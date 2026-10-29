@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -5,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
+import 'package:diaspora_nearby/features/trust/repository/trust_repository.dart';
 import 'package:diaspora_nearby/features/trust/widgets/trust_slider_widget.dart';
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
 
@@ -37,11 +39,14 @@ class TrustVouchModal extends ConsumerWidget {
       isScrollControlled: true,
       useSafeArea: false,
       backgroundColor: Colors.transparent,
-      builder: (_) => TrustVouchModal(
-        targetUserId: targetUserId,
-        currentUserId: currentUserId,
-        displayName: displayName,
-        photoUrl: photoUrl,
+      builder: (_) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: TrustVouchModal(
+          targetUserId: targetUserId,
+          currentUserId: currentUserId,
+          displayName: displayName,
+          photoUrl: photoUrl,
+        ),
       ),
     );
   }
@@ -62,6 +67,15 @@ class TrustVouchModal extends ConsumerWidget {
     final theme = Theme.of(context);
     final trustAsync = ref.watch(userTrustProvider(targetUserId));
     final pointsAsync = ref.watch(userPointsProvider(targetUserId));
+    final trustData =
+        trustAsync.value ??
+        ref.read(trustRepositoryProvider).getCachedTrustData(targetUserId);
+    final pointsData =
+        pointsAsync.value ??
+        ref.read(pointsRepositoryProvider).getCachedUserPoints(targetUserId);
+    final pctScore = trustData?.trustScore ?? 0.0;
+    final pctColor = _trustColor(pctScore);
+    final dspBalance = pointsData?.availablePoints ?? 0;
 
     return Container(
       // Overlap the header — use ~90% of screen height
@@ -106,36 +120,20 @@ class TrustVouchModal extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      // PCT + DSP inline stats
+                      // PCT + DSP inline stats (0ms synchronous cache fallback)
                       Row(
                         children: [
                           Icon(
                             LucideIcons.shieldCheck,
                             size: 13,
-                            color: trustAsync.when(
-                              data: (t) => _trustColor(t?.trustScore ?? 0),
-                              loading: () => theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.4),
-                              error: (_, _) => theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.4),
-                            ),
+                            color: pctColor,
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            trustAsync.when(
-                              data: (t) => '${t?.trustScore.toInt() ?? 0} PCT',
-                              loading: () => '--',
-                              error: (_, _) => '--',
-                            ),
+                            '${pctScore.toInt()} PCT',
                             style: TextStyle(
                               fontSize: 12,
-                              color: trustAsync.when(
-                                data: (t) => _trustColor(t?.trustScore ?? 0),
-                                loading: () => theme.colorScheme.onSurface
-                                    .withValues(alpha: 0.4),
-                                error: (_, _) => theme.colorScheme.onSurface
-                                    .withValues(alpha: 0.4),
-                              ),
+                              color: pctColor,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -147,12 +145,7 @@ class TrustVouchModal extends ConsumerWidget {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            pointsAsync.when(
-                              data: (p) =>
-                                  '${NumberFormat('#,###').format(p?.availablePoints ?? 0)} DSP',
-                              loading: () => '--',
-                              error: (_, _) => '--',
-                            ),
+                            '${NumberFormat('#,###').format(dspBalance)} DSP',
                             style: const TextStyle(
                               fontSize: 12,
                               color: _sageGreen,

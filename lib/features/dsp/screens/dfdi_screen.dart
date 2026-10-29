@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
@@ -17,14 +19,18 @@ class DFDIScreen extends ConsumerStatefulWidget {
 }
 
 class _DFDIScreenState extends ConsumerState<DFDIScreen> {
-  bool _isLoading = false;
+  static final Set<String> _registeredUsers = {};
   bool _hasRegistered = false;
 
   @override
   void initState() {
     super.initState();
-    _checkStatus();
-    _trackExploration();
+    final user = ref.read(authRepositoryProvider).currentUser;
+    if (user != null && _registeredUsers.contains(user.uid)) {
+      _hasRegistered = true;
+    }
+    unawaited(_checkStatus());
+    unawaited(_trackExploration());
   }
 
   Future<void> _trackExploration() async {
@@ -43,11 +49,30 @@ class _DFDIScreenState extends ConsumerState<DFDIScreen> {
     final user = ref.read(authRepositoryProvider).currentUser;
     if (user == null) return;
 
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool('dn_interest_dfdi_${user.uid}') == true) {
+        _registeredUsers.add(user.uid);
+        if (mounted && !_hasRegistered) {
+          setState(() => _hasRegistered = true);
+        }
+      }
+    } catch (_) {}
+
     final hasRegistered = await ref
         .read(interestRepositoryProvider)
         .checkInterest(userId: user.uid, service: 'dfdi');
 
-    if (mounted) {
+    if (hasRegistered) {
+      _registeredUsers.add(user.uid);
+      unawaited(
+        SharedPreferences.getInstance().then(
+          (p) => p.setBool('dn_interest_dfdi_${user.uid}', true),
+        ),
+      );
+    }
+
+    if (mounted && _hasRegistered != hasRegistered) {
       setState(() {
         _hasRegistered = hasRegistered;
       });
@@ -60,7 +85,21 @@ class _DFDIScreenState extends ConsumerState<DFDIScreen> {
 
     if (user == null || profile == null) return;
 
-    setState(() => _isLoading = true);
+    // 0-Latency optimistic update
+    _registeredUsers.add(user.uid);
+    setState(() {
+      _hasRegistered = true;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('You have been added to the notification list!'),
+      ),
+    );
+    unawaited(
+      SharedPreferences.getInstance().then(
+        (p) => p.setBool('dn_interest_dfdi_${user.uid}', true),
+      ),
+    );
 
     try {
       await ref
@@ -70,21 +109,10 @@ class _DFDIScreenState extends ConsumerState<DFDIScreen> {
             service: 'dfdi',
             country: profile.homeCountry ?? 'Unknown',
           );
-
-      if (mounted) {
-        setState(() {
-          _hasRegistered = true;
-          _isLoading = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('You have been added to the notification list!'),
-          ),
-        );
-      }
     } catch (e) {
+      _registeredUsers.remove(user.uid);
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() => _hasRegistered = false);
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Error: $e')));
@@ -170,7 +198,7 @@ class _DFDIScreenState extends ConsumerState<DFDIScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
-                    onPressed: _isLoading ? null : _registerInterest,
+                    onPressed: _registerInterest,
                     style: FilledButton.styleFrom(
                       backgroundColor: AppTheme.accent,
                       padding: const EdgeInsets.symmetric(
@@ -178,23 +206,14 @@ class _DFDIScreenState extends ConsumerState<DFDIScreen> {
                         horizontal: 16,
                       ),
                     ),
-                    child: _isLoading
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : Text(
-                            'Notify Me When Available for $country Community',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                    child: Text(
+                      'Notify Me When Available for $country Community',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
             ],

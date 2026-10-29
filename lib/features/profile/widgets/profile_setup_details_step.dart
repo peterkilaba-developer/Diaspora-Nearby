@@ -23,19 +23,6 @@ class CapitalizeFirstLetterFormatter extends TextInputFormatter {
   }
 }
 
-class UpperCaseTextFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    return TextEditingValue(
-      text: newValue.text.toUpperCase(),
-      selection: newValue.selection,
-    );
-  }
-}
-
 class ProfileSetupDetailsStep extends StatelessWidget {
   final TextEditingController firstNameController;
   final TextEditingController lastNameController;
@@ -47,7 +34,6 @@ class ProfileSetupDetailsStep extends StatelessWidget {
   final bool isSubmitting;
   final bool showLocation;
   final ValueChanged<bool> onLocationToggleChanged;
-  final TextEditingController referralCodeController; // [NEW]
 
   const ProfileSetupDetailsStep({
     super.key,
@@ -61,7 +47,6 @@ class ProfileSetupDetailsStep extends StatelessWidget {
     required this.isSubmitting,
     required this.showLocation,
     required this.onLocationToggleChanged,
-    required this.referralCodeController, // [NEW]
   });
 
   @override
@@ -147,7 +132,10 @@ class ProfileSetupDetailsStep extends StatelessWidget {
           decoration: InputDecoration(
             labelText: 'First Name',
             prefixIcon: const Icon(LucideIcons.user),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
             filled: true,
           ),
           inputFormatters: [CapitalizeFirstLetterFormatter()],
@@ -161,26 +149,14 @@ class ProfileSetupDetailsStep extends StatelessWidget {
           decoration: InputDecoration(
             labelText: 'Last Name',
             prefixIcon: const Icon(LucideIcons.user),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
             filled: true,
           ),
           inputFormatters: [CapitalizeFirstLetterFormatter()],
           validator: (v) => v?.isEmpty == true ? 'Required' : null,
-        ),
-
-        const SizedBox(height: 16),
-
-        TextFormField(
-          controller: referralCodeController,
-          textCapitalization: TextCapitalization.characters,
-          decoration: InputDecoration(
-            labelText: 'Referral Code (Optional)',
-            prefixIcon: const Icon(LucideIcons.ticket),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            filled: true,
-            hintText: 'e.g. PETER-UK-1234',
-          ),
-          inputFormatters: [UpperCaseTextFormatter()],
         ),
 
         const SizedBox(height: 24),

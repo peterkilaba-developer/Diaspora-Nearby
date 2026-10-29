@@ -59,83 +59,77 @@ Iterable<String?> _countryCodesFromStats(Map<String, dynamic> data) {
   return const <String?>[];
 }
 
+GlobalUnlockStats? _cachedGlobalUnlockStats;
+
 /// Provider exposing global unlock stats and country registration progress.
-/// Reads a single pre-aggregated stat document in ~10ms with 0 byte bulk download.
+/// Reads pre-aggregated stats in parallel and caches in memory for 0-latency access.
 final globalUnlockStatsProvider = FutureProvider<GlobalUnlockStats>((
   ref,
 ) async {
   final firestore = FirebaseFirestore.instance;
   final totalRequired = country_data.countries.length;
 
-  // 1. Fast server count check (~10ms, 0 bytes payload)
-  // If total registered users on the platform is less than total required countries (250),
-  // global mode is GUARANTEED to be locked! Return false immediately.
   try {
-    final countSnapshot = await firestore.collection('users').count().get();
+    final results = await Future.wait([
+      firestore.collection('users').count().get(),
+      firestore.collection('system_stats').doc('registered_countries').get(),
+    ]);
+
+    final countSnapshot = results[0] as AggregateQuerySnapshot;
+    final statsDoc = results[1] as DocumentSnapshot<Map<String, dynamic>>;
+
     final totalUsers = countSnapshot.count ?? 0;
     if (totalUsers < totalRequired) {
-      return GlobalUnlockStats(
+      final stats = GlobalUnlockStats(
         isUnlocked: false,
         registeredCount: totalUsers,
         totalRequired: totalRequired,
       );
+      _cachedGlobalUnlockStats = stats;
+      return stats;
     }
-  } catch (e) {
-    debugPrint('globalUnlockStatsProvider user count check error: $e');
-    return GlobalUnlockStats(
-      isUnlocked: false,
-      registeredCount: 0,
-      totalRequired: totalRequired,
-    );
-  }
 
-  // 2. Only if total users >= totalRequired, check actual country-code coverage.
-  try {
-    final statsDoc = await firestore
-        .collection('system_stats')
-        .doc('registered_countries')
-        .get();
     if (statsDoc.exists && statsDoc.data() != null) {
       final data = statsDoc.data()!;
       final statsCodes = _countryCodesFromStats(data).toList();
       if (statsCodes.isNotEmpty) {
-        return evaluateGlobalUnlock(statsCodes);
+        final stats = evaluateGlobalUnlock(statsCodes);
+        _cachedGlobalUnlockStats = stats;
+        return stats;
       }
     }
-
-    // A count-only aggregate cannot prove coverage. If the authoritative
-    // country-code aggregate is missing or empty, fail closed instead of
-    // downloading the entire users collection on app startup.
-    return GlobalUnlockStats(
-      isUnlocked: false,
-      registeredCount: 0,
-      totalRequired: totalRequired,
-    );
   } catch (e) {
-    debugPrint('globalUnlockStatsProvider system_stats fallback: $e');
+    debugPrint('globalUnlockStatsProvider error: $e');
+    if (_cachedGlobalUnlockStats != null) {
+      return _cachedGlobalUnlockStats!;
+    }
   }
 
-  // Default to locked when totalUsers < totalRequired or stats missing
-  return GlobalUnlockStats(
+  final fallback = GlobalUnlockStats(
     isUnlocked: false,
     registeredCount: 0,
     totalRequired: totalRequired,
   );
+  _cachedGlobalUnlockStats ??= fallback;
+  return fallback;
 });
 
 /// StreamProvider wrapping globalUnlockStatsProvider for backward compatibility.
 final isGlobalUnlockedProvider = StreamProvider<bool>((ref) {
   final statsAsync = ref.watch(globalUnlockStatsProvider);
+  final fallback = _cachedGlobalUnlockStats?.isUnlocked ?? false;
   return statsAsync.when(
     data: (data) => Stream.value(data.isUnlocked),
-    loading: () => Stream.value(false),
-    error: (e, st) => Stream.value(false),
+    loading: () => Stream.value(fallback),
+    error: (e, st) => Stream.value(fallback),
   );
 });
 
 /// Synchronous boolean helper provider for quick checks.
-/// Defaults to false while loading or when unlocked condition is not met.
+/// Uses in-memory cache while loading.
 final isGlobalUnlockedSyncProvider = Provider<bool>((ref) {
   final statsAsync = ref.watch(globalUnlockStatsProvider);
-  return statsAsync.value?.isUnlocked ?? false;
+  return statsAsync.value?.isUnlocked ??
+      _cachedGlobalUnlockStats?.isUnlocked ??
+      false;
 });

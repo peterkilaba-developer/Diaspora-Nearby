@@ -11,12 +11,14 @@ class TelegramUtils {
     );
 
     try {
-      if (await canLaunchUrl(appUrl)) {
-        return await launchUrl(appUrl, mode: LaunchMode.externalApplication);
-      } else if (await canLaunchUrl(webUrl)) {
-        return await launchUrl(webUrl, mode: LaunchMode.externalApplication);
-      }
-      return false;
+      try {
+        final launched = await launchUrl(
+          appUrl,
+          mode: LaunchMode.externalApplication,
+        );
+        if (launched) return true;
+      } catch (_) {}
+      return await launchUrl(webUrl, mode: LaunchMode.externalApplication);
     } catch (e) {
       debugPrint('Telegram Share Error: $e');
       return false;

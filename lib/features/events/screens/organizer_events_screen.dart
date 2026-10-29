@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:diaspora_nearby/features/events/models/event_data.dart';
 import 'package:diaspora_nearby/features/events/repository/event_repository.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/events/widgets/event_card.dart';
@@ -33,53 +34,63 @@ class OrganizerEventsList extends ConsumerWidget {
 
     // Use userEventsProvider to get ALL events created by this user (past + future)
     final userEventsAsync = ref.watch(userEventsProvider(user.uid));
+    final cachedMyEvents = ref
+        .read(eventRepositoryProvider)
+        .cachedRawEvents
+        .where((e) => e.creatorId == user.uid)
+        .toList();
 
-    return userEventsAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Error loading events: $e')),
-      data: (myEvents) {
-        if (myEvents.isEmpty) {
-          return const Center(child: Text('You have not created any events.'));
-        }
+    final rawList = userEventsAsync.value ?? cachedMyEvents;
 
-        // Sort upcoming events first (soonest first), then expired events (most recent first)
-        final now = DateTime.now();
-        myEvents.sort((a, b) {
-          final aExpired = EventRepository.isEventExpired(a, now);
-          final bExpired = EventRepository.isEventExpired(b, now);
-          if (aExpired != bExpired) {
-            return aExpired ? 1 : -1;
-          }
-          if (!aExpired) {
-            final dateCmp = a.startDate.compareTo(b.startDate);
-            if (dateCmp != 0) return dateCmp;
-            return a.startTime.compareTo(b.startTime);
-          } else {
-            final dateCmp = b.startDate.compareTo(a.startDate);
-            if (dateCmp != 0) return dateCmp;
-            return b.startTime.compareTo(a.startTime);
-          }
-        });
+    if (userEventsAsync.isLoading && rawList.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-        return ListView.separated(
-          padding: padding.add(
-            EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
-          ),
-          itemCount: myEvents.length,
-          separatorBuilder: (_, _) => const SizedBox(height: 16),
-          itemBuilder: (context, index) {
-            final event = myEvents[index];
-            return EventCard(
-              event: event,
-              isAttending: true,
-              isCreator: true,
-              onTap: () {
-                context.push('/events/${event.id}', extra: event);
-              },
-              onEditTap: () {
-                context.push('/events/edit/${event.id}', extra: event);
-              },
-            );
+    if (userEventsAsync.hasError && rawList.isEmpty) {
+      return Center(child: Text('Error loading events: ${userEventsAsync.error}'));
+    }
+
+    final myEvents = List<Event>.from(rawList);
+    if (myEvents.isEmpty) {
+      return const Center(child: Text('You have not created any events.'));
+    }
+
+    // Sort upcoming events first (soonest first), then expired events (most recent first)
+    final now = DateTime.now();
+    myEvents.sort((a, b) {
+      final aExpired = EventRepository.isEventExpired(a, now);
+      final bExpired = EventRepository.isEventExpired(b, now);
+      if (aExpired != bExpired) {
+        return aExpired ? 1 : -1;
+      }
+      if (!aExpired) {
+        final dateCmp = a.startDate.compareTo(b.startDate);
+        if (dateCmp != 0) return dateCmp;
+        return a.startTime.compareTo(b.startTime);
+      } else {
+        final dateCmp = b.startDate.compareTo(a.startDate);
+        if (dateCmp != 0) return dateCmp;
+        return b.startTime.compareTo(a.startTime);
+      }
+    });
+
+    return ListView.separated(
+      padding: padding.add(
+        EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
+      ),
+      itemCount: myEvents.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 16),
+      itemBuilder: (context, index) {
+        final event = myEvents[index];
+        return EventCard(
+          event: event,
+          isAttending: true,
+          isCreator: true,
+          onTap: () {
+            context.push('/events/${event.id}', extra: event);
+          },
+          onEditTap: () {
+            context.push('/events/edit/${event.id}', extra: event);
           },
         );
       },

@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -14,6 +16,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:diaspora_nearby/features/organization/repository/organization_repository.dart';
 import 'package:diaspora_nearby/features/community/repository/community_repository.dart';
+import 'package:diaspora_nearby/theme/app_theme.dart';
 
 class BusinessRegistrationModal extends ConsumerStatefulWidget {
   final String? communityId; // [NEW] optional community context
@@ -34,6 +37,7 @@ class _BusinessRegistrationModalState
   final _locationController = TextEditingController();
 
   XFile? _logoImage;
+  Future<String?>? _logoUploadFuture;
   final ImagePicker _picker = ImagePicker();
   bool _logoError = false;
 
@@ -45,6 +49,7 @@ class _BusinessRegistrationModalState
   String? _locationCity;
   String? _locationState;
   String? _locationCountry;
+  bool _isLocating = false;
 
   // Name predictions
   List<AutocompletePrediction> _namePredictions = [];
@@ -60,6 +65,36 @@ class _BusinessRegistrationModalState
     );
     if (picked != null) {
       setState(() => _logoImage = picked);
+      final user = ref.read(authRepositoryProvider).currentUser;
+      if (user != null) {
+        _logoUploadFuture = _uploadLogoInBackground(user.uid, picked);
+      }
+    }
+  }
+
+  Future<String?> _uploadLogoInBackground(String uid, XFile file) async {
+    try {
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('profile_photos')
+          .child(uid)
+          .child('business_logos')
+          .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
+
+      final metadata = SettableMetadata(
+        cacheControl: 'public, max-age=31536000',
+        contentType: 'image/jpeg',
+      );
+      if (kIsWeb) {
+        final bytes = await file.readAsBytes();
+        await storageRef.putData(bytes, metadata);
+      } else {
+        await storageRef.putFile(File(file.path), metadata);
+      }
+      return await storageRef.getDownloadURL();
+    } catch (e) {
+      debugPrint('Background logo upload error: $e');
+      return null;
     }
   }
 
@@ -168,7 +203,7 @@ class _BusinessRegistrationModalState
   ];
   String? _selectedTitle;
 
-  bool _isLoading = false;
+  final bool _isLoading = false;
 
   void _onLocationChanged(String input) async {
     if (input.isEmpty) {
@@ -190,6 +225,13 @@ class _BusinessRegistrationModalState
   }
 
   Future<void> _selectPlace(AutocompletePrediction prediction) async {
+    // Optimistically update text field and close prediction list in 0ms
+    setState(() {
+      _locationController.text = prediction.fullText;
+      _predictions = [];
+      _showPredictions = false;
+    });
+
     final places = ref.read(googlePlacesServiceProvider);
     final response = await places.getPlaceDetails(prediction.placeId);
     final place = response?.place;
@@ -280,11 +322,23 @@ class _BusinessRegistrationModalState
   }
 
   Future<void> _selectBusiness(AutocompletePrediction prediction) async {
+    // Optimistically update business name and hide predictions in 0ms
+    setState(() {
+      _isVerifiedBusiness = true;
+      _nameController.text = prediction.primaryText;
+      _isNameLocked = true;
+      _namePredictions = [];
+      _showNamePredictions = false;
+      if (prediction.secondaryText.isNotEmpty) {
+        _locationController.text = prediction.secondaryText;
+      }
+    });
+
     final places = ref.read(googlePlacesServiceProvider);
     final response = await places.getPlaceDetails(prediction.placeId);
     final place = response?.place;
 
-    if (place != null) {
+    if (place != null && mounted) {
       // Map Google Place types to our Org Types
       final googleTypes = place.types ?? [];
       String? matchedType;
@@ -307,14 +361,6 @@ class _BusinessRegistrationModalState
       }
 
       setState(() {
-        _isVerifiedBusiness = true;
-
-        _nameController.text = prediction.primaryText;
-        _isNameLocked = true;
-
-        _namePredictions = [];
-        _showNamePredictions = false;
-
         // Also populate phone if available
         if (place.phoneNumber != null) {
           _phoneController.text = place.phoneNumber!;
@@ -350,21 +396,18 @@ class _BusinessRegistrationModalState
             place.editorialSummary!.isNotEmpty) {
           _descController.text = place.editorialSummary!;
         } else {
-          // Fallback format: "A [Type] in [City]"
           final type = matchedType != null
               ? matchedType.split(' (').first
               : (prediction.secondaryText.isNotEmpty
                     ? prediction.secondaryText
                     : 'Organization');
 
-          // Use city from location population or full address roughly
           String location = 'Area';
           final components = place.addressComponents ?? [];
           for (final c in components) {
             if (c.types.contains('locality')) location = c.name;
           }
           if (location == 'Area') {
-            // Try from address
             location = place.address?.split(',').first ?? 'Area';
           }
 
@@ -381,7 +424,7 @@ class _BusinessRegistrationModalState
   }
 
   Future<void> _useCurrentLocation() async {
-    setState(() => _isLoading = true);
+    setState(() => _isLocating = true);
     try {
       bool serviceEnabled;
       LocationPermission permission;
@@ -401,7 +444,17 @@ class _BusinessRegistrationModalState
         throw Exception('Location permissions are permanently denied');
       }
 
-      final position = await Geolocator.getCurrentPosition();
+      final position =
+          await Geolocator.getLastKnownPosition() ??
+          await Geolocator.getCurrentPosition();
+
+      if (mounted) {
+        setState(() {
+          _locationLat = position.latitude;
+          _locationLng = position.longitude;
+        });
+      }
+
       final placemarks = await placemarkFromCoordinates(
         position.latitude,
         position.longitude,
@@ -410,16 +463,16 @@ class _BusinessRegistrationModalState
       if (placemarks.isNotEmpty && mounted) {
         final pm = placemarks.first;
         final address = [
-          if (pm.street != null) pm.street,
-          if (pm.locality != null) pm.locality,
-          if (pm.administrativeArea != null) pm.administrativeArea,
-          if (pm.country != null) pm.country,
+          if (pm.street != null && pm.street!.isNotEmpty) pm.street,
+          if (pm.locality != null && pm.locality!.isNotEmpty) pm.locality,
+          if (pm.administrativeArea != null &&
+              pm.administrativeArea!.isNotEmpty)
+            pm.administrativeArea,
+          if (pm.country != null && pm.country!.isNotEmpty) pm.country,
         ].join(', ');
 
         setState(() {
           _locationController.text = address;
-          _locationLat = position.latitude;
-          _locationLng = position.longitude;
           _locationCity = pm.locality;
           _locationState = pm.administrativeArea;
           _locationCountry = pm.country;
@@ -435,7 +488,7 @@ class _BusinessRegistrationModalState
         );
       }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLocating = false);
     }
   }
 
@@ -443,15 +496,19 @@ class _BusinessRegistrationModalState
     if (!mounted) return;
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('OK'),
-          ),
-        ],
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          title: Text(title),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -464,8 +521,19 @@ class _BusinessRegistrationModalState
     final formValid = _formKey.currentState!.validate();
     if (_logoImage == null || !formValid) return;
 
+    final user = ref.read(authRepositoryProvider).currentUser;
+    if (user == null) {
+      _showError('Error', 'User not logged in');
+      return;
+    }
+
     // Check organization limit (Max 2)
-    final orgsCount = ref.read(userOrganizationsProvider).value?.length ?? 0;
+    final orgRepo = ref.read(organizationRepositoryProvider);
+    final orgsCount =
+        (ref.read(userOrganizationsProvider).value ??
+                orgRepo.getCachedUserOrganizations(user.uid) ??
+                const [])
+            .length;
     if (orgsCount >= 2) {
       _showError(
         'Limit Reached',
@@ -474,113 +542,168 @@ class _BusinessRegistrationModalState
       return;
     }
 
-    setState(() => _isLoading = true);
+    if (_locationLat == null || _locationLng == null) {
+      _showError(
+        'Location Required',
+        'Please select a valid address from the suggestions.',
+      );
+      return;
+    }
 
+    final profileRepo = ref.read(profileRepositoryProvider);
+    final userProfile =
+        ref.read(userProfileProvider).value ??
+        profileRepo.getCachedProfile(user.uid);
+    final homeCountryCode = userProfile?.homeCountryCode;
+
+    final businessName = _nameController.text.trim();
+    final description = _descController.text.trim();
+    final phone = _phoneController.text.trim();
+    final organizationType = _selectedOrgType!;
+    final website = _websiteController.text.trim();
+    final locationAddress = _locationController.text.trim();
+    final locationLat = _locationLat;
+    final locationLng = _locationLng;
+    final locationCity = _locationCity;
+    final locationState = _locationState;
+    final locationCountry = _locationCountry;
+    final creatorTitle = _selectedTitle;
+    final richData = _selectedRichData;
+    final communityId = widget.communityId;
+    final pickedLogo = _logoImage!;
+    final uploadFuture =
+        _logoUploadFuture ?? _uploadLogoInBackground(user.uid, pickedLogo);
+    final router = GoRouter.of(context);
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+
+    // Wait briefly if logo upload is already done, otherwise proceed with background persistence
+    String? logoUrl;
     try {
-      final user = ref.read(authRepositoryProvider).currentUser;
-      if (user == null) {
-        throw Exception('User not logged in');
-      }
+      logoUrl = await uploadFuture.timeout(
+        const Duration(milliseconds: 50),
+        onTimeout: () => null,
+      );
+    } catch (_) {}
 
-      String? logoUrl;
-      if (_logoImage != null) {
-        try {
-          final storageRef = FirebaseStorage.instance
-              .ref()
-              .child('profile_photos')
-              .child(user.uid)
-              .child('business_logos')
-              .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
-
-          final metadata = SettableMetadata(
-            cacheControl: 'public, max-age=31536000',
-            contentType: 'image/jpeg',
-          );
-          if (kIsWeb) {
-            final bytes = await _logoImage!.readAsBytes();
-            await storageRef.putData(bytes, metadata);
-          } else {
-            await storageRef.putFile(File(_logoImage!.path), metadata);
-          }
-          logoUrl = await storageRef.getDownloadURL();
-        } catch (e) {
-          debugPrint('Logo upload error: $e');
-          setState(() => _isLoading = false);
-          _showError('Upload Failed', 'Failed to upload logo: $e');
-          return;
-        }
-      }
-
-      String orgId;
-      try {
-        // Validation for actual address/place
-        if (_locationLat == null || _locationLng == null) {
-          setState(() => _isLoading = false);
-          _showError(
-            'Location Required',
-            'Please select a valid address from the suggestions.',
-          );
-          return;
-        }
-
-        // Get user's home country code for filtering
-        final userProfile = ref.read(userProfileProvider).value;
-        final homeCountryCode = userProfile?.homeCountryCode;
-
-        orgId = await ref
-            .read(profileRepositoryProvider)
-            .submitBusinessRegistration(
-              uid: user.uid,
-              businessName: _nameController.text.trim(),
-              description: _descController.text.trim(),
-              phone: _phoneController.text.trim(),
-              organizationType: _selectedOrgType!,
-              website: _websiteController.text.trim(),
-              logoUrl: logoUrl,
-              locationAddress: _locationController.text.trim(),
-              locationLat: _locationLat,
-              locationLng: _locationLng,
-              locationCity: _locationCity,
-              locationState: _locationState,
-              locationCountry: _locationCountry,
-              homeCountryCode: homeCountryCode,
-              creatorTitle: _selectedTitle,
-
-              richData: _selectedRichData, // Pass Rich Data
-              communityId: widget.communityId, // [NEW] Pass community context
-            );
-      } catch (e) {
-        debugPrint('Registration Submit Error: $e');
-        setState(() => _isLoading = false);
-        _showError('Registration Failed', 'Error creating organization: $e');
-        return;
-      }
-
-      if (mounted) {
-        // 1. Refresh the organizations list provider
+    // Submit registration (creates org doc ref id synchronously in submitBusinessRegistration)
+    // To navigate in 0ms, we run the full registration in background if upload is still in flight,
+    // or await submitBusinessRegistration directly. Let's check:
+    try {
+      if (logoUrl != null) {
+        final orgId = await profileRepo.submitBusinessRegistration(
+          uid: user.uid,
+          businessName: businessName,
+          description: description,
+          phone: phone,
+          organizationType: organizationType,
+          website: website,
+          logoUrl: logoUrl,
+          locationAddress: locationAddress,
+          locationLat: locationLat,
+          locationLng: locationLng,
+          locationCity: locationCity,
+          locationState: locationState,
+          locationCountry: locationCountry,
+          homeCountryCode: homeCountryCode,
+          creatorTitle: creatorTitle,
+          richData: richData,
+          communityId: communityId,
+        );
+        orgRepo.cacheOrganization(orgId, {
+          'id': orgId,
+          'name': businessName,
+          'businessName': businessName,
+          'description': description,
+          'phone': phone,
+          'type': organizationType,
+          'website': website,
+          'profileImage': logoUrl,
+          'superAdminId': user.uid,
+          'admins': [user.uid],
+          'pendingAdmins': <String>[],
+          'status': 'active',
+          'locationAddress': locationAddress,
+          'city': locationCity,
+          'state': locationState,
+          'country': locationCountry,
+          'homeCountryCode': homeCountryCode,
+          if (creatorTitle != null) 'adminTitles': {user.uid: creatorTitle},
+          'communityId': ?communityId,
+        });
         ref.invalidate(userOrganizationsProvider);
-
-        // 2. Capture router before popping
-        final router = GoRouter.of(context);
-
-        // 3. Close modal
-        Navigator.pop(context);
-
-        // 4. Navigate to Manage Page (Matched correctly now due to router.dart fix)
-        router.push('/organization/manage?orgId=$orgId');
-
-        ScaffoldMessenger.of(context).showSnackBar(
+        if (mounted) {
+          navigator.pop();
+          router.push('/organization/manage?orgId=$orgId');
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Organization created successfully! Invite a second admin to activate.',
+              ),
+            ),
+          );
+        }
+      } else {
+        // Pop immediately and finish logo upload + registration in background!
+        navigator.pop();
+        messenger.showSnackBar(
           const SnackBar(
             content: Text(
               'Organization created successfully! Invite a second admin to activate.',
             ),
           ),
         );
+        unawaited(
+          () async {
+            final finalLogoUrl = await uploadFuture;
+            final orgId = await profileRepo.submitBusinessRegistration(
+              uid: user.uid,
+              businessName: businessName,
+              description: description,
+              phone: phone,
+              organizationType: organizationType,
+              website: website,
+              logoUrl: finalLogoUrl,
+              locationAddress: locationAddress,
+              locationLat: locationLat,
+              locationLng: locationLng,
+              locationCity: locationCity,
+              locationState: locationState,
+              locationCountry: locationCountry,
+              homeCountryCode: homeCountryCode,
+              creatorTitle: creatorTitle,
+              richData: richData,
+              communityId: communityId,
+            );
+            orgRepo.cacheOrganization(orgId, {
+              'id': orgId,
+              'name': businessName,
+              'businessName': businessName,
+              'description': description,
+              'phone': phone,
+              'type': organizationType,
+              'website': website,
+              'profileImage': finalLogoUrl,
+              'superAdminId': user.uid,
+              'admins': [user.uid],
+              'pendingAdmins': <String>[],
+              'status': 'active',
+              'locationAddress': locationAddress,
+              'city': locationCity,
+              'state': locationState,
+              'country': locationCountry,
+              'homeCountryCode': homeCountryCode,
+              if (creatorTitle != null) 'adminTitles': {user.uid: creatorTitle},
+              'communityId': ?communityId,
+            });
+            ref.invalidate(userOrganizationsProvider);
+            router.push('/organization/manage?orgId=$orgId');
+          }(),
+        );
       }
     } catch (e) {
       debugPrint('Submission error: $e');
       if (mounted) {
-        setState(() => _isLoading = false);
         _showError('Submission Failed', '$e');
       }
     }
@@ -594,6 +717,28 @@ class _BusinessRegistrationModalState
     _websiteController.dispose();
     _locationController.dispose();
     super.dispose();
+  }
+
+  InputDecoration _borderlessDecoration(
+    BuildContext context, {
+    required String labelText,
+    required Widget prefixIcon,
+    Widget? suffixIcon,
+    bool locked = false,
+  }) {
+    return InputDecoration(
+      labelText: labelText,
+      prefixIcon: prefixIcon,
+      suffixIcon: suffixIcon,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      filled: true,
+      fillColor: locked
+          ? Colors.green.withValues(alpha: 0.05)
+          : AppTheme.elevationColor(context, 2),
+    );
   }
 
   @override
@@ -659,12 +804,11 @@ class _BusinessRegistrationModalState
                 ),
               ),
               if (_isVerifiedBusiness)
-                if (_isVerifiedBusiness)
-                  IconButton(
-                    onPressed: _resetSelection,
-                    icon: const Icon(LucideIcons.rotateCcw, color: Colors.red),
-                    tooltip: 'Reset Selection',
-                  ),
+                IconButton(
+                  onPressed: _resetSelection,
+                  icon: const Icon(LucideIcons.rotateCcw, color: Colors.red),
+                  tooltip: 'Reset Selection',
+                ),
             ],
           ),
 
@@ -750,13 +894,13 @@ class _BusinessRegistrationModalState
                           textCapitalization: TextCapitalization.words,
                           onChanged: _onNameChanged,
                           readOnly: _isNameLocked,
-                          decoration: InputDecoration(
+                          decoration: _borderlessDecoration(
+                            context,
                             labelText: 'Business / Organization Name',
                             prefixIcon: const Icon(
                               LucideIcons.building2,
                               size: 18,
                             ),
-                            border: const OutlineInputBorder(),
                             suffixIcon: _isNameLocked
                                 ? const Icon(
                                     LucideIcons.lock,
@@ -764,10 +908,7 @@ class _BusinessRegistrationModalState
                                     color: Colors.green,
                                   )
                                 : null,
-                            filled: _isNameLocked,
-                            fillColor: _isNameLocked
-                                ? Colors.green.withValues(alpha: 0.05)
-                                : null,
+                            locked: _isNameLocked,
                           ),
                           validator: (v) =>
                               v?.isEmpty == true ? 'Required' : null,
@@ -813,10 +954,10 @@ class _BusinessRegistrationModalState
                       controller: _descController,
                       maxLines: 3,
                       textCapitalization: TextCapitalization.sentences,
-                      decoration: const InputDecoration(
+                      decoration: _borderlessDecoration(
+                        context,
                         labelText: 'Description',
-                        prefixIcon: Icon(LucideIcons.alignLeft, size: 18),
-                        border: OutlineInputBorder(),
+                        prefixIcon: const Icon(LucideIcons.alignLeft, size: 18),
                       ),
                       validator: (v) => v?.isEmpty == true ? 'Required' : null,
                     ),
@@ -831,13 +972,14 @@ class _BusinessRegistrationModalState
                           onChanged: _onLocationChanged,
                           textCapitalization: TextCapitalization.sentences,
                           readOnly: _isLocationLocked,
-                          decoration: InputDecoration(
+                          decoration: _borderlessDecoration(
+                            context,
                             labelText: 'City / Location',
                             prefixIcon: const Icon(
                               LucideIcons.mapPin,
                               size: 18,
                             ),
-                            border: const OutlineInputBorder(),
+                            locked: _isLocationLocked,
                             suffixIcon: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -856,22 +998,27 @@ class _BusinessRegistrationModalState
                                     color: Colors.green,
                                     size: 18,
                                   ),
-
                                 if (!_isLocationLocked)
                                   IconButton(
-                                    icon: const Icon(
-                                      LucideIcons.locate,
-                                      size: 18,
-                                    ),
-                                    onPressed: _useCurrentLocation,
+                                    icon: _isLocating
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(
+                                            LucideIcons.locate,
+                                            size: 18,
+                                          ),
+                                    onPressed: _isLocating
+                                        ? null
+                                        : _useCurrentLocation,
                                     tooltip: 'Use current location',
                                   ),
                               ],
                             ),
-                            filled: _isLocationLocked,
-                            fillColor: _isLocationLocked
-                                ? Colors.green.withValues(alpha: 0.05)
-                                : null,
                           ),
                           validator: (v) =>
                               v?.isEmpty == true ? 'Required' : null,
@@ -913,10 +1060,10 @@ class _BusinessRegistrationModalState
                     TextFormField(
                       controller: _phoneController,
                       readOnly: _isPhoneLocked,
-                      decoration: InputDecoration(
+                      decoration: _borderlessDecoration(
+                        context,
                         labelText: 'Business Phone',
                         prefixIcon: const Icon(LucideIcons.phone, size: 18),
-                        border: const OutlineInputBorder(),
                         suffixIcon: _isPhoneLocked
                             ? const Icon(
                                 LucideIcons.lock,
@@ -924,10 +1071,7 @@ class _BusinessRegistrationModalState
                                 color: Colors.green,
                               )
                             : null,
-                        filled: _isPhoneLocked,
-                        fillColor: _isPhoneLocked
-                            ? Colors.green.withValues(alpha: 0.05)
-                            : null,
+                        locked: _isPhoneLocked,
                       ),
                       keyboardType: TextInputType.phone,
                       validator: (v) => v?.isEmpty == true ? 'Required' : null,
@@ -936,10 +1080,10 @@ class _BusinessRegistrationModalState
                     DropdownButtonFormField<String>(
                       initialValue: _selectedOrgType,
                       isExpanded: true,
-                      decoration: const InputDecoration(
+                      decoration: _borderlessDecoration(
+                        context,
                         labelText: 'Organization Type',
-                        prefixIcon: Icon(LucideIcons.briefcase, size: 18),
-                        border: OutlineInputBorder(),
+                        prefixIcon: const Icon(LucideIcons.briefcase, size: 18),
                       ),
                       items: _orgTypes
                           .map(
@@ -965,10 +1109,10 @@ class _BusinessRegistrationModalState
                     TextFormField(
                       controller: _websiteController,
                       readOnly: _isWebsiteLocked,
-                      decoration: InputDecoration(
+                      decoration: _borderlessDecoration(
+                        context,
                         labelText: 'Website URL (optional)',
                         prefixIcon: const Icon(LucideIcons.globe, size: 18),
-                        border: const OutlineInputBorder(),
                         suffixIcon: _isWebsiteLocked
                             ? const Icon(
                                 LucideIcons.lock,
@@ -976,10 +1120,7 @@ class _BusinessRegistrationModalState
                                 color: Colors.green,
                               )
                             : null,
-                        filled: _isWebsiteLocked,
-                        fillColor: _isWebsiteLocked
-                            ? Colors.green.withValues(alpha: 0.05)
-                            : null,
+                        locked: _isWebsiteLocked,
                       ),
                       keyboardType: TextInputType.url,
                     ),
@@ -987,10 +1128,13 @@ class _BusinessRegistrationModalState
                     DropdownButtonFormField<String>(
                       initialValue: _selectedTitle,
                       isExpanded: true,
-                      decoration: const InputDecoration(
+                      decoration: _borderlessDecoration(
+                        context,
                         labelText: 'Your Title',
-                        prefixIcon: Icon(LucideIcons.badgeCheck, size: 18),
-                        border: OutlineInputBorder(),
+                        prefixIcon: const Icon(
+                          LucideIcons.badgeCheck,
+                          size: 18,
+                        ),
                       ),
                       items: _titleOptions
                           .map(
@@ -1067,22 +1211,10 @@ class _BusinessRegistrationModalState
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Text(
-                                'Submit Application',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                ),
-                              ),
+                        child: const Text(
+                          'Submit Application',
+                          style: TextStyle(color: Colors.white, fontSize: 16),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 32),

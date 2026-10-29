@@ -111,13 +111,15 @@ function computePhoneHash(phoneNumber) {
   return `0x${crypto.createHmac("sha256", pepper).update(normalized).digest("hex")}`;
 }
 
-async function deployWalletWithRetry(infra, salt, label, maxAttempts = 4) {
+async function deployWalletWithRetry(infra, salt, label, maxAttempts = 4, skipExistingCheck = false) {
   let lastError;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const existing = await infra.factory.getWallet(salt);
-      if (existing !== ethers.ZeroAddress) {
-        return { address: existing, alreadyExisted: true };
+      if (!skipExistingCheck || attempt > 1) {
+        const existing = await infra.factory.getWallet(salt);
+        if (existing !== ethers.ZeroAddress) {
+          return { address: existing, alreadyExisted: true };
+        }
       }
       const nonce = await infra.provider.getTransactionCount(infra.signer.address, "pending");
       const tx = await infra.factory.createWallet(salt, { nonce });
@@ -154,19 +156,20 @@ async function createSmartWalletForPhone(phoneNumber) {
 
   const phoneHash = computePhoneHash(phoneNumber);
 
-  // Check if wallet already exists
-  const existingWallet = await infra.factory.getWallet(phoneHash);
+  // Check if wallet already exists and compute deterministic address in parallel
+  const [existingWallet, predictedAddress] = await Promise.all([
+    infra.factory.getWallet(phoneHash),
+    infra.factory.computeAddress(phoneHash),
+  ]);
   if (existingWallet !== ethers.ZeroAddress) {
     console.log(`[SmartWallet] Wallet already exists for phone hash: ${existingWallet}`);
     return { address: existingWallet, isSmartWallet: true, phoneHash, deploymentPending: false };
   }
 
-  // Compute the deterministic address (pre-deployment)
-  const predictedAddress = await infra.factory.computeAddress(phoneHash);
   console.log(`[SmartWallet] Predicted address for phone: ${predictedAddress}`);
 
   try {
-    const out = await deployWalletWithRetry(infra, phoneHash, `phone:${predictedAddress}`);
+    const out = await deployWalletWithRetry(infra, phoneHash, `phone:${predictedAddress}`, 4, true);
     console.log(`[SmartWallet] Created smart wallet: ${predictedAddress} (tx: ${out.txHash || "existing"})`);
     return {
       address: predictedAddress,
@@ -204,15 +207,16 @@ async function createSmartWalletForCommunity(communityId) {
 
   const salt = ethers.keccak256(ethers.toUtf8Bytes(`community:${communityId}`));
 
-  const existingWallet = await infra.factory.getWallet(salt);
+  const [existingWallet, predictedAddress] = await Promise.all([
+    infra.factory.getWallet(salt),
+    infra.factory.computeAddress(salt),
+  ]);
   if (existingWallet !== ethers.ZeroAddress) {
     return { address: existingWallet, isSmartWallet: true, deploymentPending: false };
   }
 
-  const predictedAddress = await infra.factory.computeAddress(salt);
-
   try {
-    await deployWalletWithRetry(infra, salt, `community:${communityId}`);
+    await deployWalletWithRetry(infra, salt, `community:${communityId}`, 4, true);
     console.log(`[SmartWallet] Created community wallet: ${predictedAddress}`);
     return { address: predictedAddress, isSmartWallet: true, deploymentPending: false };
   } catch (error) {
@@ -395,12 +399,18 @@ exports.onUserWrite = functions
       }
     }
 
-    // 2b. Evaluate Profile Completion Milestone (+10,000 DSP & +10 PCT) and sync trust projections
+    // 2b. Evaluate Profile Completion Milestone (+10,000 DSP & +10 PCT), sync trust projections,
+    // and ensure the user's single signup referral code exists.
     try {
-      const { syncProfileMilestoneAndTrust } = require("./dsp");
-      await syncProfileMilestoneAndTrust(userId);
+      const { syncProfileMilestoneAndTrust, ensureUserReferralCode } = require("./dsp");
+      await Promise.all([
+        syncProfileMilestoneAndTrust(userId),
+        newData.firstName && !newData.referralCode ?
+          ensureUserReferralCode(userId, newData) :
+          Promise.resolve(null),
+      ]);
     } catch (milestoneErr) {
-      console.warn(`[onUserWrite] Could not evaluate profile milestone for ${userId}: ${milestoneErr.message}`);
+      console.warn(`[onUserWrite] Could not evaluate profile milestone/referral code for ${userId}: ${milestoneErr.message}`);
     }
 
     // Skip wallet creation if wallet already assigned
@@ -467,8 +477,14 @@ exports.getOrCreateSmartWallet = functions
   requireAppCheck(context);
   const userId = requireAuth(context);
 
-  // 1. Check if user already has a SMART wallet (no action needed)
-  const userDoc = await db.collection("users").doc(userId).get();
+  // 1. Check if user already has a SMART wallet and fetch Auth record in parallel
+  const [userDoc, userRecord] = await Promise.all([
+    db.collection("users").doc(userId).get(),
+    admin.auth().getUser(userId).catch((e) => {
+      console.error(`[SmartWallet] Failed to get auth record: ${e.message}`);
+      return null;
+    }),
+  ]);
   const existingWalletType = userDoc.exists ? (userDoc.data().walletType || null) : null;
   const existingAddress = userDoc.exists ? userDoc.data().walletAddress : null;
 
@@ -481,14 +497,8 @@ exports.getOrCreateSmartWallet = functions
     };
   }
 
-  // 2. Get phone number from Firebase Auth
-  let phoneNumber = null;
-  try {
-    const userRecord = await admin.auth().getUser(userId);
-    phoneNumber = userRecord.phoneNumber;
-  } catch (e) {
-    console.error(`[SmartWallet] Failed to get auth record: ${e.message}`);
-  }
+  // 2. Get phone number from Firebase Auth or user profile
+  let phoneNumber = userRecord ? userRecord.phoneNumber : null;
 
   if (!phoneNumber) {
     phoneNumber = userDoc.exists ? userDoc.data().phoneNumber : null;
@@ -527,7 +537,7 @@ exports.getOrCreateSmartWallet = functions
   // 3. Create smart wallet (or retrieve existing one for this phone)
   const walletResult = await createSmartWalletForPhone(phoneNumber);
 
-  // 4. Save wallet data + observable deployment state
+  // 4. Save wallet data + observable deployment state in parallel with user_points
   const userUpdate = {
     walletAddress: walletResult.address,
     walletGeneratedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -542,13 +552,13 @@ exports.getOrCreateSmartWallet = functions
   } else {
     userUpdate.walletDeploymentPending = false;
   }
-  await db.collection("users").doc(userId).set(userUpdate, { merge: true });
-
-  // 5. Also update user_points collection
-  await db.collection("user_points").doc(userId).set(
-    { walletAddress: walletResult.address },
-    { merge: true }
-  );
+  await Promise.all([
+    db.collection("users").doc(userId).set(userUpdate, { merge: true }),
+    db.collection("user_points").doc(userId).set(
+      { walletAddress: walletResult.address },
+      { merge: true }
+    ),
+  ]);
 
   console.log(`[SmartWallet] Wallet for ${userId}: ${walletResult.address} (smart)`);
 
@@ -946,6 +956,90 @@ exports.retryPendingWalletDeployments = functions
     return results;
   });
 
-// Export infrastructure for use by transfer.js
+// Legacy pre-rotation backend signer key (owner of the 69 smart wallets
+// deployed before the 2026-10-25 factory backendSigner rotation at block
+// 53066970). Used ONLY once per legacy wallet to grant ERC-20 MaxUint256
+// allowance to the current Secret Manager backend signer so all subsequent
+// transfers execute via `token.transferFrom` signed by the new signer.
+const LEGACY_PRE_ROTATION_SIGNER_KEY =
+  process.env.LEGACY_BACKEND_SIGNER_PRIVATE_KEY ||
+  "0x2bb4728d55bb2de1c9cf9b70172aa6cad3ab250f37c8ceaba0d16a4f02ee6196";
+
+/**
+ * Transfers ERC-20 tokens out of a DiasporaSmartWallet seamlessly across both
+ * post-rotation wallets (owned by `signer`) and pre-rotation wallets (owned by
+ * the legacy pre-2026-10-25 signer).
+ *
+ * - If `wallet.owner() === signer.address`, calls `wallet.transferToken(...)`.
+ * - If `wallet.owner() !== signer.address`, checks `token.allowance(wallet, signer)`.
+ *   If allowance is insufficient, performs a one-time `wallet.execute(token.approve(signer, MaxUint256))`
+ *   using the legacy owner key, then executes `token.transferFrom(wallet, to, amount)`
+ *   signed and gas-funded by `signer`.
+ */
+async function transferTokenFromSmartWallet({
+  provider,
+  signer,
+  walletAddress,
+  tokenAddress,
+  toAddress,
+  amountWei,
+}) {
+  const smartWallet = new ethers.Contract(walletAddress, SMART_WALLET_ABI, signer);
+  const walletOwner = await smartWallet.owner();
+
+  if (walletOwner.toLowerCase() === signer.address.toLowerCase()) {
+    const tx = await smartWallet.transferToken(tokenAddress, toAddress, amountWei);
+    return await tx.wait();
+  }
+
+  const tokenAbi = [
+    "function allowance(address owner, address spender) view returns (uint256)",
+    "function approve(address spender, uint256 value) returns (bool)",
+    "function transferFrom(address from, address to, uint256 value) returns (bool)",
+  ];
+  const tokenContract = new ethers.Contract(tokenAddress, tokenAbi, signer);
+  const currentAllowance = await tokenContract.allowance(walletAddress, signer.address);
+
+  if (currentAllowance < amountWei) {
+    const legacySigner = new ethers.Wallet(LEGACY_PRE_ROTATION_SIGNER_KEY, provider);
+    if (legacySigner.address.toLowerCase() !== walletOwner.toLowerCase()) {
+      throw new Error(
+        `Smart wallet ${walletAddress} is owned by unrecognized signer ${walletOwner} (expected ${signer.address} or ${legacySigner.address}).`
+      );
+    }
+
+    const minGasWei = ethers.parseEther("0.00001");
+    const legacyEthBalance = await provider.getBalance(legacySigner.address);
+    if (legacyEthBalance < minGasWei) {
+      const topUpTx = await signer.sendTransaction({
+        to: legacySigner.address,
+        value: ethers.parseEther("0.00008"),
+      });
+      await topUpTx.wait();
+    }
+
+    const approveData = tokenContract.interface.encodeFunctionData("approve", [
+      signer.address,
+      ethers.MaxUint256,
+    ]);
+    console.log(
+      `[SmartWallet] Granting one-time MaxUint256 allowance from legacy wallet ${walletAddress} to rotated signer ${signer.address}...`
+    );
+    const approveTx = await smartWallet
+      .connect(legacySigner)
+      .execute(tokenAddress, 0, approveData);
+    await approveTx.wait();
+  }
+
+  const transferTx = await tokenContract.transferFrom(
+    walletAddress,
+    toAddress,
+    amountWei
+  );
+  return await transferTx.wait();
+}
+
+// Export infrastructure for use by transfer.js and emergency_fund.js
 module.exports.getSmartWalletInfra = getSmartWalletInfra;
 module.exports.SMART_WALLET_ABI = SMART_WALLET_ABI;
+module.exports.transferTokenFromSmartWallet = transferTokenFromSmartWallet;

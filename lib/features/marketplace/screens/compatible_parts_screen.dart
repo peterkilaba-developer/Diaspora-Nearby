@@ -35,6 +35,15 @@ class _CompatiblePartsScreenState extends ConsumerState<CompatiblePartsScreen> {
   @override
   void initState() {
     super.initState();
+    final repo = ref.read(marketplaceRepositoryProvider);
+    final cached = repo.getCachedPartsForVehicle(
+      make: widget.make,
+      model: widget.model,
+    );
+    if (cached.isNotEmpty) {
+      _parts = cached;
+      _loading = false;
+    }
     _fetchParts();
   }
 
@@ -242,7 +251,10 @@ class _CompatiblePartsScreenState extends ConsumerState<CompatiblePartsScreen> {
     final fitsYear = cp?['carYear']?.toString() ?? '';
 
     return GestureDetector(
-      onTap: () => context.push('/marketplace/listing/${part.id}'),
+      onTap: () {
+        ref.read(marketplaceRepositoryProvider).cacheListing(part);
+        context.push('/marketplace/listing/${part.id}');
+      },
       child: Container(
         decoration: BoxDecoration(
           color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.white,

@@ -32,8 +32,10 @@ exports.createEmergencyFundCheckout = functions
   .https.onCall(async (data, context) => {
   requireAppCheck(context);
   const userId = requireAuth(context);
-  await consumeRateLimit("emergency-checkout", userId, 10, 60 * 60 * 1000);
-  const authUser = await admin.auth().getUser(userId);
+  const [, authUser] = await Promise.all([
+    consumeRateLimit("emergency-checkout", userId, 10, 60 * 60 * 1000),
+    admin.auth().getUser(userId),
+  ]);
   const email = authUser.email || null;
   const stripe = getStripe();
   const checkoutLockRef = db.collection('payment_checkout_locks').doc(userId);
@@ -44,8 +46,10 @@ exports.createEmergencyFundCheckout = functions
     // annual membership.
     await db.runTransaction(async (transaction) => {
       const membershipRef = db.collection('emergency_fund_memberships').doc(userId);
-      const membership = await transaction.get(membershipRef);
-      const lock = await transaction.get(checkoutLockRef);
+      const [membership, lock] = await Promise.all([
+        transaction.get(membershipRef),
+        transaction.get(checkoutLockRef),
+      ]);
       const now = Date.now();
       const nextPayment = membership.exists && membership.data().nextPaymentDate;
       if (membership.exists && membership.data().status === 'active' &&
@@ -86,28 +90,28 @@ exports.createEmergencyFundCheckout = functions
       });
     }
 
-    // 2. Create Ephemeral Key for the customer
-    const ephemeralKey = await stripe.ephemeralKeys.create(
-      { customer: customerId },
-      { apiVersion: '2024-12-18.acacia' }
-    );
-
-    // 3. Create PaymentIntent for $100
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: 10000, // $100.00 in cents
-      currency: 'usd',
-      customer: customerId,
-      // Business name — appears on customer bank/card statements
-      statement_descriptor: 'DIASPORA NEARBY',
-      statement_descriptor_suffix: 'EMERGENCY FUND',
-      description: 'Diaspora Nearby – Ubuntu Emergency Fund Annual Contribution',
-      metadata: {
-        userId: userId,
-        product: 'emergency_fund_contribution',
-        pctIncentive: '10',
-      },
-      automatic_payment_methods: { enabled: true },
-    });
+    // 2. Create Ephemeral Key & PaymentIntent for $100 in parallel
+    const [ephemeralKey, paymentIntent] = await Promise.all([
+      stripe.ephemeralKeys.create(
+        { customer: customerId },
+        { apiVersion: '2024-12-18.acacia' }
+      ),
+      stripe.paymentIntents.create({
+        amount: 10000, // $100.00 in cents
+        currency: 'usd',
+        customer: customerId,
+        // Business name — appears on customer bank/card statements
+        statement_descriptor: 'DIASPORA NEARBY',
+        statement_descriptor_suffix: 'EMERGENCY FUND',
+        description: 'Diaspora Nearby – Ubuntu Emergency Fund Annual Contribution',
+        metadata: {
+          userId: userId,
+          product: 'emergency_fund_contribution',
+          pctIncentive: '10',
+        },
+        automatic_payment_methods: { enabled: true },
+      }),
+    ]);
     await checkoutLockRef.set({ paymentIntentId: paymentIntent.id }, { merge: true });
 
     console.log(`[Stripe] PaymentIntent created for user ${userId}: ${paymentIntent.id}`);
@@ -192,8 +196,10 @@ exports.stripeEmergencyFundWebhook = functions
       await db.runTransaction(async (transaction) => {
         const eventRef = db.collection('stripe_webhook_events').doc(event.id);
         const paymentRef = db.collection('stripe_processed_payments').doc(paymentId);
-        const eventSnapshot = await transaction.get(eventRef);
-        const paymentSnapshot = await transaction.get(paymentRef);
+        const [eventSnapshot, paymentSnapshot] = await Promise.all([
+          transaction.get(eventRef),
+          transaction.get(paymentRef),
+        ]);
         if (eventSnapshot.exists || paymentSnapshot.exists) return;
 
         const membershipRef = db.collection('emergency_fund_memberships').doc(userId);

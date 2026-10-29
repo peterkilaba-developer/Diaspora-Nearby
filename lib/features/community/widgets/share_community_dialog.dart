@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
@@ -25,73 +26,108 @@ class ShareCommunityDialog extends ConsumerStatefulWidget {
 class _ShareCommunityDialogState extends ConsumerState<ShareCommunityDialog> {
   final GlobalKey _globalKey = GlobalKey();
   bool _isSharing = false;
+  Future<String?>? _preCapturedImageFuture;
+  Future<String>? _preFetchedShareUrlFuture;
 
-  Future<void> _captureAndShare() async {
-    setState(() {
-      _isSharing = true;
+  @override
+  void initState() {
+    super.initState();
+    _preFetchedShareUrlFuture = _resolveShareUrl();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _preCapturedImageFuture = _captureCardImage();
+      }
     });
+  }
 
+  Future<String> _resolveShareUrl() async {
+    const baseUrl = 'https://diasporanearby.com/invite';
     try {
-      // 1. Capture Image
+      final user = ref.read(authRepositoryProvider).currentUser;
+      if (user != null) {
+        final pointsRepo = ref.read(pointsRepositoryProvider);
+        String? code = await pointsRepo.getReferralCode(user.uid);
+
+        if (code == null) {
+          final userPoints = await pointsRepo.getUserPoints(user.uid);
+          final firstName = user.displayName?.split(' ').first ?? 'Friend';
+          final countryCode = userPoints?.homeCountryCode ?? 'GLO';
+          code = await pointsRepo.generateReferralCode(
+            user.uid,
+            firstName,
+            countryCode,
+          );
+        }
+
+        return '$baseUrl?code=$code';
+      }
+    } catch (e) {
+      debugPrint('Error getting referral code: $e');
+    }
+    return baseUrl;
+  }
+
+  Future<String?> _captureCardImage() async {
+    try {
       final boundary =
           _globalKey.currentContext?.findRenderObject()
               as RenderRepaintBoundary?;
-      if (boundary == null) {
-        throw Exception('Could not find render boundary');
-      }
+      if (boundary == null) return null;
 
-      // Wait a bit to ensure rendering is complete if needed (usually frame end)
-      // ui.Image image = await boundary.toImage(pixelRatio: 3.0);
-
-      // Attempt generic capture
       final image = await boundary.toImage(pixelRatio: 3.0);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       final pngBytes = byteData!.buffer.asUint8List();
 
-      // 2. Save to Temp File
       final directory = await getTemporaryDirectory();
       final imagePath =
           '${directory.path}/community_share_${widget.community.id}.png';
       final imageFile = File(imagePath);
       await imageFile.writeAsBytes(pngBytes);
+      return imagePath;
+    } catch (e) {
+      debugPrint('Error pre-capturing community card: $e');
+      return null;
+    }
+  }
 
-      // 3. Share
+  Future<void> _captureAndShare() async {
+    if (_isSharing) return;
+    setState(() {
+      _isSharing = true;
+    });
+
+    try {
+      final imageFuture = _preCapturedImageFuture ?? _captureCardImage();
+      final urlFuture = _preFetchedShareUrlFuture ?? _resolveShareUrl();
+
+      final results = await Future.wait([imageFuture, urlFuture]);
+      final imagePath = results[0] ?? await _captureCardImage();
+      final shareUrl = results[1] ?? 'https://diasporanearby.com/invite';
+
       if (mounted) {
         Navigator.pop(context);
+      }
 
-        String shareText =
-            'Join me in the ${widget.community.name} on Diaspora Nearby!';
-        String shareUrl = 'https://diasporanearby.com/invite';
+      final shareText =
+          'Join me in the ${widget.community.name} on Diaspora Nearby!';
 
-        try {
-          final user = ref.read(authRepositoryProvider).currentUser;
-          if (user != null) {
-            final pointsRepo = ref.read(pointsRepositoryProvider);
-            String? code = await pointsRepo.getReferralCode(user.uid);
-
-            if (code == null) {
-              final userPoints = await pointsRepo.getUserPoints(user.uid);
-              final firstName = user.displayName?.split(' ').first ?? 'Friend';
-              final countryCode = userPoints?.homeCountryCode ?? 'GLO';
-              code = await pointsRepo.generateReferralCode(
-                user.uid,
-                firstName,
-                countryCode,
-              );
-            }
-
-            shareUrl = '$shareUrl?code=$code';
-          }
-        } catch (e) {
-          debugPrint('Error getting referral code: $e');
-          // Continue sharing without code
-        }
-
-        await SharePlus.instance.share(
-          ShareParams(
-            files: [XFile(imagePath)],
-            text: '$shareText\n\n$shareUrl',
-            subject: 'Join ${widget.community.name}',
+      if (imagePath != null) {
+        unawaited(
+          SharePlus.instance.share(
+            ShareParams(
+              files: [XFile(imagePath)],
+              text: '$shareText\n\n$shareUrl',
+              subject: 'Join ${widget.community.name}',
+            ),
+          ),
+        );
+      } else {
+        unawaited(
+          SharePlus.instance.share(
+            ShareParams(
+              text: '$shareText\n\n$shareUrl',
+              subject: 'Join ${widget.community.name}',
+            ),
           ),
         );
       }
@@ -110,55 +146,45 @@ class _ShareCommunityDialogState extends ConsumerState<ShareCommunityDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Preview container
-          Center(
-            child: RepaintBoundary(
-              key: _globalKey,
-              child: CommunityShareCard(
-                community: widget.community,
-                memberCount: widget.community.memberCount,
+    return BackdropFilter(
+      filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+      child: Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: RepaintBoundary(
+                key: _globalKey,
+                child: CommunityShareCard(
+                  community: widget.community,
+                  memberCount: widget.community.memberCount,
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 24),
-
-          // Action Buttons
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              FloatingActionButton.extended(
-                onPressed: _isSharing ? null : _captureAndShare,
-                backgroundColor: AppTheme.accent,
-                icon: _isSharing
-                    ? Container(
-                        width: 24,
-                        height: 24,
-                        padding: const EdgeInsets.all(2),
-                        child: const CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : const Icon(LucideIcons.share2),
-                label: Text(_isSharing ? 'Preparing...' : 'Share Community'),
-              ),
-              const SizedBox(width: 16),
-              FloatingActionButton(
-                onPressed: () => Navigator.pop(context),
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black,
-                mini: true,
-                child: const Icon(LucideIcons.x),
-              ),
-            ],
-          ),
-        ],
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                FloatingActionButton.extended(
+                  onPressed: _isSharing ? null : _captureAndShare,
+                  backgroundColor: AppTheme.accent,
+                  icon: const Icon(LucideIcons.share2),
+                  label: const Text('Share Community'),
+                ),
+                const SizedBox(width: 16),
+                FloatingActionButton(
+                  onPressed: () => Navigator.pop(context),
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.black,
+                  mini: true,
+                  child: const Icon(LucideIcons.x),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

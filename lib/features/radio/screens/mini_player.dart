@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/features/radio/providers/radio_provider.dart';
@@ -18,12 +20,13 @@ class MiniPlayer extends ConsumerWidget {
 
     if (station == null) return const SizedBox.shrink();
 
-    // Check if station is favorited
+    // Check if station is favorited (with 0ms optimistic override)
     final favoriteStations =
         ref.watch(favoriteStationsProvider).asData?.value ?? [];
-    final isFavorite = favoriteStations.any(
-      (s) => s.stationuuid == station.stationuuid,
-    );
+    final optimisticMap = ref.watch(optimisticFavoritesProvider);
+    final isFavorite =
+        optimisticMap[station.stationuuid] ??
+        favoriteStations.any((s) => s.stationuuid == station.stationuuid);
 
     // Standardize Country Name
     final countryObj = getCountryByCode(station.countrycode);
@@ -82,7 +85,7 @@ class MiniPlayer extends ConsumerWidget {
                         (station.favicon.isNotEmpty &&
                             station.favicon.startsWith('http'))
                         ? DecorationImage(
-                            image: NetworkImage(station.favicon),
+                            image: CachedNetworkImageProvider(station.favicon),
                             fit: BoxFit.cover,
                           )
                         : null,
@@ -216,7 +219,7 @@ class MiniPlayer extends ConsumerWidget {
                         }
                       },
                     ),
-                    // Heart button (favorite toggle - matches card implementation)
+                    // Heart button (favorite toggle - 0ms optimistic update)
                     IconButton(
                       icon: Icon(
                         LucideIcons.heart,
@@ -225,13 +228,22 @@ class MiniPlayer extends ConsumerWidget {
                             ? Theme.of(context).colorScheme.primary
                             : Colors.white,
                       ),
-                      onPressed: () async {
+                      onPressed: () {
                         final user = ref.read(authStateProvider).value;
                         if (user != null) {
-                          await ref
-                              .read(radioRepositoryProvider)
-                              .toggleFavorite(user.uid, station);
-                          ref.invalidate(favoriteStationsProvider);
+                          ref
+                              .read(optimisticFavoritesProvider.notifier)
+                              .setFavorite(station.stationuuid, !isFavorite);
+                          unawaited(() async {
+                            await ref
+                                .read(radioRepositoryProvider)
+                                .toggleFavorite(
+                                  user.uid,
+                                  station,
+                                  currentlyFavorite: isFavorite,
+                                );
+                            ref.invalidate(favoriteStationsProvider);
+                          }());
                         }
                       },
                     ),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -15,13 +16,20 @@ import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 
 // Providers
 
-final nearbyUsersStreamProvider = StreamProvider.autoDispose<List<ProfileData>>(
-  (ref) {
-    return DiscoveryService().getUsersNearby().map(
-      (users) => users.map(ProfileData.fromJson).toList(growable: false),
-    );
-  },
-);
+final nearbyUsersStreamProvider = StreamProvider<List<ProfileData>>((ref) {
+  final profileRepo = ref.read(profileRepositoryProvider);
+  return DiscoveryService().getUsersNearby().map((users) {
+    return users
+        .map((json) {
+          final profile = ProfileData.fromJson(json);
+          if (profile.uid != null && profile.uid!.isNotEmpty) {
+            profileRepo.cacheProfile(profile.uid!, profile);
+          }
+          return profile;
+        })
+        .toList(growable: false);
+  });
+});
 
 class DiscoveryScreen extends ConsumerStatefulWidget {
   const DiscoveryScreen({super.key});
@@ -34,7 +42,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
   @override
   void initState() {
     super.initState();
-    _trackExploration();
+    unawaited(_trackExploration());
   }
 
   Future<void> _trackExploration() async {
@@ -49,6 +57,102 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
     }
   }
 
+  Widget _buildResults(
+    BuildContext context,
+    List<ProfileData> rawUsers,
+    Set<String> activeChatUserIds,
+    String homeCountry,
+  ) {
+    final users = rawUsers
+        .where((user) => !activeChatUserIds.contains(user.uid))
+        .toList();
+
+    if (users.isEmpty) {
+      final allConnected = rawUsers.isNotEmpty && activeChatUserIds.isNotEmpty;
+
+      if (allConnected) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  LucideIcons.messagesSquare,
+                  size: 48,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'All Nearby Members Connected',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'You are already in active chats with all nearby community members in your area.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Theme.of(context).hintColor),
+                ),
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(side: BorderSide.none),
+                  onPressed: () => context.go('/chats'),
+                  icon: const Icon(LucideIcons.messageSquare, size: 18),
+                  label: const Text('View Active Chats'),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.location_off_outlined,
+                size: 48,
+                color: Colors.grey,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'There are no other community members from $homeCountry nearby',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 15),
+              ),
+              const SizedBox(height: 12),
+              TextButton.icon(
+                onPressed: () {
+                  ref.invalidate(nearbyUsersStreamProvider);
+                },
+                icon: const Icon(LucideIcons.refreshCw, size: 16),
+                label: const Text('Refresh Location'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(8),
+      itemCount: users.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final user = users[index];
+        return UserCardView(
+          user: user,
+          onNameTap: () => context.push('/profile/${user.uid}'),
+          onChatTap: () => context.push('/chat/direct/${user.uid}'),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final nearbyUsersAsync = ref.watch(nearbyUsersStreamProvider);
@@ -59,7 +163,6 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
     final homeCountry =
         userProfileAsync.value?.homeCountry ?? 'your home country';
 
-    // Extract UIDs of users with whom the current user already has active direct chats
     final Set<String> activeChatUserIds = {};
     if (currentUser != null && chatsAsync.value != null) {
       for (final chat in chatsAsync.value!) {
@@ -74,113 +177,31 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
 
     return Column(
       children: [
-        // Results List
         Expanded(
           child: nearbyUsersAsync.when(
-            data: (rawUsers) {
-              // Exclude users with whom an active direct chat already exists
-              final users = rawUsers
-                  .where((user) => !activeChatUserIds.contains(user.uid))
-                  .toList();
-
-              if (users.isEmpty) {
-                // If nearby members exist but ALL of them are already in active chats
-                final allConnected =
-                    rawUsers.isNotEmpty && activeChatUserIds.isNotEmpty;
-
-                if (allConnected) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            LucideIcons.messagesSquare,
-                            size: 48,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          const SizedBox(height: 16),
-                          const Text(
-                            'All Nearby Members Connected',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'You are already in active chats with all nearby community members in your area.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Theme.of(context).hintColor,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          OutlinedButton.icon(
-                            onPressed: () => context.go('/chats'),
-                            icon: const Icon(
-                              LucideIcons.messageSquare,
-                              size: 18,
-                            ),
-                            label: const Text('View Active Chats'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }
-
-                // Default empty state when no nearby members are found
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.location_off_outlined,
-                          size: 48,
-                          color: Colors.grey,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'There are no other community members from $homeCountry nearby',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 15),
-                        ),
-                        const SizedBox(height: 12),
-                        TextButton.icon(
-                          onPressed: () {
-                            // Force refresh location
-                            ref.invalidate(nearbyUsersStreamProvider);
-                          },
-                          icon: const Icon(LucideIcons.refreshCw, size: 16),
-                          label: const Text('Refresh Location'),
-                        ),
-                      ],
-                    ),
-                  ),
+            skipLoadingOnRefresh: true,
+            skipLoadingOnReload: true,
+            data: (rawUsers) => _buildResults(
+              context,
+              rawUsers,
+              activeChatUserIds,
+              homeCountry,
+            ),
+            loading: () {
+              final cachedRaw = DiscoveryService().cachedNearbyUsers;
+              if (cachedRaw != null) {
+                final parsed = cachedRaw
+                    .map(ProfileData.fromJson)
+                    .toList(growable: false);
+                return _buildResults(
+                  context,
+                  parsed,
+                  activeChatUserIds,
+                  homeCountry,
                 );
               }
-
-              return ListView.separated(
-                padding: const EdgeInsets.all(8),
-                itemCount: users.length,
-                separatorBuilder: (context, index) =>
-                    const SizedBox(height: 12),
-                itemBuilder: (context, index) {
-                  final user = users[index];
-                  return UserCardView(
-                    user: user,
-                    onNameTap: () => context.push('/profile/${user.uid}'),
-                    onChatTap: () => context.push('/chat/direct/${user.uid}'),
-                  );
-                },
-              );
+              return const Center(child: CircularProgressIndicator());
             },
-            loading: () => const Center(child: CircularProgressIndicator()),
             error: (err, stack) => Center(child: Text('Error: $err')),
           ),
         ),

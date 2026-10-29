@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart' as cf;
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:diaspora_nearby/features/radio/models/radio_station.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 
@@ -24,13 +26,65 @@ class RadioRepository {
   static const String _directUrl =
       'https://de1.api.radio-browser.info/json'; // Primary mirror
 
+  static final Map<String, List<RadioStation>> _countryStationsCache = {};
+  static List<RadioStation>? _topStationsCache;
+  static final Map<String, List<RadioStation>> _searchCache = {};
+  static final Map<String, List<RadioStation>> _favoritesCache = {};
+  static final Map<String, List<RadioStation>> _historyCache = {};
+
+  List<RadioStation>? getCachedStationsByCountry(String countryCode) =>
+      _countryStationsCache[countryCode.toUpperCase()];
+
+  List<RadioStation>? getCachedTopStations() => _topStationsCache;
+
+  List<RadioStation>? getCachedFavorites(String userId) =>
+      _favoritesCache[userId];
+
+  List<RadioStation>? getCachedHistory(String userId) => _historyCache[userId];
+
   RadioRepository({
     required cf.FirebaseFirestore firestore,
     required FirebaseFunctions functions,
     required AuthRepository auth,
   }) : _firestore = firestore,
        _functions = functions,
-       _auth = auth;
+       _auth = auth {
+    _hydratePersistentCaches();
+  }
+
+  static bool _hydrated = false;
+  Future<void> _hydratePersistentCaches() async {
+    if (_hydrated) return;
+    _hydrated = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final topRaw = prefs.getString('radio_top_stations_v1');
+      if (topRaw != null && _topStationsCache == null) {
+        final list = json.decode(topRaw) as List<dynamic>;
+        _topStationsCache = list
+            .map((e) => RadioStation.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList();
+      }
+      for (final key in prefs.getKeys()) {
+        if (key.startsWith('radio_country_v1_')) {
+          final code = key.substring('radio_country_v1_'.length);
+          if (!_countryStationsCache.containsKey(code)) {
+            final raw = prefs.getString(key);
+            if (raw != null) {
+              final list = json.decode(raw) as List<dynamic>;
+              _countryStationsCache[code] = list
+                  .map(
+                    (e) => RadioStation.fromJson(
+                      Map<String, dynamic>.from(e as Map),
+                    ),
+                  )
+                  .toList();
+            }
+          }
+        }
+      }
+    } catch (_) {}
+  }
 
   // --- Helper Methods ---
 
@@ -138,21 +192,58 @@ class RadioRepository {
   }
 
   Future<List<RadioStation>> getStationsByCountry(String countryCode) async {
-    await _updateUnreliableCache();
-    return _fetchWithFallback(
-      'bycountrycodeexact/${countryCode.toUpperCase()}',
-    );
+    final code = countryCode.toUpperCase();
+    unawaited(_updateUnreliableCache());
+    final stations = await _fetchWithFallback('bycountrycodeexact/$code');
+    if (stations.isNotEmpty) {
+      _countryStationsCache[code] = stations;
+      unawaited(() async {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString(
+            'radio_country_v1_$code',
+            json.encode(stations.take(60).map((s) => s.toJson()).toList()),
+          );
+        } catch (_) {}
+      }());
+    }
+    return stations.isNotEmpty
+        ? stations
+        : (_countryStationsCache[code] ?? const []);
   }
 
   Future<List<RadioStation>> searchStations(String query) async {
-    await _updateUnreliableCache();
+    final normalized = query.trim().toLowerCase();
+    if (_searchCache.containsKey(normalized)) {
+      return _searchCache[normalized]!;
+    }
+    unawaited(_updateUnreliableCache());
     final encodedQuery = Uri.encodeComponent(query);
-    return _fetchWithFallback('search?name=$encodedQuery&limit=100');
+    final results = await _fetchWithFallback(
+      'search?name=$encodedQuery&limit=100',
+    );
+    if (results.isNotEmpty) {
+      _searchCache[normalized] = results;
+    }
+    return results;
   }
 
   Future<List<RadioStation>> getTopStations({int limit = 100}) async {
-    await _updateUnreliableCache();
-    return _fetchWithFallback('topclick/$limit');
+    unawaited(_updateUnreliableCache());
+    final stations = await _fetchWithFallback('topclick/$limit');
+    if (stations.isNotEmpty) {
+      _topStationsCache = stations;
+      unawaited(() async {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString(
+            'radio_top_stations_v1',
+            json.encode(stations.take(60).map((s) => s.toJson()).toList()),
+          );
+        } catch (_) {}
+      }());
+    }
+    return stations.isNotEmpty ? stations : (_topStationsCache ?? const []);
   }
 
   // --- Reliability Reporting ---
@@ -183,7 +274,11 @@ class RadioRepository {
 
   // --- Firestore Methods (Favorites & History) ---
 
-  Future<void> toggleFavorite(String userId, RadioStation station) async {
+  Future<void> toggleFavorite(
+    String userId,
+    RadioStation station, {
+    bool? currentlyFavorite,
+  }) async {
     try {
       final docRef = _firestore
           .collection('users')
@@ -191,9 +286,23 @@ class RadioRepository {
           .collection('radio_favorites')
           .doc(station.stationuuid);
 
-      final doc = await docRef.get();
+      final cachedList = _favoritesCache[userId];
+      final bool isFav = currentlyFavorite ??
+          (cachedList != null
+              ? cachedList.any((s) => s.stationuuid == station.stationuuid)
+              : (await docRef.get()).exists);
 
-      if (doc.exists) {
+      if (cachedList != null) {
+        if (isFav) {
+          _favoritesCache[userId] = cachedList
+              .where((s) => s.stationuuid != station.stationuuid)
+              .toList();
+        } else {
+          _favoritesCache[userId] = [station, ...cachedList];
+        }
+      }
+
+      if (isFav) {
         await docRef.delete();
       } else {
         await docRef.set({
@@ -216,16 +325,23 @@ class RadioRepository {
           .limit(500)
           .get();
 
-      return snapshot.docs
+      final list = snapshot.docs
           .map((doc) => RadioStation.fromJson(_sanitizeStationData(doc.data())))
           .toList();
+      _favoritesCache[userId] = list;
+      return list;
     } catch (e) {
       debugPrint('RadioRepo: Error fetching favorites: $e');
-      return [];
+      return _favoritesCache[userId] ?? [];
     }
   }
 
   Future<void> addToHistory(String userId, RadioStation station) async {
+    final existing = _historyCache[userId] ?? const <RadioStation>[];
+    _historyCache[userId] = [
+      station,
+      ...existing.where((s) => s.stationuuid != station.stationuuid),
+    ].take(20).toList();
     try {
       await _firestore
           .collection('users')
@@ -251,12 +367,14 @@ class RadioRepository {
           .limit(20)
           .get();
 
-      return snapshot.docs
+      final list = snapshot.docs
           .map((doc) => RadioStation.fromJson(_sanitizeStationData(doc.data())))
           .toList();
+      _historyCache[userId] = list;
+      return list;
     } catch (e) {
       debugPrint('RadioRepo: Error fetching history: $e');
-      return [];
+      return _historyCache[userId] ?? [];
     }
   }
 

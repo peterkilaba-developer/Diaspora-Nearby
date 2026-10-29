@@ -122,10 +122,14 @@ async function performAppointment({ chamberId, userId, role }) {
  * `approved` flips from false → true. Everything else is a no-op.
  */
 // Lightweight cache to avoid re-fetching the chamber name on every push.
+const chamberNameCache = new Map();
 async function getChamberName(chamberId) {
+    if (chamberNameCache.has(chamberId)) return chamberNameCache.get(chamberId);
     try {
         const snap = await db.collection("organizations").doc(chamberId).get();
-        return snap.exists ? snap.data().name || chamberId : chamberId;
+        const name = snap.exists ? snap.data().name || chamberId : chamberId;
+        chamberNameCache.set(chamberId, name);
+        return name;
     } catch (_) {
         return chamberId;
     }
@@ -172,15 +176,17 @@ exports.onChamberLeadershipRequestApproved = functions.firestore
             if (after.status === "approved") return null;
             try {
                 await performAppointment({ chamberId, userId, role });
-                await change.after.ref.update({
-                    status: "approved",
-                    decidedAt: admin.firestore.FieldValue.serverTimestamp(),
-                });
+                const [, chamberName] = await Promise.all([
+                    change.after.ref.update({
+                        status: "approved",
+                        decidedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    }),
+                    getChamberName(chamberId),
+                ]);
                 console.log(
                     `🏛️ [chamber-leadership] ${requestId}: appointed ${userId} as ${role} of ${chamberId}`
                 );
 
-                const chamberName = await getChamberName(chamberId);
                 await sendPushToUser(userId, {
                     title: `You're now ${roleDisplay}`,
                     body: `Your leadership request for ${chamberName} was approved.`,
@@ -195,14 +201,16 @@ exports.onChamberLeadershipRequestApproved = functions.firestore
                 console.error(
                     `[chamber-leadership] Appointment failed for ${requestId}: ${e.message}`
                 );
-                await change.after.ref.update({
-                    approved: false,
-                    status: "rejected",
-                    decisionNote: `Appointment failed: ${e.message}`,
-                    decidedAt: admin.firestore.FieldValue.serverTimestamp(),
-                });
+                const [, chamberName] = await Promise.all([
+                    change.after.ref.update({
+                        approved: false,
+                        status: "rejected",
+                        decisionNote: `Appointment failed: ${e.message}`,
+                        decidedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    }),
+                    getChamberName(chamberId),
+                ]);
 
-                const chamberName = await getChamberName(chamberId);
                 await sendPushToUser(userId, {
                     title: "Leadership request couldn't be granted",
                     body: `Couldn't appoint you as ${roleDisplay} of ${chamberName}: ${e.message}`,

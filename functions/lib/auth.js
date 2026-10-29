@@ -201,13 +201,15 @@ exports.requestWhatsAppOtp = functions.runWith({
   if (!isTestPhoneNumber(phoneNumber)) {
     requireAppCheck(context);
   }
-  await consumeRateLimit("otp-request-phone", phoneNumber, 5, 60 * 60 * 1000);
-  await consumeRateLimit(
-      "otp-request-app",
-      context.app ? context.app.appId : "emulator",
-      30,
-      60 * 60 * 1000,
-  );
+  await Promise.all([
+    consumeRateLimit("otp-request-phone", phoneNumber, 5, 60 * 60 * 1000),
+    consumeRateLimit(
+        "otp-request-app",
+        context.app ? context.app.appId : "emulator",
+        30,
+        60 * 60 * 1000,
+    ),
+  ]);
 
   const otp = crypto.randomInt(100000, 1000000).toString();
   const otpRef = db.collection("whatsapp_otps").doc(stableHash(phoneNumber));

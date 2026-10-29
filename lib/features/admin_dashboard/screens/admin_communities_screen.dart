@@ -18,6 +18,15 @@ class _AdminCommunitiesScreenState
     extends ConsumerState<AdminCommunitiesScreen> {
   String _searchQuery = '';
   final _searchController = TextEditingController();
+  late final Stream<QuerySnapshot> _communitiesStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _communitiesStream = FirebaseFirestore.instance
+        .collection('communities')
+        .snapshots();
+  }
 
   @override
   void dispose() {
@@ -72,9 +81,7 @@ class _AdminCommunitiesScreenState
           // Communities List
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('communities')
-                  .snapshots(),
+              stream: _communitiesStream,
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return Center(child: Text('Error: ${snapshot.error}'));

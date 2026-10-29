@@ -645,6 +645,7 @@ class ChatCard extends ConsumerWidget {
     // Get display name (for DM chats, gets the other participant's name)
     // Get display name
     String displayName = chat.name;
+    ProfileData? resolvedDirectPartner;
     if (chat.isCommunity) {
       final viewerHomeCountryCode = ref
           .watch(userProfileProvider)
@@ -661,11 +662,12 @@ class ChatCard extends ConsumerWidget {
           ? ref.read(profileRepositoryProvider).getCachedProfile(otherUserId)
           : null;
       final partnerAsync = ref.watch(chatPartnerProvider(otherUserId));
-      final resolvedPartner = partnerAsync.value ?? cachedPartner;
+      resolvedDirectPartner = partnerAsync.value ?? cachedPartner;
 
-      if (resolvedPartner != null) {
+      if (resolvedDirectPartner != null) {
         final fullName =
-            '${resolvedPartner.firstName} ${resolvedPartner.lastName}'.trim();
+            '${resolvedDirectPartner.firstName} ${resolvedDirectPartner.lastName}'
+                .trim();
         if (fullName.isNotEmpty) {
           displayName = fullName;
         }
@@ -805,68 +807,49 @@ class ChatCard extends ConsumerWidget {
                           Expanded(
                             child: Row(
                               children: [
-                                if (chat.isDirect)
-                                  Consumer(
-                                    builder: (context, ref, child) {
-                                      final currentUserId = ref
-                                          .watch(authStateProvider)
-                                          .value
-                                          ?.uid;
-                                      final otherUserId = chat
-                                          .getOtherParticipantId(
-                                            currentUserId ?? '',
+                                if (chat.isDirect &&
+                                    resolvedDirectPartner != null) ...[
+                                  if (resolvedDirectPartner.occupation ==
+                                      'Organization')
+                                    const Padding(
+                                      padding: EdgeInsets.only(right: 6.0),
+                                      child: Icon(
+                                        LucideIcons.building2,
+                                        size: 16,
+                                        color: Colors.blue,
+                                      ),
+                                    )
+                                  else ...[
+                                    Builder(
+                                      builder: (_) {
+                                        final countryCode =
+                                            resolvedDirectPartner!
+                                                .currentLocation
+                                                ?.countryCode ??
+                                            resolvedDirectPartner
+                                                .hostCountryCode ??
+                                            resolvedDirectPartner
+                                                .hostLocation
+                                                .countryCode;
+                                        if (countryCode != null &&
+                                            countryCode.isNotEmpty) {
+                                          return Padding(
+                                            padding: const EdgeInsets.only(
+                                              right: 6.0,
+                                            ),
+                                            child: Text(
+                                              _getCountryFlag(countryCode),
+                                              style: const TextStyle(
+                                                fontSize: 16,
+                                              ),
+                                            ),
                                           );
-                                      final profileAsync = ref.watch(
-                                        chatPartnerProvider(otherUserId ?? ''),
-                                      );
-                                      return profileAsync.maybeWhen(
-                                        data: (profile) {
-                                          // [NEW] Logic: If it is an Organization, show Building Icon
-                                          // We used 'occupation' as a flag in the provider above
-                                          final isOrganization =
-                                              profile?.occupation ==
-                                              'Organization';
-
-                                          if (isOrganization) {
-                                            return const Padding(
-                                              padding: EdgeInsets.only(
-                                                right: 6.0,
-                                              ),
-                                              child: Icon(
-                                                LucideIcons.building2,
-                                                size: 16,
-                                                color: Colors.blue,
-                                              ),
-                                            );
-                                          }
-
-                                          // Fallback chain: Current GPS -> Top-level Host Country -> Host Location Object
-                                          final countryCode =
-                                              profile
-                                                  ?.currentLocation
-                                                  ?.countryCode ??
-                                              profile?.hostCountryCode ??
-                                              profile?.hostLocation.countryCode;
-                                          if (countryCode != null &&
-                                              countryCode.isNotEmpty) {
-                                            return Padding(
-                                              padding: const EdgeInsets.only(
-                                                right: 6.0,
-                                              ),
-                                              child: Text(
-                                                _getCountryFlag(countryCode),
-                                                style: const TextStyle(
-                                                  fontSize: 16,
-                                                ),
-                                              ),
-                                            );
-                                          }
-                                          return const SizedBox.shrink();
-                                        },
-                                        orElse: () => const SizedBox.shrink(),
-                                      );
-                                    },
-                                  ),
+                                        }
+                                        return const SizedBox.shrink();
+                                      },
+                                    ),
+                                  ],
+                                ],
                                 // [NEW] Event Icon Check
                                 if (chat.isEvent)
                                   const Padding(

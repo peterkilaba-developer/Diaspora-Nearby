@@ -55,11 +55,8 @@ class _ChatLinkPreviewState extends State<ChatLinkPreview> {
 
     return FutureBuilder<LinkPreviewData?>(
       future: _previewFuture,
+      initialData: LinkPreviewService.getCachedPreviewSync(widget.url),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox.shrink();
-        }
-
         final data = snapshot.data;
         if (data == null || !data.hasValidContent) {
           return const SizedBox.shrink();

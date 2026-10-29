@@ -1,10 +1,13 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:diaspora_nearby/core/data/countries.dart'; // [NEW] For getCountryByCode
+import 'package:diaspora_nearby/core/data/countries.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:diaspora_nearby/features/community/models/community_data.dart';
+import 'package:diaspora_nearby/features/community/repository/community_repository.dart';
 import 'package:diaspora_nearby/features/chat/utils/community_chat_utils.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/shared/widgets/user_card.dart';
@@ -13,9 +16,8 @@ import 'package:diaspora_nearby/features/profile/repository/profile_repository.d
 import 'package:diaspora_nearby/core/utils/location_utils.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/shared/widgets/confetti_overlay.dart';
-// [NEW]
-import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW]
-import 'package:diaspora_nearby/features/community/widgets/share_community_dialog.dart'; // [NEW]
+import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
+import 'package:diaspora_nearby/features/community/widgets/share_community_dialog.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 
 class CommunityMembersScreen extends ConsumerStatefulWidget {
@@ -38,10 +40,9 @@ class _CommunityMembersScreenState
   @override
   void initState() {
     super.initState();
-    _trackExploration(); // [NEW]
+    unawaited(_trackExploration());
   }
 
-  // [NEW] Track reward
   Future<void> _trackExploration() async {
     final user = ref.read(authRepositoryProvider).currentUser;
     if (user != null) {
@@ -57,6 +58,16 @@ class _CommunityMembersScreenState
         );
       }
     }
+  }
+
+  void _openShareDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: ShareCommunityDialog(community: widget.community),
+      ),
+    );
   }
 
   @override
@@ -121,56 +132,65 @@ class _CommunityMembersScreenState
         actions: [
           IconButton(
             icon: const Icon(LucideIcons.share2, size: 20),
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (context) =>
-                    ShareCommunityDialog(community: widget.community),
-              );
-            },
+            onPressed: () => _openShareDialog(context),
           ),
           const SizedBox(width: 8),
         ],
       ),
-
       body: SafeArea(
         child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          // Stream members from Firestore in real time
           stream: FirebaseFirestore.instance
               .collection('users')
               .where('communityMemberships', arrayContains: widget.communityId)
               .limit(50)
               .snapshots(),
           builder: (context, snapshot) {
+            final currentUser = ref.watch(authRepositoryProvider).currentUser;
+            final currentProfile =
+                ref.watch(userProfileProvider).value ??
+                (currentUser != null
+                    ? ref
+                          .read(profileRepositoryProvider)
+                          .getCachedProfile(currentUser.uid)
+                    : null);
+            final cachedMembers = ref
+                .read(communityRepositoryProvider)
+                .getCachedCommunityMembers(widget.communityId);
+
             if (snapshot.connectionState == ConnectionState.waiting &&
-                !snapshot.hasData) {
+                !snapshot.hasData &&
+                cachedMembers == null) {
               return const Center(child: CircularProgressIndicator());
             }
-            if (snapshot.hasError) {
+            if (snapshot.hasError && cachedMembers == null) {
               return Center(child: Text('Error: ${snapshot.error}'));
             }
 
-            final currentUser = ref.watch(authRepositoryProvider).currentUser;
-            final currentProfile = ref.watch(userProfileProvider).value;
-            final members = _parseAndSortMembers(
-              snapshot.data?.docs ?? const [],
-              currentProfile,
-            );
+            final List<ProfileData> members;
+            if (snapshot.hasData) {
+              members = _parseAndSortMembers(
+                snapshot.data!.docs,
+                currentProfile,
+              );
+              ref
+                  .read(communityRepositoryProvider)
+                  .cacheCommunityMembers(widget.communityId, members);
+            } else {
+              members = cachedMembers ?? const <ProfileData>[];
+            }
+
             final isMember =
                 currentProfile?.communityMemberships?.contains(
                   widget.communityId,
                 ) ??
                 false;
 
-            // Consolidate "Empty" and "Single self member" into First Member state
-            // Only show "first member" celebration if user IS a member
             final isFirstMember =
                 isMember &&
                 (members.isEmpty ||
                     (members.length == 1 &&
                         members.first.uid == currentUser?.uid));
 
-            // [FIX] If NOT a member and no members found, show neutral empty state
             final isEmptyForNonMember = !isMember && members.isEmpty;
 
             if (isEmptyForNonMember) {
@@ -219,14 +239,7 @@ class _CommunityMembersScreenState
                       SizedBox(
                         width: double.infinity,
                         child: FilledButton.icon(
-                          onPressed: () {
-                            showDialog(
-                              context: context,
-                              builder: (context) => ShareCommunityDialog(
-                                community: widget.community,
-                              ),
-                            );
-                          },
+                          onPressed: () => _openShareDialog(context),
                           style: FilledButton.styleFrom(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 24,
@@ -245,27 +258,19 @@ class _CommunityMembersScreenState
             }
 
             if (isFirstMember) {
-              // Derive contextual names
               final homeCountryName =
                   getCountryByCode(
                     widget.community.homeCountryCode ?? '',
                   )?.name ??
                   'Home';
 
-              String locationName = widget.community.name; // Fallback
-
-              // Try to extract location name (e.g. "London") from community name
-              // Logic: Strip " Community" suffix to get the location name
               String cleanName = widget.community.name;
               if (cleanName.toLowerCase().endsWith(' community')) {
                 cleanName = cleanName
                     .substring(0, cleanName.length - 10)
                     .trim();
               }
-              locationName = cleanName;
-
-              // Special case: If it's a home country community, the name might be "Kenya Community"
-              // But if locationType is 'home', we just use the country name.
+              final String locationName = cleanName;
 
               String message = 'You are the first member of this community!';
 
@@ -274,8 +279,6 @@ class _CommunityMembersScreenState
                     'You are the first member of the $homeCountryName community!';
               } else if (widget.community.locationType == 'host' ||
                   widget.community.locationType == 'past') {
-                // If the cleaned name is already the country name (e.g. Country Level community for Host),
-                // simplify the message to avoid "Tanzania community for Tanzania"
                 if (locationName.toLowerCase() ==
                     homeCountryName.toLowerCase()) {
                   message =
@@ -293,7 +296,6 @@ class _CommunityMembersScreenState
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Container(
-                        // [FIX] Restored Container
                         padding: const EdgeInsets.all(24),
                         decoration: BoxDecoration(
                           color: Theme.of(
@@ -331,14 +333,7 @@ class _CommunityMembersScreenState
                       SizedBox(
                         width: double.infinity,
                         child: FilledButton.icon(
-                          onPressed: () {
-                            showDialog(
-                              context: context,
-                              builder: (context) => ShareCommunityDialog(
-                                community: widget.community,
-                              ),
-                            );
-                          },
+                          onPressed: () => _openShareDialog(context),
                           style: FilledButton.styleFrom(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 24,
@@ -349,9 +344,7 @@ class _CommunityMembersScreenState
                           label: const Text('Invite Friends'),
                         ),
                       ),
-                      const SizedBox(
-                        height: 40,
-                      ), // Extra space to push it slightly up from true center
+                      const SizedBox(height: 40),
                     ],
                   ),
                 ),
@@ -393,12 +386,14 @@ class _CommunityMembersScreenState
     ProfileData? currentUserProfile,
   ) {
     try {
+      final profileRepo = ref.read(profileRepositoryProvider);
       final List<ProfileData> members = [];
       for (final doc in docs) {
         try {
           final data = doc.data();
           final profile = ProfileData.fromJson(data);
           profile.uid = doc.id;
+          profileRepo.cacheProfile(doc.id, profile);
 
           final dist = calculateProfileDistanceKm(currentUserProfile, profile);
           members.add(profile.copyWith(distance: dist));
@@ -407,16 +402,13 @@ class _CommunityMembersScreenState
         }
       }
 
-      // Sort by distance (closest first)
       members.sort((a, b) {
         final dA = a.distance ?? double.infinity;
         final dB = b.distance ?? double.infinity;
         return dA.compareTo(dB);
       });
 
-      // [FIX] Self-Correction for "First Member" scenario involving index lag.
       if (members.isEmpty) {
-        // If provider has data and confirms membership, assume we are the first member
         if (currentUserProfile != null &&
             currentUserProfile.communityMemberships != null &&
             currentUserProfile.communityMemberships!.contains(

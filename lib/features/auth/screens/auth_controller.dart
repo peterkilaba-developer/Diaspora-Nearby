@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform;
@@ -6,15 +7,29 @@ import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:whatsapp_zero_tap/whatsapp_zero_tap.dart';
-// Needed for FirebaseAuthException
 import '../repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/auth/services/session_service.dart';
+import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:diaspora_nearby/features/dsp/services/smart_wallet_service.dart';
 
 final authControllerProvider = NotifierProvider<AuthController, bool>(
   AuthController.new,
 );
+
+/// Holds the most recent SMS `verificationId` emitted by `verifyPhoneNumber`
+/// so navigating to `/auth/otp` immediately on tap works before `codeSent` fires.
+final latestVerificationIdProvider =
+    NotifierProvider<LatestVerificationIdNotifier, String?>(
+      LatestVerificationIdNotifier.new,
+    );
+
+class LatestVerificationIdNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void setVerificationId(String? id) => state = id;
+}
 
 /// Holds the active pre-flight WhatsApp Zero-Tap OTP Future started before
 /// calling the Cloud Function so that zero-tap broadcasts arriving while the
@@ -67,17 +82,32 @@ class WhatsAppZeroTapSession {
 class AuthController extends Notifier<bool> {
   @override
   bool build() {
-    return false; // Initial loading state
+    return false;
   }
 
   void signInWithPhone(BuildContext context, String phoneNumber) async {
-    state = true;
     final repository = ref.read(authRepositoryProvider);
+    ref.read(latestVerificationIdProvider.notifier).setVerificationId(null);
+
+    // [PERF] Navigate to /auth/otp immediately on tap (0ms) so the user never
+    // waits on verifyPhoneNumber network handshakes on PhoneAuthScreen.
+    if (context.mounted) {
+      final currentPath = GoRouterState.of(context).uri.toString();
+      final isAlreadyOnOtp = currentPath.contains('/auth/otp');
+      final extraData = {
+        'verificationId': '',
+        'phoneNumber': phoneNumber,
+        'isWhatsApp': false,
+      };
+      if (!isAlreadyOnOtp) {
+        unawaited(context.push('/auth/otp', extra: extraData));
+      }
+    }
+
     try {
       await repository.verifyPhoneNumber(
         phoneNumber: phoneNumber,
         verificationCompleted: (credential) async {
-          // Auto-verification happened (e.g. instant verification or code auto-retrieval)
           debugPrint('Phone Auth: verificationCompleted triggered');
           state = true;
           try {
@@ -108,26 +138,17 @@ class AuthController extends Notifier<bool> {
         codeSent: (verificationId, resendToken) {
           debugPrint('Phone Auth: codeSent. ID: $verificationId');
           state = false;
-          if (context.mounted) {
-            final currentPath = GoRouterState.of(context).uri.toString();
-            final isAlreadyOnOtp = currentPath.contains('/auth/otp');
-            final extraData = {
-              'verificationId': verificationId,
-              'phoneNumber': phoneNumber,
-              'isWhatsApp': false,
-            };
-            if (isAlreadyOnOtp) {
-              context.pushReplacement('/auth/otp', extra: extraData);
-            } else {
-              context.push('/auth/otp', extra: extraData);
-            }
-          }
+          ref
+              .read(latestVerificationIdProvider.notifier)
+              .setVerificationId(verificationId);
         },
         codeAutoRetrievalTimeout: (verificationId) {
           debugPrint(
             'Phone Auth: codeAutoRetrievalTimeout. ID: $verificationId',
           );
-          // Do not set state = false here necessarily, as user might still be typing
+          ref
+              .read(latestVerificationIdProvider.notifier)
+              .setVerificationId(verificationId);
         },
       );
     } catch (e) {
@@ -143,50 +164,58 @@ class AuthController extends Notifier<bool> {
   Future<void> _handleSuccessfulSignIn(BuildContext context, User user) async {
     debugPrint('AuthCtrl: _handleSuccessfulSignIn START for uid=${user.uid}');
     try {
-      // [FIX] Check for firstName being present and non-empty, not just doc.exists.
-      // A bare FCM-only doc ({fcmToken, notificationsEnabled}) would return exists=true
-      // but should NOT be treated as a completed profile.
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-      final profileExists =
-          userDoc.exists &&
-          userDoc.data() != null &&
-          userDoc.data()!.containsKey('firstName') &&
-          (userDoc.data()!['firstName'] as String?)?.isNotEmpty == true;
-      debugPrint(
-        'AuthCtrl: profileExists=$profileExists (docExists=${userDoc.exists}, hasFirstName=${userDoc.data()?.containsKey('firstName') ?? false}), context.mounted=${context.mounted}',
+      final sessionService = ref.read(sessionServiceProvider);
+      final profileRepo = ref.read(profileRepositoryProvider);
+
+      // [PERF] Fast synchronous check from memory or session cache first
+      bool profileExists =
+          profileRepo.getCachedProfile(user.uid) != null ||
+          sessionService.isUserCached(user.uid);
+
+      if (!profileExists) {
+        // Check local Firestore cache before hitting server
+        DocumentSnapshot<Map<String, dynamic>>? userDoc;
+        try {
+          userDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .get(const GetOptions(source: Source.cache));
+        } catch (_) {}
+        if (userDoc == null || !userDoc.exists) {
+          userDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .get();
+        }
+        profileExists =
+            userDoc.exists &&
+            userDoc.data() != null &&
+            userDoc.data()!.containsKey('firstName') &&
+            (userDoc.data()!['firstName'] as String?)?.isNotEmpty == true;
+      }
+
+      // [PERF] Persist session & trigger smart wallet in background so navigation is 0ms
+      unawaited(
+        sessionService.saveSession(
+          userId: user.uid,
+          hasCompletedOnboarding: true,
+          profileComplete: profileExists,
+          isReturningUser: profileExists,
+        ),
       );
 
-      // Update Session based on Profile Existence
-      await ref
-          .read(sessionServiceProvider)
-          .saveSession(
-            userId: user.uid,
-            hasCompletedOnboarding: true,
-            profileComplete: profileExists,
-            isReturningUser: profileExists,
-          );
-
-      // [SMART WALLET] Trigger wallet creation after sign-in (non-blocking)
       try {
         ref.read(smartWalletServiceProvider).ensureWalletOnSignIn();
-        debugPrint('AuthCtrl: Smart wallet creation triggered');
       } catch (e) {
         debugPrint('AuthCtrl: Smart wallet trigger failed (non-blocking): $e');
       }
 
       if (context.mounted) {
         if (profileExists) {
-          debugPrint('AuthCtrl: context.go(/chats)');
           context.go('/chats');
         } else {
-          debugPrint('AuthCtrl: context.go(/profile-setup)');
           context.go('/profile-setup');
         }
-      } else {
-        debugPrint('AuthCtrl: context NOT MOUNTED! Navigation skipped.');
       }
     } catch (e) {
       debugPrint('AuthCtrl: ERROR in _handleSuccessfulSignIn: $e');
@@ -199,29 +228,27 @@ class AuthController extends Notifier<bool> {
     String verificationId,
     String smsCode,
   ) async {
-    debugPrint('AuthCtrl: verifyOTP called');
+    final resolvedVerificationId = verificationId.isNotEmpty
+        ? verificationId
+        : (ref.read(latestVerificationIdProvider) ?? '');
+    if (resolvedVerificationId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Waiting for SMS verification session…')),
+      );
+      return;
+    }
+
     state = true;
     final repository = ref.read(authRepositoryProvider);
     try {
       final credential = PhoneAuthProvider.credential(
-        verificationId: verificationId,
+        verificationId: resolvedVerificationId,
         smsCode: smsCode,
       );
-      debugPrint('AuthCtrl: calling signInWithCredential...');
       final userCredential = await repository.signInWithCredential(credential);
-      debugPrint(
-        'AuthCtrl: signInWithCredential SUCCESS, user=${userCredential.user?.uid}',
-      );
 
-      if (userCredential.user != null) {
-        if (context.mounted) {
-          debugPrint(
-            'AuthCtrl: context is mounted, calling _handleSuccessfulSignIn',
-          );
-          await _handleSuccessfulSignIn(context, userCredential.user!);
-        } else {
-          debugPrint('AuthCtrl: context NOT mounted after signIn!');
-        }
+      if (userCredential.user != null && context.mounted) {
+        await _handleSuccessfulSignIn(context, userCredential.user!);
       }
 
       state = false;
@@ -249,38 +276,38 @@ class AuthController extends Notifier<bool> {
   }
 
   void signInWithWhatsApp(BuildContext context, String phoneNumber) async {
-    state = true;
     final repository = ref.read(authRepositoryProvider);
-    try {
-      // Initiate the WhatsApp Zero-Tap handshake BEFORE requesting the OTP
-      // so the BroadcastReceiver is ready before the WhatsApp message arrives.
-      ref.read(pendingWhatsAppZeroTapProvider).startPreFlightListener();
+    final messenger = ScaffoldMessenger.maybeOf(context);
 
-      await repository.requestWhatsAppOtp(phoneNumber);
-      state = false;
-      if (context.mounted) {
-        final currentPath = GoRouterState.of(context).uri.toString();
-        final isAlreadyOnOtp = currentPath.contains('/auth/otp');
-        final extraData = {
-          'verificationId': 'whatsapp',
-          'phoneNumber': phoneNumber,
-          'isWhatsApp': true,
-        };
-        if (isAlreadyOnOtp) {
-          context.pushReplacement('/auth/otp', extra: extraData);
-        } else {
-          context.push('/auth/otp', extra: extraData);
-        }
+    // Initiate the WhatsApp Zero-Tap handshake BEFORE requesting the OTP
+    // so the BroadcastReceiver is ready before the WhatsApp message arrives.
+    ref.read(pendingWhatsAppZeroTapProvider).startPreFlightListener();
+
+    // [PERF] Navigate to /auth/otp immediately on tap (0ms) and fire the
+    // WhatsApp OTP Cloud Function in the background.
+    if (context.mounted) {
+      final currentPath = GoRouterState.of(context).uri.toString();
+      final isAlreadyOnOtp = currentPath.contains('/auth/otp');
+      final extraData = {
+        'verificationId': 'whatsapp',
+        'phoneNumber': phoneNumber,
+        'isWhatsApp': true,
+      };
+      if (!isAlreadyOnOtp) {
+        unawaited(context.push('/auth/otp', extra: extraData));
       }
-    } catch (e) {
-      state = false;
-      if (context.mounted) {
+    }
+
+    unawaited(() async {
+      try {
+        await repository.requestWhatsAppOtp(phoneNumber);
+      } catch (e) {
         final message = _formatAuthError(e);
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger?.showSnackBar(
           SnackBar(content: Text('WhatsApp request failed: $message')),
         );
       }
-    }
+    }());
   }
 
   void verifyWhatsAppOTP(
@@ -288,22 +315,16 @@ class AuthController extends Notifier<bool> {
     String phoneNumber,
     String otp,
   ) async {
-    debugPrint('AuthCtrl: verifyWhatsAppOTP called');
     state = true;
     final repository = ref.read(authRepositoryProvider);
     try {
-      debugPrint('AuthCtrl: calling repository.verifyWhatsAppOtp...');
       final customToken = await repository.verifyWhatsAppOtp(phoneNumber, otp);
-
-      debugPrint('AuthCtrl: calling signInWithCustomToken...');
       final userCredential = await repository.signInWithCustomToken(
         customToken,
       );
 
-      if (userCredential.user != null) {
-        if (context.mounted) {
-          await _handleSuccessfulSignIn(context, userCredential.user!);
-        }
+      if (userCredential.user != null && context.mounted) {
+        await _handleSuccessfulSignIn(context, userCredential.user!);
       }
       state = false;
     } catch (e) {

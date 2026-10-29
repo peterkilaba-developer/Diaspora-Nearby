@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
@@ -15,6 +17,23 @@ import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart'
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 
+final _qualifiedRelativesProvider =
+    FutureProvider.family<List<Relationship>, String>((ref, userId) {
+      return ref.read(bereavementServiceProvider).getQualifiedRelatives(userId);
+    });
+
+final _potentialProxiesProvider =
+    FutureProvider.family<List<ProfileData>, String>((ref, userId) {
+      return ref.read(bereavementServiceProvider).getPotentialProxies(userId);
+    });
+
+final _eligibilityProvider = FutureProvider.family<EligibilityResult, String>((
+  ref,
+  userId,
+) {
+  return ref.read(bereavementServiceProvider).checkEligibility(userId);
+});
+
 class BereavementScreen extends ConsumerStatefulWidget {
   const BereavementScreen({super.key});
 
@@ -30,7 +49,7 @@ class _BereavementScreenState extends ConsumerState<BereavementScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _trackExploration();
+    unawaited(_trackExploration());
   }
 
   Future<void> _trackExploration() async {
@@ -261,37 +280,29 @@ class _MembershipTab extends ConsumerStatefulWidget {
 }
 
 class _MembershipTabState extends ConsumerState<_MembershipTab> {
-  bool _isLoading = false;
+  static BereavementMembership? _cachedMembership;
+  BereavementMembership? _optimisticMembership;
 
-  void _showSetupCoverageDialog(EligibilityResult eligibility) async {
+  void _showSetupCoverageDialog(EligibilityResult eligibility) {
     final user = ref.read(authRepositoryProvider).currentUser;
     if (user == null) return;
 
-    setState(() => _isLoading = true);
-
-    // Fetch relatives and potential proxies
-    List<Relationship> relatives = [];
-    List<ProfileData> potentialProxies = [];
-    try {
-      relatives = await ref
-          .read(bereavementServiceProvider)
-          .getQualifiedRelatives(user.uid);
-      potentialProxies = await ref
-          .read(bereavementServiceProvider)
-          .getPotentialProxies(user.uid);
-    } catch (_) {}
-
-    setState(() => _isLoading = false);
-
-    if (!mounted) return;
+    final relatives =
+        ref.read(_qualifiedRelativesProvider(user.uid)).value ?? [];
+    final potentialProxies =
+        ref.read(_potentialProxiesProvider(user.uid)).value ?? [];
 
     showDialog(
       context: context,
-      builder: (context) => _SetupCoverageDialog(
-        initialRelatives: relatives,
-        potentialProxies: potentialProxies,
-        onConfirm: (proxyId, coveredIds) =>
-            _initiateMembership(proxyId, coveredIds),
+      builder: (context) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: _SetupCoverageDialog(
+          userId: user.uid,
+          initialRelatives: relatives,
+          potentialProxies: potentialProxies,
+          onConfirm: (proxyId, coveredIds) =>
+              _initiateMembership(proxyId, coveredIds),
+        ),
       ),
     );
   }
@@ -305,7 +316,25 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
 
     if (user == null || profile == null) return;
 
-    setState(() => _isLoading = true);
+    final prev = _optimisticMembership;
+    setState(() {
+      _optimisticMembership = BereavementMembership(
+        userId: user.uid,
+        country: profile.homeCountry ?? 'Unknown',
+        status: MembershipStatus.pending_proxy,
+        joinedDate: DateTime.now(),
+        annualContribution: 100.0,
+        supportNumber: 'DN-BER-PENDING',
+        proxyUserId: proxyId,
+        proxyStatus: ProxyStatus.pending,
+        coveredFamilyMembers: coveredIds,
+      );
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Proxy request sent! Waiting for acceptance.'),
+      ),
+    );
 
     try {
       await ref
@@ -316,21 +345,13 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
             proxyUserId: proxyId,
             coveredFamilyMembers: coveredIds,
           );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Proxy request sent! Waiting for acceptance.'),
-          ),
-        );
-      }
     } catch (e) {
       if (mounted) {
+        setState(() => _optimisticMembership = prev);
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -338,27 +359,204 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
     final user = ref.read(authRepositoryProvider).currentUser;
     if (user == null) return;
 
-    setState(() => _isLoading = true);
+    final current =
+        _optimisticMembership ??
+        ref.read(membershipStreamProvider(user.uid)).value ??
+        _cachedMembership;
+    final prev = _optimisticMembership;
+    if (current != null) {
+      setState(() {
+        _optimisticMembership = BereavementMembership(
+          userId: current.userId,
+          country: current.country,
+          status: MembershipStatus.active,
+          joinedDate: current.joinedDate,
+          annualContribution: current.annualContribution,
+          supportNumber: current.supportNumber,
+          proxyUserId: current.proxyUserId,
+          proxyStatus: ProxyStatus.accepted,
+          coveredFamilyMembers: current.coveredFamilyMembers,
+          nextPaymentDate: DateTime.now().add(const Duration(days: 365)),
+        );
+      });
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Beta Access Activated! Welcome to the Fund.'),
+      ),
+    );
+
     try {
       await ref
           .read(bereavementServiceProvider)
           .completeMembershipPayment(user.uid);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Beta Access Activated! Welcome to the Fund.'),
-          ),
-        );
-      }
     } catch (e) {
       if (mounted) {
+        setState(() => _optimisticMembership = prev);
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Payment Error: $e')));
       }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Widget _buildMembershipBody(
+    BuildContext context,
+    String uid,
+    BereavementMembership? liveMembership,
+  ) {
+    final membership = _optimisticMembership ?? liveMembership;
+    if (membership == null) {
+      return _buildReadiness(uid);
+    }
+
+    if (membership.status == MembershipStatus.pending_proxy) {
+      return _buildStatusPage(
+        icon: LucideIcons.clock,
+        title: 'Waiting for Proxy',
+        description:
+            'You have sent a request to your chosen proxy. Once they accept, you can proceed to payment.',
+        color: Colors.orange,
+      );
+    }
+
+    if (membership.status == MembershipStatus.pending_payment) {
+      return _buildPaymentPage(membership);
+    }
+
+    final rels = ref.watch(_qualifiedRelativesProvider(membership.userId)).value ?? [];
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(bottom: 50),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: _buildStatusCard(context, membership),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Column(
+              children: [
+                _buildInfoRow('Support Number', membership.supportNumber),
+                const Divider(),
+                _buildInfoRow(
+                  'Annual Contribution',
+                  '\$${membership.annualContribution.round()}',
+                ),
+                const Divider(),
+                _buildInfoRow('Home Country', membership.country),
+                const Divider(),
+                _buildInfoRow(
+                  'Member Since',
+                  DateFormat('MMM d, yyyy').format(membership.joinedDate),
+                ),
+                const Divider(),
+                _buildInfoRow(
+                  'Next Contribution',
+                  membership.nextPaymentDate != null
+                      ? DateFormat(
+                          'MMM d, yyyy',
+                        ).format(membership.nextPaymentDate!)
+                      : 'N/A',
+                ),
+                const Divider(),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16.0),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Beneficiaries & Proxy',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Your designated proxy and supported family members.',
+                style: TextStyle(color: Colors.grey, fontSize: 13),
+              ),
+            ),
+          ),
+
+          Container(
+            margin: const EdgeInsets.all(16),
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.cardDecoration(context).color,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                _buildBeneficiaryItem(
+                  icon: LucideIcons.shieldAlert,
+                  name: membership.proxyUserId != null
+                      ? 'Proxy User (${membership.proxyUserId})'
+                      : 'No Proxy',
+                  relation: 'Designated Proxy',
+                  isProxy: true,
+                ),
+                const Divider(),
+                if (membership.coveredFamilyMembers.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 16.0),
+                    child: Text(
+                      'No supported family members added yet.',
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  )
+                else
+                  Column(
+                    children: membership.coveredFamilyMembers.map((id) {
+                      String name = 'Unknown Member';
+                      String relation = 'Relative';
+
+                      if (id.startsWith('friend_')) {
+                        name = id.replaceFirst('friend_', '');
+                        relation = 'Friend';
+                      } else {
+                        final r = rels.where((k) => k.id == id).firstOrNull;
+                        if (r != null) {
+                          name = r.name;
+                          relation = r.type;
+                        } else if (id.isNotEmpty) {
+                          name = 'Member ($id)';
+                        }
+                      }
+
+                      return _buildBeneficiaryItem(
+                        icon: LucideIcons.user,
+                        name: name,
+                        relation: relation,
+                      );
+                    }).toList(),
+                  ),
+              ],
+            ),
+          ),
+
+          SizedBox(height: MediaQuery.of(context).padding.bottom + 20),
+        ],
+      ),
+    );
   }
 
   @override
@@ -366,184 +564,23 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
     final user = ref.watch(authRepositoryProvider).currentUser;
     if (user == null) return const Center(child: Text('Please log in'));
 
-    // Check loading state for dialog prep
-    if (_isLoading) return const Center(child: CircularProgressIndicator());
+    // Pre-watch relatives & proxies so opening dialog is 0ms
+    ref.watch(_qualifiedRelativesProvider(user.uid));
+    ref.watch(_potentialProxiesProvider(user.uid));
 
     final membershipAsync = ref.watch(membershipStreamProvider(user.uid));
+    if (membershipAsync.hasValue) {
+      _cachedMembership = membershipAsync.value;
+      if (membershipAsync.value != null &&
+          _optimisticMembership != null &&
+          membershipAsync.value!.status == _optimisticMembership!.status) {
+        _optimisticMembership = null;
+      }
+    }
 
     return membershipAsync.when(
-      data: (membership) {
-        if (membership == null) {
-          // Not a member yet: Show Readiness
-          return _buildReadiness(user.uid);
-        }
-
-        // Handle States
-        if (membership.status == MembershipStatus.pending_proxy) {
-          return _buildStatusPage(
-            icon: LucideIcons.clock,
-            title: 'Waiting for Proxy',
-            description:
-                'You have sent a request to your chosen proxy. Once they accept, you can proceed to payment.',
-            color: Colors.orange,
-          );
-        }
-
-        if (membership.status == MembershipStatus.pending_payment) {
-          return _buildPaymentPage(membership);
-        }
-
-        // Active Membership
-        return SingleChildScrollView(
-          padding: const EdgeInsets.only(bottom: 50),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: _buildStatusCard(context, membership),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Column(
-                  children: [
-                    _buildInfoRow('Support Number', membership.supportNumber),
-                    const Divider(),
-                    _buildInfoRow(
-                      'Annual Contribution',
-                      '\$${membership.annualContribution.round()}',
-                    ),
-                    const Divider(),
-                    _buildInfoRow(
-                      'Home Country',
-                      membership.country,
-                    ), // Updated Label
-                    const Divider(),
-                    _buildInfoRow(
-                      'Member Since',
-                      DateFormat('MMM d, yyyy').format(membership.joinedDate),
-                    ),
-                    const Divider(),
-                    _buildInfoRow(
-                      'Next Contribution',
-                      membership.nextPaymentDate != null
-                          ? DateFormat(
-                              'MMM d, yyyy',
-                            ).format(membership.nextPaymentDate!)
-                          : 'N/A',
-                    ),
-                    const Divider(),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16.0),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Beneficiaries & Proxy',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Your designated proxy and supported family members.',
-                    style: TextStyle(color: Colors.grey, fontSize: 13),
-                  ),
-                ),
-              ),
-
-              Container(
-                margin: const EdgeInsets.all(16),
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppTheme.cardDecoration(context).color,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    _buildBeneficiaryItem(
-                      icon: LucideIcons.shieldAlert,
-                      name: membership.proxyUserId != null
-                          ? 'Proxy User (${membership.proxyUserId})'
-                          : 'No Proxy',
-                      relation: 'Designated Proxy',
-                      isProxy: true,
-                    ),
-                    const Divider(),
-                    if (membership.coveredFamilyMembers.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 16.0),
-                        child: Text(
-                          'No supported family members added yet.',
-                          style: TextStyle(
-                            color: Colors.grey,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      )
-                    else
-                      FutureBuilder<List<Relationship>>(
-                        future: ref
-                            .read(bereavementServiceProvider)
-                            .getQualifiedRelatives(membership.userId),
-                        builder: (context, snapshot) {
-                          // Allow showing cached data or wait
-                          final rels = snapshot.data ?? [];
-
-                          return Column(
-                            children: membership.coveredFamilyMembers.map((id) {
-                              String name = 'Unknown Member';
-                              String relation = 'Relative';
-
-                              if (id.startsWith('friend_')) {
-                                name = id.replaceFirst('friend_', '');
-                                relation = 'Friend';
-                              } else {
-                                final r = rels
-                                    .where((k) => k.id == id)
-                                    .firstOrNull;
-                                if (r != null) {
-                                  name = r.name;
-                                  relation = r.type;
-                                } else if (id.isNotEmpty) {
-                                  // Fallback
-                                  name = 'Member ($id)';
-                                }
-                              }
-
-                              return _buildBeneficiaryItem(
-                                icon: LucideIcons.user,
-                                name: name,
-                                relation: relation,
-                              );
-                            }).toList(),
-                          );
-                        },
-                      ),
-                  ],
-                ),
-              ),
-
-              // Safe Area Spacer
-              SizedBox(height: MediaQuery.of(context).padding.bottom + 20),
-            ],
-          ),
-        );
-      },
-      loading: () => const Center(child: CircularProgressIndicator()),
+      data: (membership) => _buildMembershipBody(context, user.uid, membership),
+      loading: () => _buildMembershipBody(context, user.uid, _cachedMembership),
       error: (e, st) => Center(child: Text('Error: $e')),
     );
   }
@@ -601,14 +638,12 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
             SizedBox(
               width: double.infinity,
               child: FilledButton(
-                onPressed: _isLoading ? null : _processPayment,
+                onPressed: _processPayment,
                 style: FilledButton.styleFrom(
                   backgroundColor: AppTheme.accent,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-                child: _isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('Activate Free Beta Access'),
+                child: const Text('Activate Free Beta Access'),
               ),
             ),
           ],
@@ -652,82 +687,81 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
   }
 
   Widget _buildReadiness(String userId) {
-    return FutureBuilder<EligibilityResult>(
-      future: ref.read(bereavementServiceProvider).checkEligibility(userId),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        final result = snapshot.data!;
-
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Membership Eligibility',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Complete these steps to join the Bereavement Fund.',
-                style: TextStyle(color: Colors.grey),
-              ),
-              const SizedBox(height: 24),
-
-              _buildChecklistItem(
-                'Verified Profile',
-                result.isProfileVerified,
-                'Complete identity verification.',
-              ),
-
-              _buildChecklistItem(
-                'Community Trust (>67)',
-                result.hasEnoughTrust,
-                'Increase your Trust Score.',
-              ),
-              _buildChecklistItem(
-                'Qualified Network',
-                result.hasEnoughRelatives,
-                'Add at least 2 relatives.',
-              ),
-
-              const SizedBox(height: 24),
-              _SuggestedProxiesList(userId: userId),
-              const SizedBox(height: 8),
-
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: result.isEligible
-                      ? () => _showSetupCoverageDialog(result)
-                      : null,
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: AppTheme.accent,
-                    disabledBackgroundColor: Colors.grey.withValues(alpha: 0.2),
-                  ),
-                  child: const Text('Setup Coverage'),
-                ),
-              ),
-              if (!result.isEligible)
-                const Padding(
-                  padding: EdgeInsets.only(top: 16),
-                  child: Center(
-                    child: Text(
-                      'Please meet all conditions to proceed.',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  ),
-                ),
-
-              SizedBox(height: MediaQuery.of(context).padding.bottom + 20),
-            ],
-          ),
+    final eligibilityAsync = ref.watch(_eligibilityProvider(userId));
+    final result =
+        eligibilityAsync.value ??
+        EligibilityResult(
+          isProfileComplete: false,
+          isProfileVerified: false,
+          hasEnoughTrust: false,
+          hasEnoughRelatives: false,
         );
-      },
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Membership Eligibility',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Complete these steps to join the Bereavement Fund.',
+            style: TextStyle(color: Colors.grey),
+          ),
+          const SizedBox(height: 24),
+
+          _buildChecklistItem(
+            'Verified Profile',
+            result.isProfileVerified,
+            'Complete identity verification.',
+          ),
+
+          _buildChecklistItem(
+            'Community Trust (>67)',
+            result.hasEnoughTrust,
+            'Increase your Trust Score.',
+          ),
+          _buildChecklistItem(
+            'Qualified Network',
+            result.hasEnoughRelatives,
+            'Add at least 2 relatives.',
+          ),
+
+          const SizedBox(height: 24),
+          _SuggestedProxiesList(userId: userId),
+          const SizedBox(height: 8),
+
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: result.isEligible
+                  ? () => _showSetupCoverageDialog(result)
+                  : null,
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                backgroundColor: AppTheme.accent,
+                disabledBackgroundColor: Colors.grey.withValues(alpha: 0.2),
+              ),
+              child: const Text('Setup Coverage'),
+            ),
+          ),
+          if (!result.isEligible)
+            const Padding(
+              padding: EdgeInsets.only(top: 16),
+              child: Center(
+                child: Text(
+                  'Please meet all conditions to proceed.',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ),
+            ),
+
+          SizedBox(height: MediaQuery.of(context).padding.bottom + 20),
+        ],
+      ),
     );
   }
 
@@ -906,10 +940,108 @@ class _ClaimsTab extends ConsumerStatefulWidget {
 }
 
 class _ClaimsTabState extends ConsumerState<_ClaimsTab> {
+  static List<BereavementClaim> _cachedClaims = [];
+  final List<BereavementClaim> _optimisticClaims = [];
+
   void _showClaimDialog() {
-    showDialog(
+    showDialog<BereavementClaim>(
       context: context,
-      builder: (context) => const _SubmitClaimDialog(),
+      builder: (context) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: const _SubmitClaimDialog(),
+      ),
+    ).then((optimisticClaim) {
+      if (optimisticClaim != null && mounted) {
+        setState(() {
+          _optimisticClaims.insert(0, optimisticClaim);
+        });
+      }
+    });
+  }
+
+  Widget _buildClaimsList(BuildContext context, List<BereavementClaim> live) {
+    final liveNames = live.map((c) => c.deceasedName).toSet();
+    final pendingOptimistic = _optimisticClaims
+        .where((c) => !liveNames.contains(c.deceasedName))
+        .toList();
+    final claims = [...pendingOptimistic, ...live];
+
+    if (claims.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              LucideIcons.clipboardList,
+              size: 64,
+              color: Colors.grey.withValues(alpha: 0.3),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'No support requests yet',
+              style: TextStyle(color: Colors.grey),
+            ),
+          ],
+        ),
+      );
+    }
+    return ListView.builder(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        16,
+        16,
+        MediaQuery.of(context).padding.bottom + 80,
+      ),
+      itemCount: claims.length,
+      itemBuilder: (context, index) {
+        final claim = claims[index];
+        return Card(
+          elevation: 2,
+          margin: const EdgeInsets.only(bottom: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: ListTile(
+            tileColor: AppTheme.cardDecoration(context).color,
+            contentPadding: const EdgeInsets.all(16),
+            title: Text(
+              claim.deceasedName,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            trailing: PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'broadcast') {
+                  _showBroadcastDialog(context, claim);
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'broadcast',
+                  child: Row(
+                    children: [
+                      Icon(LucideIcons.megaphone, size: 18),
+                      SizedBox(width: 8),
+                      Text('Broadcast Announcement'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 4),
+                Text(
+                  'Passed Away \u2022 ${DateFormat('MMM d').format(claim.dateOfDeath)}',
+                  style: const TextStyle(color: Colors.grey),
+                ),
+                const SizedBox(height: 8),
+                _buildStatusProgress(context, claim.status),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -924,6 +1056,9 @@ class _ClaimsTabState extends ConsumerState<_ClaimsTab> {
         membership?.status == MembershipStatus.grace_period;
 
     final claimsAsync = ref.watch(claimsStreamProvider(user.uid));
+    if (claimsAsync.hasValue) {
+      _cachedClaims = claimsAsync.value!;
+    }
 
     return Scaffold(
       floatingActionButton: canRequest
@@ -935,91 +1070,8 @@ class _ClaimsTabState extends ConsumerState<_ClaimsTab> {
             )
           : null,
       body: claimsAsync.when(
-        data: (claims) {
-          if (claims.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    LucideIcons.clipboardList,
-                    size: 64,
-                    color: Colors.grey.withValues(alpha: 0.3),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'No support requests yet',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ],
-              ),
-            );
-          }
-          return ListView.builder(
-            padding: EdgeInsets.fromLTRB(
-              16,
-              16,
-              16,
-              MediaQuery.of(context).padding.bottom + 80,
-            ),
-            itemCount: claims.length,
-            itemBuilder: (context, index) {
-              final claim = claims[index];
-              return Card(
-                elevation: 2,
-                margin: const EdgeInsets.only(bottom: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: ListTile(
-                  tileColor: AppTheme.cardDecoration(context).color,
-                  contentPadding: const EdgeInsets.all(16),
-                  title: Text(
-                    claim.deceasedName,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                  trailing: PopupMenuButton<String>(
-                    onSelected: (value) {
-                      if (value == 'broadcast') {
-                        _showBroadcastDialog(context, claim);
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'broadcast',
-                        child: Row(
-                          children: [
-                            Icon(LucideIcons.megaphone, size: 18),
-                            SizedBox(width: 8),
-                            Text('Broadcast Announcement'),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 4),
-                      // Simplified to show Deceased and Status as requested
-                      Text(
-                        'Passed Away \u2022 ${DateFormat('MMM d').format(claim.dateOfDeath)}',
-                        style: const TextStyle(color: Colors.grey),
-                      ),
-                      const SizedBox(height: 8),
-                      // Progress bar visualization of status
-                      _buildStatusProgress(context, claim.status),
-                    ],
-                  ),
-                ),
-              );
-            },
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        data: (claims) => _buildClaimsList(context, claims),
+        loading: () => _buildClaimsList(context, _cachedClaims),
         error: (e, st) => Center(child: Text('Error: $e')),
       ),
     );
@@ -1099,29 +1151,32 @@ class _ClaimsTabState extends ConsumerState<_ClaimsTab> {
   void _showBroadcastDialog(BuildContext context, BereavementClaim claim) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Broadcast Announcement'),
-        content: Text(
-          'Notify community members about the passing of ${claim.deceasedName}?',
+      builder: (context) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          title: const Text('Broadcast Announcement'),
+          content: Text(
+            'Notify community members about the passing of ${claim.deceasedName}?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Announcement broadcasted to community.'),
+                  ),
+                );
+              },
+              child: const Text('Broadcast'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              // Call service to broadcast (mock for now)
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Announcement broadcasted to community.'),
-                ),
-              );
-            },
-            child: const Text('Broadcast'),
-          ),
-        ],
       ),
     );
   }
@@ -1133,45 +1188,40 @@ class _SuggestedProxiesList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return FutureBuilder<List<ProfileData>>(
-      future: ref.read(bereavementServiceProvider).getPotentialProxies(userId),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData || (snapshot.data?.isEmpty ?? true)) {
-          return const SizedBox.shrink();
-        }
+    final proxies = ref.watch(_potentialProxiesProvider(userId)).value ?? [];
+    if (proxies.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Suggested Proxies (Verified Contacts)",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: snapshot.data!.length,
-              itemBuilder: (context, index) {
-                final p = snapshot.data![index];
-                // Create a mock relationship object to reuse the card
-                final mockRel = Relationship(
-                  id: p.uid!,
-                  name: p.firstName,
-                  type: 'Verified Contact',
-                  status: 'active',
-                  createdAt: DateTime.now(),
-                );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Suggested Proxies (Verified Contacts)",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: proxies.length,
+          itemBuilder: (context, index) {
+            final p = proxies[index];
+            final mockRel = Relationship(
+              id: p.uid!,
+              name: p.firstName,
+              type: 'Verified Contact',
+              status: 'active',
+              createdAt: DateTime.now(),
+            );
 
-                return RelationshipCard(
-                  relationship: mockRel,
-                  enableActions: false,
-                );
-              },
-            ),
-          ],
-        );
-      },
+            return RelationshipCard(
+              relationship: mockRel,
+              enableActions: false,
+            );
+          },
+        ),
+      ],
     );
   }
 }
@@ -1194,7 +1244,6 @@ class _SubmitClaimDialogState extends ConsumerState<_SubmitClaimDialog> {
   final _relationController = TextEditingController();
   final _descController = TextEditingController();
   DateTime? _dateOfDeath;
-  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -1217,35 +1266,42 @@ class _SubmitClaimDialogState extends ConsumerState<_SubmitClaimDialog> {
     final user = ref.read(authRepositoryProvider).currentUser;
     if (user == null) return;
 
-    setState(() => _isLoading = true);
+    final deceasedName = _nameController.text;
+    final relationship = _relationController.text;
+    final dateOfDeath = _dateOfDeath!;
+    final description = _descController.text;
 
-    try {
-      await ref
-          .read(bereavementServiceProvider)
+    final optimistic = BereavementClaim(
+      id: 'optimistic_${DateTime.now().millisecondsSinceEpoch}',
+      userId: user.uid,
+      deceasedName: deceasedName,
+      relationship: relationship,
+      dateOfDeath: dateOfDeath,
+      status: ClaimStatus.submitted,
+      submittedDate: DateTime.now(),
+      description: description,
+    );
+
+    final service = ref.read(bereavementServiceProvider);
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.pop(context, optimistic);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Support request submitted successfully')),
+    );
+
+    unawaited(
+      service
           .submitClaim(
             userId: user.uid,
-            deceasedName: _nameController.text,
-            relationship: _relationController.text,
-            dateOfDeath: _dateOfDeath!,
-            description: _descController.text,
-          );
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Support request submitted successfully'),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+            deceasedName: deceasedName,
+            relationship: relationship,
+            dateOfDeath: dateOfDeath,
+            description: description,
+          )
+          .catchError((Object e) {
+            messenger.showSnackBar(SnackBar(content: Text('Error: $e')));
+          }),
+    );
   }
 
   Future<void> _pickDate() async {
@@ -1261,6 +1317,7 @@ class _SubmitClaimDialogState extends ConsumerState<_SubmitClaimDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
       title: const Text('New Support Request'),
       content: SingleChildScrollView(
         child: Form(
@@ -1314,44 +1371,34 @@ class _SubmitClaimDialogState extends ConsumerState<_SubmitClaimDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
-        FilledButton(
-          onPressed: _isLoading ? null : _submit,
-          child: _isLoading
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2,
-                  ),
-                )
-              : const Text('Submit'),
-        ),
+        FilledButton(onPressed: _submit, child: const Text('Submit')),
       ],
     );
   }
 }
 
-class _SetupCoverageDialog extends StatefulWidget {
+class _SetupCoverageDialog extends ConsumerStatefulWidget {
+  final String userId;
   final List<Relationship> initialRelatives;
   final List<ProfileData> potentialProxies;
   final Function(String proxyId, List<String> coveredIds) onConfirm;
 
   const _SetupCoverageDialog({
+    required this.userId,
     required this.initialRelatives,
     required this.potentialProxies,
     required this.onConfirm,
   });
 
   @override
-  State<_SetupCoverageDialog> createState() => _SetupCoverageDialogState();
+  ConsumerState<_SetupCoverageDialog> createState() =>
+      _SetupCoverageDialogState();
 }
 
-class _SetupCoverageDialogState extends State<_SetupCoverageDialog> {
+class _SetupCoverageDialogState extends ConsumerState<_SetupCoverageDialog> {
   final _proxyController = TextEditingController();
   final _friendController = TextEditingController();
 
-  // Track valid state
   bool _isProxyValid = false;
 
   late List<String> _coveredIds;
@@ -1372,14 +1419,9 @@ class _SetupCoverageDialogState extends State<_SetupCoverageDialog> {
 
   void _addFriend() {
     final val = _friendController.text.trim();
-    // Assuming adding a 'Friend' implies adding them to coverage manually?
-    // Or is the 'Friend' the Proxy?
-    // "add friend choice in this modal if there is no one yet" -> If no relatives, add friend as 'Relationship'?
-    // I will mock adding a 'Friend' user ID.
     if (val.isNotEmpty) {
       setState(() {
-        // In real app, we would search user
-        _coveredIds.add('friend_$val'); // Mock ID
+        _coveredIds.add('friend_$val');
         _displayNames.add('$val (Friend)');
         _friendController.clear();
       });
@@ -1388,7 +1430,12 @@ class _SetupCoverageDialogState extends State<_SetupCoverageDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final proxies =
+        ref.watch(_potentialProxiesProvider(widget.userId)).value ??
+        widget.potentialProxies;
+
     return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
       title: const Text('Join Fund'),
       content: SingleChildScrollView(
         child: Column(
@@ -1477,12 +1524,16 @@ class _SetupCoverageDialogState extends State<_SetupCoverageDialog> {
               textCapitalization: TextCapitalization.words,
               decoration: InputDecoration(
                 labelText: 'Proxy User ID / Name',
-                border: const OutlineInputBorder(),
+                filled: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
                 prefixIcon: const Icon(LucideIcons.search),
                 errorText: _isProxyValid ? null : 'Required *',
               ),
             ),
-            if (widget.potentialProxies.isNotEmpty) ...[
+            if (proxies.isNotEmpty) ...[
               const SizedBox(height: 12),
               const Text(
                 'Suggestions (Verified Contacts)',
@@ -1494,13 +1545,13 @@ class _SetupCoverageDialogState extends State<_SetupCoverageDialog> {
               ),
               const SizedBox(height: 8),
               SizedBox(
-                height: 150, // Limit height
+                height: 150,
                 width: double.maxFinite,
                 child: ListView.builder(
                   shrinkWrap: true,
-                  itemCount: widget.potentialProxies.length,
+                  itemCount: proxies.length,
                   itemBuilder: (context, index) {
-                    final p = widget.potentialProxies[index];
+                    final p = proxies[index];
                     final mockRel = Relationship(
                       id: p.uid!,
                       name: p.firstName,
@@ -1516,7 +1567,6 @@ class _SetupCoverageDialogState extends State<_SetupCoverageDialog> {
                         });
                       },
                       child: IgnorePointer(
-                        // Ignore taps on card internal elements, we want to select
                         child: RelationshipCard(
                           relationship: mockRel,
                           enableActions: false,

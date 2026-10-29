@@ -61,25 +61,20 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
 
   Future<void> _checkPermissions() async {
     try {
-      final locationStatus = await Permission.location.status;
-      final notificationStatus = await Permission.notification.status;
+      final results = await Future.wait<dynamic>([
+        Permission.location.status,
+        Permission.notification.status,
+        Permission.locationAlways.status
+            .then<PermissionStatus?>((s) => s)
+            .catchError((_) => null),
+      ]);
+      final locationStatus = results[0] as PermissionStatus;
+      final notificationStatus = results[1] as PermissionStatus;
+      final bgStatus = results[2] as PermissionStatus?;
 
-      // Check background location - handle legacy/new Android versions gracefully
-      bool backgroundLocationGranted = false;
-      try {
-        final bgStatus = await Permission.locationAlways.status;
-        // [FIX] Accept both isGranted and isLimited for background location
-        backgroundLocationGranted = bgStatus.isGranted || bgStatus.isLimited;
-        debugPrint(
-          'Permission Check - Location: $locationStatus, Notification: $notificationStatus, BgLocation: $bgStatus',
-        );
-      } catch (e) {
-        debugPrint('Error checking background location: $e');
-        // [FIX] If we can't check background location, treat as granted
-        // to avoid permanently blocking the user. The router only checks
-        // foreground location anyway.
-        backgroundLocationGranted = true;
-      }
+      final bool backgroundLocationGranted = bgStatus == null
+          ? true
+          : (bgStatus.isGranted || bgStatus.isLimited);
 
       if (mounted) {
         setState(() {
@@ -92,20 +87,9 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
               : backgroundLocationGranted;
         });
 
-        debugPrint(
-          'Permission State - loc=$_locationGranted, notif=$_notificationGranted, bgLoc=$_backgroundLocationGranted, allGranted=$_allPermissionsGranted, isProcessing=$_isProcessing',
-        );
-
-        // Auto-navigate as soon as all permissions are granted (unless user explicitly stepped back to review)
+        // Auto-navigate immediately in 0ms as soon as all permissions are granted
         if (_allPermissionsGranted && !_isProcessing && !widget.isReviewMode) {
-          // Brief delay to let UI settle before navigating
-          await Future.delayed(const Duration(milliseconds: 300));
-          if (mounted &&
-              _allPermissionsGranted &&
-              !_isProcessing &&
-              !widget.isReviewMode) {
-            _continue();
-          }
+          _continue();
         }
       }
     } catch (e) {
@@ -123,7 +107,6 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
       if (status.isPermanentlyDenied) {
         await openAppSettings();
       }
-      await _checkPermissions();
     } catch (e) {
       debugPrint('Error requesting location: $e');
       if (mounted) {
@@ -142,7 +125,6 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
       if (status.isPermanentlyDenied) {
         await openAppSettings();
       }
-      await _checkPermissions();
     } catch (e) {
       debugPrint('Error requesting notifications: $e');
     } finally {
@@ -162,13 +144,8 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
       if (status.isPermanentlyDenied) {
         await openAppSettings();
       }
-
-      // We don't need to auto-proceed here immediately if we are going to settings,
-      // the resume handler will take care of updating the UI.
-      await _checkPermissions();
     } catch (e) {
       debugPrint('Error requesting background location: $e');
-      // Don't crash, just log
     } finally {
       await _checkPermissions();
     }
@@ -360,7 +337,6 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
           child: Container(
             padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding),
             decoration: AppTheme.cardDecoration(context).copyWith(
-              border: const Border(),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.05),

@@ -5,6 +5,7 @@ import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/profile/models/relationship.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
+import 'package:diaspora_nearby/features/trust/models/trust_data.dart';
 import 'package:diaspora_nearby/features/trust/repository/trust_repository.dart';
 import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 import 'package:uuid/uuid.dart';
@@ -56,23 +57,24 @@ class BereavementService {
   // --- Eligibility ---
 
   Future<EligibilityResult> checkEligibility(String userId) async {
-    // 1. Profile Check
-    final profile = await _profileRepo.getUserProfile(userId);
-    final isProfileComplete = profile?.isComplete ?? false;
+    final results = await Future.wait<Object?>([
+      _profileRepo.getUserProfile(userId),
+      _trustRepo.getTrustData(userId),
+      _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('relationships')
+          .where('status', isEqualTo: 'active')
+          .get(),
+    ]);
 
-    // 2. Trust Check (Verified & Score >= 67)
-    final trust = await _trustRepo.getTrustData(userId);
+    final profile = results[0] as ProfileData?;
+    final trust = results[1] as TrustData?;
+    final relationshipsSnap = results[2] as QuerySnapshot<Map<String, dynamic>>;
+
+    final isProfileComplete = profile?.isComplete ?? false;
     final isVerified = trust?.isVerified ?? false;
     final hasEnoughTrust = (trust?.trustScore ?? 0) >= 67;
-
-    // 3. Relatives Check (>= 2)
-    final relationshipsSnap = await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('relationships')
-        .where('status', isEqualTo: 'active')
-        .get();
-
     final hasEnoughRelatives = relationshipsSnap.docs.length >= 2;
 
     return EligibilityResult(
@@ -102,7 +104,7 @@ class BereavementService {
   Future<List<Relationship>> getQualifiedRelatives(String userId) async {
     try {
       final snap = await _firestore
-          .collection('users')
+           .collection('users')
           .doc(userId)
           .collection('relationships')
           .where('status', isEqualTo: 'active')
@@ -119,7 +121,10 @@ class BereavementService {
   // Helper to fetch potential proxies from active DM chats (Verified Users Only)
   Future<List<ProfileData>> getPotentialProxies(String userId) async {
     try {
-      final chats = await _chatRepo.getUserChats();
+      final cachedChats = _chatRepo.cachedChats;
+      final chats = cachedChats.isNotEmpty
+          ? cachedChats
+          : await _chatRepo.getUserChats();
       final directChats = chats.where((c) => c.isDirect).toList();
 
       final potentialIds = directChats
@@ -131,20 +136,28 @@ class BereavementService {
 
       if (potentialIds.isEmpty) return [];
 
-      // Fetch profiles
-      final profilesFutures = potentialIds.map(
-        (id) => _profileRepo.getUserProfile(id),
+      // Fetch profiles in parallel
+      final profiles = await Future.wait(
+        potentialIds.map((id) => _profileRepo.getUserProfile(id)),
       );
-      final profiles = await Future.wait(profilesFutures);
 
-      // Filter by Verification (and remove nulls)
+      final validProfiles = profiles
+          .whereType<ProfileData>()
+          .where((p) => p.uid != null)
+          .toList();
+
+      if (validProfiles.isEmpty) return [];
+
+      // Fetch all trust data in parallel instead of sequential loop
+      final trustList = await Future.wait(
+        validProfiles.map((p) => _trustRepo.getTrustData(p.uid!)),
+      );
+
       final verifiedProfiles = <ProfileData>[];
-      for (final p in profiles) {
-        if (p == null || p.uid == null) continue;
-
-        final trust = await _trustRepo.getTrustData(p.uid!);
+      for (var i = 0; i < validProfiles.length; i++) {
+        final trust = trustList[i];
         if (trust != null && trust.isVerified) {
-          verifiedProfiles.add(p);
+          verifiedProfiles.add(validProfiles[i]);
         }
       }
 
@@ -161,8 +174,6 @@ class BereavementService {
     required String proxyUserId,
     required List<String> coveredFamilyMembers,
   }) async {
-    // Check if membership already exists? If so, update.
-
     final membership = BereavementMembership(
       userId: userId,
       country: country,
@@ -179,8 +190,6 @@ class BereavementService {
         .collection('bereavement_memberships')
         .doc(userId)
         .set(membership.toMap());
-
-    // Logic to notify proxy would go here
   }
 
   // Step 2: Proxy Accepts (Called by Proxy User)
@@ -188,8 +197,6 @@ class BereavementService {
     String memberUserId,
     String proxyUserId,
   ) async {
-    // Logic to validate proxy user would go here
-
     await _firestore
         .collection('bereavement_memberships')
         .doc(memberUserId)
@@ -209,10 +216,6 @@ class BereavementService {
   // processes payment via Stripe/M-Pesa before activating membership.
   Future<void> completeMembershipPayment(String userId) async {
     if (!isBetaMode) {
-      // TODO: Call Cloud Function to process real payment
-      // e.g., final result = await FirebaseFunctions.instance
-      //   .httpsCallable('processBereavementPayment')
-      //   .call({'userId': userId});
       throw UnimplementedError(
         'Real payment processing not yet integrated. '
         'Set isBetaMode = true for beta access.',

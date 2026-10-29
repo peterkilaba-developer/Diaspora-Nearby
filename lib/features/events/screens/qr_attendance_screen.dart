@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -17,7 +18,7 @@ class QRAttendanceScreen extends ConsumerStatefulWidget {
   const QRAttendanceScreen({
     super.key,
     required this.eventId,
-    required this.eventTitle, // Passed for context but verifying against eventId
+    required this.eventTitle,
     required this.isCreator,
   });
 
@@ -47,6 +48,10 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
         : !widget.isCreator; // Creator shows code by default
 
     if (widget.isCreator) {
+      // [PERF] Seed synchronously from pre-warmed cache if available
+      _generatedCode = ref
+          .read(eventRepositoryProvider)
+          .getCachedAttendanceCode(widget.eventId);
       _generateCode();
     }
   }
@@ -62,7 +67,7 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
         });
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && _generatedCode == null) {
         setState(() {
           _scanError = 'Failed to generate code. Please try again.';
         });
@@ -95,31 +100,50 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
           // Fallback to raw value
         }
 
-        try {
-          final repo = ref.read(eventRepositoryProvider);
-          final user = ref.read(authStateProvider).value;
+        final repo = ref.read(eventRepositoryProvider);
+        final user =
+            ref.read(authStateProvider).value ??
+            ref.read(authRepositoryProvider).currentUser;
 
-          if (user == null) {
-            _showError('User not logged in');
-            return;
-          }
+        if (user == null) {
+          _showError('User not logged in');
+          return;
+        }
 
-          // Optimistic UI Update
-          setState(() => _scanSuccess = 'Verifying...');
-
-          final result = await repo.verifyAndMarkAttendance(
-            widget.eventId,
-            user.uid,
-            attendanceCode,
+        // Validate QR prefix locally for 0ms optimistic confirmation
+        if (!attendanceCode.startsWith('attendance:${widget.eventId}:')) {
+          _showError(
+            'Invalid Event Code. Please scan the official event QR.',
           );
+          return;
+        }
 
-          if (mounted) {
+        final cachedEvent = repo.getCachedEvent(widget.eventId);
+        final alreadyCheckedIn =
+            cachedEvent?.confirmedAttendees?.contains(user.uid) ?? false;
+
+        // [PERF] 0ms Optimistic check-in confirmation
+        setState(() {
+          _scanError = null;
+          _scanSuccess = alreadyCheckedIn
+              ? 'You\'re already checked in!'
+              : 'Check-in Confirmed! +100 DSP';
+        });
+
+        unawaited(() async {
+          try {
+            final result = await repo.verifyAndMarkAttendance(
+              widget.eventId,
+              user.uid,
+              attendanceCode,
+            );
+
+            if (!mounted) return;
             switch (result) {
               case VerificationResult.success:
                 setState(() => _scanSuccess = 'Check-in Confirmed! +100 DSP');
                 break;
               case VerificationResult.alreadyCheckedIn:
-                // Show as success state but with different message
                 setState(() => _scanSuccess = 'You\'re already checked in!');
                 break;
               case VerificationResult.invalidCode:
@@ -131,10 +155,12 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
                 _showError('Error verifying attendance. Please try again.');
                 break;
             }
+          } catch (_) {
+            if (mounted) {
+              _showError('Error verifying attendance. Please try again.');
+            }
           }
-        } catch (e) {
-          _showError('Error verifying attendance. Please try again.');
-        }
+        }());
         break; // Process only first valid barcode
       }
     }
@@ -145,7 +171,6 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
       _scanError = message;
       _scanSuccess = null;
     });
-    // Can optionally restart scanner here if desired, but user might want to see error
   }
 
   // Toggle between modes
@@ -159,8 +184,6 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
         controller.start();
       } else {
         controller.stop();
-        // If switching to show code mode and it's missing (e.g. valid for attendees to show code? No, primarily creator)
-        // Attendees likely scan. Creators show.
         if (widget.isCreator && _generatedCode == null) {
           _generateCode();
         }

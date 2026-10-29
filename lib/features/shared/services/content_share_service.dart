@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
@@ -35,28 +37,39 @@ class ContentShareService {
 
     if (content.isEmpty) return;
 
-    // Build referral invite link for footer
+    // Build referral invite link synchronously in 0ms from cache
     String inviteLink = 'https://diasporanearby.com/invite';
     try {
       final user = _ref.read(authRepositoryProvider).currentUser;
       if (user != null) {
         final pointsRepo = _ref.read(pointsRepositoryProvider);
-        String? code = await pointsRepo.getReferralCode(user.uid);
-        if (code == null) {
-          final userProfile = await _ref
-              .read(profileRepositoryProvider)
-              .getUserProfile(user.uid);
-          if (userProfile != null) {
-            final countryCode = userProfile.homeCountryCode ?? 'US';
-            code = await pointsRepo.generateReferralCode(
-              user.uid,
-              userProfile.firstName,
-              countryCode,
-            );
-          }
-        }
-        if (code != null) {
+        String? code = pointsRepo.getCachedReferralCode(user.uid);
+        if (code != null && code.isNotEmpty) {
           inviteLink = '$inviteLink?code=$code';
+        } else {
+          // Warm cache in background for subsequent shares without blocking the share sheet
+          unawaited(() async {
+            try {
+              var fetched = await pointsRepo.getReferralCode(user.uid);
+              if (fetched == null) {
+                final userProfile =
+                    _ref
+                        .read(profileRepositoryProvider)
+                        .getCachedProfile(user.uid) ??
+                    await _ref
+                        .read(profileRepositoryProvider)
+                        .getUserProfile(user.uid);
+                if (userProfile != null) {
+                  final countryCode = userProfile.homeCountryCode ?? 'US';
+                  await pointsRepo.generateReferralCode(
+                    user.uid,
+                    userProfile.firstName,
+                    countryCode,
+                  );
+                }
+              }
+            } catch (_) {}
+          }());
         }
       }
     } catch (e) {
@@ -66,21 +79,21 @@ class ContentShareService {
     // Add App Footer with referral link
     content += '\n\nSent via Diaspora Nearby $inviteLink';
 
-    // Show share sheet
+    // Show share sheet immediately in 0ms
     try {
       await SharePlus.instance.share(ShareParams(text: content));
 
-      // Award points (Assuming sheet opened successfully)
-      final rewarded = await _awardPoints('message_share');
-
-      if (rewarded && context.mounted) {
-        // Show reward feedback
-        showExplorationRewardToast(
-          context,
-          message: 'Personal Stake increased!',
-          points: 100,
-        );
-      }
+      // Award points in background
+      unawaited(() async {
+        final rewarded = await _awardPoints('message_share');
+        if (rewarded && context.mounted) {
+          showExplorationRewardToast(
+            context,
+            message: 'Personal Stake increased!',
+            points: 100,
+          );
+        }
+      }());
     } catch (e) {
       debugPrint('Error sharing message: $e');
     }
@@ -90,7 +103,10 @@ class ContentShareService {
   Future<void> shareEvent(BuildContext context, Event event) async {
     showDialog(
       context: context,
-      builder: (_) => ShareEventDialog(event: event),
+      builder: (_) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: ShareEventDialog(event: event),
+      ),
     );
   }
 

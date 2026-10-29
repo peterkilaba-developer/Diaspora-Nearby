@@ -12,8 +12,8 @@ import 'package:diaspora_nearby/features/discovery/providers/global_search_provi
 import 'package:diaspora_nearby/core/providers/view_mode_provider.dart';
 import 'package:diaspora_nearby/core/utils/location_utils.dart';
 import 'package:diaspora_nearby/features/events/widgets/event_card.dart';
-import 'package:diaspora_nearby/features/dsp/services/points_service.dart'; // [NEW]
-import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW]
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
+import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 
 class EventsScreen extends ConsumerStatefulWidget {
   const EventsScreen({super.key});
@@ -29,11 +29,20 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
   @override
   void initState() {
     super.initState();
+    _currentPosition = ref.read(liveUserPositionProvider).value;
     _getCurrentLocation();
   }
 
   Future<void> _getCurrentLocation() async {
     try {
+      // [PERF] Use last known position first so distances render immediately
+      final lastKnown = await Geolocator.getLastKnownPosition();
+      if (lastKnown != null && mounted) {
+        setState(() {
+          _currentPosition = lastKnown;
+        });
+      }
+
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         return;
@@ -51,14 +60,6 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
         return;
       }
 
-      // [PERF] Use last known position first so distances render immediately
-      final lastKnown = await Geolocator.getLastKnownPosition();
-      if (lastKnown != null && mounted) {
-        setState(() {
-          _currentPosition = lastKnown;
-        });
-      }
-
       final position = await Geolocator.getCurrentPosition();
       if (mounted) {
         setState(() {
@@ -73,10 +74,16 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // Auth & User Profile
-    final user = ref.watch(authStateProvider).value;
+    // Auth & User Profile (with synchronous fallbacks for 0-latency frame 0)
+    final user =
+        ref.watch(authStateProvider).value ??
+        ref.read(authRepositoryProvider).currentUser;
     final userProfileAsync = ref.watch(userProfileProvider);
-    final userProfile = userProfileAsync.value;
+    final userProfile =
+        userProfileAsync.value ??
+        (user != null
+            ? ref.read(profileRepositoryProvider).getCachedProfile(user.uid)
+            : null);
 
     final eventRepo = ref.watch(eventRepositoryProvider);
     final searchQuery = ref.watch(globalSearchProvider);
@@ -88,10 +95,6 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
     // User Home Country Code
     final userHomeCountryCode = userProfile?.homeCountryCode;
 
-    // Repo Logic:
-    // 1. Home View: isGlobal=false, homeCountryCode=userHomeCountryCode
-    // 2. Global View: isGlobal=true, homeCountryCode=null (Fetch all, filter locally to EXCLUDE home)
-
     final bool repoIsGlobal = isGlobalViewMode;
     final String? repoCountryCode = isGlobalViewMode
         ? null
@@ -102,72 +105,84 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
     }
 
     final rawEventsAsync = ref.watch(allRawEventsStreamProvider);
+    final cachedRaw = eventRepo.cachedRawEvents;
+    final rawEvents = rawEventsAsync.value ?? cachedRaw;
+
+    if (rawEventsAsync.isLoading && rawEvents.isEmpty) {
+      return Scaffold(
+        backgroundColor: theme.colorScheme.surface,
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (rawEventsAsync.hasError && rawEvents.isEmpty) {
+      return Scaffold(
+        backgroundColor: theme.colorScheme.surface,
+        body: Center(child: Text('Error: ${rawEventsAsync.error}')),
+      );
+    }
+
+    final allEvents = eventRepo.filterVisibleEvents(
+      rawEvents,
+      isGlobal: repoIsGlobal,
+      homeCountryCode: repoCountryCode,
+      currentUserId: user.uid,
+      userCommunityMemberships: userProfile?.communityMemberships ?? [],
+    );
+
+    // Filter Logic
+    final livePos =
+        ref.watch(liveUserPositionProvider).value ?? _currentPosition;
+    final filteredEvents = allEvents.where((event) {
+      // 1. Creator or RSVP'd attendee always sees the event
+      if (event.creatorId == user.uid ||
+          (event.attendees?.contains(user.uid) ?? false)) {
+        // Still apply search query below
+      } else if (!isGlobalViewMode) {
+        // Home View: match homeCountryCode (case-insensitive) when present on both
+        if (userHomeCountryCode != null &&
+            userHomeCountryCode.isNotEmpty &&
+            event.homeCountryCode != null &&
+            event.homeCountryCode!.isNotEmpty &&
+            event.homeCountryCode!.toUpperCase() !=
+                userHomeCountryCode.toUpperCase()) {
+          return false;
+        }
+      }
+
+      // 2. Search Filter
+      final query = searchQuery.toLowerCase();
+      if (query.isEmpty) return true;
+
+      return event.title.toLowerCase().contains(query) ||
+          event.description.toLowerCase().contains(query) ||
+          event.location.toLowerCase().contains(query);
+    }).toList();
+
+    for (final event in filteredEvents) {
+      event.distance = calculateEventDistanceKm(
+        event,
+        viewer: userProfile,
+        livePosition: livePos,
+        fallbackDistanceKm: event.distance,
+      );
+    }
+
+    // Sort upcoming events by soonest start date/time first, then by closest distance
+    filteredEvents.sort((a, b) {
+      final dateCmp = a.startDate.compareTo(b.startDate);
+      if (dateCmp != 0) return dateCmp;
+      final timeCmp = a.startTime.compareTo(b.startTime);
+      if (timeCmp != 0) return timeCmp;
+      final dA = a.distance ?? double.infinity;
+      final dB = b.distance ?? double.infinity;
+      return dA.compareTo(dB);
+    });
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
-      body: rawEventsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('Error: $error')),
-        data: (rawEvents) {
-          final allEvents = eventRepo.filterVisibleEvents(
-            rawEvents,
-            isGlobal: repoIsGlobal,
-            homeCountryCode: repoCountryCode,
-            currentUserId: user.uid,
-            userCommunityMemberships: userProfile?.communityMemberships ?? [],
-          );
-
-          // Filter Logic
-          final livePos =
-              ref.watch(liveUserPositionProvider).value ?? _currentPosition;
-          final filteredEvents = allEvents.where((event) {
-            // 1. Creator or RSVP'd attendee always sees the event
-            if (event.creatorId == user.uid ||
-                (event.attendees?.contains(user.uid) ?? false)) {
-              // Still apply search query below
-            } else if (!isGlobalViewMode) {
-              // Home View: match homeCountryCode (case-insensitive) when present on both
-              if (userHomeCountryCode != null &&
-                  userHomeCountryCode.isNotEmpty &&
-                  event.homeCountryCode != null &&
-                  event.homeCountryCode!.isNotEmpty &&
-                  event.homeCountryCode!.toUpperCase() !=
-                      userHomeCountryCode.toUpperCase()) {
-                return false;
-              }
-            }
-
-            // 2. Search Filter
-            final query = searchQuery.toLowerCase();
-            if (query.isEmpty) return true;
-
-            return event.title.toLowerCase().contains(query) ||
-                event.description.toLowerCase().contains(query) ||
-                event.location.toLowerCase().contains(query);
-          }).toList();
-
-          for (final event in filteredEvents) {
-            event.distance = calculateEventDistanceKm(
-              event,
-              viewer: userProfile,
-              livePosition: livePos,
-              fallbackDistanceKm: event.distance,
-            );
-          }
-
-          // Sort upcoming events by soonest start date/time first, then by closest distance
-          filteredEvents.sort((a, b) {
-            final dateCmp = a.startDate.compareTo(b.startDate);
-            if (dateCmp != 0) return dateCmp;
-            final timeCmp = a.startTime.compareTo(b.startTime);
-            if (timeCmp != 0) return timeCmp;
-            final dA = a.distance ?? double.infinity;
-            final dB = b.distance ?? double.infinity;
-            return dA.compareTo(dB);
-          });
-
-          if (filteredEvents.isEmpty) {
-            return Center(
+      body: filteredEvents.isEmpty
+          ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -189,98 +204,94 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                   ),
                 ],
               ),
-            );
-          }
-
-          return RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(allRawEventsStreamProvider);
-            },
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
-              itemCount: filteredEvents.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 16),
-              itemBuilder: (context, index) {
-                final event = filteredEvents[index];
-                final isAttending =
-                    event.attendees?.contains(user.uid) ?? false;
-                final isInterested =
-                    event.interested?.contains(user.uid) ?? false;
-                final isCreator = event.creatorId == user.uid;
-
-                return EventCard(
-                  event: event,
-                  isAttending: isAttending,
-                  isInterested: isInterested,
-                  isCreator: isCreator,
-                  userLocation: _currentPosition,
-                  searchQuery: searchQuery, // Pass the search query
-                  onEditTap: () {
-                    context.push('/events/edit/${event.id}', extra: event);
-                  },
-                  onInterestToggle: () async {
-                    final shouldAdd = !isInterested;
-                    // [PERF] Apply optimistic interest update immediately on frame 0
-                    setState(() {
-                      final current = <String>{...?event.interested};
-                      if (shouldAdd) {
-                        current.add(user.uid);
-                      } else {
-                        current.remove(user.uid);
-                      }
-                      event.interested = current.toList();
-                    });
-                    try {
-                      await eventRepo.toggleInterest(
-                        event.id,
-                        user.uid,
-                        shouldAdd,
-                      );
-
-                      // [NEW] Track Interest
-                      if (shouldAdd) {
-                        // Only reward for showing interest, not removing
-                        ref
-                            .read(pointsServiceProvider)
-                            .trackExplorationReward(
-                              user.uid,
-                              'action_event_interest',
-                            )
-                            .then((rewarded) {
-                              if (rewarded && context.mounted) {
-                                showExplorationRewardToast(
-                                  context,
-                                  message: 'Interested in Event',
-                                );
-                              }
-                            });
-                      }
-                    } catch (e) {
-                      // Revert optimistic update on failure
-                      if (mounted) {
-                        setState(() {
-                          final current = <String>{...?event.interested};
-                          if (shouldAdd) {
-                            current.remove(user.uid);
-                          } else {
-                            current.add(user.uid);
-                          }
-                          event.interested = current.toList();
-                        });
-                      }
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text('Error: $e')));
-                      }
-                    }
-                  },
-                );
+            )
+          : RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(allRawEventsStreamProvider);
               },
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 16,
+                ),
+                itemCount: filteredEvents.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 16),
+                itemBuilder: (context, index) {
+                  final event = filteredEvents[index];
+                  final isAttending =
+                      event.attendees?.contains(user.uid) ?? false;
+                  final isInterested =
+                      event.interested?.contains(user.uid) ?? false;
+                  final isCreator = event.creatorId == user.uid;
+
+                  return EventCard(
+                    event: event,
+                    isAttending: isAttending,
+                    isInterested: isInterested,
+                    isCreator: isCreator,
+                    userLocation: _currentPosition,
+                    searchQuery: searchQuery,
+                    onEditTap: () {
+                      context.push('/events/edit/${event.id}', extra: event);
+                    },
+                    onInterestToggle: () async {
+                      final shouldAdd = !isInterested;
+                      // [PERF] Apply optimistic interest update immediately on frame 0
+                      setState(() {
+                        final current = <String>{...?event.interested};
+                        if (shouldAdd) {
+                          current.add(user.uid);
+                        } else {
+                          current.remove(user.uid);
+                        }
+                        event.interested = current.toList();
+                      });
+                      try {
+                        await eventRepo.toggleInterest(
+                          event.id,
+                          user.uid,
+                          shouldAdd,
+                        );
+
+                        if (shouldAdd) {
+                          ref
+                              .read(pointsServiceProvider)
+                              .trackExplorationReward(
+                                user.uid,
+                                'action_event_interest',
+                              )
+                              .then((rewarded) {
+                                if (rewarded && context.mounted) {
+                                  showExplorationRewardToast(
+                                    context,
+                                    message: 'Interested in Event',
+                                  );
+                                }
+                              });
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          setState(() {
+                            final current = <String>{...?event.interested};
+                            if (shouldAdd) {
+                              current.remove(user.uid);
+                            } else {
+                              current.add(user.uid);
+                            }
+                            event.interested = current.toList();
+                          });
+                        }
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                        }
+                      }
+                    },
+                  );
+                },
+              ),
             ),
-          );
-        },
-      ),
     );
   }
 }

@@ -457,6 +457,73 @@ class RoomOffer {
 /// Service for interacting with the Travel API via a
 /// server-side Cloud Function proxy. API credentials never touch the client.
 class AmadeusService {
+  static final Map<String, List<FlightOffer>> _flightSearchCache = {};
+  static final Map<String, Map<String, dynamic>> _confirmedPriceCache = {};
+  static final Map<String, List<HotelListEntry>> _hotelsByCityCache = {};
+  static final Map<String, List<HotelListEntry>> _hotelsByGeocodeCache = {};
+  static final Map<String, List<HotelOfferResult>> _hotelOffersCache = {};
+
+  static String _flightCacheKey({
+    required String originIata,
+    required String destinationIata,
+    required String departureDate,
+    String? returnDate,
+    required int adults,
+    required int maxResults,
+    required String currencyCode,
+  }) =>
+      '${originIata.toUpperCase()}|${destinationIata.toUpperCase()}|$departureDate|${returnDate ?? ''}|$adults|$maxResults|${currencyCode.toUpperCase()}';
+
+  static String _hotelLocationCacheKey({
+    required double latitude,
+    required double longitude,
+    required String checkInDate,
+    required String checkOutDate,
+    required int adults,
+    required int rooms,
+    String? query,
+  }) =>
+      '${latitude.toStringAsFixed(2)},${longitude.toStringAsFixed(2)}|$checkInDate|$checkOutDate|$adults|$rooms|${query?.trim().toLowerCase() ?? ''}';
+
+  List<FlightOffer>? getCachedFlights({
+    required String originIata,
+    required String destinationIata,
+    required String departureDate,
+    String? returnDate,
+    int adults = 1,
+    int maxResults = 10,
+    String currencyCode = 'USD',
+  }) => _flightSearchCache[_flightCacheKey(
+    originIata: originIata,
+    destinationIata: destinationIata,
+    departureDate: departureDate,
+    returnDate: returnDate,
+    adults: adults,
+    maxResults: maxResults,
+    currencyCode: currencyCode,
+  )];
+
+  Map<String, dynamic>? getCachedConfirmedPrice(String offerId) =>
+      _confirmedPriceCache[offerId];
+
+  List<HotelOfferResult>? getCachedHotelsByLocation({
+    required double latitude,
+    required double longitude,
+    required String checkInDate,
+    required String checkOutDate,
+    int adults = 1,
+    int rooms = 1,
+    String? query,
+  }) => _hotelOffersCache[_hotelLocationCacheKey(
+    latitude: latitude,
+    longitude: longitude,
+    checkInDate: checkInDate,
+    checkOutDate: checkOutDate,
+    adults: adults,
+    rooms: rooms,
+    query: query,
+  )];
+
   /// Recursively converts all nested maps from `Map<Object?, Object?>` to
   /// `Map<String, dynamic>` and lists from `List<Object?>` to `List<dynamic>`.
   /// Firebase callable functions return untyped maps that need deep casting.
@@ -511,6 +578,18 @@ class AmadeusService {
     int maxResults = 10,
     String currencyCode = 'USD',
   }) async {
+    final cacheKey = _flightCacheKey(
+      originIata: originIata,
+      destinationIata: destinationIata,
+      departureDate: departureDate,
+      returnDate: returnDate,
+      adults: adults,
+      maxResults: maxResults,
+      currencyCode: currencyCode,
+    );
+    final cached = _flightSearchCache[cacheKey];
+    if (cached != null) return cached;
+
     final params = <String, dynamic>{
       'originIata': originIata,
       'destinationIata': destinationIata,
@@ -527,6 +606,7 @@ class AmadeusService {
     final offers = (data['data'] as List? ?? [])
         .map((o) => FlightOffer.fromJson(Map<String, dynamic>.from(o)))
         .toList();
+    _flightSearchCache[cacheKey] = offers;
     return offers;
   }
 
@@ -540,6 +620,10 @@ class AmadeusService {
   Future<Map<String, dynamic>> confirmFlightPrice(
     Map<String, dynamic> rawOfferJson,
   ) async {
+    final offerId = rawOfferJson['id']?.toString() ?? '';
+    if (offerId.isNotEmpty && _confirmedPriceCache.containsKey(offerId)) {
+      return _confirmedPriceCache[offerId]!;
+    }
     final data = await _call('confirmFlightPrice', {
       'rawOfferJson': rawOfferJson,
     });
@@ -548,7 +632,11 @@ class AmadeusService {
     if (confirmedOffers.isEmpty) {
       throw AmadeusException('No confirmed pricing returned');
     }
-    return Map<String, dynamic>.from(confirmedOffers.first);
+    final confirmed = Map<String, dynamic>.from(confirmedOffers.first);
+    if (offerId.isNotEmpty) {
+      _confirmedPriceCache[offerId] = confirmed;
+    }
+    return confirmed;
   }
 
   /// Create a flight order (booking) with traveler details.
@@ -617,6 +705,9 @@ class AmadeusService {
     int radius = 5,
     int maxResults = 20,
   }) async {
+    final key = '${cityCode.toUpperCase()}|$radius|$maxResults';
+    if (_hotelsByCityCache.containsKey(key)) return _hotelsByCityCache[key]!;
+
     final data = await _call('searchHotelsByCity', {
       'cityCode': cityCode.toUpperCase(),
       'radius': radius,
@@ -626,6 +717,7 @@ class AmadeusService {
         .map((h) => HotelListEntry.fromJson(Map<String, dynamic>.from(h)))
         .take(maxResults)
         .toList();
+    _hotelsByCityCache[key] = hotels;
     return hotels;
   }
 
@@ -642,6 +734,12 @@ class AmadeusService {
     int maxResults = 20,
     String? query,
   }) async {
+    final key =
+        '${latitude.toStringAsFixed(2)},${longitude.toStringAsFixed(2)}|$radius|$maxResults|${query?.trim().toLowerCase() ?? ''}';
+    if (_hotelsByGeocodeCache.containsKey(key)) {
+      return _hotelsByGeocodeCache[key]!;
+    }
+
     final data = await _call('searchHotelsByGeocode', {
       'latitude': latitude,
       'longitude': longitude,
@@ -653,6 +751,7 @@ class AmadeusService {
         .map((h) => HotelListEntry.fromJson(Map<String, dynamic>.from(h)))
         .take(maxResults)
         .toList();
+    _hotelsByGeocodeCache[key] = hotels;
     return hotels;
   }
 
@@ -706,6 +805,12 @@ class AmadeusService {
     int maxResults = 15,
     String currencyCode = 'USD',
   }) async {
+    final cacheKey =
+        'city:${cityCode.toUpperCase()}|$checkInDate|$checkOutDate|$adults|$rooms|$maxResults|$currencyCode';
+    if (_hotelOffersCache.containsKey(cacheKey)) {
+      return _hotelOffersCache[cacheKey]!;
+    }
+
     // Step 1 — list hotels in the city
     final hotelList = await searchHotelsByCity(
       cityCode: cityCode,
@@ -726,7 +831,9 @@ class AmadeusService {
       currencyCode: currencyCode,
     );
 
-    return offers.take(maxResults).toList();
+    final result = offers.take(maxResults).toList();
+    _hotelOffersCache[cacheKey] = result;
+    return result;
   }
 
   /// Convenience: Search hotels by geographic location (lat/lng → offers).
@@ -744,6 +851,19 @@ class AmadeusService {
     String currencyCode = 'USD',
     String? query,
   }) async {
+    final cacheKey = _hotelLocationCacheKey(
+      latitude: latitude,
+      longitude: longitude,
+      checkInDate: checkInDate,
+      checkOutDate: checkOutDate,
+      adults: adults,
+      rooms: rooms,
+      query: query,
+    );
+    if (_hotelOffersCache.containsKey(cacheKey)) {
+      return _hotelOffersCache[cacheKey]!;
+    }
+
     // Step 1 — list hotels by geocode
     final hotelList = await searchHotelsByGeocode(
       latitude: latitude,
@@ -767,7 +887,9 @@ class AmadeusService {
       currencyCode: currencyCode,
     );
 
-    return offers.take(maxResults).toList();
+    final result = offers.take(maxResults).toList();
+    _hotelOffersCache[cacheKey] = result;
+    return result;
   }
 }
 

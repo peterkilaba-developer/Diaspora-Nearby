@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:ui';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:diaspora_nearby/features/admin_dashboard/services/admin_service.dart';
 import 'package:flutter/material.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
@@ -17,6 +20,17 @@ class AdminUsersScreen extends ConsumerStatefulWidget {
 class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
   String _searchQuery = '';
   final _searchController = TextEditingController();
+  late final Stream<QuerySnapshot> _usersStream;
+  final Map<String, bool> _optimisticBanState = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _usersStream = FirebaseFirestore.instance
+        .collection('users')
+        .limit(200)
+        .snapshots();
+  }
 
   @override
   void dispose() {
@@ -70,10 +84,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
           // Users Table/List
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('users')
-                  .limit(200)
-                  .snapshots(),
+              stream: _usersStream,
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return Center(child: Text('Error: ${snapshot.error}'));
@@ -85,10 +96,14 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                 final users =
                     snapshot.data?.docs
                         .map((doc) {
-                          return ProfileData.fromJson({
-                            ...doc.data() as Map<String, dynamic>,
-                            'uid': doc.id,
-                          });
+                          final data = Map<String, dynamic>.from(
+                            doc.data() as Map<String, dynamic>,
+                          );
+                          data['uid'] = doc.id;
+                          if (_optimisticBanState.containsKey(doc.id)) {
+                            data['isBanned'] = _optimisticBanState[doc.id];
+                          }
+                          return ProfileData.fromJson(data);
                         })
                         .where((u) {
                           final query = _searchQuery.toLowerCase();
@@ -113,7 +128,15 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                   separatorBuilder: (c, i) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final user = users[index];
-                    return _UserTile(user: user, ref: ref);
+                    return _UserTile(
+                      user: user,
+                      ref: ref,
+                      onOptimisticBan: (uid, isBanned) {
+                        setState(() {
+                          _optimisticBanState[uid] = isBanned;
+                        });
+                      },
+                    );
                   },
                 );
               },
@@ -128,8 +151,13 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
 class _UserTile extends StatelessWidget {
   final ProfileData user;
   final WidgetRef ref;
+  final void Function(String uid, bool isBanned) onOptimisticBan;
 
-  const _UserTile({required this.user, required this.ref});
+  const _UserTile({
+    required this.user,
+    required this.ref,
+    required this.onOptimisticBan,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -143,7 +171,7 @@ class _UserTile extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 24,
-            backgroundImage: NetworkImage(user.profileImage),
+            backgroundImage: CachedNetworkImageProvider(user.profileImage),
             child: null,
           ),
           const SizedBox(width: 16),
@@ -254,32 +282,45 @@ class _UserTile extends StatelessWidget {
     final action = user.isBanned == true ? 'Unban' : 'Ban';
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('$action User'),
-        content: Text(
-          'Are you sure you want to ${action.toLowerCase()} ${user.fullName}?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          title: Text('$action User'),
+          content: Text(
+            'Are you sure you want to ${action.toLowerCase()} ${user.fullName}?',
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(
-              action,
-              style: TextStyle(
-                color: user.isBanned == true ? Colors.green : Colors.red,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(
+                action,
+                style: TextStyle(
+                  color: user.isBanned == true ? Colors.green : Colors.red,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
 
-    if (confirm == true) {
+    if (confirm == true && user.uid != null) {
+      final prevBan = user.isBanned == true;
+      final newBan = !prevBan;
+      onOptimisticBan(user.uid!, newBan);
       final adminService = ref.read(adminServiceProvider);
-      await adminService.banUser(user.uid!, !(user.isBanned == true));
+      unawaited(() async {
+        try {
+          await adminService.banUser(user.uid!, newBan);
+        } catch (_) {
+          onOptimisticBan(user.uid!, prevBan);
+        }
+      }());
     }
   }
 }

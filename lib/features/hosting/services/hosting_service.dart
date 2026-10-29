@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -61,7 +62,9 @@ class HostingService {
         return null;
       }
 
-      final profile = _ref.read(userProfileProvider).value;
+      final profile =
+          _ref.read(userProfileProvider).value ??
+          _ref.read(profileRepositoryProvider).getCachedProfile(user.uid);
       if (profile == null) {
         debugPrint('❌ [Hosting] No user profile loaded');
         return null;
@@ -87,12 +90,17 @@ class HostingService {
         createdAt: DateTime.now(),
       );
 
+      // Optimistically cache on frame 0
+      _hostingRepo.cacheRequest(request);
+
       // Save to Firestore
       final createdRequest = await _hostingRepo.createRequest(request);
 
-      // Broadcast to community chat (if chat exists)
+      // Broadcast to community chat in background (non-blocking)
       if (communityChatId != null && communityChatId.isNotEmpty) {
-        await _broadcastToCommunityChatMessage(createdRequest, communityChatId);
+        unawaited(
+          _broadcastToCommunityChatMessage(createdRequest, communityChatId),
+        );
       }
 
       debugPrint('✅ [Hosting] Request created and broadcast: $requestId');
@@ -139,7 +147,6 @@ class HostingService {
         },
       );
 
-      // Update the request with the chat message reference
       debugPrint('✅ [Hosting] Broadcast sent to community chat: $chatId');
     } catch (e) {
       debugPrint('❌ [Hosting] Error broadcasting to chat: $e');
@@ -182,9 +189,12 @@ class HostingService {
         '🏠 [confirmArrangement] Host: $hostName ($hostId), chatId: $chatId',
       );
 
+      _hostingRepo.cacheRequest(request);
       final session = await _hostingRepo.createSession(
         requestId: request.id,
         hostId: hostId,
+        hostName: hostName,
+        hostPhoto: hostPhoto,
         chatId: chatId,
       );
       debugPrint('✅ [Hosting] Arrangement confirmed, session: ${session.id}');

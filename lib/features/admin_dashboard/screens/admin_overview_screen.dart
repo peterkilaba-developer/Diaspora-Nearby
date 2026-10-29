@@ -4,9 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/features/admin_dashboard/repository/admin_repository.dart';
 
-final _adminStatsProvider = FutureProvider.autoDispose(
-  (ref) => ref.read(adminRepositoryProvider).getDashboardStats(),
-);
+final _adminStatsProvider = StreamProvider<Map<String, int>>((ref) async* {
+  final repo = ref.read(adminRepositoryProvider);
+  final cached = repo.getCachedDashboardStats();
+  if (cached != null) {
+    yield cached;
+  }
+  yield await repo.getDashboardStats();
+});
 
 class AdminOverviewScreen extends ConsumerWidget {
   const AdminOverviewScreen({super.key});

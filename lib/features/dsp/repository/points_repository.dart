@@ -85,6 +85,32 @@ class PointsRepository {
 
   PointsRepository(this._firestore, this._functions);
 
+  static final Map<String, UserPoints> _userPointsCache = {};
+  static final Map<String, String> _referralCodeCache = {};
+  static final Map<String, Future<String>> _inFlightReferralCodeFutures = {};
+  static final Map<String, Map<String, dynamic>> _referralStatsCache = {};
+  static final Map<String, List<PointsTransaction>> _userTransactionsCache = {};
+
+  UserPoints? getCachedUserPoints(String userId) => _userPointsCache[userId];
+
+  void cacheUserPoints(String userId, UserPoints points) {
+    _userPointsCache[userId] = points;
+  }
+
+  String? getCachedReferralCode(String userId) => _referralCodeCache[userId];
+
+  void cacheReferralCode(String userId, String code) {
+    if (code.isNotEmpty) {
+      _referralCodeCache[userId] = code;
+    }
+  }
+
+  Map<String, dynamic>? getCachedReferralStats(String userId) =>
+      _referralStatsCache[userId];
+
+  List<PointsTransaction>? getCachedUserTransactions(String userId) =>
+      _userTransactionsCache[userId];
+
   // --- Real-time Leaderboard & Community Stats ---
 
   /// Streams the country leaderboard by points.
@@ -384,9 +410,13 @@ class PointsRepository {
   Future<UserPoints?> getUserPoints(String userId) async {
     try {
       final doc = await _firestore.collection('user_points').doc(userId).get();
-      if (!doc.exists) return null;
-      return UserPoints.fromMap(doc.data()!);
+      if (!doc.exists) return _userPointsCache[userId];
+      final parsed = UserPoints.fromMap(doc.data()!);
+      _userPointsCache[userId] = parsed;
+      return parsed;
     } catch (e) {
+      final cached = _userPointsCache[userId];
+      if (cached != null) return cached;
       throw Exception('Failed to get user points: $e');
     }
   }
@@ -397,9 +427,14 @@ class PointsRepository {
         .collection('user_points')
         .doc(userId)
         .snapshots()
-        .map((doc) => doc.exists ? UserPoints.fromMap(doc.data()!) : null)
-        .onErrorReturn(null)
-        .startWith(null);
+        .map((doc) {
+          if (!doc.exists || doc.data() == null) return null;
+          final parsed = UserPoints.fromMap(doc.data()!);
+          _userPointsCache[userId] = parsed;
+          return parsed;
+        })
+        .onErrorReturn(_userPointsCache[userId])
+        .startWith(_userPointsCache[userId]);
   }
 
   // [NEW] Stream user transactions history
@@ -414,12 +449,14 @@ class PointsRepository {
         .limit(limit)
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs.map((doc) {
+          final list = snapshot.docs.map((doc) {
             return PointsTransaction.fromMap(doc.data(), doc.id);
           }).toList();
+          _userTransactionsCache[userId] = list;
+          return list;
         })
-        .onErrorReturn(const <PointsTransaction>[])
-        .startWith(const <PointsTransaction>[]);
+        .onErrorReturn(_userTransactionsCache[userId] ?? const <PointsTransaction>[])
+        .startWith(_userTransactionsCache[userId] ?? const <PointsTransaction>[]);
   }
 
   // Stream P2P transfer transactions between two users
@@ -485,7 +522,14 @@ class PointsRepository {
   Future<void> initializeUserPoints(String userId) async {
     try {
       final callable = _functions.httpsCallable('initializeUserPoints');
-      await callable.call({});
+      final response = await callable.call({});
+      final data = response.data;
+      if (data is Map) {
+        final code = data['referralCode'] as String?;
+        if (code != null && code.isNotEmpty) {
+          _referralCodeCache[userId] = code;
+        }
+      }
     } catch (e) {
       debugPrint('[initializeUserPoints] Cloud Function error: $e');
       rethrow;
@@ -617,23 +661,39 @@ class PointsRepository {
     });
   }
 
-  // Generate unique referral code
+  // Generate or retrieve the user's single referral code created at signup
   Future<String> generateReferralCode(
     String userId,
     String firstName,
     String countryCode,
   ) async {
-    final response = await _functions
-        .httpsCallable('getOrCreateReferralCode')
-        .call<Map<String, dynamic>>({
-          'firstName': firstName,
-          'countryCode': countryCode,
-        });
-    final code = response.data['code'] as String?;
-    if (code == null || code.isEmpty) {
-      throw StateError('Referral service returned no code.');
-    }
-    return code;
+    final cached = _referralCodeCache[userId];
+    if (cached != null && cached.isNotEmpty) return cached;
+
+    final existingInFlight = _inFlightReferralCodeFutures[userId];
+    if (existingInFlight != null) return existingInFlight;
+
+    final future = () async {
+      try {
+        final response = await _functions
+            .httpsCallable('getOrCreateReferralCode')
+            .call<Map<String, dynamic>>({
+              'firstName': firstName,
+              'countryCode': countryCode,
+            });
+        final code = response.data['code'] as String?;
+        if (code == null || code.isEmpty) {
+          throw StateError('Referral service returned no code.');
+        }
+        _referralCodeCache[userId] = code;
+        return code;
+      } finally {
+        _inFlightReferralCodeFutures.remove(userId);
+      }
+    }();
+
+    _inFlightReferralCodeFutures[userId] = future;
+    return future;
   }
 
   // Transfer liquid on-chain tokens ($DIASPORA) via Cloud Function
@@ -664,24 +724,51 @@ class PointsRepository {
     }
   }
 
-  // Get user's referral code
+  // Get user's single referral code created at signup
   Future<String?> getReferralCode(String userId) async {
+    final cached = _referralCodeCache[userId];
+    if (cached != null && cached.isNotEmpty) return cached;
+
     try {
-      // Source.server forces the SDK to go to Firestore directly instead of
-      // waiting on an internally-queued request that may never resolve when
-      // the index is missing or the connection is partial.
+      // Check local Firestore cache first for 0-latency resolution before hitting server.
+      try {
+        final cacheSnap = await _firestore
+            .collection('referral_codes')
+            .where('userId', isEqualTo: userId)
+            .limit(1)
+            .get(const GetOptions(source: Source.cache))
+            .timeout(const Duration(seconds: 1));
+        if (cacheSnap.docs.isNotEmpty) {
+          final data = cacheSnap.docs.first.data();
+          final code = data['code'] as String?;
+          if (code != null && code.isNotEmpty) {
+            _referralCodeCache[userId] = code;
+            _referralStatsCache[userId] = data;
+            return code;
+          }
+        }
+      } catch (_) {}
+
       final snapshot = await _firestore
           .collection('referral_codes')
           .where('userId', isEqualTo: userId)
           .limit(1)
           .get(const GetOptions(source: Source.server))
           .timeout(
-            const Duration(seconds: 12),
+            const Duration(seconds: 5),
             onTimeout: () => throw Exception('Referral code lookup timed out'),
           );
 
-      if (snapshot.docs.isEmpty) return null;
-      return snapshot.docs.first.data()['code'] as String;
+      if (snapshot.docs.isNotEmpty) {
+        final data = snapshot.docs.first.data();
+        final code = data['code'] as String;
+        _referralCodeCache[userId] = code;
+        _referralStatsCache[userId] = data;
+        return code;
+      }
+
+      // Ensure the single signup code exists via server if not yet materialized
+      return await generateReferralCode(userId, '', '');
     } catch (e) {
       throw Exception('Failed to get referral code: $e');
     }
@@ -715,9 +802,17 @@ class PointsRepository {
           .limit(1)
           .get();
 
-      if (snapshot.docs.isEmpty) return null;
-      return snapshot.docs.first.data();
+      if (snapshot.docs.isEmpty) return _referralStatsCache[userId];
+      final data = snapshot.docs.first.data();
+      _referralStatsCache[userId] = data;
+      final code = data['code'] as String?;
+      if (code != null && code.isNotEmpty) {
+        _referralCodeCache[userId] = code;
+      }
+      return data;
     } catch (e) {
+      final cached = _referralStatsCache[userId];
+      if (cached != null) return cached;
       throw Exception('Failed to get referral stats: $e');
     }
   }
@@ -960,16 +1055,18 @@ class PointsRepository {
     final pairId = '${hostUserId}_$visitorUserId';
     final reversePairId = '${visitorUserId}_$hostUserId';
 
-    final doc = await _firestore.collection('peer_visits').doc(pairId).get();
+    final docs = await Future.wait([
+      _firestore.collection('peer_visits').doc(pairId).get(),
+      _firestore.collection('peer_visits').doc(reversePairId).get(),
+    ]);
+
+    final doc = docs[0];
     if (doc.exists && doc.data() != null) {
       final ts = doc.data()!['lastVisitTimestamp'];
       return _parseDateTime(ts);
     }
 
-    final reverseDoc = await _firestore
-        .collection('peer_visits')
-        .doc(reversePairId)
-        .get();
+    final reverseDoc = docs[1];
     if (reverseDoc.exists && reverseDoc.data() != null) {
       final ts = reverseDoc.data()!['lastVisitTimestamp'];
       return _parseDateTime(ts);

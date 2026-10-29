@@ -53,9 +53,14 @@ async function sendPushToUser(userId, payload) {
         };
     }
     if (payload.apnsThreadId || payload.apnsCollapseId) {
+        let safeCollapseId = payload.apnsCollapseId ? String(payload.apnsCollapseId) : "";
+        if (safeCollapseId && Buffer.byteLength(safeCollapseId, "utf8") > 64) {
+            const crypto = require("crypto");
+            safeCollapseId = crypto.createHash("sha256").update(safeCollapseId).digest("hex").slice(0, 64);
+        }
         message.apns = {
-            ...(payload.apnsCollapseId ? {
-                headers: { "apns-collapse-id": payload.apnsCollapseId },
+            ...(safeCollapseId ? {
+                headers: { "apns-collapse-id": safeCollapseId },
             } : {}),
             payload: {
                 aps: {

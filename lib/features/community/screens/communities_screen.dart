@@ -1,19 +1,21 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/community/viewmodels/community_hierarchy_viewmodel.dart';
+import 'package:diaspora_nearby/features/community/repository/community_repository.dart';
 import 'package:diaspora_nearby/features/community/models/hierarchy_item.dart';
 import 'package:diaspora_nearby/features/chat/utils/community_chat_utils.dart';
 import 'package:diaspora_nearby/features/community/models/community_data.dart';
-// Import existing screen for reuse
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/features/discovery/providers/global_search_provider.dart';
-import 'package:diaspora_nearby/features/dsp/services/points_service.dart'; // [NEW]
-import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart'; // [NEW]
-import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW]
-import 'package:diaspora_nearby/features/hosting/widgets/request_host_dialog.dart'; // [NEW] Hosting
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
+import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
+import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
+import 'package:diaspora_nearby/features/hosting/widgets/request_host_dialog.dart';
 import 'package:diaspora_nearby/core/providers/global_feature_provider.dart';
+import 'package:diaspora_nearby/core/providers/view_mode_provider.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 
 class CommunitiesScreen extends ConsumerStatefulWidget {
@@ -43,8 +45,6 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen> {
   HierarchyItem? _filterItem(HierarchyItem item, String query) {
     final matchesSelf = item.name.toLowerCase().contains(query.toLowerCase());
 
-    // If self matches, we perform a "relaxed" match where we return the item as is,
-    // assuming the user might want to see all children of a matching category.
     if (matchesSelf) return item;
 
     final filteredChildren = <HierarchyItem>[];
@@ -56,83 +56,86 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen> {
     }
 
     if (filteredChildren.isNotEmpty) {
-      // If query doesn't match self but matches children, return self with filtered children
       return item.copyWith(children: filteredChildren);
     }
 
     return null;
   }
 
+  Widget _buildItemsList(
+    BuildContext context,
+    List<HierarchyItem> items,
+    String searchQuery,
+  ) {
+    final filteredItems = _filterHierarchy(items, searchQuery);
+
+    if (filteredItems.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              LucideIcons.heartHandshake,
+              size: 64,
+              color: Theme.of(context).disabledColor,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              searchQuery.isNotEmpty
+                  ? 'No communities match your search.'
+                  : 'No communities found.',
+              style: TextStyle(color: Theme.of(context).hintColor),
+            ),
+            if (searchQuery.isNotEmpty) ...[
+              const SizedBox(height: 8),
+            ] else ...[
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: () => ref.refresh(communityHierarchyProvider),
+                child: const Text('Retry'),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
+      itemCount: filteredItems.length,
+      itemBuilder: (context, index) {
+        final item = filteredItems[index];
+        return HierarchyItemWidget(
+          item: item,
+          hostDepth: 0,
+          initiallyExpanded: searchQuery.isNotEmpty,
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final hierarchyState = ref.watch(communityHierarchyProvider);
-    // Watch profile provider to keep routerNotifier in sync, but don't gate UI on it.
-    // The communityHierarchyProvider reads homeCountryCode directly from Firestore.
-    ref.watch(userProfileProvider);
+    final profileAsync = ref.watch(userProfileProvider);
     final searchQuery = ref.watch(globalSearchProvider);
+    final mode = ref.watch(communitiesViewModeProvider);
 
-    // Case: Profile is null — this can happen if:
-    // 1. Profile truly doesn't exist (new user)
-    // 2. ProfileData.fromJson() threw a parse error (existing user, data mismatch)
-    // Don't block the entire communities screen for case #2.
-    // The communityHierarchyProvider reads homeCountryCode directly from Firestore,
-    // so it works independently of the ProfileData model.
-
-    // Communities is accessed via AppBar modal, needs Scaffold wrapper
     return Scaffold(
       body: hierarchyState.when(
-        data: (items) {
-          final filteredItems = _filterHierarchy(items, searchQuery);
-
-          if (filteredItems.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    LucideIcons.heartHandshake,
-                    size: 64,
-                    color: Theme.of(context).disabledColor,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    searchQuery.isNotEmpty
-                        ? 'No communities match your search.'
-                        : 'No communities found.',
-                    style: TextStyle(color: Theme.of(context).hintColor),
-                  ),
-                  if (searchQuery.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    // No retry button on search empty state usually
-                  ] else ...[
-                    const SizedBox(height: 8),
-                    ElevatedButton(
-                      onPressed: () => ref.refresh(communityHierarchyProvider),
-                      child: const Text('Retry'),
-                    ),
-                  ],
-                ],
-              ),
-            );
-          }
-
-          return ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
-            itemCount: filteredItems.length,
-            itemBuilder: (context, index) {
-              final item = filteredItems[index];
-              return HierarchyItemWidget(
-                item: item,
-                hostDepth: 0, // Start at 0 for top-level items
-                // Pass search query to maybe force expansion?
-                // For now just basic rendering.
-                initiallyExpanded: searchQuery
-                    .isNotEmpty, // Auto-expand if searching to show matches deep in tree
-              );
-            },
+        skipLoadingOnReload: true,
+        skipLoadingOnRefresh: true,
+        data: (items) => _buildItemsList(context, items, searchQuery),
+        loading: () {
+          final cachedItems = CommunityHierarchyViewModel.getCachedHierarchy(
+            mode,
+            profileAsync.value?.homeCountryCode,
           );
+          if (cachedItems != null && cachedItems.isNotEmpty) {
+            return _buildItemsList(context, cachedItems, searchQuery);
+          }
+          return const Center(child: CircularProgressIndicator());
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, st) => Center(child: Text('Error: $e')),
       ),
     );
@@ -141,13 +144,13 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen> {
 
 class HierarchyItemWidget extends ConsumerStatefulWidget {
   final HierarchyItem item;
-  final int hostDepth; // Tracks depth within host hierarchy only
-  final bool initiallyExpanded; // [NEW]
+  final int hostDepth;
+  final bool initiallyExpanded;
 
   const HierarchyItemWidget({
     super.key,
     required this.item,
-    this.hostDepth = 0, // Start at 0 for non-host items
+    this.hostDepth = 0,
     this.initiallyExpanded = false,
   });
 
@@ -162,8 +165,6 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
   @override
   void initState() {
     super.initState();
-    // Pre-expand items where isExpandable is false (countries)
-    // These items have children but should always show them
     if ((widget.item.children.isNotEmpty &&
             widget.item.isExpandable == false) ||
         widget.item.initiallyExpanded ||
@@ -173,7 +174,6 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
   }
 
   void _openMembersList(BuildContext context) {
-    // Reconstruct Community object
     final community = Community(
       id: widget.item.id,
       name: widget.item.name,
@@ -184,9 +184,11 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
       location: widget.item.location ?? {},
       profileImage: widget.item.profileImage?.value,
       flag: widget.item.flag ?? '',
+      memberCount: widget.item.totalMembers,
+      totalMembers: widget.item.totalMembers,
     );
 
-    // Push to full screen route instead of modal bottom sheet
+    ref.read(communityRepositoryProvider).cacheCommunity(community);
     context.push('/communities/${community.id}/members', extra: community);
   }
 
@@ -256,7 +258,6 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
                             ],
                           ),
                         ),
-                        // [FIX] Removed chevron for global community as it's not expandable here
                       ],
                     ),
                     if (item.globalStats != null) ...[
@@ -278,7 +279,6 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
               ),
             ),
           ),
-          // Show global children (continents) always
           if (item.children.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(left: 0, top: 4),
@@ -367,25 +367,29 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
               ],
             ),
             onTap: () {
-              // [NEW] Track Member View
+              // Navigate immediately in 0ms
+              _openMembersList(context);
+
+              // Track Member View in background
               final user = ref.read(authRepositoryProvider).currentUser;
               if (user != null) {
-                ref
-                    .read(pointsServiceProvider)
-                    .trackExplorationReward(
-                      user.uid,
-                      'action_community_members',
-                    )
-                    .then((rewarded) {
-                      if (rewarded && context.mounted) {
-                        showExplorationRewardToast(
-                          context,
-                          message: 'Community discovered!',
-                        );
-                      }
-                    });
+                unawaited(
+                  ref
+                      .read(pointsServiceProvider)
+                      .trackExplorationReward(
+                        user.uid,
+                        'action_community_members',
+                      )
+                      .then((rewarded) {
+                        if (rewarded && context.mounted) {
+                          showExplorationRewardToast(
+                            context,
+                            message: 'Community discovered!',
+                          );
+                        }
+                      }),
+                );
               }
-              _openMembersList(context);
             },
             trailing: hasChildren
                 ? (isPreExpanded
@@ -402,31 +406,33 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
                             ).iconTheme.color?.withValues(alpha: 0.5),
                           ),
                           onPressed: () {
-                            // [NEW] Track Expand
-                            if (!_isExpanded) {
+                            final wasExpanded = _isExpanded;
+                            setState(() {
+                              _isExpanded = !_isExpanded;
+                            });
+                            if (!wasExpanded) {
                               final user = ref
                                   .read(authRepositoryProvider)
                                   .currentUser;
                               if (user != null) {
-                                ref
-                                    .read(pointsServiceProvider)
-                                    .trackExplorationReward(
-                                      user.uid,
-                                      'action_community_expand',
-                                    )
-                                    .then((rewarded) {
-                                      if (rewarded && context.mounted) {
-                                        showExplorationRewardToast(
-                                          context,
-                                          message: 'Expansion bonus!',
-                                        );
-                                      }
-                                    });
+                                unawaited(
+                                  ref
+                                      .read(pointsServiceProvider)
+                                      .trackExplorationReward(
+                                        user.uid,
+                                        'action_community_expand',
+                                      )
+                                      .then((rewarded) {
+                                        if (rewarded && context.mounted) {
+                                          showExplorationRewardToast(
+                                            context,
+                                            message: 'Expansion bonus!',
+                                          );
+                                        }
+                                      }),
+                                );
                               }
                             }
-                            setState(() {
-                              _isExpanded = !_isExpanded;
-                            });
                           },
                         ))
                 : (item.type == 'city' || item.type == 'community'
@@ -451,7 +457,6 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
                       : null),
           ),
 
-          // Show children if expanded OR if pre-expanded
           if (hasChildren && (_isExpanded || isPreExpanded))
             Column(
               children: item.children
@@ -459,7 +464,6 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
                     (child) => Padding(
                       padding: EdgeInsets.only(
                         top: 8,
-                        // 4px per level, but keep Continent and Country at 0px
                         left:
                             (child.type == 'continent' ||
                                 child.type == 'country' ||
@@ -503,7 +507,6 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
         .watch(userProfileProvider)
         .value
         ?.homeCountryCode;
-    // Use CommunityChatUtils for consistent avatar rendering!
     return CommunityChatUtils.getCommunityAvatar(
       context: context,
       type: item.type,

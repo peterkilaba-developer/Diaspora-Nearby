@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -5,15 +7,10 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/organization/models/chamber_roles.dart';
 import 'package:diaspora_nearby/features/organization/repository/organization_repository.dart';
+import 'package:diaspora_nearby/features/shared/utils/app_snackbar.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 
 /// Bottom-sheet modal that lets a chamber member request a leadership seat.
-///
-/// Open via [ChamberLeadershipRequestModal.show]. Submission calls
-/// [OrganizationRepository.requestChamberLeadership]; the server-side
-/// pre-flight checks handle nationality pins, membership, and duplicate
-/// guards. Errors are surfaced inline (red banner) rather than via a snack
-/// bar so the user can correct and resubmit without re-opening the sheet.
 class ChamberLeadershipRequestModal extends ConsumerStatefulWidget {
   final String orgId;
   final String chamberName;
@@ -40,11 +37,14 @@ class ChamberLeadershipRequestModal extends ConsumerStatefulWidget {
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => ChamberLeadershipRequestModal(
-        orgId: orgId,
-        chamberName: chamberName,
-        homeCountryCode: homeCountryCode,
-        hostCountryCode: hostCountryCode,
+      builder: (_) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: ChamberLeadershipRequestModal(
+          orgId: orgId,
+          chamberName: chamberName,
+          homeCountryCode: homeCountryCode,
+          hostCountryCode: hostCountryCode,
+        ),
       ),
     );
   }
@@ -58,7 +58,7 @@ class _ChamberLeadershipRequestModalState
     extends ConsumerState<ChamberLeadershipRequestModal> {
   String? _selectedRole;
   final _messageController = TextEditingController();
-  bool _submitting = false;
+  final bool _submitting = false;
   String? _error;
 
   @override
@@ -88,42 +88,36 @@ class _ChamberLeadershipRequestModalState
       return;
     }
 
-    setState(() {
-      _submitting = true;
-      _error = null;
-    });
+    final selectedRole = _selectedRole!;
+    final pitch = _messageController.text.trim();
+    final repo = ref.read(organizationRepositoryProvider);
+    final rootContext = Navigator.of(context, rootNavigator: true).context;
 
-    try {
-      await ref
-          .read(organizationRepositoryProvider)
+    Navigator.pop(context);
+    AppSnackbar.success(
+      rootContext,
+      'Request submitted for ${ChamberRoles.displayName(selectedRole)}.',
+    );
+
+    unawaited(
+      repo
           .requestChamberLeadership(
             orgId: widget.orgId,
             userId: uid,
-            role: _selectedRole!,
-            message: _messageController.text.trim(),
-          );
-      if (!mounted) return;
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Request submitted. An admin will review your pitch for '
-            '${ChamberRoles.displayName(_selectedRole!)}.',
-          ),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _submitting = false;
-        // Strip Dart's "Bad state: " / "Invalid argument(s): " prefixes
-        // for a cleaner inline error.
-        _error = e.toString().replaceFirst(
-          RegExp(r'^(Bad state|Invalid argument(?:\(s\))?|Exception): '),
-          '',
-        );
-      });
-    }
+            role: selectedRole,
+            message: pitch,
+          )
+          .then((_) {})
+          .catchError((Object e) {
+            if (rootContext.mounted) {
+              final cleanMsg = e.toString().replaceFirst(
+                RegExp(r'^(Bad state|Invalid argument(?:\(s\))?|Exception): '),
+                '',
+              );
+              AppSnackbar.error(rootContext, cleanMsg);
+            }
+          }),
+    );
   }
 
   @override
@@ -136,9 +130,6 @@ class _ChamberLeadershipRequestModalState
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Padding(
-        // Bottom padding must account for BOTH the keyboard (viewInsets) and
-        // the system gesture/nav bar (viewPadding). Using only viewInsets
-        // hides the submit button behind the system nav.
         padding: EdgeInsets.only(
           left: 16,
           right: 16,
@@ -220,8 +211,20 @@ class _ChamberLeadershipRequestModalState
                   hintText:
                       'Why are you the right person for this seat? '
                       'Mention lived experience, B2B track record, etc.',
+                  filled: true,
+                  fillColor: theme.colorScheme.surfaceContainerHighest
+                      .withValues(alpha: 0.35),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
                   ),
                 ),
               ),
@@ -261,17 +264,8 @@ class _ChamberLeadershipRequestModalState
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  icon: _submitting
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(LucideIcons.send),
-                  label: Text(_submitting ? 'Submitting…' : 'Submit Request'),
+                  icon: const Icon(LucideIcons.send),
+                  label: const Text('Submit Request'),
                   onPressed: _submitting ? null : _submit,
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),

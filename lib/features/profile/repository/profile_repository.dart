@@ -54,11 +54,19 @@ class UserProfileNotifier extends AsyncNotifier<ProfileData?> {
     if (user == null) return null;
 
     final repo = ref.watch(profileRepositoryProvider);
+    final cached = repo.getCachedProfile(user.uid);
+    if (cached != null) {
+      state = AsyncData(cached);
+    }
     _profileSub = repo.watchOwnProfile(user.uid).listen((liveProfile) {
       if (liveProfile != null && liveProfile.firstName.isNotEmpty) {
         state = AsyncData(liveProfile);
       }
     });
+    if (cached != null) {
+      unawaited(repo.getUserProfile(user.uid));
+      return cached;
+    }
     return repo.getUserProfile(user.uid);
   }
 
@@ -304,6 +312,16 @@ class ProfileRepository {
     }
   }
 
+  /// [PERF] Synchronously read all currently cached profiles for a list of UIDs.
+  List<ProfileData> getCachedProfiles(Iterable<String> uids) {
+    final result = <ProfileData>[];
+    for (final uid in uids.toSet()) {
+      final p = getCachedProfile(uid);
+      if (p != null) result.add(p);
+    }
+    return result;
+  }
+
   Future<ProfileData?> getUserProfile(
     String uid, {
     bool forceServer = false,
@@ -464,55 +482,56 @@ class ProfileRepository {
   }
 
   Stream<ProfileData?> watchOwnProfile(String uid) {
-    late StreamController<ProfileData?> controller;
-    Map<String, dynamic>? latestPub;
-    Map<String, dynamic>? latestPriv;
-    StreamSubscription<cf.DocumentSnapshot<Map<String, dynamic>>>? pubSub;
-    StreamSubscription<cf.DocumentSnapshot<Map<String, dynamic>>>? privSub;
-
-    void emitCombined() {
-      if (latestPub == null) return;
-      try {
-        final merged = <String, dynamic>{
-          ...latestPub!,
-          if (latestPriv != null) ...latestPriv!,
-          'uid': uid,
-        };
-        final profile = ProfileData.fromJson(merged);
-        if (profile.firstName.isNotEmpty) {
-          _profileCache[uid] = _CachedProfile(profile, DateTime.now());
-        }
-        if (!controller.isClosed) {
-          controller.add(profile);
-        }
-      } catch (e) {
-        debugPrint('Error parsing live own profile for $uid: $e');
+    return Stream.multi((controller) {
+      final cached = getCachedProfile(uid);
+      if (cached != null) {
+        controller.add(cached);
       }
-    }
+      Map<String, dynamic>? latestPub;
+      Map<String, dynamic>? latestPriv;
+      StreamSubscription<cf.DocumentSnapshot<Map<String, dynamic>>>? pubSub;
+      StreamSubscription<cf.DocumentSnapshot<Map<String, dynamic>>>? privSub;
 
-    controller = StreamController<ProfileData?>.broadcast(
-      onListen: () {
-        pubSub = _firestore.collection('users').doc(uid).snapshots().listen((
-          doc,
-        ) {
-          if (doc.exists && doc.data() != null) {
-            latestPub = doc.data();
-            emitCombined();
+      void emitCombined() {
+        if (latestPub == null) return;
+        try {
+          final merged = <String, dynamic>{
+            ...latestPub!,
+            if (latestPriv != null) ...latestPriv!,
+            'uid': uid,
+          };
+          final profile = ProfileData.fromJson(merged);
+          if (profile.firstName.isNotEmpty) {
+            _profileCache[uid] = _CachedProfile(profile, DateTime.now());
           }
-        }, onError: (_) {});
-        privSub = _privateRef(uid).snapshots().listen((doc) {
-          if (doc.exists && doc.data() != null) {
-            latestPriv = doc.data();
-            emitCombined();
+          if (!controller.isClosed) {
+            controller.add(profile);
           }
-        }, onError: (_) {});
-      },
-      onCancel: () {
-        pubSub?.cancel();
-        privSub?.cancel();
-      },
-    );
-    return controller.stream;
+        } catch (e) {
+          debugPrint('Error parsing live own profile for $uid: $e');
+        }
+      }
+
+      pubSub = _firestore.collection('users').doc(uid).snapshots().listen((
+        doc,
+      ) {
+        if (doc.exists && doc.data() != null) {
+          latestPub = doc.data();
+          emitCombined();
+        }
+      }, onError: (_) {});
+      privSub = _privateRef(uid).snapshots().listen((doc) {
+        if (doc.exists && doc.data() != null) {
+          latestPriv = doc.data();
+          emitCombined();
+        }
+      }, onError: (_) {});
+
+      controller.onCancel = () async {
+        await pubSub?.cancel();
+        await privSub?.cancel();
+      };
+    });
   }
 
   Future<List<ProfileData>> searchUsers(
@@ -583,16 +602,22 @@ class ProfileRepository {
 
       if (missingUids.isEmpty) return profiles;
 
-      // Firestore 'whereIn' allows max 10 items
+      // Firestore 'whereIn' allows max 10 items — run chunks in parallel
+      final chunkFutures = <Future<cf.QuerySnapshot<Map<String, dynamic>>>>[];
       for (var i = 0; i < missingUids.length; i += 10) {
         final end = (i + 10 < missingUids.length) ? i + 10 : missingUids.length;
         final chunk = missingUids.sublist(i, end);
 
-        final query = await _firestore
-            .collection('users')
-            .where(cf.FieldPath.documentId, whereIn: chunk)
-            .get();
+        chunkFutures.add(
+          _firestore
+              .collection('users')
+              .where(cf.FieldPath.documentId, whereIn: chunk)
+              .get(),
+        );
+      }
 
+      final snapshots = await Future.wait(chunkFutures);
+      for (final query in snapshots) {
         for (final doc in query.docs) {
           if (doc.exists) {
             final data = doc.data();
@@ -632,6 +657,17 @@ class ProfileRepository {
   }
 
   Future<void> saveUserProfile(String uid, ProfileData profile) async {
+    // [PERF] Immediately update in-memory cache with saved profile so UI reads are instant
+    if (profile.firstName.isNotEmpty) {
+      _profileCache[uid] = _CachedProfile(
+        profile.copyWith(uid: uid),
+        DateTime.now(),
+      );
+      unawaited(_sessionService.setUserCached(uid));
+    } else {
+      invalidateProfileCache(uid);
+    }
+
     final data = profile.toJson();
     data['updatedAt'] = cf.FieldValue.serverTimestamp();
     final split = _splitSensitiveData(data);
@@ -652,15 +688,6 @@ class ProfileRepository {
     );
     batch.set(_privateRef(uid), split.privateData, cf.SetOptions(merge: true));
     await batch.commit();
-    // [PERF] Immediately update in-memory cache with saved profile so UI reads are instant
-    if (profile.firstName.isNotEmpty) {
-      _profileCache[uid] = _CachedProfile(
-        profile.copyWith(uid: uid),
-        DateTime.now(),
-      );
-    } else {
-      invalidateProfileCache(uid);
-    }
     // Cache UID locally for quick existence checks
     await _sessionService.setUserCached(uid);
   }
@@ -762,25 +789,35 @@ class ProfileRepository {
       'communityId': ?communityId,
     };
 
-    await orgRef.set(orgData);
-    await FirebaseFunctions.instance
-        .httpsCallable('createChat')
-        .call<Map<String, dynamic>>({
-          'mode': 'organization',
-          'organizationId': orgId,
-        });
-
-    // 2. Cache org locally for immediate access (Deprecated: now handled by OrganizationRepository subscription)
-    // await LocalCacheService.cacheOrganization(orgId, orgData);
-
-    // 3. Add orgId to creator's organizationMemberships for denormalized lookup
-    try {
-      await _firestore.collection('users').doc(uid).update({
-        'organizationMemberships': cf.FieldValue.arrayUnion([orgId]),
-      });
-    } catch (e) {
-      debugPrint('Error updating user memberships: $e');
-    }
+    await Future.wait([
+      orgRef.set(orgData),
+      _firestore
+          .collection('users')
+          .doc(uid)
+          .update({
+            'organizationMemberships': cf.FieldValue.arrayUnion([orgId]),
+          })
+          .catchError((Object e) {
+            debugPrint('Error updating user memberships: $e');
+          }),
+    ]);
+    unawaited(
+      FirebaseFunctions.instance
+          .httpsCallable('createChat')
+          .call<Map<String, dynamic>>({
+            'mode': 'organization',
+            'organizationId': orgId,
+          })
+          .catchError((Object e) {
+            debugPrint('Error creating organization chat: $e');
+            return FirebaseFunctions.instance
+                .httpsCallable('createChat')
+                .call<Map<String, dynamic>>({
+                  'mode': 'organization',
+                  'organizationId': orgId,
+                });
+          }),
+    );
 
     return orgId;
   }

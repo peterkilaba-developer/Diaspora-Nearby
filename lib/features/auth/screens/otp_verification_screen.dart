@@ -52,7 +52,6 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    // Setup pulsing animation for the waiting icon
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
@@ -73,11 +72,8 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
       if (!widget.isWhatsApp) {
         _startListeningForCode();
       } else {
-        // Attach to pre-flight Zero-Tap listener immediately before any async clipboard call
         _startListeningForWhatsAppZeroTap();
 
-        // Snapshot existing clipboard text on load so old stale codes
-        // from previous logins or other apps are never auto-submitted.
         try {
           final data = await Clipboard.getData(Clipboard.kTextPlain);
           _initialClipboardText = data?.text?.trim();
@@ -149,8 +145,6 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // User may have switched to WhatsApp, tapped "Copy Code" or copied the SMS,
-      // and switched back to the app. Check clipboard safely after frame.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           _checkClipboardForCode();
@@ -170,25 +164,19 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
       final text = clipboardData?.text?.trim();
       if (text == null || text.isEmpty) return;
 
-      // Ignore whatever was already in the clipboard before this screen opened
       if (text == _initialClipboardText) return;
 
-      // Match 6 consecutive digits anywhere in clipboard string
       final match = RegExp(r'\b(\d{6})\b').firstMatch(text);
       if (match != null && mounted) {
         final extractedCode = match.group(1)!;
 
-        // Skip if this exact code was already submitted and failed verification
         if (extractedCode == _lastFailedCode) return;
-        // Skip if already detected or submitting
         if (extractedCode == _otpCode && (_autoDetected || _isSubmitting)) {
           return;
         }
 
         debugPrint('📋 Code detected from clipboard: $extractedCode');
 
-        // Always schedule state update and auto-verify after the current frame
-        // to prevent "setState() or markNeedsBuild() called during build"
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted || _isSubmitting) return;
           setState(() {
@@ -197,7 +185,6 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
             _detectionSource = widget.isWhatsApp ? 'WhatsApp' : 'Clipboard';
           });
 
-          // Automatically verify and proceed
           _verify();
         });
       }
@@ -219,7 +206,6 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
 
   @override
   void codeUpdated() {
-    // This is called when SMS is detected by sms_autofill
     if (code != null && code!.length == 6) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || _isSubmitting) return;
@@ -229,7 +215,6 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
           _isListening = false;
           _detectionSource = 'SMS';
         });
-        // Auto-verify and proceed
         _verify();
       });
     }
@@ -238,16 +223,9 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
   Future<void> _startListeningForCode() async {
     try {
       setState(() => _isListening = true);
-      // Start listening for incoming SMS
-      await SmsAutoFill().listenForCode();
+      SmsAutoFill().listenForCode();
       final signature = await SmsAutoFill().getAppSignature;
       debugPrint('OTPVerificationScreen: App Signature for SMS: $signature');
-
-      Future.delayed(const Duration(seconds: 60), () {
-        if (mounted && _isListening) {
-          setState(() => _isListening = false);
-        }
-      });
     } catch (e) {
       debugPrint('OTPVerificationScreen: Failed to start listening: $e');
       if (mounted) setState(() => _isListening = false);
@@ -257,7 +235,7 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
   void _verify() {
     if (_isSubmitting || _otpCode.length != 6) return;
     final isLoading = ref.read(authControllerProvider);
-    if (isLoading) return; // Prevent double submission
+    if (isLoading) return;
 
     _isSubmitting = true;
     if (widget.isWhatsApp) {
@@ -265,34 +243,46 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
           .read(authControllerProvider.notifier)
           .verifyWhatsAppOTP(context, widget.phoneNumber, _otpCode);
     } else {
+      final verificationId = widget.verificationId.isNotEmpty
+          ? widget.verificationId
+          : (ref.read(latestVerificationIdProvider) ?? '');
       ref
           .read(authControllerProvider.notifier)
-          .verifyOTP(context, widget.verificationId, _otpCode);
+          .verifyOTP(context, verificationId, _otpCode);
     }
   }
 
-  void _handleResend() async {
+  void _handleResend() {
     if (_countdownSeconds > 0) return;
+    // [PERF] Reset timer & show confirmation immediately on tap (0ms)
     setState(() {
       _otpCode = '';
       _autoDetected = false;
       _lastFailedCode = null;
       _isSubmitting = false;
     });
-    // On resend, capture current clipboard content so previous attempt's code is ignored
-    try {
-      final data = await Clipboard.getData(Clipboard.kTextPlain);
-      _initialClipboardText = data?.text?.trim();
-    } catch (_) {}
-    if (!mounted) return;
     _startCountdown();
     _ensureClipboardTimer();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Verification code resent'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+
+    unawaited(() async {
+      try {
+        final data = await Clipboard.getData(Clipboard.kTextPlain);
+        _initialClipboardText = data?.text?.trim();
+      } catch (_) {}
+    }());
+
     if (widget.isWhatsApp) {
       ref
           .read(authControllerProvider.notifier)
           .signInWithWhatsApp(context, widget.phoneNumber);
     } else {
-      _startListeningForCode();
+      unawaited(_startListeningForCode());
       ref
           .read(authControllerProvider.notifier)
           .signInWithPhone(context, widget.phoneNumber);
@@ -301,7 +291,6 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Reset submission lock and clear invalid code if loading ends (e.g. error received)
     ref.listen<bool>(authControllerProvider, (previous, next) {
       if (previous == true && next == false && mounted) {
         setState(() {
@@ -340,7 +329,6 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const SizedBox(height: 20),
-                  // Animated Pulsing Badge Icon
                   Center(
                     child: AnimatedBuilder(
                       animation: _pulseAnimation,
@@ -408,7 +396,6 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
                   ),
                   const SizedBox(height: 14),
 
-                  // Dynamic Real-time Status Badge (no background on any banner or pill)
                   Center(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
@@ -487,7 +474,6 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
 
                   const SizedBox(height: 36),
 
-                  // PIN Input Field
                   PinFieldAutoFill(
                     decoration: BoxLooseDecoration(
                       strokeColorBuilder: FixedColorBuilder(accentColor),
@@ -510,7 +496,6 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
                           _isSubmitting = false;
                         });
                       }
-                      // Auto-verify as soon as 6 digits are typed or pasted
                       if (code?.length == 6 && !_isSubmitting) {
                         _verify();
                       }
@@ -527,7 +512,6 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
 
                   const Spacer(),
 
-                  // Verify Button
                   SizedBox(
                     height: 56,
                     child: ElevatedButton(
@@ -563,7 +547,6 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
 
                   const SizedBox(height: 16),
 
-                  // Resend and Fallback Actions with Timer
                   Center(
                     child: _countdownSeconds > 0
                         ? Padding(

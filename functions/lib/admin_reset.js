@@ -332,19 +332,19 @@ exports.setAdminClaim = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError('invalid-argument', 'A valid targetUid is required.');
   }
 
-  // Set custom claim on target
-  const targetRecord = await admin.auth().getUser(targetUid);
-  await admin.auth().setCustomUserClaims(targetUid, {
-    ...(targetRecord.customClaims || {}),
-    admin: true,
-  });
-
-  // Set isAdmin on Firestore user doc
   const targetDoc = db.collection('users').doc(targetUid);
-  const targetSnapshot = await targetDoc.get();
-  if (targetSnapshot.exists) {
-    await targetDoc.update({ isAdmin: true });
-  }
+  const [targetRecord, targetSnapshot] = await Promise.all([
+    admin.auth().getUser(targetUid),
+    targetDoc.get(),
+  ]);
+
+  await Promise.all([
+    admin.auth().setCustomUserClaims(targetUid, {
+      ...(targetRecord.customClaims || {}),
+      admin: true,
+    }),
+    targetSnapshot.exists ? targetDoc.update({ isAdmin: true }) : Promise.resolve(),
+  ]);
 
   console.log(`[Admin] Admin claim set for user ${targetUid} by ${callerId}`);
   return { success: true, targetUid };

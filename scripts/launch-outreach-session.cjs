@@ -77,14 +77,8 @@ function buildInjectedHudScript(config, initialState) {
   const CONFIG = ${serializedConfig};
   const STATE = ${serializedState};
 
-  function hashCode(prefix, str) {
-    let h = 2166136261;
-    const s = String(str || 'genesis');
-    for (let i = 0; i < s.length; i++) {
-      h ^= s.charCodeAt(i);
-      h = Math.imul(h, 16777619);
-    }
-    return prefix + (h >>> 0).toString(16).toUpperCase().padStart(6, '0').slice(0, 6);
+  function hashCode() {
+    return 'PETER-TZ-CC57';
   }
 
   function fillTpl(tpl, vars) {

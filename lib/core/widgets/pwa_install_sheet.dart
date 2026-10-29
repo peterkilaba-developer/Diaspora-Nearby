@@ -1,37 +1,55 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:diaspora_nearby/core/providers/theme_provider.dart';
 import 'package:diaspora_nearby/core/services/pwa_install_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// A full-screen bottom sheet shown once after login on web to prompt
 /// PWA installation.
-///
-/// • **Android/Chrome** — one-tap install via `beforeinstallprompt`
-/// • **iOS Safari** — guided step-by-step "Add to Home Screen" instructions
 class PwaInstallSheet extends StatelessWidget {
   final bool isIos;
   const PwaInstallSheet._({required this.isIos});
 
   static const _prefKey = 'pwa_install_dismissed';
+  static bool _dismissedInMemory = false;
+
+  static void _persistDismissed() {
+    _dismissedInMemory = true;
+    unawaited(
+      SharedPreferences.getInstance().then(
+        (prefs) => prefs.setBool(_prefKey, true),
+      ),
+    );
+  }
 
   /// Shows the install sheet if:
   ///  1. Running on web
   ///  2. Not previously dismissed/installed
   ///  3. Not already running as standalone PWA
   static Future<void> maybeShow(BuildContext context, WidgetRef ref) async {
-    if (!kIsWeb) return;
+    if (!kIsWeb || _dismissedInMemory) return;
 
-    final prefs = await SharedPreferences.getInstance();
-    if (prefs.getBool(_prefKey) == true) return;
+    bool dismissed = false;
+    try {
+      final prefs = ref.read(sharedPreferencesProvider);
+      dismissed = prefs.getBool(_prefKey) == true;
+    } catch (_) {
+      final prefs = await SharedPreferences.getInstance();
+      dismissed = prefs.getBool(_prefKey) == true;
+    }
+    if (dismissed) {
+      _dismissedInMemory = true;
+      return;
+    }
 
     // Don't show if already installed as PWA
     final notifier = ref.read(pwaInstallServiceProvider.notifier);
     if (notifier.isPwaStandalone()) return;
 
-    // Small delay so the main UI settles first
-    await Future.delayed(const Duration(milliseconds: 800));
     if (!context.mounted) return;
 
     // Detect platform
@@ -48,7 +66,10 @@ class PwaInstallSheet extends StatelessWidget {
       isScrollControlled: true,
       isDismissible: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => PwaInstallSheet._(isIos: isIos),
+      builder: (_) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: PwaInstallSheet._(isIos: isIos),
+      ),
     );
   }
 
@@ -73,7 +94,6 @@ class PwaInstallSheet extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Drag handle
           Padding(
             padding: const EdgeInsets.only(top: 12),
             child: Container(
@@ -92,7 +112,6 @@ class PwaInstallSheet extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // App Icon
                   Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
@@ -118,7 +137,6 @@ class PwaInstallSheet extends StatelessWidget {
                   ),
                   const SizedBox(height: 24),
 
-                  // Title
                   Text(
                     'Install Diaspora Nearby',
                     style: TextStyle(
@@ -131,7 +149,6 @@ class PwaInstallSheet extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
 
-                  // Subtitle
                   Text(
                     isIos
                         ? 'Add to your home screen in 2 easy steps'
@@ -145,7 +162,6 @@ class PwaInstallSheet extends StatelessWidget {
                   ),
                   const SizedBox(height: 28),
 
-                  // Platform-specific content
                   if (isIos) ...[
                     _buildIosInstructions(theme),
                   ] else ...[
@@ -154,17 +170,14 @@ class PwaInstallSheet extends StatelessWidget {
 
                   const SizedBox(height: 32),
 
-                  // Action button
                   if (isIos) ...[
-                    // iOS: "Got it" button
                     SizedBox(
                       width: double.infinity,
                       height: 52,
                       child: FilledButton.icon(
-                        onPressed: () async {
-                          final prefs = await SharedPreferences.getInstance();
-                          await prefs.setBool(_prefKey, true);
-                          if (context.mounted) Navigator.of(context).pop();
+                        onPressed: () {
+                          _persistDismissed();
+                          Navigator.of(context).pop();
                         },
                         icon: const Icon(LucideIcons.checkCircle, size: 20),
                         label: const Text(
@@ -184,7 +197,6 @@ class PwaInstallSheet extends StatelessWidget {
                       ),
                     ),
                   ] else ...[
-                    // Android: One-tap install button
                     Consumer(
                       builder: (context, ref, _) {
                         return SizedBox(
@@ -195,13 +207,8 @@ class PwaInstallSheet extends StatelessWidget {
                               final notifier = ref.read(
                                 pwaInstallServiceProvider.notifier,
                               );
+                              _persistDismissed();
                               final accepted = await notifier.promptInstall();
-
-                              if (context.mounted) {
-                                final prefs =
-                                    await SharedPreferences.getInstance();
-                                await prefs.setBool(_prefKey, true);
-                              }
 
                               if (context.mounted) {
                                 Navigator.of(context).pop();
@@ -258,15 +265,13 @@ class PwaInstallSheet extends StatelessWidget {
                   ],
                   const SizedBox(height: 12),
 
-                  // Dismiss
                   SizedBox(
                     width: double.infinity,
                     height: 44,
                     child: TextButton(
-                      onPressed: () async {
-                        final prefs = await SharedPreferences.getInstance();
-                        await prefs.setBool(_prefKey, true);
-                        if (context.mounted) Navigator.of(context).pop();
+                      onPressed: () {
+                        _persistDismissed();
+                        Navigator.of(context).pop();
                       },
                       child: Text(
                         'Maybe later',
@@ -288,7 +293,6 @@ class PwaInstallSheet extends StatelessWidget {
     );
   }
 
-  // ── Android: Feature highlights ──────────────────────────────
   Widget _buildAndroidFeatures() {
     return const Column(
       mainAxisSize: MainAxisSize.min,
@@ -324,12 +328,10 @@ class PwaInstallSheet extends StatelessWidget {
     );
   }
 
-  // ── iOS: Step-by-step instructions ───────────────────────────
   Widget _buildIosInstructions(ThemeData theme) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Step 1
         _InstructionStep(
           stepNumber: '1',
           icon: LucideIcons.share,
@@ -338,16 +340,12 @@ class PwaInstallSheet extends StatelessWidget {
           theme: theme,
         ),
         const SizedBox(height: 20),
-
-        // Arrow
         Icon(
           LucideIcons.arrowDown,
           size: 20,
           color: theme.colorScheme.onSurface.withValues(alpha: 0.25),
         ),
         const SizedBox(height: 20),
-
-        // Step 2
         _InstructionStep(
           stepNumber: '2',
           icon: LucideIcons.plusSquare,
@@ -356,16 +354,12 @@ class PwaInstallSheet extends StatelessWidget {
           theme: theme,
         ),
         const SizedBox(height: 20),
-
-        // Arrow
         Icon(
           LucideIcons.arrowDown,
           size: 20,
           color: theme.colorScheme.onSurface.withValues(alpha: 0.25),
         ),
         const SizedBox(height: 20),
-
-        // Done!
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -420,8 +414,6 @@ class PwaInstallSheet extends StatelessWidget {
     );
   }
 }
-
-// ── Shared Widgets ─────────────────────────────────────────────
 
 class _FeatureRow extends StatelessWidget {
   final IconData icon;
@@ -505,7 +497,6 @@ class _InstructionStep extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Step number badge
           Container(
             width: 36,
             height: 36,
@@ -525,10 +516,8 @@ class _InstructionStep extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 14),
-          // Icon
           Icon(icon, size: 24, color: theme.colorScheme.primary),
           const SizedBox(width: 12),
-          // Text
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

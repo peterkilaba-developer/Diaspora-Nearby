@@ -37,6 +37,13 @@ class _RealEstateSearchScreenState
   @override
   void initState() {
     super.initState();
+    final cached = ref
+        .read(realEstateRepositoryProvider)
+        .getCachedListings(category: widget.category);
+    if (cached.isNotEmpty) {
+      _allListings = cached;
+      _isLoading = false;
+    }
     _loadListings();
   }
 
@@ -48,7 +55,7 @@ class _RealEstateSearchScreenState
 
   Future<void> _loadListings() async {
     setState(() {
-      _isLoading = true;
+      if (_allListings.isEmpty) _isLoading = true;
       _error = null;
     });
     try {
@@ -68,7 +75,7 @@ class _RealEstateSearchScreenState
       // Gracefully show empty state instead of error
       if (mounted) {
         setState(() {
-          _allListings = [];
+          if (_allListings.isEmpty) _allListings = [];
           _isLoading = false;
         });
       }
@@ -406,11 +413,21 @@ class _MyRealEstateListingsScreenState
   @override
   void initState() {
     super.initState();
+    final uid = ref.read(authRepositoryProvider).currentUser?.uid ?? '';
+    if (uid.isNotEmpty) {
+      final cached = ref
+          .read(realEstateRepositoryProvider)
+          .getCachedMyListings(uid, category: widget.category);
+      if (cached.isNotEmpty) {
+        _listings = cached;
+        _isLoading = false;
+      }
+    }
     _load();
   }
 
   Future<void> _load() async {
-    setState(() => _isLoading = true);
+    if (_listings.isEmpty) setState(() => _isLoading = true);
     try {
       final uid = ref.read(authRepositoryProvider).currentUser?.uid ?? '';
       final repo = ref.read(realEstateRepositoryProvider);

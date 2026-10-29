@@ -42,6 +42,7 @@ class _ActiveElectionsScreenState extends ConsumerState<ActiveElectionsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final repo = ref.watch(governanceRepositoryProvider);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Active Leader Elections'),
@@ -49,9 +50,11 @@ class _ActiveElectionsScreenState extends ConsumerState<ActiveElectionsScreen> {
         foregroundColor: Colors.white,
       ),
       body: StreamBuilder<List<GovernanceUnit>>(
-        stream: ref.watch(governanceRepositoryProvider).watchActiveElections(),
+        initialData: repo.getCachedActiveElections(),
+        stream: repo.watchActiveElections(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              snapshot.data == null) {
             return const Center(child: CircularProgressIndicator());
           }
 

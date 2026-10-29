@@ -125,11 +125,14 @@ class MessageBubble extends ConsumerWidget {
         ),
         child: Consumer(
           builder: (context, ref, child) {
-            // [FIX] Fetch profile data at the top level of the bubble
+            // [FIX] Fetch profile data at the top level of the bubble with synchronous cache fallback
+            final cachedProfile = ref
+                .read(profileRepositoryProvider)
+                .getCachedProfile(message.senderId);
             final profileAsync = ref.watch(
               userProfileByIdProvider(message.senderId),
             );
-            final profile = profileAsync.value;
+            final profile = profileAsync.value ?? cachedProfile;
 
             return Row(
               mainAxisAlignment: isOwn
@@ -473,8 +476,11 @@ class MessageBubble extends ConsumerWidget {
                                     ),
                                   ),
 
-                                  // Loading Overlay
-                                  if (message.status == 'sending')
+                                  // Loading Overlay (only for heavy file uploads: image, video, document)
+                                  if (message.status == 'sending' &&
+                                      (message.type == 'image' ||
+                                          message.type == 'video' ||
+                                          message.type == 'document'))
                                     Positioned.fill(
                                       child: IgnorePointer(
                                         ignoring: false, // Catch touches

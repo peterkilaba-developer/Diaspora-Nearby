@@ -65,6 +65,17 @@ class _RealEstateDetailScreenState
   @override
   void initState() {
     super.initState();
+    final repo = ref.read(realEstateRepositoryProvider);
+    _isSaved = repo.isListingSavedSync(listing.id);
+    final cachedStats = repo.getCachedStats(listing.id);
+    if (cachedStats != null) {
+      _viewsByCountry = Map<String, int>.from(cachedStats.viewsByCountry);
+      _totalViews = cachedStats.totalViews;
+      _statsLoaded = true;
+    } else {
+      _totalViews = listing.viewCount;
+      _statsLoaded = true;
+    }
     _recordView();
     _checkSavedState();
     if (_isOwnerCheck()) _loadStats();
@@ -107,7 +118,7 @@ class _RealEstateDetailScreenState
       final saved = await ref
           .read(realEstateRepositoryProvider)
           .isListingSaved(listing.id, uid);
-      if (mounted) setState(() => _isSaved = saved);
+      if (mounted && saved != _isSaved) setState(() => _isSaved = saved);
     } catch (_) {}
   }
 
@@ -115,24 +126,23 @@ class _RealEstateDetailScreenState
   Future<void> _toggleSave() async {
     final uid = ref.read(authRepositoryProvider).currentUser?.uid;
     if (uid == null) return;
-    setState(() => _isSaved = !_isSaved);
+    final newSaved = !_isSaved;
+    setState(() => _isSaved = newSaved);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(newSaved ? 'Listing saved!' : 'Removed from saved'),
+        duration: const Duration(seconds: 1),
+      ),
+    );
     try {
       final repo = ref.read(realEstateRepositoryProvider);
-      if (_isSaved) {
+      if (newSaved) {
         await repo.saveListing(listing.id, uid);
       } else {
         await repo.unsaveListing(listing.id, uid);
       }
     } catch (_) {
-      if (mounted) setState(() => _isSaved = !_isSaved);
-    }
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_isSaved ? 'Listing saved!' : 'Removed from saved'),
-          duration: const Duration(seconds: 1),
-        ),
-      );
+      if (mounted) setState(() => _isSaved = !newSaved);
     }
   }
 
@@ -151,6 +161,10 @@ class _RealEstateDetailScreenState
         final country = (doc.data()['country'] as String?) ?? 'Unknown';
         byCountry[country] = (byCountry[country] ?? 0) + 1;
       }
+
+      ref
+          .read(realEstateRepositoryProvider)
+          .cacheStats(listing.id, byCountry, snap.docs.length);
 
       if (mounted) {
         setState(() {

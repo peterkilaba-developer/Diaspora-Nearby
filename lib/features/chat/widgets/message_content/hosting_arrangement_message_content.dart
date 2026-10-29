@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -32,7 +34,8 @@ class HostingArrangementMessageContent extends ConsumerStatefulWidget {
 
 class _HostingArrangementMessageContentState
     extends ConsumerState<HostingArrangementMessageContent> {
-  bool _isProcessing = false;
+  final bool _isProcessing = false;
+  String? _optimisticStatus;
 
   Map<String, dynamic> get _meta => widget.message.metadata ?? {};
 
@@ -72,7 +75,7 @@ class _HostingArrangementMessageContentState
     final onSurface = theme.colorScheme.onSurface;
 
     // Watch session for live status
-    String sessionStatus = 'confirmed';
+    String sessionStatus = _optimisticStatus ?? 'confirmed';
     HostingSession? liveSession;
     if (_sessionId != null && currentUserId != null) {
       final sessionAsync = ref.watch(
@@ -80,7 +83,7 @@ class _HostingArrangementMessageContentState
       );
       liveSession = sessionAsync.value;
       if (liveSession != null && liveSession.id == _sessionId) {
-        sessionStatus = liveSession.status.name;
+        sessionStatus = _optimisticStatus ?? liveSession.status.name;
       } else {
         liveSession = null;
       }
@@ -503,9 +506,11 @@ class _HostingArrangementMessageContentState
 
           // ── END REQUESTED: Confirm end or waiting ──
           if (sessionStatus == 'endRequested') ...[
-            if (session.endRequestedBy != null &&
-                ((isTraveler && session.endRequestedBy == session.travelerId) ||
-                    (isHost && session.endRequestedBy == session.hostId)))
+            if (_optimisticStatus == 'endRequested' ||
+                (session.endRequestedBy != null &&
+                    ((isTraveler &&
+                            session.endRequestedBy == session.travelerId) ||
+                        (isHost && session.endRequestedBy == session.hostId))))
               // This user requested the end — waiting for the other
               Container(
                 width: double.infinity,
@@ -598,110 +603,108 @@ class _HostingArrangementMessageContentState
     // Confirm with a dialog first
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text(
-          'End Stay?',
-          style: TextStyle(fontWeight: FontWeight.w700),
-        ),
-        content: const Text(
-          'Are you sure you want to end this stay? '
-          'The other party will need to confirm to complete the session.',
-          style: TextStyle(),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          title: const Text(
+            'End Stay?',
+            style: TextStyle(fontWeight: FontWeight.w700),
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.accent,
-              foregroundColor: Colors.white,
+          content: const Text(
+            'Are you sure you want to end this stay? '
+            'The other party will need to confirm to complete the session.',
+            style: TextStyle(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
             ),
-            child: const Text('End Stay'),
-          ),
-        ],
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.accent,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('End Stay'),
+            ),
+          ],
+        ),
       ),
     );
 
     if (confirmed != true || !mounted) return;
 
-    setState(() => _isProcessing = true);
+    final hostingService = ref.read(hostingServiceProvider);
+    final messenger = ScaffoldMessenger.of(context);
 
-    try {
-      final hostingService = ref.read(hostingServiceProvider);
-      final success = await hostingService.requestEndStay(session.id);
+    // Optimistic 0ms update
+    setState(() {
+      _optimisticStatus = 'endRequested';
+    });
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('End stay requested. Waiting for confirmation.'),
+      ),
+    );
 
-      if (!mounted) return;
-
-      if (success) {
-        // Send a DM system message
-        await _sendEndRequestMessage(session);
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('End stay requested. Waiting for confirmation.'),
-            ),
-          );
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+    unawaited(() async {
+      try {
+        final success = await hostingService.requestEndStay(session.id);
+        if (success) {
+          await _sendEndRequestMessage(session);
+        } else if (mounted) {
+          setState(() => _optimisticStatus = null);
+          messenger.showSnackBar(
             const SnackBar(content: Text('Failed to request end stay.')),
           );
         }
+      } catch (e) {
+        if (mounted) {
+          setState(() => _optimisticStatus = null);
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Error requesting end stay.')),
+          );
+        }
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error requesting end stay.')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isProcessing = false);
-    }
+    }());
   }
 
   Future<void> _settleSession(HostingSession session) async {
-    setState(() => _isProcessing = true);
+    final hostingService = ref.read(hostingServiceProvider);
+    final messenger = ScaffoldMessenger.of(context);
 
-    try {
-      final hostingService = ref.read(hostingServiceProvider);
-      final success = await hostingService.settleSession(session.id);
+    // Optimistic 0ms update
+    setState(() {
+      _optimisticStatus = 'settled';
+    });
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Hosting session completed successfully!')),
+    );
 
-      if (!mounted) return;
-
-      if (success) {
-        // Send a DM system message about settlement
-        await _sendSettlementMessage(session);
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Hosting session completed successfully!'),
-            ),
-          );
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+    unawaited(() async {
+      try {
+        final success = await hostingService.settleSession(session.id);
+        if (success) {
+          await _sendSettlementMessage(session);
+        } else if (mounted) {
+          setState(() => _optimisticStatus = null);
+          messenger.showSnackBar(
             const SnackBar(
               content: Text('Failed to complete session. Please try again.'),
             ),
           );
         }
+      } catch (e) {
+        if (mounted) {
+          setState(() => _optimisticStatus = null);
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Error during settlement.')),
+          );
+        }
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error during settlement.')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isProcessing = false);
-    }
+    }());
   }
 
   // ── DM Notification Messages ──────────────────────────────

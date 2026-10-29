@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,11 +9,13 @@ import 'package:intl/intl.dart';
 
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
+import 'package:diaspora_nearby/features/hosting/models/hosting_request.dart';
 import 'package:diaspora_nearby/features/hosting/services/hosting_service.dart';
 import 'package:diaspora_nearby/features/notifications/models/notification_item.dart';
 import 'package:diaspora_nearby/features/notifications/providers/notification_count_provider.dart';
 import 'package:diaspora_nearby/features/notifications/repository/notifications_repository.dart';
 import 'package:diaspora_nearby/features/hosting/repository/hosting_repository.dart';
+import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 
@@ -27,6 +31,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
 
+  final Set<String> _optimisticReadIds = {};
+  final Set<String> _optimisticCompletedIds = {};
+  final Set<String> _optimisticDeletedIds = {};
+  bool _optimisticMarkedAllRead = false;
+  bool _optimisticClearedAll = false;
+
   @override
   void initState() {
     super.initState();
@@ -39,10 +49,42 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
     super.dispose();
   }
 
+  List<NotificationItem> _applyOptimisticState(List<NotificationItem> items) {
+    if (_optimisticClearedAll) return const [];
+    final result = <NotificationItem>[];
+    for (var item in items) {
+      if (_optimisticDeletedIds.contains(item.id)) continue;
+      final isRead =
+          item.isRead ||
+          _optimisticMarkedAllRead ||
+          _optimisticReadIds.contains(item.id) ||
+          _optimisticCompletedIds.contains(item.id);
+      final actionCompleted =
+          item.actionCompleted || _optimisticCompletedIds.contains(item.id);
+      if (isRead != item.isRead || actionCompleted != item.actionCompleted) {
+        item = item.copyWith(isRead: isRead, actionCompleted: actionCompleted);
+      }
+      result.add(item);
+    }
+    return result;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final userId = ref.watch(authRepositoryProvider).currentUser?.uid;
+    final cachedNotifications = userId != null
+        ? ref.read(notificationsRepositoryProvider).getCachedNotifications(
+            userId,
+          )
+        : null;
     final notificationsAsync = ref.watch(notificationsStreamProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final rawNotifications =
+        notificationsAsync.value ?? cachedNotifications;
+    final effectiveNotifications = rawNotifications != null
+        ? _applyOptimisticState(rawNotifications)
+        : null;
 
     return Scaffold(
       appBar: AppBar(
@@ -67,11 +109,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
               borderRadius: BorderRadius.circular(12),
             ),
             onSelected: (value) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (!mounted) return;
-                if (value == 'mark_all_read') _markAllRead();
-                if (value == 'clear_all') _clearAll();
-              });
+              if (!mounted) return;
+              if (value == 'mark_all_read') _markAllRead();
+              if (value == 'clear_all') _clearAll();
             },
             itemBuilder: (context) => [
               PopupMenuItem(
@@ -127,7 +167,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                   const Icon(LucideIcons.alertCircle, size: 16),
                   const SizedBox(width: 6),
                   const Text('Action Required'),
-                  _buildBadge(notificationsAsync),
+                  _buildBadge(effectiveNotifications),
                 ],
               ),
             ),
@@ -154,103 +194,113 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
           ],
         ),
       ),
-      body: notificationsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, st) {
-          debugPrint('❌ Notifications error: $e\n$st');
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    LucideIcons.alertTriangle,
-                    size: 40,
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.3),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Error loading notifications',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '$e',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.5),
+      body: effectiveNotifications != null
+          ? _buildTabsContent(effectiveNotifications, isDark)
+          : notificationsAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, st) {
+                debugPrint('❌ Notifications error: $e\n$st');
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          LucideIcons.alertTriangle,
+                          size: 40,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.3),
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Error loading notifications',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '$e',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.5),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          onPressed: () =>
+                              ref.invalidate(notificationsStreamProvider),
+                          icon: const Icon(LucideIcons.refreshCw, size: 16),
+                          label: const Text('Retry'),
+                        ),
+                      ],
                     ),
-                    textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: () =>
-                        ref.invalidate(notificationsStreamProvider),
-                    icon: const Icon(LucideIcons.refreshCw, size: 16),
-                    label: const Text('Retry'),
-                  ),
-                ],
+                );
+              },
+              data: (allNotifications) => _buildTabsContent(
+                _applyOptimisticState(allNotifications),
+                isDark,
               ),
             ),
-          );
-        },
-        data: (allNotifications) {
-          final actionRequired = allNotifications
-              .where((n) => n.actionRequired && !n.actionCompleted)
-              .toList();
-          final completed = allNotifications
-              .where((n) => n.actionRequired && n.actionCompleted)
-              .toList();
+    );
+  }
 
-          return TabBarView(
-            controller: _tabController,
-            children: [
-              // Tab 1: Action Required
-              actionRequired.isEmpty
-                  ? _buildEmptyState(
-                      icon: LucideIcons.checkCircle2,
-                      title: 'All caught up!',
-                      subtitle: 'No pending actions',
-                    )
-                  : _buildList(actionRequired, isDark),
+  Widget _buildTabsContent(
+    List<NotificationItem> allNotifications,
+    bool isDark,
+  ) {
+    final actionRequired = allNotifications
+        .where((n) => n.actionRequired && !n.actionCompleted)
+        .toList();
+    final completed = allNotifications
+        .where((n) => n.actionRequired && n.actionCompleted)
+        .toList();
 
-              // Tab 2: Completed
-              completed.isEmpty
-                  ? _buildEmptyState(
-                      icon: LucideIcons.checkCheck,
-                      title: 'No completed actions yet',
-                      subtitle: 'Completed actions will appear here',
-                    )
-                  : _buildList(completed, isDark),
+    return TabBarView(
+      controller: _tabController,
+      children: [
+        // Tab 1: Action Required
+        actionRequired.isEmpty
+            ? _buildEmptyState(
+                icon: LucideIcons.checkCircle2,
+                title: 'All caught up!',
+                subtitle: 'No pending actions',
+              )
+            : _buildList(actionRequired, isDark),
 
-              // Tab 3: All Notifications
-              allNotifications.isEmpty
-                  ? _buildEmptyState(
-                      icon: LucideIcons.bellOff,
-                      title: 'No notifications yet',
-                      subtitle: 'You\'ll see activity here',
-                    )
-                  : _buildList(allNotifications, isDark),
-            ],
-          );
-        },
-      ),
+        // Tab 2: Completed
+        completed.isEmpty
+            ? _buildEmptyState(
+                icon: LucideIcons.checkCheck,
+                title: 'No completed actions yet',
+                subtitle: 'Completed actions will appear here',
+              )
+            : _buildList(completed, isDark),
+
+        // Tab 3: All Notifications
+        allNotifications.isEmpty
+            ? _buildEmptyState(
+                icon: LucideIcons.bellOff,
+                title: 'No notifications yet',
+                subtitle: 'You\'ll see activity here',
+              )
+            : _buildList(allNotifications, isDark),
+      ],
     );
   }
 
   // ── Badge on the Action Required tab ─────────────────────────────────
 
-  Widget _buildBadge(AsyncValue<List<NotificationItem>> async) {
+  Widget _buildBadge(List<NotificationItem>? items) {
     final count =
-        async.value
-            ?.where((n) => n.actionRequired && !n.actionCompleted)
-            .length ??
-        0;
+        items?.where((n) => n.actionRequired && !n.actionCompleted).length ?? 0;
     if (count == 0) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(left: 6),
@@ -339,14 +389,19 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
   // ── Actions ──────────────────────────────────────────────────────────
 
   void _handleTap(NotificationItem item) {
-    // Mark as read
     final userId = ref.read(authRepositoryProvider).currentUser?.uid;
+    setState(() {
+      _optimisticReadIds.add(item.id);
+    });
     if (userId != null) {
-      ref.read(notificationsRepositoryProvider).markAsRead(userId, item.id);
+      unawaited(
+        ref.read(notificationsRepositoryProvider).markAsRead(userId, item.id),
+      );
     }
 
     String? route;
     bool isGoRoute = false;
+    bool shouldCompleteAction = false;
 
     // Navigate based on type
     switch (item.type) {
@@ -362,11 +417,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         if (chatId != null && chatId.isNotEmpty) {
           route = '/chats/$chatId';
         }
-        if (userId != null && item.actionRequired && !item.actionCompleted) {
-          ref
-              .read(notificationsRepositoryProvider)
-              .markActionCompleted(userId, item.id);
-        }
+        shouldCompleteAction = true;
         break;
       case NotificationType.relationshipRequest:
         final fromUserId = item.payload['fromUserId'] as String?;
@@ -381,11 +432,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         if (chatId != null && chatId.isNotEmpty) {
           route = '/chats/$chatId';
         }
-        if (userId != null && item.actionRequired && !item.actionCompleted) {
-          ref
-              .read(notificationsRepositoryProvider)
-              .markActionCompleted(userId, item.id);
-        }
+        shouldCompleteAction = true;
         break;
       case NotificationType.groupInvitation:
         final chatId = item.payload['chatId'] as String?;
@@ -395,11 +442,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         break;
       case NotificationType.proxyRequest:
         route = '/dsp/emergency-fund';
-        if (userId != null && item.actionRequired && !item.actionCompleted) {
-          ref
-              .read(notificationsRepositoryProvider)
-              .markActionCompleted(userId, item.id);
-        }
+        shouldCompleteAction = true;
         break;
       case NotificationType.dspTransfer:
         final chatId = item.payload['chatId'] as String?;
@@ -422,11 +465,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         } else {
           route = '/dsp/travel/stays';
         }
-        if (userId != null && item.actionRequired && !item.actionCompleted) {
-          ref
-              .read(notificationsRepositoryProvider)
-              .markActionCompleted(userId, item.id);
-        }
+        shouldCompleteAction = true;
         break;
 
       // ── Events ──
@@ -450,11 +489,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       case NotificationType.electionResults:
         route = '/communities';
         isGoRoute = true;
-        if (userId != null && item.actionRequired && !item.actionCompleted) {
-          ref
-              .read(notificationsRepositoryProvider)
-              .markActionCompleted(userId, item.id);
-        }
+        shouldCompleteAction = true;
         break;
 
       // ── Marketplace ──
@@ -471,11 +506,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
             isGoRoute = true;
           }
         }
-        if (userId != null && item.actionRequired && !item.actionCompleted) {
-          ref
-              .read(notificationsRepositoryProvider)
-              .markActionCompleted(userId, item.id);
-        }
+        shouldCompleteAction = true;
         break;
       case NotificationType.marketplaceStatusChange:
       case NotificationType.marketplacePriceDrop:
@@ -496,11 +527,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         } else {
           route = '/dsp/real-estate/buy';
         }
-        if (userId != null && item.actionRequired && !item.actionCompleted) {
-          ref
-              .read(notificationsRepositoryProvider)
-              .markActionCompleted(userId, item.id);
-        }
+        shouldCompleteAction = true;
         break;
       case NotificationType.realEstateMatch:
       case NotificationType.realEstatePriceChange:
@@ -548,17 +575,25 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         break;
     }
 
-    if (route != null) {
-      final targetRoute = route;
-      final targetIsGo = isGoRoute;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        if (targetIsGo) {
-          context.go(targetRoute);
-        } else {
-          context.push(targetRoute);
-        }
+    if (shouldCompleteAction && item.actionRequired && !item.actionCompleted) {
+      setState(() {
+        _optimisticCompletedIds.add(item.id);
       });
+      if (userId != null) {
+        unawaited(
+          ref
+              .read(notificationsRepositoryProvider)
+              .markActionCompleted(userId, item.id),
+        );
+      }
+    }
+
+    if (route != null && mounted) {
+      if (isGoRoute) {
+        context.go(route);
+      } else {
+        context.push(route);
+      }
     }
   }
 
@@ -568,6 +603,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
 
     String? route;
     bool isGoRoute = false;
+    bool markCompleted = false;
 
     switch (action) {
       case 'select_host':
@@ -581,9 +617,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         if (chatId != null && chatId.isNotEmpty) {
           route = '/chats/$chatId';
         }
-        ref
-            .read(notificationsRepositoryProvider)
-            .markActionCompleted(userId, item.id);
+        markCompleted = true;
         break;
       case 'view_profile':
         final profileId =
@@ -598,42 +632,43 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         if (eventId != null && eventId.isNotEmpty) {
           route = '/events/$eventId';
         }
-        ref
-            .read(notificationsRepositoryProvider)
-            .markActionCompleted(userId, item.id);
+        markCompleted = true;
         break;
       case 'view_listing':
         final listingId = item.payload['listingId'] as String?;
         if (listingId != null && listingId.isNotEmpty) {
           route = '/marketplace/listing/$listingId';
         }
-        ref
-            .read(notificationsRepositoryProvider)
-            .markActionCompleted(userId, item.id);
+        markCompleted = true;
         break;
       case 'view_election':
         route = '/communities';
         isGoRoute = true;
-        ref
-            .read(notificationsRepositoryProvider)
-            .markActionCompleted(userId, item.id);
+        markCompleted = true;
         break;
       case 'dismiss':
         _dismissNotification(item);
         return;
     }
 
-    if (route != null) {
-      final targetRoute = route;
-      final targetIsGo = isGoRoute;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        if (targetIsGo) {
-          context.go(targetRoute);
-        } else {
-          context.push(targetRoute);
-        }
+    if (markCompleted) {
+      setState(() {
+        _optimisticCompletedIds.add(item.id);
+        _optimisticReadIds.add(item.id);
       });
+      unawaited(
+        ref
+            .read(notificationsRepositoryProvider)
+            .markActionCompleted(userId, item.id),
+      );
+    }
+
+    if (route != null && mounted) {
+      if (isGoRoute) {
+        context.go(route);
+      } else {
+        context.push(route);
+      }
     }
   }
 
@@ -659,94 +694,114 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       return;
     }
 
+    // Optimistically mark notification completed on frame 0
+    setState(() {
+      _optimisticCompletedIds.add(item.id);
+      _optimisticReadIds.add(item.id);
+    });
+    unawaited(
+      ref
+          .read(notificationsRepositoryProvider)
+          .markActionCompleted(userId, item.id),
+    );
+
+    final profileRepo = ref.read(profileRepositoryProvider);
+    final cachedHostProfile = profileRepo.getCachedProfile(hostId);
+    final hostDisplayName =
+        cachedHostProfile?.fullName ??
+        (item.payload['hostName'] as String?) ??
+        'Host';
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$hostDisplayName selected as your host!')),
+      );
+    }
+
     try {
-      // 1. Fetch the full hosting request
-      final request = await ref
-          .read(hostingRepositoryProvider)
-          .getRequest(requestId);
+      final hostingRepo = ref.read(hostingRepositoryProvider);
+      final chatRepo = ref.read(chatRepositoryProvider);
+
+      // Fetch request, host profile, and create/find DM concurrently
+      final results = await Future.wait([
+        hostingRepo.getRequest(requestId),
+        cachedHostProfile != null
+            ? Future.value(cachedHostProfile)
+            : profileRepo.getUserProfile(hostId),
+        chatRepo.createDirectChat(hostId),
+      ]);
+
+      final request = results[0] as HostingRequest?;
+      final hostProfile = results[1] as ProfileData?;
+      final chat = results[2] as dynamic;
+
       if (request == null) {
         throw Exception(
           'This hosting request no longer exists. It may have expired.',
         );
       }
-
-      // 2. Fetch host profile
-      final hostProfile = await ref
-          .read(profileRepositoryProvider)
-          .getUserProfile(hostId);
       if (hostProfile == null) {
         throw Exception('Could not load host profile.');
       }
-
-      // 3. Create/find DM between traveler and host
-      final chatRepo = ref.read(chatRepositoryProvider);
-      final chat = await chatRepo.createDirectChat(hostId);
       if (chat == null) {
         throw Exception('Could not create chat with host.');
       }
 
-      // 4. Confirm arrangement (creates session, updates request to matched + active)
-      final session = await ref
-          .read(hostingServiceProvider)
-          .confirmArrangement(
-            request: request,
-            hostId: hostId,
-            hostName: hostProfile.fullName,
-            hostPhoto: hostProfile.profileImage,
-            chatId: chat.id,
-          );
-      if (session == null) {
-        throw Exception('Could not create hosting session. Please try again.');
-      }
-
-      // 5. Send arrangement system message to the DM
-      await chatRepo.sendTextMessage(
-        chat.id,
-        '🏠 Hosting arrangement confirmed! '
-        '${request.travelerName} will be hosted by ${hostProfile.fullName} '
-        'from ${_formatDate(request.arrivalDate)} to ${_formatDate(request.departureDate)}. '
-        'Use this chat to coordinate the details.',
-        type: 'system',
-        senderIdOverride: 'system',
-        senderNameOverride: 'Hosting',
-        metadata: {
-          'systemType': 'hosting_arrangement',
-          'sessionId': session.id,
-          'requestId': request.id,
-          'travelerId': request.travelerId,
-          'travelerName': request.travelerName,
-          'travelerPhoto': request.travelerPhoto,
-          'hostId': hostId,
-          'hostName': hostProfile.fullName,
-          'hostPhoto': hostProfile.profileImage,
-          'communityName': request.communityName,
-          'arrivalDate': request.arrivalDate.toIso8601String(),
-          'departureDate': request.departureDate.toIso8601String(),
-          'stayDuration': request.stayDuration,
-        },
-      );
-
-      // 6. Mark notification as completed
-      await ref
-          .read(notificationsRepositoryProvider)
-          .markActionCompleted(userId, item.id);
-
+      final targetChatId = chat.id as String;
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${hostProfile.fullName} selected as your host!'),
-          ),
-        );
-        final targetChatId = chat.id;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            context.push('/chats/$targetChatId');
-          }
-        });
+        context.push('/chats/$targetChatId');
       }
+
+      // Run arrangement confirmation and system message in background
+      final hostingService = ref.read(hostingServiceProvider);
+      unawaited(
+        () async {
+          try {
+            final session = await hostingService.confirmArrangement(
+              request: request,
+              hostId: hostId,
+              hostName: hostProfile.fullName,
+              hostPhoto: hostProfile.profileImage,
+              chatId: targetChatId,
+            );
+            if (session != null) {
+              await chatRepo.sendTextMessage(
+                targetChatId,
+                '🏠 Hosting arrangement confirmed! '
+                '${request.travelerName} will be hosted by ${hostProfile.fullName} '
+                'from ${_formatDate(request.arrivalDate)} to ${_formatDate(request.departureDate)}. '
+                'Use this chat to coordinate the details.',
+                type: 'system',
+                senderIdOverride: 'system',
+                senderNameOverride: 'Hosting',
+                metadata: {
+                  'systemType': 'hosting_arrangement',
+                  'sessionId': session.id,
+                  'requestId': request.id,
+                  'travelerId': request.travelerId,
+                  'travelerName': request.travelerName,
+                  'travelerPhoto': request.travelerPhoto,
+                  'hostId': hostId,
+                  'hostName': hostProfile.fullName,
+                  'hostPhoto': hostProfile.profileImage,
+                  'communityName': request.communityName,
+                  'arrivalDate': request.arrivalDate.toIso8601String(),
+                  'departureDate': request.departureDate.toIso8601String(),
+                  'stayDuration': request.stayDuration,
+                },
+              );
+            }
+          } catch (e) {
+            debugPrint('Background error confirming arrangement: $e');
+          }
+        }(),
+      );
     } catch (e) {
       debugPrint('Error selecting host: $e');
       if (mounted) {
+        setState(() {
+          _optimisticCompletedIds.remove(item.id);
+        });
         final message = e is Exception
             ? e.toString().replaceFirst('Exception: ', '')
             : 'Something went wrong. Please try again.';
@@ -761,77 +816,80 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
     final userId = ref.read(authRepositoryProvider).currentUser?.uid;
     if (userId == null) return;
 
+    // Optimistically mark completed and show feedback immediately on frame 0
+    setState(() {
+      _optimisticCompletedIds.add(item.id);
+      _optimisticReadIds.add(item.id);
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Host declined')));
+    }
+
     final requestId = item.payload['requestId'] as String?;
     final hostId = item.payload['hostId'] as String?;
     if (requestId == null || hostId == null) {
-      debugPrint(
-        'Error rejecting host: missing requestId=$requestId or hostId=$hostId',
+      unawaited(
+        ref
+            .read(notificationsRepositoryProvider)
+            .markActionCompleted(userId, item.id),
       );
-      // Clear stale notification anyway
-      await ref
-          .read(notificationsRepositoryProvider)
-          .markActionCompleted(userId, item.id);
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Notification cleared.')));
-      }
       return;
     }
 
-    try {
-      // Remove host from interested list
-      await ref
-          .read(hostingRepositoryProvider)
-          .withdrawInterest(requestId, hostId);
-      // Mark this notification as completed (dismissed)
-      await ref
-          .read(notificationsRepositoryProvider)
-          .markActionCompleted(userId, item.id);
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Host declined')));
-      }
-    } catch (e) {
-      debugPrint('Error rejecting host: $e');
-      // Still clear the notification if the request doesn't exist
-      await ref
-          .read(notificationsRepositoryProvider)
-          .markActionCompleted(userId, item.id);
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Host declined')));
-      }
-    }
+    unawaited(
+      Future.wait([
+        ref.read(hostingRepositoryProvider).withdrawInterest(requestId, hostId),
+        ref
+            .read(notificationsRepositoryProvider)
+            .markActionCompleted(userId, item.id),
+      ]).catchError((Object e) {
+        debugPrint('Error rejecting host: $e');
+        return <void>[];
+      }),
+    );
   }
 
   void _dismissNotification(NotificationItem item) {
     final userId = ref.read(authRepositoryProvider).currentUser?.uid;
     if (userId == null) return;
-    ref
-        .read(notificationsRepositoryProvider)
-        .deleteNotification(userId, item.id);
+    setState(() {
+      _optimisticDeletedIds.add(item.id);
+    });
+    unawaited(
+      ref
+          .read(notificationsRepositoryProvider)
+          .deleteNotification(userId, item.id),
+    );
   }
 
   Future<void> _markAllRead() async {
     final userId = ref.read(authRepositoryProvider).currentUser?.uid;
     if (userId == null) return;
-    try {
-      await ref.read(notificationsRepositoryProvider).markAllAsRead(userId);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('All notifications marked as read')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error marking read: $e')));
-      }
+    setState(() {
+      _optimisticMarkedAllRead = true;
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('All notifications marked as read')),
+      );
     }
+    unawaited(
+      ref
+          .read(notificationsRepositoryProvider)
+          .markAllAsRead(userId)
+          .catchError((Object e) {
+            if (mounted) {
+              setState(() {
+                _optimisticMarkedAllRead = false;
+              });
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text('Error marking read: $e')));
+            }
+          }),
+    );
   }
 
   void _clearAll() {
@@ -840,37 +898,53 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
 
     showDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Clear all notifications?'),
-        content: const Text('This cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.of(dialogContext).pop();
-              try {
-                await ref
-                    .read(notificationsRepositoryProvider)
-                    .clearAll(userId);
+      builder: (dialogContext) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          title: const Text('Clear all notifications?'),
+          content: const Text('This cannot be undone.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                setState(() {
+                  _optimisticClearedAll = true;
+                });
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('All notifications cleared')),
                   );
                 }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error clearing notifications: $e')),
-                  );
-                }
-              }
-            },
-            child: const Text('Clear', style: TextStyle(color: AppTheme.error)),
-          ),
-        ],
+                unawaited(
+                  ref
+                      .read(notificationsRepositoryProvider)
+                      .clearAll(userId)
+                      .catchError((Object e) {
+                        if (mounted) {
+                          setState(() {
+                            _optimisticClearedAll = false;
+                          });
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Error clearing notifications: $e'),
+                            ),
+                          );
+                        }
+                      }),
+                );
+              },
+              child: const Text(
+                'Clear',
+                style: TextStyle(color: AppTheme.error),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

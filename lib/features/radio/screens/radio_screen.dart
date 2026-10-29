@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:diaspora_nearby/core/data/countries.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,14 +20,22 @@ import 'package:diaspora_nearby/features/shared/widgets/confetti_overlay.dart';
 
 // --- Providers ---
 final stationsByCountryProvider =
-    FutureProvider.family<List<RadioStation>, String>((ref, countryCode) async {
+    StreamProvider.family<List<RadioStation>, String>((ref, countryCode) async* {
       final repo = ref.watch(radioRepositoryProvider);
-      return repo.getStationsByCountry(countryCode);
+      final cached = repo.getCachedStationsByCountry(countryCode);
+      if (cached != null && cached.isNotEmpty) {
+        yield cached;
+      }
+      yield await repo.getStationsByCountry(countryCode);
     });
 
-final topStationsProvider = FutureProvider<List<RadioStation>>((ref) async {
+final topStationsProvider = StreamProvider<List<RadioStation>>((ref) async* {
   final repo = ref.watch(radioRepositoryProvider);
-  return repo.getTopStations();
+  final cached = repo.getCachedTopStations();
+  if (cached != null && cached.isNotEmpty) {
+    yield cached;
+  }
+  yield await repo.getTopStations();
 });
 
 // [NEW] Global Search Provider
@@ -408,9 +418,10 @@ class RadioStationCard extends ConsumerWidget {
 
     final favoriteStations =
         ref.watch(favoriteStationsProvider).asData?.value ?? [];
-    final isFavorite = favoriteStations.any(
-      (s) => s.stationuuid == station.stationuuid,
-    );
+    final optimisticMap = ref.watch(optimisticFavoritesProvider);
+    final isFavorite =
+        optimisticMap[station.stationuuid] ??
+        favoriteStations.any((s) => s.stationuuid == station.stationuuid);
 
     // Standardize Country Name
     // API returns full names like "The United Republic of Tanzania", we want "Tanzania"
@@ -447,7 +458,7 @@ class RadioStationCard extends ConsumerWidget {
                 (station.favicon.isNotEmpty &&
                     station.favicon.startsWith('http'))
                 ? DecorationImage(
-                    image: NetworkImage(station.favicon),
+                    image: CachedNetworkImageProvider(station.favicon),
                     fit: BoxFit.cover,
                   )
                 : null,
@@ -529,21 +540,32 @@ class RadioStationCard extends ConsumerWidget {
                     ? Theme.of(context).colorScheme.primary
                     : null,
               ),
-              onPressed: () async {
+              onPressed: () {
                 final user = ref.read(authStateProvider).value;
                 if (user != null) {
-                  // [NEW] Track Favorite
                   ref
-                      .read(pointsServiceProvider)
-                      .trackExplorationReward(
-                        user.uid,
-                        'action_radio_favorite',
-                        points: 100,
-                      );
-                  await ref
-                      .read(radioRepositoryProvider)
-                      .toggleFavorite(user.uid, station);
-                  ref.invalidate(favoriteStationsProvider);
+                      .read(optimisticFavoritesProvider.notifier)
+                      .setFavorite(station.stationuuid, !isFavorite);
+                  // [NEW] Track Favorite
+                  unawaited(
+                    ref
+                        .read(pointsServiceProvider)
+                        .trackExplorationReward(
+                          user.uid,
+                          'action_radio_favorite',
+                          points: 100,
+                        ),
+                  );
+                  unawaited(() async {
+                    await ref
+                        .read(radioRepositoryProvider)
+                        .toggleFavorite(
+                          user.uid,
+                          station,
+                          currentlyFavorite: isFavorite,
+                        );
+                    ref.invalidate(favoriteStationsProvider);
+                  }());
                 }
               },
             ),

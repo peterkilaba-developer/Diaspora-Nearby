@@ -40,11 +40,29 @@ function calculateImpliedValue({totalUsers=0, totalMinted=0, totalBurned=0, curr
            totalUsers, totalMinted, totalBurned, currentEpoch, fiatGdpUsd };
 }
 
-// ═══ LIVE DATA STATE ═══
+// ═══ LIVE DATA STATE (0ms localStorage hydration) ═══
+const LT_LIVE_CACHE_KEY = 'dn_lt_live_data';
 let liveData = { totalUsers:0, totalMinted:0, totalBurned:0, currentEpoch:1, fiatGdpUsd:0 };
+try {
+  const cached = localStorage.getItem(LT_LIVE_CACHE_KEY);
+  if(cached){
+    const parsed = JSON.parse(cached);
+    if(parsed && typeof parsed === 'object') Object.assign(liveData, parsed);
+  }
+} catch(e){}
 let liveValuation = calculateImpliedValue(liveData);
 let trajectoryPoints = []; // {epoch, impliedValue} pairs for chart
 let projectedTrajectoryPoints = []; // {epoch, impliedValue} for $10k GDP projection
+let _pricingRafId = null;
+
+function scheduleDynamicPricingUpdate(){
+  try { localStorage.setItem(LT_LIVE_CACHE_KEY, JSON.stringify(liveData)); } catch(e){}
+  if(_pricingRafId !== null) return;
+  _pricingRafId = requestAnimationFrame(() => {
+    _pricingRafId = null;
+    updateDynamicPricing();
+  });
+}
 
 // ═══ FORMATTERS ═══
 function fmtUsd(n){
@@ -491,24 +509,28 @@ async function submitNotification(){
   const email = document.getElementById('notify-email')?.value?.trim();
   if(!email) return;
 
-  btn.innerHTML='<i data-lucide="loader" style="width:16px;height:16px;animation:spin 1s linear infinite;"></i> Registering...';
-  btn.disabled = true;
-  lucide.createIcons();
+  if(typeof window._submitLiquidityInterest !== 'function'){
+    btn.innerHTML='<i data-lucide="bell" style="width:16px;height:16px"></i> Try Again';
+    btn.disabled = false;
+    lucide.createIcons();
+    return;
+  }
 
-  const sel = currentSelection;
+  // 0ms optimistic confirmation
+  const sel = { ...currentSelection };
+  showSuccess(email);
+
   try {
-    if(typeof window._submitLiquidityInterest !== 'function'){
-      throw new Error('Secure notification service is unavailable');
-    }
     await window._submitLiquidityInterest({
       email,
       epoch: sel.epoch,
       tge: sel.tge || 0,
       type: sel.type
     });
-    showSuccess(email);
   } catch(error) {
     console.error('Liquidity notification signup failed:', error);
+    document.getElementById('modal-step-2').style.display='none';
+    document.getElementById('modal-step-1').style.display='';
     btn.innerHTML='<i data-lucide="bell" style="width:16px;height:16px"></i> Try Again';
     btn.disabled = false;
     lucide.createIcons();

@@ -26,6 +26,7 @@ class SavedListingsScreen extends ConsumerWidget {
     }
 
     final repo = ref.watch(marketplaceRepositoryProvider);
+    final cachedSaved = repo.getCachedSavedListings();
 
     return Scaffold(
       appBar: AppBar(
@@ -37,9 +38,11 @@ class SavedListingsScreen extends ConsumerWidget {
         backgroundColor: Colors.transparent,
       ),
       body: StreamBuilder<List<MarketplaceListing>>(
+        initialData: cachedSaved.isNotEmpty ? cachedSaved : null,
         stream: repo.getSavedListings(userId),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
             return const Center(
               child: CircularProgressIndicator(color: AppTheme.accent),
             );
@@ -111,7 +114,10 @@ class SavedListingsScreen extends ConsumerWidget {
     WidgetRef ref,
   ) {
     return GestureDetector(
-      onTap: () => context.push('/marketplace/listing/${listing.id}'),
+      onTap: () {
+        ref.read(marketplaceRepositoryProvider).cacheListing(listing);
+        context.push('/marketplace/listing/${listing.id}');
+      },
       child: Container(
         decoration: BoxDecoration(
           color: isDark

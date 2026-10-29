@@ -14,12 +14,12 @@ import 'package:geolocator/geolocator.dart'; // [NEW]
 @pragma('vm:entry-point')
 class BackgroundLocationService {
   static bool _isInitialized = false;
+  static Position? cachedLastKnownPosition;
   static final FlutterLocalNotificationsPlugin _notificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
   static Future<void> initializeService() async {
     if (_isInitialized) {
-      // No-log: Already initialized
       return;
     }
 
@@ -41,7 +41,7 @@ class BackgroundLocationService {
       newChannelId,
       'Background Service',
       description: 'Used for background location updates',
-      importance: Importance.high, // Set to high to ensure service validity
+      importance: Importance.high,
     );
 
     if (defaultTargetPlatform == TargetPlatform.android) {
@@ -86,8 +86,6 @@ class BackgroundLocationService {
     DartPluginRegistrant.ensureInitialized();
     WidgetsFlutterBinding.ensureInitialized();
 
-    // No-log: Started
-
     if (service is AndroidServiceInstance) {
       service.on('setAsForeground').listen((event) {
         service.setAsForegroundService();
@@ -121,33 +119,25 @@ class BackgroundLocationService {
       }
 
       // Re-init notifications inside the isolate
-      final AndroidInitializationSettings initializationSettingsAndroid =
-          const AndroidInitializationSettings('@mipmap/ic_launcher');
-      final InitializationSettings initializationSettings =
+      const AndroidInitializationSettings initializationSettingsAndroid =
+          AndroidInitializationSettings('@mipmap/ic_launcher');
+      const InitializationSettings initializationSettings =
           InitializationSettings(android: initializationSettingsAndroid);
       await _notificationsPlugin.initialize(settings: initializationSettings);
 
-      // [DEBUG] Explicit startup log
-      // No-log start logic
-
-      // [DEBUG] Run immediately after 5 seconds to verify logic without waiting
-      Future.delayed(const Duration(seconds: 5), () async {
-        // No-log immediate check
+      // [PERF] Run initial location check immediately without artificial 5s delay
+      unawaited(() async {
         try {
           final user = FirebaseAuth.instance.currentUser;
           if (user != null) {
             await LocationUpdateService().updateCurrentLocation(user.uid);
-          } else {
-            // No-log
           }
         } catch (e) {
-          debugPrint('ðŸ“ [BACKGROUND] Immediate check failed: $e');
+          debugPrint('📍 [BACKGROUND] Immediate check failed: $e');
         }
-      });
+      }());
 
       // Start location updates
-      // [UPDATED] Switch from Timer to Stream for reliable background updates
-      // User requested 10 miles (approx 16093 meters)
       const int distanceFilterMeters = 16093;
 
       late LocationSettings locationSettings;
@@ -157,30 +147,28 @@ class BackgroundLocationService {
           accuracy: LocationAccuracy.medium,
           distanceFilter: distanceFilterMeters,
           forceLocationManager: true,
-          // Optional: configuration for battery usage vs latency
         );
       } else if (defaultTargetPlatform == TargetPlatform.iOS ||
           defaultTargetPlatform == TargetPlatform.macOS) {
         locationSettings = AppleSettings(
           accuracy: LocationAccuracy.medium,
-          activityType: ActivityType.automotiveNavigation, // Good for driving
+          activityType: ActivityType.automotiveNavigation,
           distanceFilter: distanceFilterMeters,
-          pauseLocationUpdatesAutomatically:
-              false, // CRITICAL: Stop iOS from killing the stream
+          pauseLocationUpdatesAutomatically: false,
           showBackgroundLocationIndicator: false,
         );
       } else {
         locationSettings = const LocationSettings(
           accuracy: LocationAccuracy.medium,
-          distanceFilter: distanceFilterMeters, // 10 miles
+          distanceFilter: distanceFilterMeters,
         );
       }
 
-      // No-log
-
       Geolocator.getPositionStream(locationSettings: locationSettings).listen(
         (Position? position) async {
-          // No-log
+          if (position != null) {
+            cachedLastKnownPosition = position;
+          }
           await _performBackgroundCheck(service);
         },
         onError: (e) {
@@ -192,7 +180,6 @@ class BackgroundLocationService {
     }
   }
 
-  // [NEW] Helper to perform the actual update and check
   static Future<void> _performBackgroundCheck(ServiceInstance service) async {
     try {
       if (service is AndroidServiceInstance) {
@@ -207,7 +194,6 @@ class BackgroundLocationService {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         debugPrint('Background: Updating location for ${user.uid}');
-        // Update location in DB
         await LocationUpdateService().updateCurrentLocation(user.uid);
       } else {
         debugPrint('No user logged in, skipping background location update.');

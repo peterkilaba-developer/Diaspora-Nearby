@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
@@ -54,6 +55,8 @@ class LocationUpdateService {
         return;
       }
 
+      cacheLastKnownPosition(position);
+
       // Reverse geocode using native geocoding package
       String formattedAddress = '${position.latitude}, ${position.longitude}';
       String? city;
@@ -70,7 +73,6 @@ class LocationUpdateService {
         if (placemarks.isNotEmpty) {
           final placemark = placemarks.first;
 
-          // Extract city - try multiple fields
           city =
               placemark.locality ??
               placemark.subLocality ??
@@ -80,7 +82,6 @@ class LocationUpdateService {
           country = placemark.country;
           countryCode = placemark.isoCountryCode;
 
-          // Build formatted address
           final addressParts = <String>[];
           if (placemark.street != null && placemark.street!.isNotEmpty) {
             addressParts.add(placemark.street!);
@@ -113,10 +114,9 @@ class LocationUpdateService {
         tsMs,
       ).toIso8601String();
 
-      // Create currentLocation data matching React structure
       final currentLocationData = {
         'formatted_address': formattedAddress,
-        'place_id': '', // Not available from geocoding package
+        'place_id': '',
         'geometry': {
           'location': {'lat': position.latitude, 'lng': position.longitude},
         },
@@ -129,10 +129,17 @@ class LocationUpdateService {
         'lastUpdated': isoNow,
       };
 
-      // Determine whether to auto-enable city visibility for the +10 PCT.
-      // We award it the moment we have the user's current location — but
-      // never re-enable it if they've already forfeited the +10 by hiding.
-      final userDoc = await _firestore.collection('users').doc(userId).get();
+      // [PERF] Prefer local Firestore cache for user visibility flags
+      DocumentSnapshot<Map<String, dynamic>>? userDoc;
+      try {
+        userDoc = await _firestore
+            .collection('users')
+            .doc(userId)
+            .get(const GetOptions(source: Source.cache));
+      } catch (_) {}
+      if (userDoc == null || !userDoc.exists) {
+        userDoc = await _firestore.collection('users').doc(userId).get();
+      }
       final userData = userDoc.data() ?? {};
       final forfeited = userData['cityVisibilityForfeited'] == true;
       final hasExplicitChoice = userData.containsKey('showCurrentLocationName');
@@ -142,13 +149,12 @@ class LocationUpdateService {
 
       final updates = <String, dynamic>{
         'currentLocation': currentLocationData,
-        'geo': geoFirePoint.data, // Add geohash data for queries
+        'geo': geoFirePoint.data,
         'locationUpdatedAt': FieldValue.serverTimestamp(),
       };
 
-      // Keep public users/{userId} city-level (~1km rounded) currentLocation
-      // updated in real time so member lists, profile views, and distance
-      // displays stay accurate across the app.
+      // [PERF] Commit public and private location updates in a single atomic batch
+      final batch = _firestore.batch();
       if (showCity) {
         final safeLat = (position.latitude * 100).round() / 100;
         final safeLng = (position.longitude * 100).round() / 100;
@@ -171,7 +177,7 @@ class LocationUpdateService {
             'location': {'lat': safeLat, 'lng': safeLng},
           },
         };
-        await _firestore.collection('users').doc(userId).set({
+        batch.set(_firestore.collection('users').doc(userId), {
           if (!forfeited && !hasExplicitChoice) 'showCurrentLocationName': true,
           'currentCity': city,
           'currentState': state,
@@ -180,16 +186,20 @@ class LocationUpdateService {
         }, SetOptions(merge: true));
       }
 
-      await _firestore
-          .collection('user_private')
-          .doc(userId)
-          .set(updates, SetOptions(merge: true));
+      batch.set(
+        _firestore.collection('user_private').doc(userId),
+        updates,
+        SetOptions(merge: true),
+      );
+      await batch.commit();
 
-      // Check for automatic RSVP'd event attendance within 100 meters
-      await _checkGeofencedEventAttendance(
-        userId,
-        position.latitude,
-        position.longitude,
+      // [PERF] Check for automatic RSVP'd event attendance in background
+      unawaited(
+        _checkGeofencedEventAttendance(
+          userId,
+          position.latitude,
+          position.longitude,
+        ),
       );
     } catch (e) {
       // Failed to update location
@@ -206,7 +216,6 @@ class LocationUpdateService {
     try {
       final now = DateTime.now();
 
-      // Query active published events where user is listed in 'attendees'
       final snapshot = await _firestore
           .collection('events')
           .where('attendees', arrayContains: userId)
@@ -218,11 +227,9 @@ class LocationUpdateService {
         final data = doc.data();
         final eventId = doc.id;
 
-        // Check if user is already confirmed
         final confirmed = List<String>.from(data['confirmedAttendees'] ?? []);
         if (confirmed.contains(userId)) continue;
 
-        // Check venue coordinates or plus code
         double? venueLat = (data['latitude'] as num?)?.toDouble();
         double? venueLng = (data['longitude'] as num?)?.toDouble();
 
@@ -239,7 +246,6 @@ class LocationUpdateService {
 
         if (venueLat == null || venueLng == null) continue;
 
-        // Calculate distance in kilometers, convert to meters
         final distanceKm = calculateDistance(
           userLat,
           userLng,
@@ -249,7 +255,6 @@ class LocationUpdateService {
         final distanceMeters = distanceKm * 1000.0;
 
         if (distanceMeters <= 100.0) {
-          // Check event timeframe
           final startDateStr = data['startDate'] as String? ?? '';
           final startTimeStr = data['startTime'] as String? ?? '00:00';
           final endDateStr = data['endDate'] as String? ?? startDateStr;
@@ -277,7 +282,6 @@ class LocationUpdateService {
           start ??= now;
           end ??= start.add(const Duration(hours: 3));
 
-          // Allow check-in from 30 mins before start until 1 hour after end
           final windowStart = start.subtract(const Duration(minutes: 30));
           final windowEnd = end.add(const Duration(hours: 1));
 

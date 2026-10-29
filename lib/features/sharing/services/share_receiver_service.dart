@@ -65,9 +65,8 @@ class ShareReceiverService {
   }
 
   void _navigateToShare(List<SharedMediaFile> files) {
-    // Navigate to Share Destination Screen with the files
-    // Use a small delay to ensure router is ready
-    Future.delayed(const Duration(milliseconds: 500), () {
+    // Navigate immediately on the current/next frame without a 500ms delay
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       try {
         _ref.read(routerProvider).pushNamed('share_destination', extra: files);
       } catch (e) {

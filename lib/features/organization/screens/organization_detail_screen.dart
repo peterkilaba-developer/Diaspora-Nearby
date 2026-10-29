@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -40,20 +41,35 @@ class _OrganizationDetailScreenState
   ProfileData? _superAdminProfile;
   bool _isLoading = true;
   bool _isFollowing = false;
-  bool _isFollowLoading = false;
+  final bool _isFollowLoading = false;
 
   // User location for navigation
   double? _userLat;
   double? _userLng;
 
-  // Live subscription to the org doc — so chamber council updates from
-  // admin appointment flow back into the UI without requiring a refresh.
+  // Live subscription to the org doc
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _orgDocSub;
 
   @override
   void initState() {
     super.initState();
-    _orgData = widget.initialData;
+    final repo = ref.read(organizationRepositoryProvider);
+    final profileRepo = ref.read(profileRepositoryProvider);
+    final currentUser = ref.read(authRepositoryProvider).currentUser;
+
+    _orgData = widget.initialData ?? repo.getCachedOrganization(widget.orgId);
+    if (_orgData != null) {
+      _isLoading = false;
+      final superAdminId = _orgData!['superAdminId'] as String?;
+      if (superAdminId != null) {
+        _superAdminProfile = profileRepo.getCachedProfile(superAdminId);
+      }
+      if (currentUser != null) {
+        final followers = List<String>.from(_orgData!['followers'] ?? []);
+        _isFollowing = followers.contains(currentUser.uid);
+      }
+    }
+
     _loadData();
     _loadUserLocation();
     _subscribeToOrgDoc();
@@ -76,7 +92,17 @@ class _OrganizationDetailScreenState
             final data = snap.data();
             if (data == null) return;
             data['id'] = snap.id;
-            setState(() => _orgData = data);
+            ref
+                .read(organizationRepositoryProvider)
+                .cacheOrganization(snap.id, data);
+            final currentUser = ref.read(authRepositoryProvider).currentUser;
+            final followers = List<String>.from(data['followers'] ?? []);
+            setState(() {
+              _orgData = data;
+              if (currentUser != null && followers.contains(currentUser.uid)) {
+                _isFollowing = true;
+              }
+            });
           },
           onError: (e) {
             debugPrint('Org doc subscription error: $e');
@@ -88,12 +114,24 @@ class _OrganizationDetailScreenState
     if (!force && _orgData != null && _orgData!['id'] == widget.orgId) {
       setState(() => _isLoading = false);
       _checkIfFollowing();
+      final superAdminId = _orgData!['superAdminId'] as String?;
+      if (superAdminId != null && _superAdminProfile == null) {
+        ref
+            .read(profileRepositoryProvider)
+            .getUserProfile(superAdminId)
+            .then((profile) {
+              if (mounted && profile != null) {
+                setState(() => _superAdminProfile = profile);
+              }
+            })
+            .catchError((_) {});
+      }
       return;
     }
 
     try {
       final repo = ref.read(organizationRepositoryProvider);
-      var data = await repo.getOrganization(widget.orgId);
+      var data = await repo.getOrganization(widget.orgId, force: force);
       if (data == null && widget.orgId.startsWith('chamber_')) {
         final parts = widget.orgId.replaceFirst('chamber_', '').split('_');
         if (parts.length >= 2) {
@@ -135,17 +173,24 @@ class _OrganizationDetailScreenState
         });
         _checkIfFollowing();
 
-        // Fetch Super Admin Profile
         if (data != null && data['superAdminId'] != null) {
-          try {
-            final profile = await ref
-                .read(profileRepositoryProvider)
-                .getUserProfile(data['superAdminId']);
-            if (mounted) {
-              setState(() => _superAdminProfile = profile);
+          final superAdminId = data['superAdminId'] as String;
+          final cachedAdmin = ref
+              .read(profileRepositoryProvider)
+              .getCachedProfile(superAdminId);
+          if (cachedAdmin != null) {
+            setState(() => _superAdminProfile = cachedAdmin);
+          } else {
+            try {
+              final profile = await ref
+                  .read(profileRepositoryProvider)
+                  .getUserProfile(superAdminId);
+              if (mounted) {
+                setState(() => _superAdminProfile = profile);
+              }
+            } catch (e) {
+              debugPrint('Error fetching super admin: $e');
             }
-          } catch (e) {
-            debugPrint('Error fetching super admin: $e');
           }
         }
       }
@@ -154,12 +199,17 @@ class _OrganizationDetailScreenState
     }
   }
 
-  Future<void> _openChat() async {
+  void _openChat() {
     if (_orgData == null) return;
-    final chatId = await _resolveChatIdForNavigation();
-    if (!mounted) return;
+    final orgId = (_orgData!['id'] as String?) ?? widget.orgId;
+    final storedChatId = _orgData!['chatId'] as String?;
+    final isCorridorChamber = _orgData!['kind'] == 'corridor_chamber';
 
-    if (chatId != null) {
+    final chatId = (storedChatId != null && storedChatId.isNotEmpty)
+        ? storedChatId
+        : (isCorridorChamber ? 'org_$orgId' : null);
+
+    if (chatId != null && chatId.isNotEmpty) {
       context.push('/chats/$chatId');
     } else {
       ScaffoldMessenger.of(
@@ -168,44 +218,16 @@ class _OrganizationDetailScreenState
     }
   }
 
-  Future<String?> _resolveChatIdForNavigation() async {
-    if (_orgData == null) return null;
-
-    final orgId = (_orgData!['id'] as String?) ?? widget.orgId;
-    final storedChatId = _orgData!['chatId'] as String?;
-    final isCorridorChamber = _orgData!['kind'] == 'corridor_chamber';
-
-    if (isCorridorChamber) {
-      final canonicalChatId = 'org_$orgId';
-      final canonicalChat = await FirebaseFirestore.instance
-          .collection('chats')
-          .doc(canonicalChatId)
-          .get();
-      if (canonicalChat.exists) return canonicalChatId;
-    }
-
-    if (storedChatId == null || storedChatId.isEmpty) return null;
-
-    final storedChat = await FirebaseFirestore.instance
-        .collection('chats')
-        .doc(storedChatId)
-        .get();
-    if (storedChat.exists) return storedChatId;
-
-    return null;
-  }
-
   Future<void> _checkIfFollowing() async {
     final user = ref.read(authRepositoryProvider).currentUser;
     if (user == null || _orgData == null) return;
 
     final followers = List<String>.from(_orgData!['followers'] ?? []);
     if (followers.contains(user.uid)) {
-      if (mounted) setState(() => _isFollowing = true);
+      if (mounted && !_isFollowing) setState(() => _isFollowing = true);
       return;
     }
 
-    // Fallback: Check Firestore userChats subcollection
     try {
       final chatId = _orgData!['chatId'] as String?;
       if (chatId != null) {
@@ -224,33 +246,47 @@ class _OrganizationDetailScreenState
     }
   }
 
-  Future<void> _toggleFollow() async {
+  void _toggleFollow() {
     final user = ref.read(authRepositoryProvider).currentUser;
-    if (user == null) return;
+    if (user == null || _orgData == null) return;
 
-    setState(() => _isFollowLoading = true);
     final repo = ref.read(organizationRepositoryProvider);
+    final wasFollowing = _isFollowing;
+    final prevFollowers = List<String>.from(_orgData!['followers'] ?? []);
+    final updatedFollowers = List<String>.from(prevFollowers);
 
-    try {
-      if (_isFollowing) {
-        await repo.unfollowOrganization(widget.orgId, user.uid);
-        if (mounted) setState(() => _isFollowing = false);
-      } else {
-        await repo.followOrganization(widget.orgId, user.uid);
-        if (mounted) setState(() => _isFollowing = true);
-      }
-
-      // Force reload to verify state
-      await _loadData(force: true);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _isFollowLoading = false);
+    if (wasFollowing) {
+      updatedFollowers.remove(user.uid);
+    } else if (!updatedFollowers.contains(user.uid)) {
+      updatedFollowers.add(user.uid);
     }
+
+    setState(() {
+      _isFollowing = !wasFollowing;
+      _orgData = {..._orgData!, 'followers': updatedFollowers};
+    });
+    repo.cacheOrganization(widget.orgId, _orgData!);
+
+    final action = wasFollowing
+        ? repo.unfollowOrganization(widget.orgId, user.uid)
+        : repo.followOrganization(widget.orgId, user.uid);
+
+    unawaited(
+      action.catchError((Object e) {
+        if (mounted) {
+          setState(() {
+            _isFollowing = wasFollowing;
+            if (_orgData != null) {
+              _orgData = {..._orgData!, 'followers': prevFollowers};
+              repo.cacheOrganization(widget.orgId, _orgData!);
+            }
+          });
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        }
+      }),
+    );
   }
 
   void _launchUrl(String? url) async {
@@ -263,7 +299,6 @@ class _OrganizationDetailScreenState
         url.startsWith('mailto')) {
       uri = Uri.parse(url);
     } else {
-      // Default to https for websites without scheme
       uri = Uri.parse('https://$url');
     }
 
@@ -271,8 +306,6 @@ class _OrganizationDetailScreenState
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri);
       } else {
-        // Some devices might not report canLaunchUrl properly for tel:
-        // Try launching anyway if it's a tel link
         if (url.startsWith('tel')) {
           await launchUrl(uri);
         }
@@ -436,12 +469,7 @@ class _OrganizationDetailScreenState
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                20,
-                20,
-                20,
-                100,
-              ), // Added bottom padding
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -476,13 +504,11 @@ class _OrganizationDetailScreenState
                   // Action Buttons Row
                   Row(
                     children: [
-                      // Chambers use the explicit Join / Follow lifecycle
-                      // (opt-in). Regular orgs show Manage for admins, or Follow toggle for others.
                       Expanded(
                         child: _orgData!['kind'] == 'corridor_chamber'
                             ? _buildChamberJoinFollowButton()
                             : isAdmin
-                            ? OutlinedButton.icon(
+                            ? FilledButton.tonalIcon(
                                 onPressed: () {
                                   context.push(
                                     '/organization/manage?orgId=${widget.orgId}',
@@ -490,34 +516,26 @@ class _OrganizationDetailScreenState
                                 },
                                 icon: const Icon(LucideIcons.settings),
                                 label: const Text('Manage'),
-                                style: OutlinedButton.styleFrom(
+                                style: FilledButton.styleFrom(
                                   minimumSize: const Size(double.infinity, 54),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                 ),
                               )
-                            : OutlinedButton.icon(
+                            : FilledButton.tonalIcon(
                                 onPressed: _isFollowLoading
                                     ? null
                                     : _toggleFollow,
-                                icon: _isFollowLoading
-                                    ? const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : Icon(
-                                        _isFollowing
-                                            ? LucideIcons.check
-                                            : LucideIcons.plus,
-                                      ),
+                                icon: Icon(
+                                  _isFollowing
+                                      ? LucideIcons.check
+                                      : LucideIcons.plus,
+                                ),
                                 label: Text(
                                   _isFollowing ? 'Following' : 'Follow',
                                 ),
-                                style: OutlinedButton.styleFrom(
+                                style: FilledButton.styleFrom(
                                   minimumSize: const Size(double.infinity, 54),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
@@ -555,14 +573,11 @@ class _OrganizationDetailScreenState
                     _buildLinkedBusinessesCard(theme, currentUserId),
                     const SizedBox(height: 24),
                   ] else ...[
-                    // Regular org — show the chambers this business is
-                    // affiliated with (reverse of the chamber's directory).
                     _buildAffiliatedChambersCard(theme, currentUserId),
                     const SizedBox(height: 24),
                   ],
 
-                  // Embedded chat preview. Protected messages are only
-                  // subscribed to after the user follows or joins.
+                  // Embedded chat preview.
                   if (_orgData!['chatId'] != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 24.0),
@@ -573,7 +588,7 @@ class _OrganizationDetailScreenState
                       ),
                     ),
 
-                  // [NEW] Super Admin Card
+                  // Super Admin Card
                   if (_superAdminProfile != null) ...[
                     const Text(
                       'Leadership',
@@ -587,7 +602,7 @@ class _OrganizationDetailScreenState
                     const SizedBox(height: 32),
                   ],
 
-                  // [NEW] Products & Services Section
+                  // Products & Services Section
                   _buildProductsListingSection(theme, isAdmin),
                   const SizedBox(height: 32),
 
@@ -703,7 +718,6 @@ class _OrganizationDetailScreenState
   Widget _buildSuperAdminCard(ThemeData theme) {
     if (_superAdminProfile == null) return const SizedBox.shrink();
 
-    // Determine flag (Home Country)
     String flag = '';
     if (_superAdminProfile!.homeCountryCode != null) {
       final country = country_data.getCountryByCode(
@@ -712,7 +726,6 @@ class _OrganizationDetailScreenState
       if (country != null) flag = country.flag;
     }
 
-    // Determine Title
     String title = 'Super Admin';
     if (_orgData != null && _orgData!['adminTitles'] is Map) {
       final titles = _orgData!['adminTitles'];
@@ -734,7 +747,6 @@ class _OrganizationDetailScreenState
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Row(
             children: [
-              // Avatar
               CircleAvatar(
                 radius: 28,
                 backgroundColor: Colors.grey.shade200,
@@ -757,12 +769,10 @@ class _OrganizationDetailScreenState
                     : null,
               ),
               const SizedBox(width: 12),
-              // Info
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Name + Flag
                     Row(
                       children: [
                         if (flag.isNotEmpty)
@@ -786,7 +796,6 @@ class _OrganizationDetailScreenState
                       ],
                     ),
                     const SizedBox(height: 4),
-                    // Title
                     Text(
                       title,
                       style: theme.textTheme.bodyMedium?.copyWith(
@@ -796,7 +805,6 @@ class _OrganizationDetailScreenState
                   ],
                 ),
               ),
-              // Chevron
               Icon(
                 LucideIcons.chevronRight,
                 size: 20,
@@ -811,10 +819,6 @@ class _OrganizationDetailScreenState
     );
   }
 
-  /// Secondary action row beneath the primary chamber CTA:
-  ///   - Visitor:  "Follow (read-only)" outlined  ← lets them lurk without joining
-  ///   - Follower: "Become Member" filled         ← upgrade path
-  ///   - Member:   "Leave Chamber" text button    ← step down to follower
   Widget _buildChamberSecondaryActions(String? currentUserId) {
     if (currentUserId == null) return const SizedBox.shrink();
     final members = List<String>.from(
@@ -830,9 +834,7 @@ class _OrganizationDetailScreenState
       return Align(
         alignment: Alignment.centerLeft,
         child: TextButton.icon(
-          onPressed: _chamberActionBusy
-              ? null
-              : () => _leaveChamber(currentUserId),
+          onPressed: () => _leaveChamber(currentUserId),
           icon: const Icon(LucideIcons.logOut, size: 16),
           label: const Text('Leave chamber'),
           style: TextButton.styleFrom(foregroundColor: AppTheme.error),
@@ -843,9 +845,7 @@ class _OrganizationDetailScreenState
       return SizedBox(
         width: double.infinity,
         child: FilledButton.icon(
-          onPressed: _chamberActionBusy
-              ? null
-              : () => _joinChamber(currentUserId),
+          onPressed: () => _joinChamber(currentUserId),
           icon: const Icon(LucideIcons.userPlus),
           label: const Text('Become Member'),
           style: FilledButton.styleFrom(
@@ -860,13 +860,11 @@ class _OrganizationDetailScreenState
     // Visitor
     return SizedBox(
       width: double.infinity,
-      child: OutlinedButton.icon(
-        onPressed: _chamberActionBusy
-            ? null
-            : () => _followChamber(currentUserId),
+      child: FilledButton.tonalIcon(
+        onPressed: () => _followChamber(currentUserId),
         icon: const Icon(LucideIcons.eye),
         label: const Text('Follow (read-only)'),
-        style: OutlinedButton.styleFrom(
+        style: FilledButton.styleFrom(
           padding: const EdgeInsets.symmetric(vertical: 12),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -876,11 +874,6 @@ class _OrganizationDetailScreenState
     );
   }
 
-  /// Builds the three-state primary action for chambers based on the live
-  /// `members` / `followers` arrays:
-  ///   - Visitor (not a follower, not a member): "Join Chamber" filled
-  ///   - Follower (in followers only): "Following" outlined + "Join" CTA below
-  ///   - Member (in members): static "Chamber Member" badge
   Widget _buildChamberJoinFollowButton() {
     final user = ref.watch(authRepositoryProvider).currentUser;
     if (user == null) {
@@ -896,11 +889,11 @@ class _OrganizationDetailScreenState
     final isFollower = followers.contains(user.uid);
 
     if (isMember) {
-      return OutlinedButton.icon(
+      return FilledButton.tonalIcon(
         onPressed: null,
         icon: const Icon(LucideIcons.shieldCheck),
         label: const Text('Chamber Member'),
-        style: OutlinedButton.styleFrom(
+        style: FilledButton.styleFrom(
           minimumSize: const Size(double.infinity, 54),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -909,17 +902,11 @@ class _OrganizationDetailScreenState
       );
     }
     if (isFollower) {
-      return OutlinedButton.icon(
-        onPressed: _chamberActionBusy ? null : () => _unfollowChamber(user.uid),
-        icon: _chamberActionBusy
-            ? const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Icon(LucideIcons.check),
+      return FilledButton.tonalIcon(
+        onPressed: () => _unfollowChamber(user.uid),
+        icon: const Icon(LucideIcons.check),
         label: const Text('Following'),
-        style: OutlinedButton.styleFrom(
+        style: FilledButton.styleFrom(
           minimumSize: const Size(double.infinity, 54),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -927,20 +914,9 @@ class _OrganizationDetailScreenState
         ),
       );
     }
-    // Visitor — primary action is Join; secondary Follow shown alongside in
-    // _buildChamberSecondaryActions.
     return FilledButton.icon(
-      onPressed: _chamberActionBusy ? null : () => _joinChamber(user.uid),
-      icon: _chamberActionBusy
-          ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.white,
-              ),
-            )
-          : const Icon(LucideIcons.userPlus),
+      onPressed: () => _joinChamber(user.uid),
+      icon: const Icon(LucideIcons.userPlus),
       label: const Text('Join Chamber'),
       style: FilledButton.styleFrom(
         minimumSize: const Size(double.infinity, 54),
@@ -949,106 +925,185 @@ class _OrganizationDetailScreenState
     );
   }
 
-  bool _chamberActionBusy = false;
+  void _joinChamber(String uid) {
+    if (_orgData == null) return;
+    final repo = ref.read(organizationRepositoryProvider);
+    final prevMembers = List<String>.from(_orgData!['members'] ?? []);
+    final prevFollowers = List<String>.from(_orgData!['followers'] ?? []);
+    final updatedMembers = List<String>.from(prevMembers);
+    final updatedFollowers = List<String>.from(prevFollowers);
+    if (!updatedMembers.contains(uid)) updatedMembers.add(uid);
+    if (!updatedFollowers.contains(uid)) updatedFollowers.add(uid);
 
-  Future<void> _joinChamber(String uid) async {
-    setState(() => _chamberActionBusy = true);
-    try {
-      await ref
-          .read(organizationRepositoryProvider)
-          .joinChamber(orgId: widget.orgId, userId: uid);
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Joined the chamber.')));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Couldn\'t join: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _chamberActionBusy = false);
-    }
+    setState(() {
+      _isFollowing = true;
+      _orgData = {
+        ..._orgData!,
+        'members': updatedMembers,
+        'followers': updatedFollowers,
+        'memberCount': updatedMembers.length,
+      };
+    });
+    repo.cacheOrganization(widget.orgId, _orgData!);
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Joined the chamber.')));
+
+    unawaited(
+      repo.joinChamber(orgId: widget.orgId, userId: uid).catchError((Object e) {
+        if (mounted) {
+          setState(() {
+            _isFollowing = prevFollowers.contains(uid);
+            if (_orgData != null) {
+              _orgData = {
+                ..._orgData!,
+                'members': prevMembers,
+                'followers': prevFollowers,
+                'memberCount': prevMembers.length,
+              };
+              repo.cacheOrganization(widget.orgId, _orgData!);
+            }
+          });
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Couldn\'t join: $e')));
+        }
+      }),
+    );
   }
 
-  Future<void> _followChamber(String uid) async {
-    setState(() => _chamberActionBusy = true);
-    try {
-      await ref
-          .read(organizationRepositoryProvider)
-          .followChamber(orgId: widget.orgId, userId: uid);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Now following the chamber.')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Couldn\'t follow: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _chamberActionBusy = false);
-    }
+  void _followChamber(String uid) {
+    if (_orgData == null) return;
+    final repo = ref.read(organizationRepositoryProvider);
+    final prevFollowers = List<String>.from(_orgData!['followers'] ?? []);
+    final updatedFollowers = List<String>.from(prevFollowers);
+    if (!updatedFollowers.contains(uid)) updatedFollowers.add(uid);
+
+    setState(() {
+      _isFollowing = true;
+      _orgData = {..._orgData!, 'followers': updatedFollowers};
+    });
+    repo.cacheOrganization(widget.orgId, _orgData!);
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Now following the chamber.')));
+
+    unawaited(
+      repo.followChamber(orgId: widget.orgId, userId: uid).catchError((
+        Object e,
+      ) {
+        if (mounted) {
+          setState(() {
+            _isFollowing = prevFollowers.contains(uid);
+            if (_orgData != null) {
+              _orgData = {..._orgData!, 'followers': prevFollowers};
+              repo.cacheOrganization(widget.orgId, _orgData!);
+            }
+          });
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Couldn\'t follow: $e')));
+        }
+      }),
+    );
   }
 
-  Future<void> _unfollowChamber(String uid) async {
-    setState(() => _chamberActionBusy = true);
-    try {
-      await ref
-          .read(organizationRepositoryProvider)
-          .unfollowChamber(orgId: widget.orgId, userId: uid);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Unfollowed the chamber.')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Couldn\'t unfollow: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _chamberActionBusy = false);
-    }
+  void _unfollowChamber(String uid) {
+    if (_orgData == null) return;
+    final repo = ref.read(organizationRepositoryProvider);
+    final prevFollowers = List<String>.from(_orgData!['followers'] ?? []);
+    final prevMembers = List<String>.from(_orgData!['members'] ?? []);
+    final updatedFollowers = List<String>.from(prevFollowers)..remove(uid);
+    final updatedMembers = List<String>.from(prevMembers)..remove(uid);
+
+    setState(() {
+      _isFollowing = false;
+      _orgData = {
+        ..._orgData!,
+        'followers': updatedFollowers,
+        'members': updatedMembers,
+      };
+    });
+    repo.cacheOrganization(widget.orgId, _orgData!);
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Unfollowed the chamber.')));
+
+    unawaited(
+      repo.unfollowChamber(orgId: widget.orgId, userId: uid).catchError((
+        Object e,
+      ) {
+        if (mounted) {
+          setState(() {
+            _isFollowing = prevFollowers.contains(uid);
+            if (_orgData != null) {
+              _orgData = {
+                ..._orgData!,
+                'followers': prevFollowers,
+                'members': prevMembers,
+              };
+              repo.cacheOrganization(widget.orgId, _orgData!);
+            }
+          });
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Couldn\'t unfollow: $e')));
+        }
+      }),
+    );
   }
 
-  Future<void> _leaveChamber(String uid) async {
-    setState(() => _chamberActionBusy = true);
-    try {
-      await ref
-          .read(organizationRepositoryProvider)
-          .leaveChamber(orgId: widget.orgId, userId: uid);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Left the chamber (still following).')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Couldn\'t leave: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _chamberActionBusy = false);
-    }
+  void _leaveChamber(String uid) {
+    if (_orgData == null) return;
+    final repo = ref.read(organizationRepositoryProvider);
+    final prevMembers = List<String>.from(_orgData!['members'] ?? []);
+    final updatedMembers = List<String>.from(prevMembers)..remove(uid);
+
+    setState(() {
+      _orgData = {
+        ..._orgData!,
+        'members': updatedMembers,
+        'memberCount': updatedMembers.length,
+      };
+    });
+    repo.cacheOrganization(widget.orgId, _orgData!);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Left the chamber (still following).')),
+    );
+
+    unawaited(
+      repo.leaveChamber(orgId: widget.orgId, userId: uid).catchError((
+        Object e,
+      ) {
+        if (mounted) {
+          setState(() {
+            if (_orgData != null) {
+              _orgData = {
+                ..._orgData!,
+                'members': prevMembers,
+                'memberCount': prevMembers.length,
+              };
+              repo.cacheOrganization(widget.orgId, _orgData!);
+            }
+          });
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Couldn\'t leave: $e')));
+        }
+      }),
+    );
   }
 
-  /// Regular-org-only: lists corridor chambers this business is affiliated
-  /// with. The reverse of [_buildLinkedBusinessesCard]. Admins of the
-  /// business can unlink a chamber inline.
   Widget _buildAffiliatedChambersCard(ThemeData theme, String? currentUserId) {
     final linked = List<String>.from(
       (_orgData?['linkedChamberIds'] as List?) ?? const <dynamic>[],
     );
     if (linked.isEmpty) return const SizedBox.shrink();
 
-    // Determine if the viewer can manage affiliations (admin/superAdmin).
     final admins = List<String>.from(
       (_orgData?['admins'] as List?) ?? const <dynamic>[],
     );
@@ -1098,50 +1153,68 @@ class _OrganizationDetailScreenState
   Future<void> _unlinkChamber(String chamberId, String userId) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Unlink chamber?'),
-        content: const Text(
-          'This business will no longer appear in the chamber\'s member directory.',
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          title: const Text('Unlink chamber?'),
+          content: const Text(
+            'This business will no longer appear in the chamber\'s member directory.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppTheme.error),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Unlink'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppTheme.error),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Unlink'),
-          ),
-        ],
       ),
     );
-    if (confirmed != true) return;
-    try {
-      await ref
-          .read(organizationRepositoryProvider)
+    if (confirmed != true || _orgData == null) return;
+
+    final repo = ref.read(organizationRepositoryProvider);
+    final prevLinked = List<String>.from(_orgData!['linkedChamberIds'] ?? []);
+    final updatedLinked = List<String>.from(prevLinked)..remove(chamberId);
+
+    setState(() {
+      _orgData = {..._orgData!, 'linkedChamberIds': updatedLinked};
+    });
+    repo.cacheOrganization(widget.orgId, _orgData!);
+
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Affiliation removed.')));
+    }
+
+    unawaited(
+      repo
           .unlinkBusinessFromChamber(
             chamberOrgId: chamberId,
             businessOrgId: widget.orgId,
             userId: userId,
-          );
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Affiliation removed.')));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Couldn\'t unlink: $e')));
-      }
-    }
+          )
+          .catchError((Object e) {
+            if (mounted) {
+              setState(() {
+                if (_orgData != null) {
+                  _orgData = {..._orgData!, 'linkedChamberIds': prevLinked};
+                  repo.cacheOrganization(widget.orgId, _orgData!);
+                }
+              });
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text('Couldn\'t unlink: $e')));
+            }
+          }),
+    );
   }
 
-  /// Chamber-only: lists registered businesses linked to this chamber.
-  /// Members of the chamber whose own businesses aren't yet linked see a
-  /// "Link a Business" CTA that opens a picker over their admin orgs.
   Widget _buildLinkedBusinessesCard(ThemeData theme, String? currentUserId) {
     final linked = List<String>.from(
       (_orgData?['linkedBusinesses'] as List?) ?? const <dynamic>[],
@@ -1185,11 +1258,11 @@ class _OrganizationDetailScreenState
           const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
-            child: OutlinedButton.icon(
+            child: FilledButton.tonalIcon(
               icon: const Icon(LucideIcons.plus),
               label: const Text('Link a Business'),
               onPressed: () => _openBusinessLinker(currentUserId, linked),
-              style: OutlinedButton.styleFrom(
+              style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -1212,9 +1285,12 @@ class _OrganizationDetailScreenState
     String currentUserId,
     List<String> alreadyLinked,
   ) async {
-    // Fetch orgs the user admins (excluding chambers + already-linked).
     final repo = ref.read(organizationRepositoryProvider);
-    final myOrgs = await repo.getUserOrganizations(currentUserId);
+    final myOrgs =
+        ref.read(userOrganizationsProvider).value ??
+        repo.getCachedUserOrganizations(currentUserId) ??
+        await repo.getUserOrganizations(currentUserId);
+
     final eligible = myOrgs.where((o) {
       if (o['kind'] == 'corridor_chamber') return false;
       if (alreadyLinked.contains(o['id'])) return false;
@@ -1238,58 +1314,86 @@ class _OrganizationDetailScreenState
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Padding(
-                padding: EdgeInsets.fromLTRB(16, 8, 16, 12),
-                child: Text(
-                  'Pick a business to link',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Theme.of(ctx).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 8, 16, 12),
+                    child: Text(
+                      'Pick a business to link',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                  ...eligible.map(
+                    (o) => ListTile(
+                      leading: const Icon(LucideIcons.briefcase),
+                      title: Text(o['businessName'] ?? o['name'] ?? 'Business'),
+                      subtitle: Text(o['type'] ?? ''),
+                      onTap: () => Navigator.pop(ctx, o['id'] as String),
+                    ),
+                  ),
+                ],
               ),
-              ...eligible.map(
-                (o) => ListTile(
-                  leading: const Icon(LucideIcons.briefcase),
-                  title: Text(o['businessName'] ?? o['name'] ?? 'Business'),
-                  subtitle: Text(o['type'] ?? ''),
-                  onTap: () => Navigator.pop(ctx, o['id'] as String),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
     );
-    if (picked == null) return;
+    if (picked == null || _orgData == null) return;
 
-    try {
-      await repo.linkBusinessToChamber(
-        chamberOrgId: widget.orgId,
-        businessOrgId: picked,
-        userId: currentUserId,
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Business linked.')));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Couldn\'t link: $e')));
-      }
+    final prevLinked = List<String>.from(_orgData!['linkedBusinesses'] ?? []);
+    final updatedLinked = List<String>.from(prevLinked);
+    if (!updatedLinked.contains(picked)) updatedLinked.add(picked);
+
+    setState(() {
+      _orgData = {..._orgData!, 'linkedBusinesses': updatedLinked};
+    });
+    repo.cacheOrganization(widget.orgId, _orgData!);
+
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Business linked.')));
     }
+
+    unawaited(
+      repo
+          .linkBusinessToChamber(
+            chamberOrgId: widget.orgId,
+            businessOrgId: picked,
+            userId: currentUserId,
+          )
+          .catchError((Object e) {
+            if (mounted) {
+              setState(() {
+                if (_orgData != null) {
+                  _orgData = {..._orgData!, 'linkedBusinesses': prevLinked};
+                  repo.cacheOrganization(widget.orgId, _orgData!);
+                }
+              });
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text('Couldn\'t link: $e')));
+            }
+          }),
+    );
   }
 
-  /// Chamber-only: shows the 6 council seats with current holders / open
-  /// seats, the requesting user's pending request status (if any), and a
-  /// "Request Leadership" CTA when the user isn't already a leader.
   Widget _buildChamberLeadershipCard(ThemeData theme, String? currentUserId) {
     final councilRoles = Map<String, String>.from(
       (_orgData!['councilRoles'] as Map?)?.cast<String, String>() ??
@@ -1299,7 +1403,6 @@ class _OrganizationDetailScreenState
     final hostCC = (_orgData!['hostCountryCode'] as String?) ?? '';
     final chamberName = (_orgData!['name'] as String?) ?? 'Chamber';
 
-    // role -> uid for fast lookup.
     final seatHolders = <String, String?>{};
     for (final r in ChamberRoles.all) {
       seatHolders[r] = null;
@@ -1335,7 +1438,6 @@ class _OrganizationDetailScreenState
           ),
         ),
         const SizedBox(height: 12),
-        // Seat grid — each row is a role with a vacancy badge or appointee uid.
         ...ChamberRoles.all.map((role) {
           final holderUid = seatHolders[role];
           final isMine = holderUid != null && holderUid == currentUserId;
@@ -1350,11 +1452,6 @@ class _OrganizationDetailScreenState
         }),
         const SizedBox(height: 8),
 
-        // The user's pending request status (if any) + "Request" CTA.
-        // Only diaspora whose own (home, host) matches the chamber's corridor
-        // may request leadership — a Tanzanian in the US shouldn't be able
-        // to pitch for the PH ⇄ TZ chamber. For non-corridor visitors, show
-        // a small explanatory note instead.
         if (currentUserId != null && !userIsLeader)
           _buildCorridorGatedRequestSection(
             currentUserId: currentUserId,
@@ -1366,9 +1463,6 @@ class _OrganizationDetailScreenState
     );
   }
 
-  /// Gates the Request-Leadership UI on the viewer's corridor matching the
-  /// chamber's (home, host). Non-corridor viewers see a brief note explaining
-  /// why the CTA isn't available.
   Widget _buildCorridorGatedRequestSection({
     required String currentUserId,
     required String chamberName,
@@ -1376,7 +1470,9 @@ class _OrganizationDetailScreenState
     required String hostCC,
   }) {
     final theme = Theme.of(context);
-    final profile = ref.watch(userProfileProvider).value;
+    final profile =
+        ref.watch(userProfileProvider).value ??
+        ref.read(profileRepositoryProvider).getCachedProfile(currentUserId);
 
     final userHome = (profile?.homeCountryCode ?? '').toUpperCase();
     final userHost = (profile?.hostCountryCode ?? '').toUpperCase();
@@ -1397,7 +1493,6 @@ class _OrganizationDetailScreenState
       );
     }
 
-    // Corridor match — but leadership requests still require active membership.
     final members = List<String>.from(
       (_orgData?['members'] as List?) ?? const <dynamic>[],
     );
@@ -1452,6 +1547,7 @@ class _OrganizationDetailScreenState
   }) {
     final repo = ref.read(organizationRepositoryProvider);
     return StreamBuilder<List<ChamberLeadershipRequest>>(
+      initialData: repo.getCachedMyLeadershipRequests(currentUserId),
       stream: repo.watchMyLeadershipRequests(currentUserId),
       builder: (context, snapshot) {
         final all = snapshot.data ?? const <ChamberLeadershipRequest>[];
@@ -1489,7 +1585,7 @@ class _OrganizationDetailScreenState
 
         return SizedBox(
           width: double.infinity,
-          child: OutlinedButton.icon(
+          child: FilledButton.tonalIcon(
             icon: const Icon(LucideIcons.heartHandshake),
             label: const Text('Request Leadership'),
             onPressed: () => ChamberLeadershipRequestModal.show(
@@ -1499,7 +1595,7 @@ class _OrganizationDetailScreenState
               homeCountryCode: homeCC,
               hostCountryCode: hostCC,
             ),
-            style: OutlinedButton.styleFrom(
+            style: FilledButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -1561,9 +1657,7 @@ class _OrganizationDetailScreenState
             ),
             if (isAdmin)
               TextButton.icon(
-                onPressed: () {
-                  // TODO: Navigate to products management
-                },
+                onPressed: () {},
                 icon: const Icon(LucideIcons.plus, size: 16),
                 label: const Text('Add Item'),
               ),
@@ -1574,7 +1668,6 @@ class _OrganizationDetailScreenState
           'Detailed products and services listing is active. You can browse them below.',
           style: TextStyle(fontSize: 14, color: Colors.grey),
         ),
-        // TODO: List products here
         const SizedBox(height: 16),
         const Center(
           child: Text(
@@ -1588,57 +1681,66 @@ class _OrganizationDetailScreenState
 
   Future<void> _handleEnableListing() async {
     final user = ref.read(authRepositoryProvider).currentUser;
-    if (user == null) return;
+    if (user == null || _orgData == null) return;
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Enable Specialized Listing?'),
-        content: const Text(
-          'This will enable a dedicated products and services page for your organization.',
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          title: const Text('Enable Specialized Listing?'),
+          content: const Text(
+            'This will enable a dedicated products and services page for your organization.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Enable'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Enable'),
-          ),
-        ],
       ),
     );
 
-    if (confirmed == true) {
-      setState(() => _isLoading = true);
-      try {
-        await ref
-            .read(organizationRepositoryProvider)
-            .enableProductListing(widget.orgId, user.uid);
+    if (confirmed == true && _orgData != null) {
+      final repo = ref.read(organizationRepositoryProvider);
+      setState(() {
+        _orgData = {..._orgData!, 'isListingEnabled': true};
+      });
+      repo.cacheOrganization(widget.orgId, _orgData!);
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Specialized listing enabled!')),
-          );
-          _loadData(force: true);
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to enable listing: $e')),
-          );
-        }
-      } finally {
-        if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Specialized listing enabled!')),
+        );
       }
+
+      unawaited(
+        repo.enableProductListing(widget.orgId, user.uid).catchError((
+          Object e,
+        ) {
+          if (mounted) {
+            setState(() {
+              if (_orgData != null) {
+                _orgData = {..._orgData!, 'isListingEnabled': false};
+                repo.cacheOrganization(widget.orgId, _orgData!);
+              }
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Failed to enable listing: $e')),
+            );
+          }
+        }),
+      );
     }
   }
 }
 
-/// Single seat row in the Chamber Council card. Async-loads the holder's
-/// profile so we can show their name + avatar; falls back to a placeholder
-/// while loading and "Open seat" when [holderUid] is null.
 class _ChamberSeatRow extends ConsumerWidget {
   final String role;
   final String? holderUid;
@@ -1717,75 +1819,72 @@ class _ChamberSeatRow extends ConsumerWidget {
     }
 
     final profileAsync = ref.watch(userProfileByIdProvider(holderUid!));
-    return profileAsync.when(
-      loading: () =>
-          Text(roleLabel, style: const TextStyle(fontWeight: FontWeight.w600)),
-      error: (_, _) =>
-          Text(roleLabel, style: const TextStyle(fontWeight: FontWeight.w600)),
-      data: (profile) {
-        final fullName = profile == null
-            ? null
-            : '${profile.firstName} ${profile.lastName}'.trim();
-        return Row(
-          children: [
-            if (profile != null && profile.profileImage.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: CircleAvatar(
-                  radius: 14,
-                  backgroundImage: CachedNetworkImageProvider(
-                    profile.profileImage,
-                  ),
+    final profile =
+        profileAsync.value ??
+        ref.read(profileRepositoryProvider).getCachedProfile(holderUid!);
+
+    if (profile == null && profileAsync.isLoading) {
+      return Text(
+        roleLabel,
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      );
+    }
+
+    final fullName = profile == null
+        ? null
+        : '${profile.firstName} ${profile.lastName}'.trim();
+    return Row(
+      children: [
+        if (profile != null && profile.profileImage.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: CircleAvatar(
+              radius: 14,
+              backgroundImage: CachedNetworkImageProvider(profile.profileImage),
+            ),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: CircleAvatar(
+              radius: 14,
+              backgroundColor: AppTheme.accent.withValues(alpha: 0.2),
+              child: Text(
+                (fullName?.isNotEmpty ?? false)
+                    ? fullName![0].toUpperCase()
+                    : '?',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.accent,
                 ),
-              )
-            else
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: CircleAvatar(
-                  radius: 14,
-                  backgroundColor: AppTheme.accent.withValues(alpha: 0.2),
-                  child: Text(
-                    (fullName?.isNotEmpty ?? false)
-                        ? fullName![0].toUpperCase()
-                        : '?',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.accent,
-                    ),
-                  ),
-                ),
-              ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    (fullName?.isNotEmpty ?? false) ? fullName! : 'Member',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    roleLabel,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                    ),
-                  ),
-                ],
               ),
             ),
-          ],
-        );
-      },
+          ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                (fullName?.isNotEmpty ?? false) ? fullName! : 'Member',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+                overflow: TextOverflow.ellipsis,
+              ),
+              Text(
+                roleLabel,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
 
-/// Renders a single affiliated chamber as a tile in a business's
-/// "Affiliated Chambers" card. Shows the chamber's dual-flag avatar and
-/// name, tappable to navigate into the chamber detail screen. Admins of
-/// the business get an inline unlink button.
 class _AffiliatedChamberTile extends ConsumerWidget {
   final String chamberId;
   final bool canUnlink;
@@ -1801,101 +1900,102 @@ class _AffiliatedChamberTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final chamberAsync = ref.watch(organizationByIdProvider(chamberId));
-    return chamberAsync.when(
-      loading: () => Container(
-        height: 56,
+    final org =
+        chamberAsync.value ??
+        ref.read(organizationRepositoryProvider).getCachedOrganization(chamberId);
+
+    if (org == null) {
+      if (chamberAsync.isLoading) {
+        return Container(
+          height: 56,
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest.withValues(
+              alpha: 0.3,
+            ),
+            borderRadius: BorderRadius.circular(10),
+          ),
+        );
+      }
+      return const SizedBox.shrink();
+    }
+
+    final host = org['hostCountryCode'] as String?;
+    final home = org['homeCountryCode'] as String?;
+    Widget avatar = CircleAvatar(
+      radius: 16,
+      backgroundColor: AppTheme.accent.withValues(alpha: 0.15),
+      child: const Icon(
+        LucideIcons.landmark,
+        size: 14,
+        color: AppTheme.accent,
+      ),
+    );
+    if (host != null && home != null) {
+      final hostFlag = country_data.getCountryByCode(host)?.flag;
+      final homeFlag = country_data.getCountryByCode(home)?.flag;
+      if (hostFlag != null && homeFlag != null) {
+        avatar = SizedBox(
+          width: 32,
+          height: 32,
+          child: Stack(
+            children: [
+              Positioned(
+                left: 0,
+                bottom: 0,
+                child: Text(hostFlag, style: const TextStyle(fontSize: 18)),
+              ),
+              Positioned(
+                right: 0,
+                top: 0,
+                child: Text(homeFlag, style: const TextStyle(fontSize: 14)),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => context.push('/organization/$chamberId', extra: org),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: theme.colorScheme.surfaceContainerHighest.withValues(
             alpha: 0.3,
           ),
           borderRadius: BorderRadius.circular(10),
         ),
+        child: Row(
+          children: [
+            avatar,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                org['name'] ?? org['businessName'] ?? 'Chamber',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (canUnlink)
+              IconButton(
+                icon: const Icon(LucideIcons.unlink, size: 16),
+                color: AppTheme.error,
+                tooltip: 'Unlink',
+                onPressed: onUnlink,
+              )
+            else
+              Icon(
+                LucideIcons.chevronRight,
+                size: 16,
+                color: theme.iconTheme.color?.withValues(alpha: 0.4),
+              ),
+          ],
+        ),
       ),
-      error: (_, _) => const SizedBox.shrink(),
-      data: (org) {
-        if (org == null) return const SizedBox.shrink();
-        final host = org['hostCountryCode'] as String?;
-        final home = org['homeCountryCode'] as String?;
-        Widget avatar = CircleAvatar(
-          radius: 16,
-          backgroundColor: AppTheme.accent.withValues(alpha: 0.15),
-          child: const Icon(
-            LucideIcons.landmark,
-            size: 14,
-            color: AppTheme.accent,
-          ),
-        );
-        if (host != null && home != null) {
-          final hostFlag = country_data.getCountryByCode(host)?.flag;
-          final homeFlag = country_data.getCountryByCode(home)?.flag;
-          if (hostFlag != null && homeFlag != null) {
-            avatar = SizedBox(
-              width: 32,
-              height: 32,
-              child: Stack(
-                children: [
-                  Positioned(
-                    left: 0,
-                    bottom: 0,
-                    child: Text(hostFlag, style: const TextStyle(fontSize: 18)),
-                  ),
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    child: Text(homeFlag, style: const TextStyle(fontSize: 14)),
-                  ),
-                ],
-              ),
-            );
-          }
-        }
-        return InkWell(
-          borderRadius: BorderRadius.circular(10),
-          onTap: () => context.push('/organization/$chamberId'),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest.withValues(
-                alpha: 0.3,
-              ),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              children: [
-                avatar,
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    org['name'] ?? org['businessName'] ?? 'Chamber',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (canUnlink)
-                  IconButton(
-                    icon: const Icon(LucideIcons.unlink, size: 16),
-                    color: AppTheme.error,
-                    tooltip: 'Unlink',
-                    onPressed: onUnlink,
-                  )
-                else
-                  Icon(
-                    LucideIcons.chevronRight,
-                    size: 16,
-                    color: theme.iconTheme.color?.withValues(alpha: 0.4),
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 }
 
-/// Renders a single linked business as a tile in the chamber's Member
-/// Businesses card. Loads the business org doc by id and shows its name +
-/// type, tappable to navigate into the org detail screen.
 class _LinkedBusinessTile extends ConsumerWidget {
   final String orgId;
   const _LinkedBusinessTile({required this.orgId});
@@ -1904,82 +2004,86 @@ class _LinkedBusinessTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final orgAsync = ref.watch(organizationByIdProvider(orgId));
-    return orgAsync.when(
-      loading: () => Container(
-        height: 56,
+    final org =
+        orgAsync.value ??
+        ref.read(organizationRepositoryProvider).getCachedOrganization(orgId);
+
+    if (org == null) {
+      if (orgAsync.isLoading) {
+        return Container(
+          height: 56,
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest.withValues(
+              alpha: 0.3,
+            ),
+            borderRadius: BorderRadius.circular(10),
+          ),
+        );
+      }
+      return const SizedBox.shrink();
+    }
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => context.push('/organization/$orgId', extra: org),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: theme.colorScheme.surfaceContainerHighest.withValues(
             alpha: 0.3,
           ),
           borderRadius: BorderRadius.circular(10),
         ),
-      ),
-      error: (_, _) => const SizedBox.shrink(),
-      data: (org) {
-        if (org == null) return const SizedBox.shrink();
-        return InkWell(
-          borderRadius: BorderRadius.circular(10),
-          onTap: () => context.push('/organization/$orgId'),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest.withValues(
-                alpha: 0.3,
+        child: Row(
+          children: [
+            if ((org['profileImage'] as String?)?.isNotEmpty ?? false)
+              CircleAvatar(
+                radius: 16,
+                backgroundImage: CachedNetworkImageProvider(
+                  org['profileImage'],
+                ),
+              )
+            else
+              CircleAvatar(
+                radius: 16,
+                backgroundColor: AppTheme.accent.withValues(alpha: 0.15),
+                child: const Icon(
+                  LucideIcons.briefcase,
+                  size: 14,
+                  color: AppTheme.accent,
+                ),
               ),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              children: [
-                if ((org['profileImage'] as String?)?.isNotEmpty ?? false)
-                  CircleAvatar(
-                    radius: 16,
-                    backgroundImage: CachedNetworkImageProvider(
-                      org['profileImage'],
-                    ),
-                  )
-                else
-                  CircleAvatar(
-                    radius: 16,
-                    backgroundColor: AppTheme.accent.withValues(alpha: 0.15),
-                    child: const Icon(
-                      LucideIcons.briefcase,
-                      size: 14,
-                      color: AppTheme.accent,
-                    ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    org['businessName'] ?? org['name'] ?? 'Business',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                    overflow: TextOverflow.ellipsis,
                   ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        org['businessName'] ?? org['name'] ?? 'Business',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if ((org['type'] as String?)?.isNotEmpty ?? false)
-                        Text(
-                          org['type'],
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: theme.colorScheme.onSurface.withValues(
-                              alpha: 0.6,
-                            ),
-                          ),
+                  if ((org['type'] as String?)?.isNotEmpty ?? false)
+                    Text(
+                      org['type'],
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.6,
                         ),
-                    ],
-                  ),
-                ),
-                Icon(
-                  LucideIcons.chevronRight,
-                  size: 16,
-                  color: theme.iconTheme.color?.withValues(alpha: 0.4),
-                ),
-              ],
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ),
-        );
-      },
+            Icon(
+              LucideIcons.chevronRight,
+              size: 16,
+              color: theme.iconTheme.color?.withValues(alpha: 0.4),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

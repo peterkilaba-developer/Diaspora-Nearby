@@ -354,10 +354,25 @@ async function performTGE(triggerSource) {
   // to it. If you find treasuryBalance > 0 there in the future, something
   // regressed — run functions/scripts/migrate-investors-to-liquidity.js again.
   const systemSlotSpecs = [
-    { id: "founders",  envWallet: foundersTreasuryAddress,  label: "Founders & Core Team" },
-    { id: "liquidity", envWallet: liquidityTreasuryAddress, label: "Liquidity Treasury" },
-    { id: "burn",      envWallet: null,                     label: "Deflationary Burn" },
+    { id: "founders",  sysField: "foundersPoints",  envWallet: foundersTreasuryAddress,  label: "Founders & Core Team" },
+    { id: "liquidity", sysField: "liquidityPoints", envWallet: liquidityTreasuryAddress, label: "Liquidity Treasury" },
+    { id: "burn",      sysField: "burnedPoints",    envWallet: null,                     label: "Deflationary Burn" },
   ];
+
+  const [treasuryStatsDoc, supplyStatsDoc] = await Promise.all([
+    db.collection("system_stats").doc("treasury").get(),
+    db.collection("system_stats").doc("dsp_supply").get(),
+  ]);
+  const treasuryStats = treasuryStatsDoc.exists ? (treasuryStatsDoc.data() || {}) : {};
+  const currentTotalSupply = supplyStatsDoc.exists ? Number(supplyStatsDoc.data()?.totalMinted || 0) : 0;
+  const exactFivePercentCap = currentTotalSupply > 0 ? Math.round(currentTotalSupply * 0.05) : 0;
+
+  const provider = new ethers.JsonRpcProvider(process.env.RPC_URL || "https://mainnet.base.org");
+  const tokenContract = new ethers.Contract(
+    tokenAddress,
+    ["function balanceOf(address account) external view returns (uint256)"],
+    provider
+  );
 
   let systemSlotsIncluded = 0;
   for (const slot of systemSlotSpecs) {
@@ -367,18 +382,36 @@ async function performTGE(triggerSource) {
       continue;
     }
     const data = govDoc.data();
-    const bal = data.treasuryBalance || 0;
-    if (bal <= 0) {
-      continue; // legitimate: nothing accrued for this slot since last TGE
-    }
     const wallet = slot.envWallet || data.walletAddress;
     if (!wallet || wallet.length < 10) {
-      console.warn(
-        `[TGE Oracle] system slot governance/${slot.id} has treasuryBalance=${bal} ` +
-        `but no resolvable wallet (env override unset, govDoc.walletAddress missing). ` +
-        `Skipping — fix Firestore or set env override to include this slot in future TGEs.`
-      );
+      const rawBal = data.treasuryBalance || 0;
+      if (rawBal > 0) {
+        console.warn(
+          `[TGE Oracle] system slot governance/${slot.id} has treasuryBalance=${rawBal} ` +
+          `but no resolvable wallet (env override unset, govDoc.walletAddress missing). ` +
+          `Skipping — fix Firestore or set env override to include this slot in future TGEs.`
+        );
+      }
       continue;
+    }
+
+    // Reconcile against on-chain $DIASPORA so Founders/Liquidity never exceed exact 5% of total supply
+    let bal = Math.floor(Number(data.treasuryBalance || 0));
+    const cumulativeTarget = exactFivePercentCap > 0
+      ? exactFivePercentCap
+      : Math.floor(Number(treasuryStats[slot.sysField] || 0));
+    if (cumulativeTarget > 0 && slot.id !== "burn") {
+      try {
+        const onChainWei = await tokenContract.balanceOf(wallet);
+        const onChainTokens = Math.floor(Number(ethers.formatUnits(onChainWei, 18)));
+        bal = Math.max(0, cumulativeTarget - onChainTokens);
+      } catch (balErr) {
+        console.warn(`[TGE Oracle] Could not read on-chain balance for ${slot.id}, using treasuryBalance: ${balErr.message}`);
+      }
+    }
+
+    if (bal <= 0) {
+      continue; // legitimate: nothing accrued or already at/above 5% on-chain
     }
 
     recipients.push(wallet);
@@ -408,7 +441,6 @@ async function performTGE(triggerSource) {
   );
 
   // ── Step 3: Call on-chain executeTGE ───────────────────────────────
-  const provider = new ethers.JsonRpcProvider(process.env.RPC_URL || "https://mainnet.base.org");
   const signer = new ethers.Wallet(backendSignerKey, provider);
   const tgeController = new ethers.Contract(tgeControllerAddress, TGE_CONTROLLER_ABI, signer);
 
@@ -602,41 +634,6 @@ async function performTGE(triggerSource) {
         ref: govRef,
         patch: govPatch,
       });
-
-      if (snap.deductedDsp > 0) {
-        if (snap.systemSlot) {
-          const sysField = snap.unitId === "founders"
-            ? "foundersPoints"
-            : (snap.unitId === "liquidity" ? "liquidityPoints" : (snap.unitId === "burn" ? "burnedPoints" : null));
-          if (sysField) {
-            operations.push({
-              ref: db.collection("system_stats").doc("treasury"),
-              patch: {
-                [sysField]: admin.firestore.FieldValue.increment(-snap.deductedDsp),
-                lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-              },
-            });
-          }
-        } else {
-          const commId = snap.communityId || (snap.unitId === "global_community" ? "global_community" : null);
-          if (commId) {
-            operations.push({
-              ref: db.collection("communities").doc(commId),
-              patch: {
-                points: admin.firestore.FieldValue.increment(-snap.deductedDsp),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-              },
-            });
-            operations.push({
-              ref: db.collection("communities").doc(commId).collection("treasury").doc("current"),
-              patch: {
-                points: admin.firestore.FieldValue.increment(-snap.deductedDsp),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-              },
-            });
-          }
-        }
-      }
     }
   }
 
@@ -991,12 +988,12 @@ exports.awardPoints = functions
 
     // Treasury distribution (unless explicitly skipped)
     if (!skipTreasury) {
-      // 2x expansion: user gets `points`, system mints `2 * points` total
+      // 2x expansion: user gets `points` (50%), 1:1 Ubuntu matching pool gets `points` (50%)
       const totalMinted = points * 2;
-      // 10% of TOTAL (not 10% of user points) → base-10 SAFT alignment
-      const unit = Math.floor(totalMinted * 0.10); // 10% of total per treasury
+      // 10% of the 1:1 Ubuntu matching pool per slot (10 slots = 100% match) = exact 5% of totalMinted
+      const unit = Math.floor(points * 0.10);
 
-      // System treasuries (Founders 10% + Liquidity 10% + Burn 10%)
+      // System treasuries (Founders 5% + Liquidity 5% + Burn 5% of total supply)
       batch.set(db.collection("system_stats").doc("treasury"), {
         foundersPoints: admin.firestore.FieldValue.increment(unit),
         liquidityPoints: admin.firestore.FieldValue.increment(unit),
@@ -1257,9 +1254,9 @@ exports.deductPoints = functions.https.onCall(async (data, context) => {
  *   - 10% Deflationary Burn
  *   - 70% split across the user's dual geographic community slots (and global community)
  */
-async function distributeUbuntuMatchingSupply(batch, userId, userPointsAmount, now, reason = "ubuntu_match") {
+async function distributeUbuntuMatchingSupply(batch, userId, userPointsAmount, now, reason = "ubuntu_match", preloadedUserData = null) {
   const totalMinted = userPointsAmount * 2; // 1:1 match
-  const unit = Math.round(totalMinted * 0.10); // 10% of total (20% of userPointsAmount)
+  const unit = Math.round(userPointsAmount * 0.10); // 10% of 1:1 Ubuntu matching pool = exact 5% of totalMinted
   const points = userPointsAmount;
 
   // 1. Supply increment
@@ -1294,11 +1291,26 @@ async function distributeUbuntuMatchingSupply(batch, userId, userPointsAmount, n
     updatedAt: now,
   }, { merge: true });
 
+  batch.set(db.collection("governance").doc("burn"), {
+    id: "burn",
+    name: "Natural Burn Pool",
+    type: "system",
+    walletAddress: "0x000000000000000000000000000000000000dEaD",
+    walletType: "burn",
+    treasuryBalance: admin.firestore.FieldValue.increment(unit),
+    title: "Natural Burn Pool",
+    updatedAt: now,
+  }, { merge: true });
+
   // 4. Dual geographic community slots
   try {
-    const userDoc = await db.collection("users").doc(userId).get();
-    if (userDoc.exists) {
-      const memberships = userDoc.data().communityMemberships || [];
+    let userData = preloadedUserData;
+    if (!userData) {
+      const userDoc = await db.collection("users").doc(userId).get();
+      userData = userDoc.exists ? userDoc.data() : null;
+    }
+    if (userData) {
+      const memberships = userData.communityMemberships || [];
       const findMembership = (prefix) => memberships.find((id) => id.startsWith(prefix)) || "";
 
       const homeContinent = findMembership("home_continent_");
@@ -1396,17 +1408,21 @@ exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
 
   try {
     const userPointsRef = db.collection("user_points").doc(userId);
-    const doc = await userPointsRef.get();
+    const [doc, userDoc] = await Promise.all([
+      userPointsRef.get(),
+      db.collection("users").doc(userId).get(),
+    ]);
     const docData = doc.exists ? doc.data() : null;
 
     // Already fully initialized with welcome bonus
     if (doc.exists && docData && docData.signupDate && docData.userId && docData.lifetimeEarnings?.welcome_bonus) {
-      return { success: true, alreadyInitialized: true };
+      const existingCode = await ensureUserReferralCode(userId, userDoc.exists ? userDoc.data() : null);
+      return { success: true, alreadyInitialized: true, referralCode: existingCode };
     }
 
     // Fetch home country code from users collection
-    const userDoc = await db.collection("users").doc(userId).get();
-    const countryCode = userDoc.exists ? (userDoc.data().homeCountryCode || null) : null;
+    const userData = userDoc.exists ? userDoc.data() : null;
+    const countryCode = userData ? (userData.homeCountryCode || null) : null;
 
     const batch = db.batch();
     const now = admin.firestore.FieldValue.serverTimestamp();
@@ -1485,12 +1501,15 @@ exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
         metadata: { description: "Welcome to Diaspora!" },
       });
 
-      await distributeUbuntuMatchingSupply(batch, userId, WELCOME_BONUS, now, "welcome_bonus_match");
+      await distributeUbuntuMatchingSupply(batch, userId, WELCOME_BONUS, now, "welcome_bonus_match", userData);
     }
 
-    await batch.commit();
+    const [, referralCode] = await Promise.all([
+      batch.commit(),
+      ensureUserReferralCode(userId, userData),
+    ]);
 
-    return { success: true, welcomeBonusAwarded: shouldAwardBonus };
+    return { success: true, welcomeBonusAwarded: shouldAwardBonus, referralCode };
   } catch (error) {
     console.error(`[initializeUserPoints] Error:`, error.message);
     throw new functions.https.HttpsError("internal", `Failed to initialize: ${error.message}`);
@@ -1498,8 +1517,100 @@ exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
 });
 
 /**
- * getOrCreateReferralCode — Returns the authenticated user's referral code,
- * generating and storing a unique one in `referral_codes/{code}` if none exists.
+ * Ensures the user has a single invitation code created at signup.
+ * Never creates a second code if one already exists on `users/{userId}` or `referral_codes`.
+ */
+async function ensureUserReferralCode(userId, preloadedUserData = null, firstNameOverride = null, countryCodeOverride = null) {
+  const [existingSnap, userDoc] = await Promise.all([
+    db.collection("referral_codes").where("userId", "==", userId).limit(1).get(),
+    preloadedUserData ? Promise.resolve(null) : db.collection("users").doc(userId).get(),
+  ]);
+
+  const userData = preloadedUserData || (userDoc && userDoc.exists ? userDoc.data() : {});
+
+  if (!existingSnap.empty) {
+    const existingData = existingSnap.docs[0].data();
+    const existingCode = existingData.code || existingSnap.docs[0].id;
+    if (userData.referralCode !== existingCode) {
+      await db.collection("users").doc(userId).set({ referralCode: existingCode }, { merge: true });
+    }
+    return existingCode;
+  }
+
+  if (userData.referralCode && typeof userData.referralCode === "string" && userData.referralCode.trim()) {
+    const existingUserCode = userData.referralCode.trim().toUpperCase();
+    const codeRef = db.collection("referral_codes").doc(existingUserCode);
+    const codeDoc = await codeRef.get();
+    if (!codeDoc.exists) {
+      await codeRef.set({
+        code: existingUserCode,
+        userId,
+        firstName: userData.firstName || firstNameOverride || "",
+        countryCode: (userData.homeCountryCode || userData.hostCountryCode || countryCodeOverride || "GL").slice(0, 2).toUpperCase(),
+        usedCount: 0,
+        createdAt: new Date().toISOString(),
+      });
+    }
+    return existingUserCode;
+  }
+
+  const rawFirstName = String(firstNameOverride || userData.firstName || "MEMBER")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+  const prefixName = (rawFirstName || "MEMBER").slice(0, 12);
+
+  const rawCountry = String(countryCodeOverride || userData.homeCountryCode || userData.hostCountryCode || "GL")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z]/g, "");
+  const countryCode = (rawCountry || "GL").slice(0, 2);
+
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let code = "";
+  let isUnique = false;
+  const deterministicSuffix = ethers.id(String(userId)).slice(2, 6).toUpperCase();
+
+  for (let attempt = 0; attempt < 10; attempt++) {
+    let rand = "";
+    if (attempt === 0) {
+      rand = deterministicSuffix;
+    } else {
+      for (let i = 0; i < 4; i++) {
+        rand += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+    }
+    code = `${prefixName}-${countryCode}-${rand}`;
+    const codeDoc = await db.collection("referral_codes").doc(code).get();
+    if (!codeDoc.exists || codeDoc.data()?.userId === userId) {
+      isUnique = true;
+      break;
+    }
+  }
+
+  if (!isUnique) {
+    throw new functions.https.HttpsError("internal", "Could not generate a unique referral code.");
+  }
+
+  await Promise.all([
+    db.collection("referral_codes").doc(code).set({
+      code,
+      userId,
+      firstName: userData.firstName || firstNameOverride || "",
+      countryCode,
+      usedCount: 0,
+      createdAt: new Date().toISOString(),
+    }, { merge: true }),
+    db.collection("users").doc(userId).set({ referralCode: code }, { merge: true }),
+  ]);
+
+  return code;
+}
+exports.ensureUserReferralCode = ensureUserReferralCode;
+
+/**
+ * getOrCreateReferralCode — Returns the authenticated user's single signup referral code,
+ * creating it only if none exists yet.
  */
 exports.getOrCreateReferralCode = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
@@ -1509,65 +1620,7 @@ exports.getOrCreateReferralCode = functions.https.onCall(async (data, context) =
   const userId = context.auth.uid;
 
   try {
-    const existingSnap = await db
-      .collection("referral_codes")
-      .where("userId", "==", userId)
-      .limit(1)
-      .get();
-
-    if (!existingSnap.empty) {
-      const existingData = existingSnap.docs[0].data();
-      const existingCode = existingData.code || existingSnap.docs[0].id;
-      await db.collection("users").doc(userId).set({ referralCode: existingCode }, { merge: true });
-      return { success: true, code: existingCode };
-    }
-
-    const userDoc = await db.collection("users").doc(userId).get();
-    const userData = userDoc.exists ? userDoc.data() : {};
-
-    const rawFirstName = String(data?.firstName || userData.firstName || "MEMBER")
-      .trim()
-      .toUpperCase()
-      .replace(/[^A-Z0-9]/g, "");
-    const prefixName = (rawFirstName || "MEMBER").slice(0, 12);
-
-    const rawCountry = String(data?.countryCode || userData.homeCountryCode || userData.hostCountryCode || "GL")
-      .trim()
-      .toUpperCase()
-      .replace(/[^A-Z]/g, "");
-    const countryCode = (rawCountry || "GL").slice(0, 2);
-
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let code = "";
-    let isUnique = false;
-
-    for (let attempt = 0; attempt < 10; attempt++) {
-      let rand = "";
-      for (let i = 0; i < 4; i++) {
-        rand += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      code = `${prefixName}-${countryCode}-${rand}`;
-      const codeDoc = await db.collection("referral_codes").doc(code).get();
-      if (!codeDoc.exists) {
-        isUnique = true;
-        break;
-      }
-    }
-
-    if (!isUnique) {
-      throw new functions.https.HttpsError("internal", "Could not generate a unique referral code.");
-    }
-
-    await db.collection("referral_codes").doc(code).set({
-      code,
-      userId,
-      firstName: userData.firstName || data?.firstName || "",
-      countryCode,
-      usedCount: 0,
-      createdAt: new Date().toISOString(),
-    });
-    await db.collection("users").doc(userId).set({ referralCode: code }, { merge: true });
-
+    const code = await ensureUserReferralCode(userId, null, data?.firstName, data?.countryCode);
     return { success: true, code };
   } catch (error) {
     if (error instanceof functions.https.HttpsError) throw error;
@@ -1594,19 +1647,23 @@ exports.redeemReferralCode = functions.https.onCall(async (data, context) => {
   const REFERRAL_BONUS = 1000;
 
   try {
-    // 1. Resolve referrer from referral_codes/{code} or direct userId fallback
-    let codeDoc = await db.collection("referral_codes").doc(rawCode).get();
+    // 1. Resolve referrer from referral_codes/{code} or direct userId fallback, and read referee profile in parallel
+    const refereeDocRef = db.collection("users").doc(refereeId);
+    const [codeDoc, userByUid, refereeDoc] = await Promise.all([
+      db.collection("referral_codes").doc(rawCode).get(),
+      db.collection("users").doc(rawCode).get(),
+      refereeDocRef.get(),
+    ]);
     let referrerId = null;
     let resolvedCode = rawCode;
 
     if (codeDoc.exists) {
       referrerId = codeDoc.data().userId;
-    } else {
-      // Fallback: check if rawCode is a direct UID (e.g., from older share links)
-      const userByUid = await db.collection("users").doc(rawCode).get();
-      if (userByUid.exists) {
-        referrerId = userByUid.id;
-      }
+    } else if (userByUid.exists) {
+      referrerId = userByUid.id;
+    } else if (rawCode === "C5A05929" || /^(TZ|EX)[A-F0-9]{6}$/.test(rawCode)) {
+      // Outreach campaign code -> attribute to Founder Peter Swai (PETER-TZ-CC57)
+      referrerId = "yJ2REewPGWZQyS3zhisK1KziJJD3";
     }
 
     if (!referrerId) {
@@ -1618,8 +1675,6 @@ exports.redeemReferralCode = functions.https.onCall(async (data, context) => {
     }
 
     // 2. Prevent duplicate redemption by the same user
-    const refereeDocRef = db.collection("users").doc(refereeId);
-    const refereeDoc = await refereeDocRef.get();
     if (refereeDoc.exists && refereeDoc.data().referredBy) {
       return {
         success: true,
@@ -1720,8 +1775,10 @@ exports.awardMessagePoints = functions.https.onCall(async (data, context) => {
       const userDocRef = db.collection("users").doc(userId);
 
       // ── All reads FIRST (Firestore requirement) ──
-      const snapshot = await transaction.get(userPointsRef);
-      const msgUserDoc = await transaction.get(userDocRef);
+      const [snapshot, msgUserDoc] = await Promise.all([
+        transaction.get(userPointsRef),
+        transaction.get(userDocRef),
+      ]);
 
       if (!snapshot.exists) return;
 
@@ -1760,8 +1817,8 @@ exports.awardMessagePoints = functions.https.onCall(async (data, context) => {
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      // Treasury distribution: 10% of TOTAL each to founders, liquidity, burn
-      const unit = Math.floor(pointsToAward * 0.20); // 10% of total (points × 2 × 0.10)
+      // Treasury distribution: 10% of 1:1 Ubuntu matching pool (5% of total supply) each to founders, liquidity, burn
+      const unit = Math.floor(pointsToAward * 0.10); // 5% of total (pointsToAward × 0.10)
       if (unit > 0) {
         transaction.set(db.collection("system_stats").doc("treasury"), {
           foundersPoints: admin.firestore.FieldValue.increment(unit),
@@ -1780,6 +1837,14 @@ exports.awardMessagePoints = functions.https.onCall(async (data, context) => {
 
         transaction.set(db.collection("governance").doc("liquidity"), {
           id: "liquidity", name: "Liquidity Treasury", title: "Liquidity Treasury", type: "system",
+          treasuryBalance: admin.firestore.FieldValue.increment(unit),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        transaction.set(db.collection("governance").doc("burn"), {
+          id: "burn", name: "Natural Burn Pool", title: "Natural Burn Pool", type: "system",
+          walletAddress: "0x000000000000000000000000000000000000dEaD",
+          walletType: "burn",
           treasuryBalance: admin.firestore.FieldValue.increment(unit),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
@@ -1881,8 +1946,10 @@ exports.awardExplorationPoints = functions.https.onCall(async (data, context) =>
       const userDocRef = db.collection("users").doc(userId);
 
       // ── All reads FIRST (Firestore requirement) ──
-      const snapshot = await transaction.get(userPointsRef);
-      const expUserDoc = await transaction.get(userDocRef);
+      const [snapshot, expUserDoc] = await Promise.all([
+        transaction.get(userPointsRef),
+        transaction.get(userDocRef),
+      ]);
 
       if (snapshot.exists) {
         const docData = snapshot.data();
@@ -1914,8 +1981,8 @@ exports.awardExplorationPoints = functions.https.onCall(async (data, context) =>
         metadata: metadata || {},
       });
 
-      // Treasury: 10% of TOTAL each to founders, liquidity, burn
-      const unit = Math.floor(points * 0.20); // 10% of total (points × 2 × 0.10)
+      // Treasury: 10% of 1:1 Ubuntu matching pool (5% of total supply) each to founders, liquidity, burn
+      const unit = Math.floor(points * 0.10); // 5% of total (points × 0.10)
       if (unit > 0) {
         transaction.set(db.collection("system_stats").doc("treasury"), {
           foundersPoints: admin.firestore.FieldValue.increment(unit),
@@ -1934,6 +2001,14 @@ exports.awardExplorationPoints = functions.https.onCall(async (data, context) =>
 
         transaction.set(db.collection("governance").doc("liquidity"), {
           id: "liquidity", name: "Liquidity Treasury", title: "Liquidity Treasury", type: "system",
+          treasuryBalance: admin.firestore.FieldValue.increment(unit),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        transaction.set(db.collection("governance").doc("burn"), {
+          id: "burn", name: "Natural Burn Pool", title: "Natural Burn Pool", type: "system",
+          walletAddress: "0x000000000000000000000000000000000000dEaD",
+          walletType: "burn",
           treasuryBalance: admin.firestore.FieldValue.increment(unit),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
@@ -2035,8 +2110,10 @@ exports.awardSharePoints = functions.https.onCall(async (data, context) => {
       const userDocRef = db.collection("users").doc(userId);
 
       // ── All reads FIRST (Firestore requirement) ──
-      const snapshot = await transaction.get(userPointsRef);
-      const shareUserDoc = await transaction.get(userDocRef);
+      const [snapshot, shareUserDoc] = await Promise.all([
+        transaction.get(userPointsRef),
+        transaction.get(userDocRef),
+      ]);
 
       if (!snapshot.exists) return;
 
@@ -2074,8 +2151,8 @@ exports.awardSharePoints = functions.https.onCall(async (data, context) => {
         metadata: { contentType: contentType || "unknown" },
       });
 
-      // Treasury: 10% of TOTAL each
-      const unit = Math.floor(points * 0.20); // 10% of total (points × 2 × 0.10)
+      // Treasury: 10% of 1:1 Ubuntu matching pool (5% of total supply) each
+      const unit = Math.floor(points * 0.10); // 5% of total (points × 0.10)
       if (unit > 0) {
         transaction.set(db.collection("system_stats").doc("treasury"), {
           foundersPoints: admin.firestore.FieldValue.increment(unit),
@@ -2094,6 +2171,14 @@ exports.awardSharePoints = functions.https.onCall(async (data, context) => {
 
         transaction.set(db.collection("governance").doc("liquidity"), {
           id: "liquidity", name: "Liquidity Treasury", title: "Liquidity Treasury", type: "system",
+          treasuryBalance: admin.firestore.FieldValue.increment(unit),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        transaction.set(db.collection("governance").doc("burn"), {
+          id: "burn", name: "Natural Burn Pool", title: "Natural Burn Pool", type: "system",
+          walletAddress: "0x000000000000000000000000000000000000dEaD",
+          walletType: "burn",
           treasuryBalance: admin.firestore.FieldValue.increment(unit),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
@@ -2197,18 +2282,19 @@ exports.recordFiatGdp = functions.https.onCall(async (data, context) => {
   }
 
   try {
-    // Global treasury counter (platform-wide, regardless of corridor).
-    await db.collection("system_stats").doc("treasury").set({
-      totalFiatGdpUsd: admin.firestore.FieldValue.increment(amountUsd),
-      lastFiatGdpUpdate: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
+    // Global treasury counter and caller profile lookup in parallel.
+    const [, callerDoc] = await Promise.all([
+      db.collection("system_stats").doc("treasury").set({
+        totalFiatGdpUsd: admin.firestore.FieldValue.increment(amountUsd),
+        lastFiatGdpUpdate: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true }),
+      db.collection("users").doc(context.auth.uid).get(),
+    ]);
 
     // Unified corridor roll-up. Derives the corridor from the caller's
     // profile and bumps their chamber's GDP counters. Audit row is
     // written inside the helper (no double-log).
-    const callerProfile = (
-      await db.collection("users").doc(context.auth.uid).get()
-    ).data() || {};
+    const callerProfile = callerDoc.data() || {};
     const { recordCorridorActivity } = require("./corridor_activity");
     await recordCorridorActivity({
       homeCountryCode: callerProfile.homeCountryCode,
@@ -2242,9 +2328,11 @@ exports.syncTreasuryBalances = functions
     console.log(`[syncTreasuryBalances] Triggered by ${callerId}`);
 
     try {
-      const userPointsSnap = await db.collection("user_points").get();
-      const usersSnap = await db.collection("users").get();
-      const govSnap = await db.collection("governance").get();
+      const [userPointsSnap, usersSnap, govSnap] = await Promise.all([
+        db.collection("user_points").get(),
+        db.collection("users").get(),
+        db.collection("governance").get(),
+      ]);
 
       const userProfiles = {};
       usersSnap.forEach((doc) => {
@@ -2341,25 +2429,33 @@ exports.syncTreasuryBalances = functions
           ["function balanceOf(address account) external view returns (uint256)"],
           provider
         );
-        for (const gDoc of govSnap.docs) {
-          const gData = gDoc.data();
-          const w = gData.walletAddress;
-          if (w && w.startsWith("0x") && w.length === 42 && gDoc.id !== "burn") {
+        const eligibleGovDocs = govSnap.docs.filter((gDoc) => {
+          const w = gDoc.data().walletAddress;
+          return w && w.startsWith("0x") && w.length === 42 && gDoc.id !== "burn";
+        });
+        await Promise.all(
+          eligibleGovDocs.map(async (gDoc) => {
+            const w = gDoc.data().walletAddress;
             const balWei = await tokenContract.balanceOf(w);
             onChainBalances[gDoc.id] = Math.floor(Number(ethers.formatUnits(balWei, 18)));
-          }
-        }
+          })
+        );
       } catch (rpcErr) {
         console.warn("[syncTreasuryBalances] On-chain balance lookup warning:", rpcErr.message);
       }
+
+      const exactSupply = Math.round(totalUserPoints * 2.0);
+      const exactFivePct = Math.round(exactSupply * 0.05);
+      totalSystemSlotAwarded = exactFivePct;
+      communityAwardedMap["global_community"] = exactFivePct;
 
       const foundersConverted = onChainBalances["founders"] || 0;
       const liquidityConverted = onChainBalances["liquidity"] || 0;
       const burnConverted = Math.max(foundersConverted, liquidityConverted);
 
-      const totalFoundersPoints = Math.max(0, totalSystemSlotAwarded - foundersConverted);
-      const totalLiquidityPoints = Math.max(0, totalSystemSlotAwarded - liquidityConverted);
-      const totalBurnedPoints = Math.max(0, totalSystemSlotAwarded - burnConverted);
+      const reconciledFoundersDsp = Math.max(0, totalSystemSlotAwarded - foundersConverted);
+      const reconciledLiquidityDsp = Math.max(0, totalSystemSlotAwarded - liquidityConverted);
+      const reconciledBurnDsp = Math.max(0, totalSystemSlotAwarded - burnConverted);
 
       for (const commId of Object.keys(communityAwardedMap)) {
         const govId = commId === "global_community"
@@ -2381,25 +2477,25 @@ exports.syncTreasuryBalances = functions
         }
       };
 
-      // System treasury
+      // System treasury (cumulative epoch 5% balances for UI & valuation)
       batch.set(db.collection("system_stats").doc("treasury"), {
-        foundersPoints: totalFoundersPoints,
-        liquidityPoints: totalLiquidityPoints,
-        burnedPoints: totalBurnedPoints,
+        foundersPoints: totalSystemSlotAwarded,
+        liquidityPoints: totalSystemSlotAwarded,
+        burnedPoints: totalSystemSlotAwarded,
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
         syncedBy: callerId,
       }, { merge: true });
       opCount++;
 
-      // Governance docs
+      // Governance docs (active unconverted DSP for next TDE)
       batch.set(db.collection("governance").doc("founders"), {
-        treasuryBalance: totalFoundersPoints,
+        treasuryBalance: reconciledFoundersDsp,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
       opCount++;
 
       batch.set(db.collection("governance").doc("liquidity"), {
-        treasuryBalance: totalLiquidityPoints,
+        treasuryBalance: reconciledLiquidityDsp,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
       opCount++;
@@ -2410,7 +2506,7 @@ exports.syncTreasuryBalances = functions
         type: "system",
         walletAddress: "0x000000000000000000000000000000000000dEaD",
         walletType: "burn",
-        treasuryBalance: totalBurnedPoints,
+        treasuryBalance: reconciledBurnDsp,
         title: "Natural Burn Pool",
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
@@ -2420,15 +2516,15 @@ exports.syncTreasuryBalances = functions
       for (const commId of Object.keys(communityPointsMap)) {
         await commitIfNeeded();
 
-        const pcts = communityPCTs[commId] || [];
         const avgPct = 100;
+        const cumulativeCommAwarded = communityAwardedMap[commId] || 0;
 
         const treasuryRef = db.collection("communities").doc(commId).collection("treasury").doc("current");
         batch.set(treasuryRef, {
-          points: communityPointsMap[commId],
+          points: cumulativeCommAwarded,
           cumulativeEarnings: communityBasisMap[commId],
           memberPoints: communityMemberPointsMap[commId],
-          awardedBalance: communityAwardedMap[commId] || 0,
+          awardedBalance: cumulativeCommAwarded,
           averagePct: avgPct,
           averagePoCT: avgPct,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -2437,7 +2533,7 @@ exports.syncTreasuryBalances = functions
 
         await commitIfNeeded();
 
-        // Governance doc
+        // Governance doc (unconverted DSP for next TDE)
         const govId = commId === "global_community"
           ? "global_community"
           : (commId.includes("_") ? commId.substring(commId.indexOf("_") + 1) : commId);
@@ -2451,12 +2547,12 @@ exports.syncTreasuryBalances = functions
 
         await commitIfNeeded();
 
-        // Mirror to top-level community doc
+        // Mirror cumulative epoch DSP to top-level community doc
         batch.set(db.collection("communities").doc(commId), {
-          points: communityPointsMap[commId],
+          points: cumulativeCommAwarded,
           cumulativeEarnings: communityBasisMap[commId],
           memberPoints: communityMemberPointsMap[commId],
-          awardedBalance: communityAwardedMap[commId] || 0,
+          awardedBalance: cumulativeCommAwarded,
           averagePct: avgPct,
           averagePoCT: avgPct,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -2468,7 +2564,7 @@ exports.syncTreasuryBalances = functions
 
       // Global supply
       batch.set(db.collection("system_stats").doc("dsp_supply"), {
-        totalMinted: Math.round(totalUserPoints * 2.0),
+        totalMinted: exactSupply,
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
       opCount++;
@@ -2478,9 +2574,9 @@ exports.syncTreasuryBalances = functions
       return {
         success: true,
         totalUserPoints,
-        totalFoundersPoints,
-        totalLiquidityPoints,
-        totalBurnedPoints,
+        totalFoundersPoints: totalSystemSlotAwarded,
+        totalLiquidityPoints: totalSystemSlotAwarded,
+        totalBurnedPoints: totalSystemSlotAwarded,
         communitiesProcessed: Object.keys(communityPointsMap).length,
       };
     } catch (error) {
@@ -2763,38 +2859,6 @@ exports.retryPendingTGEDeductions = functions
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
               },
             });
-            if (s.systemSlot) {
-              const sysField = s.unitId === "founders"
-                ? "foundersPoints"
-                : (s.unitId === "liquidity" ? "liquidityPoints" : (s.unitId === "burn" ? "burnedPoints" : null));
-              if (sysField) {
-                operations.push({
-                  ref: db.collection("system_stats").doc("treasury"),
-                  data: {
-                    [sysField]: admin.firestore.FieldValue.increment(-deducted),
-                    lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-                  },
-                });
-              }
-            } else {
-              const commId = s.communityId || (s.unitId === "global_community" ? "global_community" : null);
-              if (commId) {
-                operations.push({
-                  ref: db.collection("communities").doc(commId),
-                  data: {
-                    points: admin.firestore.FieldValue.increment(-deducted),
-                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                  },
-                });
-                operations.push({
-                  ref: db.collection("communities").doc(commId).collection("treasury").doc("current"),
-                  data: {
-                    points: admin.firestore.FieldValue.increment(-deducted),
-                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                  },
-                });
-              }
-            }
           }
         }
 
@@ -2847,19 +2911,20 @@ exports.onVouchWrite = functions.firestore
 
     if (!afterData) {
       if (beforeData && beforeData.remainingStake > 0) {
-        await db.collection("user_points").doc(beforeData.fromUserId).set({
-          availablePoints: admin.firestore.FieldValue.increment(beforeData.remainingStake),
-          lastUpdated: admin.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
-
-        await db.collection("points_transactions").doc().set({
-          userId: beforeData.fromUserId,
-          points: beforeData.remainingStake,
-          amount: beforeData.remainingStake,
-          action: "trust_stake_refund",
-          type: "earn",
-          timestamp: admin.firestore.FieldValue.serverTimestamp()
-        });
+        await Promise.all([
+          db.collection("user_points").doc(beforeData.fromUserId).set({
+            availablePoints: admin.firestore.FieldValue.increment(beforeData.remainingStake),
+            lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+          }, { merge: true }),
+          db.collection("points_transactions").doc().set({
+            userId: beforeData.fromUserId,
+            points: beforeData.remainingStake,
+            amount: beforeData.remainingStake,
+            action: "trust_stake_refund",
+            type: "earn",
+            timestamp: admin.firestore.FieldValue.serverTimestamp()
+          }),
+        ]);
       }
       if (beforeData && beforeData.toUserId) {
         try {
@@ -2918,8 +2983,6 @@ exports.onVouchWrite = functions.firestore
           metadata: { toUserId, score }
        });
 
-       await distributeUbuntuMatchingSupply(batch, fromUserId, 1000, now, "trust_vouch_reward_match");
-
        // Reward vouchee
        batch.set(db.collection("user_points").doc(toUserId), {
            availablePoints: admin.firestore.FieldValue.increment(1000),
@@ -2941,7 +3004,10 @@ exports.onVouchWrite = functions.firestore
           metadata: { fromUserId, score }
        });
 
-       await distributeUbuntuMatchingSupply(batch, toUserId, 1000, now, "vouched_by_peer_match");
+       await Promise.all([
+         distributeUbuntuMatchingSupply(batch, fromUserId, 1000, now, "trust_vouch_reward_match"),
+         distributeUbuntuMatchingSupply(batch, toUserId, 1000, now, "vouched_by_peer_match"),
+       ]);
     }
 
     // 2. Staking logic
@@ -3330,7 +3396,10 @@ exports.generateTdeClaimProof = functions.https.onCall(async (data, context) => 
   const epoch = Number(data?.epoch) || 1;
   const tdeEvent = Number(data?.tdeEvent) || 0;
 
-  const tdeDoc = await db.collection("tde_snapshots").doc(`epoch_${epoch}_tde_${tdeEvent}`).get();
+  const [tdeDoc, userDoc] = await Promise.all([
+    db.collection("tde_snapshots").doc(`epoch_${epoch}_tde_${tdeEvent}`).get(),
+    db.collection("users").doc(userId).get(),
+  ]);
   if (!tdeDoc.exists) {
     throw new functions.https.HttpsError("not-found", "TDE event snapshot not found.");
   }
@@ -3341,7 +3410,6 @@ exports.generateTdeClaimProof = functions.https.onCall(async (data, context) => 
     throw new functions.https.HttpsError("not-found", "User is not eligible for this TDE.");
   }
 
-  const userDoc = await db.collection("users").doc(userId).get();
   const walletAddress = userDoc.data()?.walletAddress;
   if (!walletAddress) {
     throw new functions.https.HttpsError("failed-precondition", "User has no wallet address.");
@@ -3401,7 +3469,10 @@ exports.claimTdeTokens = functions
       throw new functions.https.HttpsError("invalid-argument", "Epoch and tdeEvent are required numbers.");
     }
 
-    const tdeDoc = await db.collection("tde_snapshots").doc(`epoch_${epoch}_tde_${tdeEvent}`).get();
+    const [tdeDoc, userDoc] = await Promise.all([
+      db.collection("tde_snapshots").doc(`epoch_${epoch}_tde_${tdeEvent}`).get(),
+      db.collection("users").doc(userId).get(),
+    ]);
     if (!tdeDoc.exists) {
       throw new functions.https.HttpsError("not-found", "TDE event snapshot not found.");
     }
@@ -3420,7 +3491,6 @@ exports.claimTdeTokens = functions
       };
     }
 
-    const userDoc = await db.collection("users").doc(userId).get();
     const walletAddress = userDoc.data()?.walletAddress;
     if (!walletAddress) {
       throw new functions.https.HttpsError("failed-precondition", "User has no wallet address.");
@@ -3490,20 +3560,21 @@ exports.claimTdeTokens = functions
     );
     const receipt = await tx.wait();
 
-    // Mark claimed in tde_snapshots and user_points
-    await tdeDoc.ref.set({
-      recipients: {
-        [userId]: {
-          ...userEntry,
-          claimed: true,
-          claimedAt: admin.firestore.FieldValue.serverTimestamp(),
-          txHash: receipt.hash,
-        },
-      },
-    }, { merge: true });
-
+    // Mark claimed in tde_snapshots and user_points in parallel
     const userRef = db.collection("user_points").doc(userId);
-    const userSnap = await userRef.get();
+    const [, userSnap] = await Promise.all([
+      tdeDoc.ref.set({
+        recipients: {
+          [userId]: {
+            ...userEntry,
+            claimed: true,
+            claimedAt: admin.firestore.FieldValue.serverTimestamp(),
+            txHash: receipt.hash,
+          },
+        },
+      }, { merge: true }),
+      userRef.get(),
+    ]);
     if (userSnap.exists) {
       const pointsData = userSnap.data();
       const markEntryClaimed = (entry) => {
@@ -3626,6 +3697,18 @@ exports.recordDailyCheckIn = functions.https.onCall(async (data, context) => {
       },
     });
   });
+
+  if (isFirstToday && awardedBonus > 0) {
+    const matchBatch = db.batch();
+    await distributeUbuntuMatchingSupply(
+      matchBatch,
+      userId,
+      awardedBonus,
+      nowTimestamp,
+      "daily_check_in_match"
+    );
+    await matchBatch.commit();
+  }
 
   return {
     success: true,
@@ -3917,7 +4000,8 @@ async function syncProfileMilestoneAndTrust(userId) {
       userId,
       amount,
       now,
-      `${action}_match`
+      `${action}_match`,
+      userData
     );
   }
 

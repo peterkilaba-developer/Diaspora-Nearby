@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -21,15 +23,30 @@ class OrganizationManagementScreen extends ConsumerStatefulWidget {
 
 class _OrganizationManagementScreenState
     extends ConsumerState<OrganizationManagementScreen> {
+  static final Map<String, List<String>> _participantsCache = {};
+  static List<ProfileData>? _cachedFriends;
+
   String? _selectedOrgId;
   Map<String, dynamic>? _extraOrg;
   bool _isLoadingExtra = false;
   bool _hasAttemptedFetch = false;
 
+  // Local optimistic overrides per orgId
+  final Map<String, Map<String, dynamic>> _optimisticOrgs = {};
+
   @override
   void initState() {
     super.initState();
     _selectedOrgId = widget.initialOrgId;
+    if (widget.initialOrgId != null) {
+      final cached = ref
+          .read(organizationRepositoryProvider)
+          .getCachedOrganization(widget.initialOrgId!);
+      if (cached != null) {
+        _extraOrg = Map<String, dynamic>.from(cached);
+        _hasAttemptedFetch = true;
+      }
+    }
   }
 
   Future<void> _fetchInitialOrg() async {
@@ -59,56 +76,69 @@ class _OrganizationManagementScreenState
     }
   }
 
+  Map<String, dynamic> _applyOptimisticOrg(Map<String, dynamic> raw) {
+    final id = raw['id'] as String?;
+    if (id != null && _optimisticOrgs.containsKey(id)) {
+      return {...raw, ..._optimisticOrgs[id]!};
+    }
+    return raw;
+  }
+
   @override
   Widget build(BuildContext context) {
     final orgsAsync = ref.watch(userOrganizationsProvider);
+    final currentUserId = ref.read(authRepositoryProvider).currentUser?.uid;
+    final repo = ref.read(organizationRepositoryProvider);
+    final orgsList =
+        orgsAsync.value ??
+        (currentUserId != null
+            ? repo.getCachedUserOrganizations(currentUserId)
+            : null);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Manage Organizations')),
       body: SafeArea(
-        child: orgsAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (err, _) => Center(child: Text('Error: $err')),
-          data: (orgs) {
-            // Check if we need to fetch the initial org
+        child: Builder(
+          builder: (context) {
+            if (orgsList == null && orgsAsync.isLoading && _extraOrg == null) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final orgs = orgsList ?? const <Map<String, dynamic>>[];
+
             if (widget.initialOrgId != null &&
                 !orgs.any((o) => o['id'] == widget.initialOrgId) &&
                 !_hasAttemptedFetch) {
-              // Schedule fetch after build
               WidgetsBinding.instance.addPostFrameCallback(
                 (_) => _fetchInitialOrg(),
               );
             }
 
-            if (_isLoadingExtra) {
+            if (_isLoadingExtra && orgs.isEmpty && _extraOrg == null) {
               return const Center(child: CircularProgressIndicator());
             }
 
-            final allOrgs = [...orgs];
-            final currentUserId = ref
-                .read(authRepositoryProvider)
-                .currentUser
-                ?.uid;
+            final allOrgs = orgs.map(_applyOptimisticOrg).toList();
 
             if (_extraOrg != null) {
-              // Verify admin status
+              final extra = _applyOptimisticOrg(_extraOrg!);
               final admins =
-                  (_extraOrg!['admins'] as List?)
+                  (extra['admins'] as List?)
                       ?.map((e) => e.toString())
                       .toList() ??
                   [];
               final pending =
-                  (_extraOrg!['pendingAdmins'] as List?)
+                  (extra['pendingAdmins'] as List?)
                       ?.map((e) => e.toString())
                       .toList() ??
                   [];
-              final isSuper = _extraOrg!['superAdminId'] == currentUserId;
+              final isSuper = extra['superAdminId'] == currentUserId;
 
               if (admins.contains(currentUserId) ||
                   pending.contains(currentUserId) ||
                   isSuper) {
-                if (!allOrgs.any((o) => o['id'] == _extraOrg!['id'])) {
-                  allOrgs.add(_extraOrg!);
+                if (!allOrgs.any((o) => o['id'] == extra['id'])) {
+                  allOrgs.add(extra);
                 }
               }
             }
@@ -132,81 +162,17 @@ class _OrganizationManagementScreenState
                       ),
                       const SizedBox(height: 8),
                       const Text('You do not manage any organizations yet.'),
-                      if (widget.initialOrgId != null) ...[
-                        const SizedBox(height: 24),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.red.shade50,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Column(
-                            children: [
-                              Text(
-                                'Debug Info (Please share this)',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.red.shade900,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Requested ID: ${widget.initialOrgId}',
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                              Text(
-                                'Fetch Attempted: $_hasAttemptedFetch',
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                              Text(
-                                'Fetch Result: ${_extraOrg == null ? "NULL (DB Read Failed)" : "Success (Found Doc)"}',
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                              if (_extraOrg != null) ...[
-                                const Divider(),
-                                Text(
-                                  'User ID: $currentUserId',
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                                Text(
-                                  'Super Admin: ${_extraOrg!['superAdminId']}',
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                                Text(
-                                  'Admins in DB: ${(_extraOrg!['admins'] as List?)?.join(", ")}',
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                                const Text(
-                                  'Status: Permissions check failed.',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.red,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ),
               );
             }
 
-            // Default selection if only one
-            if (_selectedOrgId == null && allOrgs.isNotEmpty) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) {
-                  setState(() {
-                    _selectedOrgId = allOrgs.first['id'];
-                  });
-                }
-              });
-            }
+            final effectiveSelectedId =
+                _selectedOrgId ??
+                (allOrgs.length == 1 ? allOrgs.first['id'] as String? : null);
 
-            // If multiple orgs and none selected, show list
-            if (allOrgs.length > 1 && _selectedOrgId == null) {
+            if (allOrgs.length > 1 && effectiveSelectedId == null) {
               return ListView.builder(
                 itemCount: allOrgs.length,
                 itemBuilder: (context, index) {
@@ -223,28 +189,28 @@ class _OrganizationManagementScreenState
               );
             }
 
-            if (_selectedOrgId == null && allOrgs.isNotEmpty) {
-              return const SizedBox.shrink();
-            }
-
             final selectedOrg = allOrgs.firstWhere(
-              (o) => o['id'] == _selectedOrgId,
+              (o) => o['id'] == effectiveSelectedId,
               orElse: () => allOrgs.first,
             );
 
-            return _buildOrgDetails(selectedOrg, allOrgs.length > 1);
+            return _buildOrgDetails(selectedOrg, allOrgs);
           },
         ),
       ),
     );
   }
 
-  Widget _buildOrgDetails(Map<String, dynamic> org, bool showSwitch) {
+  Widget _buildOrgDetails(
+    Map<String, dynamic> org,
+    List<Map<String, dynamic>> allOrgs,
+  ) {
     final currentUserId = ref.watch(authRepositoryProvider).currentUser?.uid;
     final isSuperAdmin = org['superAdminId'] == currentUserId;
     final admins = List<String>.from(org['admins'] ?? []);
     final pendingAdmins = List<String>.from(org['pendingAdmins'] ?? []);
     final isPending = pendingAdmins.contains(currentUserId);
+    final profileRepo = ref.read(profileRepositoryProvider);
 
     if (isPending) {
       return Center(
@@ -274,13 +240,13 @@ class _OrganizationManagementScreenState
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  OutlinedButton(
-                    onPressed: () => _handleInviteResponse(org['id'], false),
+                  FilledButton.tonal(
+                    onPressed: () => _handleInviteResponse(org, false),
                     child: const Text('Decline'),
                   ),
                   const SizedBox(width: 16),
                   FilledButton(
-                    onPressed: () => _handleInviteResponse(org['id'], true),
+                    onPressed: () => _handleInviteResponse(org, true),
                     child: const Text('Accept Invitation'),
                   ),
                 ],
@@ -291,33 +257,36 @@ class _OrganizationManagementScreenState
       );
     }
 
+    final chatId = org['chatId'] as String?;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: OutlinedButton.icon(
-              onPressed: () {
-                if (ref.read(userOrganizationsProvider).value?.length == 2) {
-                  final orgs = ref.read(userOrganizationsProvider).value!;
-                  final other = orgs.firstWhere(
-                    (o) => o['id'] != _selectedOrgId,
-                  );
-                  setState(() => _selectedOrgId = other['id']);
-                } else {
-                  setState(() => _selectedOrgId = null);
-                }
-              },
-              icon: const Icon(LucideIcons.arrowRightLeft),
-              label: Text(
-                ref.read(userOrganizationsProvider).value?.length == 2
-                    ? 'Switch Organization'
-                    : 'View All Organizations',
+          if (allOrgs.length > 1)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: FilledButton.tonalIcon(
+                onPressed: () {
+                  if (allOrgs.length == 2) {
+                    final other = allOrgs.firstWhere(
+                      (o) => o['id'] != org['id'],
+                      orElse: () => allOrgs.first,
+                    );
+                    setState(() => _selectedOrgId = other['id']);
+                  } else {
+                    setState(() => _selectedOrgId = null);
+                  }
+                },
+                icon: const Icon(LucideIcons.arrowRightLeft),
+                label: Text(
+                  allOrgs.length == 2
+                      ? 'Switch Organization'
+                      : 'View All Organizations',
+                ),
               ),
             ),
-          ),
 
           // Header
           Row(
@@ -380,9 +349,9 @@ class _OrganizationManagementScreenState
           const SizedBox(height: 24),
 
           // Embedded Chat Preview for Admins
-          if (org['chatId'] != null) ...[
+          if (chatId != null) ...[
             OrganizationChatPreview(
-              chatId: org['chatId'],
+              chatId: chatId,
               canViewMessages: true,
               title: 'Organization Messages',
             ),
@@ -410,17 +379,14 @@ class _OrganizationManagementScreenState
               final isMe = adminID == currentUserId;
               final isCreator = adminID == org['superAdminId'];
 
-              return FutureBuilder(
-                // We'd ideally need a batched fetch or user provider, but fetching individually for MVP is okay
-                future: ref
-                    .read(profileRepositoryProvider)
-                    .getUserProfile(adminID), // [FIX] Use ProfileRepository
+              return FutureBuilder<ProfileData?>(
+                initialData: profileRepo.getCachedProfile(adminID),
+                future: profileRepo.getUserProfile(adminID),
                 builder: (context, snapshot) {
                   final userData = snapshot.data;
                   final name = userData != null
                       ? '${userData.firstName} ${userData.lastName}'
                       : 'User $adminID';
-                  // Email is not available in ProfileData
 
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
@@ -439,16 +405,14 @@ class _OrganizationManagementScreenState
                     ),
                     title: Text(name + (isMe ? ' (You)' : '')),
                     subtitle: Text(isCreator ? 'Super Admin' : 'Admin'),
-                    trailing:
-                        (isSuperAdmin &&
-                            !isCreator) // Only Super Admin can remove other admins
+                    trailing: (isSuperAdmin && !isCreator)
                         ? IconButton(
                             icon: const Icon(
                               LucideIcons.trash2,
                               color: Colors.red,
                             ),
                             onPressed: () =>
-                                _confirmRemoveAdmin(org['id'], adminID, name),
+                                _confirmRemoveAdmin(org, adminID, name),
                           )
                         : null,
                   );
@@ -471,10 +435,9 @@ class _OrganizationManagementScreenState
               itemCount: pendingAdmins.length,
               itemBuilder: (context, index) {
                 final userId = pendingAdmins[index];
-                return FutureBuilder(
-                  future: ref
-                      .read(profileRepositoryProvider)
-                      .getUserProfile(userId),
+                return FutureBuilder<ProfileData?>(
+                  initialData: profileRepo.getCachedProfile(userId),
+                  future: profileRepo.getUserProfile(userId),
                   builder: (context, snapshot) {
                     final userData = snapshot.data;
                     final name = userData != null
@@ -498,7 +461,7 @@ class _OrganizationManagementScreenState
                                 color: Colors.orange,
                                 size: 20,
                               )
-                            : null, // Could overlay clock icon if needed, but user just asked for photo
+                            : null,
                       ),
                       title: Text(name),
                       subtitle: const Text('Invite Sent'),
@@ -508,7 +471,7 @@ class _OrganizationManagementScreenState
                                 LucideIcons.x,
                                 color: Colors.grey,
                               ),
-                              onPressed: () => _cancelInvite(org['id'], userId),
+                              onPressed: () => _cancelInvite(org, userId),
                             )
                           : null,
                     );
@@ -522,7 +485,7 @@ class _OrganizationManagementScreenState
             Padding(
               padding: const EdgeInsets.only(top: 8, bottom: 24),
               child: FilledButton.icon(
-                onPressed: () => _showSelectAdminModal(org['id']),
+                onPressed: () => _showSelectAdminModal(org),
                 icon: const Icon(LucideIcons.plus),
                 label: const Text('Add Admin'),
                 style: FilledButton.styleFrom(
@@ -546,15 +509,15 @@ class _OrganizationManagementScreenState
 
           // Participants List
           FutureBuilder<List<String>>(
-            future: _getParticipants(org['chatId']),
+            initialData: chatId != null ? _participantsCache[chatId] : null,
+            future: _getParticipants(chatId),
             builder: (context, snapshot) {
               final participants = snapshot.data ?? [];
-              if (snapshot.connectionState == ConnectionState.waiting) {
+              if (snapshot.data == null &&
+                  snapshot.connectionState == ConnectionState.waiting) {
                 return const CircularProgressIndicator();
               }
 
-              // Filter out admins from participants list for display if preferred,
-              // or show everyone but disable removal for admins.
               return ListView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
@@ -564,10 +527,9 @@ class _OrganizationManagementScreenState
                   final isMe = userId == currentUserId;
                   final isAdminMember = admins.contains(userId);
 
-                  return FutureBuilder(
-                    future: ref
-                        .read(profileRepositoryProvider)
-                        .getUserProfile(userId),
+                  return FutureBuilder<ProfileData?>(
+                    initialData: profileRepo.getCachedProfile(userId),
+                    future: profileRepo.getUserProfile(userId),
                     builder: (context, profileSnapshot) {
                       final userData = profileSnapshot.data;
                       final name = userData != null
@@ -599,7 +561,7 @@ class _OrganizationManagementScreenState
                                   color: Colors.red,
                                 ),
                                 onPressed: () =>
-                                    _removeChatMember(org['id'], userId, name),
+                                    _removeChatMember(org, userId, name),
                               )
                             : null,
                       );
@@ -613,11 +575,11 @@ class _OrganizationManagementScreenState
           if (isSuperAdmin)
             Padding(
               padding: const EdgeInsets.only(top: 16),
-              child: OutlinedButton.icon(
+              child: FilledButton.tonalIcon(
                 onPressed: () => _showAddMemberModal(org),
                 icon: const Icon(LucideIcons.userPlus),
                 label: const Text('Add Participant from Followers'),
-                style: OutlinedButton.styleFrom(
+                style: FilledButton.styleFrom(
                   minimumSize: const Size(double.infinity, 48),
                 ),
               ),
@@ -627,295 +589,391 @@ class _OrganizationManagementScreenState
     );
   }
 
-  Future<void> _showSelectAdminModal(String orgId) async {
-    // Show spinner while fetching friends
-    showDialog(
+  Future<void> _showSelectAdminModal(Map<String, dynamic> org) async {
+    final orgId = org['id'] as String;
+    final friendsFuture = ref
+        .read(chatRepositoryProvider)
+        .getDirectChatFriends()
+        .then((list) {
+          _cachedFriends = list;
+          return list;
+        });
+
+    await showModalBottomSheet(
       context: context,
-      barrierDismissible: false,
-      builder: (c) => const Center(child: CircularProgressIndicator()),
-    );
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Theme.of(sheetCtx).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: DraggableScrollableSheet(
+            initialChildSize: 0.6,
+            minChildSize: 0.4,
+            maxChildSize: 0.9,
+            expand: false,
+            builder: (context, scrollController) {
+              return FutureBuilder<List<ProfileData>>(
+                initialData: _cachedFriends,
+                future: friendsFuture,
+                builder: (context, snapshot) {
+                  final friends = snapshot.data;
+                  if (friends == null) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (friends.isEmpty) {
+                    return const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(LucideIcons.users, size: 48, color: Colors.grey),
+                          SizedBox(height: 16),
+                          Text('No contacts found from DMs.'),
+                        ],
+                      ),
+                    );
+                  }
 
-    try {
-      final friends = await ref
-          .read(chatRepositoryProvider)
-          .getDirectChatFriends();
-      if (mounted) Navigator.pop(context); // Close loading
-
-      if (!mounted) return;
-
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        builder: (context) => DraggableScrollableSheet(
-          initialChildSize: 0.6,
-          minChildSize: 0.4,
-          maxChildSize: 0.9,
-          expand: false,
-          builder: (context, scrollController) {
-            if (friends.isEmpty) {
-              return const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(LucideIcons.users, size: 48, color: Colors.grey),
-                    SizedBox(height: 16),
-                    Text('No contacts found from DMs.'),
-                  ],
-                ),
-              );
-            }
-
-            return Column(
-              children: [
-                const Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Text(
-                    'Invite Admin',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                Expanded(
-                  child: ListView.builder(
-                    controller: scrollController,
-                    itemCount: friends.length,
-                    itemBuilder: (context, index) {
-                      final friend = friends[index];
-                      return ListTile(
-                        leading: CircleAvatar(
-                          backgroundImage: friend.profileImage.isNotEmpty
-                              ? NetworkImage(friend.profileImage)
-                              : null,
-                          child: friend.profileImage.isEmpty
-                              ? Text(friend.firstName[0])
-                              : null,
-                        ),
-                        title: Text('${friend.firstName} ${friend.lastName}'),
-                        subtitle: Text(
-                          (friend.profession != null &&
-                                  friend.profession!.isNotEmpty)
-                              ? friend.profession!.first
-                              : 'User',
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(
-                            LucideIcons.send,
-                            color: Colors.blue,
+                  return Column(
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: Text(
+                          'Invite Admin',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
                           ),
-                          onPressed: () async {
-                            if (friend.uid != null) {
-                              await _inviteAdminById(orgId, friend);
-                              if (context.mounted) Navigator.pop(context);
-                            }
+                        ),
+                      ),
+                      Expanded(
+                        child: ListView.builder(
+                          controller: scrollController,
+                          itemCount: friends.length,
+                          itemBuilder: (context, index) {
+                            final friend = friends[index];
+                            return ListTile(
+                              leading: CircleAvatar(
+                                backgroundImage: friend.profileImage.isNotEmpty
+                                    ? NetworkImage(friend.profileImage)
+                                    : null,
+                                child: friend.profileImage.isEmpty
+                                    ? Text(friend.firstName[0])
+                                    : null,
+                              ),
+                              title: Text(
+                                '${friend.firstName} ${friend.lastName}',
+                              ),
+                              subtitle: Text(
+                                (friend.profession != null &&
+                                        friend.profession!.isNotEmpty)
+                                    ? friend.profession!.first
+                                    : 'User',
+                              ),
+                              trailing: IconButton(
+                                icon: const Icon(
+                                  LucideIcons.send,
+                                  color: Colors.blue,
+                                ),
+                                onPressed: () {
+                                  if (friend.uid != null) {
+                                    Navigator.pop(sheetCtx);
+                                    _inviteAdminById(org, orgId, friend);
+                                  }
+                                },
+                              ),
+                            );
                           },
                         ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            );
-          },
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
+          ),
         ),
-      );
-    } catch (e) {
-      if (mounted) Navigator.pop(context); // Close loading
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error loading contacts: $e')));
-      }
-    }
+      ),
+    );
   }
 
-  Future<void> _inviteAdminById(String orgId, ProfileData friend) async {
-    // Get org name
-    final orgs = ref.read(userOrganizationsProvider).value ?? [];
-    final org = orgs.firstWhere((o) => o['id'] == orgId, orElse: () => {});
+  void _inviteAdminById(
+    Map<String, dynamic> org,
+    String orgId,
+    ProfileData friend,
+  ) {
+    final friendUid = friend.uid;
+    if (friendUid == null) return;
+
     final orgName = org['businessName'] ?? org['name'] ?? 'the organization';
+    final repo = ref.read(organizationRepositoryProvider);
+    final prevPending = List<String>.from(org['pendingAdmins'] ?? []);
+    final updatedPending = List<String>.from(prevPending);
+    if (!updatedPending.contains(friendUid)) {
+      updatedPending.add(friendUid);
+    }
 
-    try {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Sending invitation...')));
+    setState(() {
+      _optimisticOrgs[orgId] = {...org, 'pendingAdmins': updatedPending};
+    });
+    repo.cacheOrganization(orgId, _optimisticOrgs[orgId]!);
 
-      // 1. Add to pending lists
-      await ref
-          .read(organizationRepositoryProvider)
-          .inviteAdmin(orgId, friend.uid!);
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Invitation sent!')));
 
-      // 2. Send DM
-      final currentUser = ref.read(authRepositoryProvider).currentUser;
-      if (currentUser != null) {
-        // Create chat logic is needed if doesn't exist, but 'friends' logic implies chat exists.
-        // Assuming getDirectChatFriends implies existing chat, we just send message.
-        // But we need chatId. We can pass chatId in friend object or re-fetch.
-        // For now, simpler: just create/get direct chat and send.
-
-        final chatRepo = ref.read(chatRepositoryProvider);
-        // This is blocking UI a bit but acceptable for MVP
-        final chat = await chatRepo.createDirectChat(friend.uid!);
-
-        if (chat != null) {
-          await chatRepo.sendTextMessage(
-            chat.id,
-            'I have invited you to be an admin of "$orgName". Please go to Account > Manage Organizations to accept.',
+    unawaited(() async {
+      try {
+        await repo.inviteAdmin(orgId, friendUid);
+        final currentUser = ref.read(authRepositoryProvider).currentUser;
+        if (currentUser != null) {
+          final chatRepo = ref.read(chatRepositoryProvider);
+          final chat = await chatRepo.createDirectChat(friendUid);
+          if (chat != null) {
+            await chatRepo.sendTextMessage(
+              chat.id,
+              'I have invited you to be an admin of "$orgName". Please go to Account > Manage Organizations to accept.',
+            );
+          }
+        }
+        ref.invalidate(userOrganizationsProvider);
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _optimisticOrgs[orgId] = {...org, 'pendingAdmins': prevPending};
+          });
+          repo.cacheOrganization(orgId, _optimisticOrgs[orgId]!);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to invite: $e'),
+              backgroundColor: Colors.red,
+            ),
           );
         }
       }
-
-      ref.invalidate(userOrganizationsProvider);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Invitation sent!')));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to invite: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
+    }());
   }
 
-  Future<void> _handleInviteResponse(String orgId, bool accept) async {
-    try {
-      final repo = ref.read(organizationRepositoryProvider);
-      final userId = ref.read(authRepositoryProvider).currentUser!.uid;
+  void _handleInviteResponse(Map<String, dynamic> org, bool accept) {
+    final orgId = org['id'] as String;
+    final repo = ref.read(organizationRepositoryProvider);
+    final userId = ref.read(authRepositoryProvider).currentUser?.uid;
+    if (userId == null) return;
 
-      if (accept) {
-        await repo.acceptInvite(orgId, userId);
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Invitation accepted!')));
-        }
-      } else {
-        await repo.declineInvite(orgId, userId);
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Invitation declined.')));
-        }
-      }
-      ref.invalidate(userOrganizationsProvider);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
+    final prevAdmins = List<String>.from(org['admins'] ?? []);
+    final prevPending = List<String>.from(org['pendingAdmins'] ?? []);
+    final updatedAdmins = List<String>.from(prevAdmins);
+    final updatedPending = List<String>.from(prevPending)..remove(userId);
+    if (accept && !updatedAdmins.contains(userId)) {
+      updatedAdmins.add(userId);
     }
+
+    setState(() {
+      _optimisticOrgs[orgId] = {
+        ...org,
+        'admins': updatedAdmins,
+        'pendingAdmins': updatedPending,
+      };
+    });
+    repo.cacheOrganization(orgId, _optimisticOrgs[orgId]!);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(accept ? 'Invitation accepted!' : 'Invitation declined.'),
+      ),
+    );
+
+    final action = accept
+        ? repo.acceptInvite(orgId, userId)
+        : repo.declineInvite(orgId, userId);
+
+    unawaited(
+      action
+          .then((_) => ref.invalidate(userOrganizationsProvider))
+          .catchError((Object e) {
+            if (mounted) {
+              setState(() {
+                _optimisticOrgs[orgId] = {
+                  ...org,
+                  'admins': prevAdmins,
+                  'pendingAdmins': prevPending,
+                };
+              });
+              repo.cacheOrganization(orgId, _optimisticOrgs[orgId]!);
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text('Error: $e')));
+            }
+          }),
+    );
   }
 
-  Future<void> _cancelInvite(String orgId, String userId) async {
-    try {
-      await ref
-          .read(organizationRepositoryProvider)
-          .declineInvite(orgId, userId); // Same as declining
-      ref.invalidate(userOrganizationsProvider);
-    } catch (e) {
-      // error
-    }
+  void _cancelInvite(Map<String, dynamic> org, String userId) {
+    final orgId = org['id'] as String;
+    final repo = ref.read(organizationRepositoryProvider);
+    final prevPending = List<String>.from(org['pendingAdmins'] ?? []);
+    final updatedPending = List<String>.from(prevPending)..remove(userId);
+
+    setState(() {
+      _optimisticOrgs[orgId] = {...org, 'pendingAdmins': updatedPending};
+    });
+    repo.cacheOrganization(orgId, _optimisticOrgs[orgId]!);
+
+    unawaited(
+      repo
+          .declineInvite(orgId, userId)
+          .then((_) => ref.invalidate(userOrganizationsProvider))
+          .catchError((Object e) {
+            if (mounted) {
+              setState(() {
+                _optimisticOrgs[orgId] = {...org, 'pendingAdmins': prevPending};
+              });
+              repo.cacheOrganization(orgId, _optimisticOrgs[orgId]!);
+            }
+          }),
+    );
   }
 
   Future<void> _confirmRemoveAdmin(
-    String orgId,
+    Map<String, dynamic> org,
     String adminId,
     String name,
   ) async {
+    final orgId = org['id'] as String;
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Remove Admin?'),
-        content: Text('Are you sure you want to remove $name from admins?'),
-        actions: [
-          TextButton(
-            onPressed: () => context.pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => context.pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Remove'),
-          ),
-        ],
+      builder: (context) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          title: const Text('Remove Admin?'),
+          content: Text('Are you sure you want to remove $name from admins?'),
+          actions: [
+            TextButton(
+              onPressed: () => context.pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => context.pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Remove'),
+            ),
+          ],
+        ),
       ),
     );
 
     if (confirm == true) {
-      try {
-        await ref
-            .read(organizationRepositoryProvider)
-            .removeAdmin(orgId, adminId);
-        ref.invalidate(userOrganizationsProvider);
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Admin removed.')));
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-          );
-        }
+      final repo = ref.read(organizationRepositoryProvider);
+      final prevAdmins = List<String>.from(org['admins'] ?? []);
+      final updatedAdmins = List<String>.from(prevAdmins)..remove(adminId);
+
+      setState(() {
+        _optimisticOrgs[orgId] = {...org, 'admins': updatedAdmins};
+      });
+      repo.cacheOrganization(orgId, _optimisticOrgs[orgId]!);
+
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Admin removed.')));
       }
+
+      unawaited(
+        repo
+            .removeAdmin(orgId, adminId)
+            .then((_) => ref.invalidate(userOrganizationsProvider))
+            .catchError((Object e) {
+              if (mounted) {
+                setState(() {
+                  _optimisticOrgs[orgId] = {...org, 'admins': prevAdmins};
+                });
+                repo.cacheOrganization(orgId, _optimisticOrgs[orgId]!);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            }),
+      );
     }
   }
 
   Future<void> _removeChatMember(
-    String orgId,
+    Map<String, dynamic> org,
     String userId,
     String name,
   ) async {
+    final orgId = org['id'] as String;
+    final chatId = org['chatId'] as String?;
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Remove from Chat?'),
-        content: Text(
-          'Are you sure you want to remove $name from the organization board?',
+      builder: (context) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          title: const Text('Remove from Chat?'),
+          content: Text(
+            'Are you sure you want to remove $name from the organization board?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => context.pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => context.pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Remove'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => context.pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => context.pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Remove'),
-          ),
-        ],
       ),
     );
 
     if (confirm == true) {
-      try {
-        await ref
-            .read(organizationRepositoryProvider)
-            .removeChatMember(orgId, userId);
-        if (mounted) {
-          setState(() {}); // Refresh future builder
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Member removed from chat.')),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-          );
-        }
+      final prevParticipants = chatId != null
+          ? List<String>.from(_participantsCache[chatId] ?? [])
+          : <String>[];
+      if (chatId != null && _participantsCache.containsKey(chatId)) {
+        setState(() {
+          _participantsCache[chatId] = List<String>.from(prevParticipants)
+            ..remove(userId);
+        });
       }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Member removed from chat.')),
+        );
+      }
+
+      unawaited(
+        ref
+            .read(organizationRepositoryProvider)
+            .removeChatMember(orgId, userId)
+            .catchError((Object e) {
+              if (mounted) {
+                if (chatId != null) {
+                  setState(() {
+                    _participantsCache[chatId] = prevParticipants;
+                  });
+                }
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            }),
+      );
     }
   }
 
@@ -927,18 +985,22 @@ class _OrganizationManagementScreenState
           .doc(chatId)
           .get();
       if (chatDoc.exists) {
-        return List<String>.from(chatDoc.data()?['participants'] ?? []);
+        final list = List<String>.from(chatDoc.data()?['participants'] ?? []);
+        _participantsCache[chatId] = list;
+        return list;
       }
     } catch (e) {
       debugPrint('Error fetching participants: $e');
     }
-    return [];
+    return _participantsCache[chatId] ?? [];
   }
 
   Future<void> _showAddMemberModal(Map<String, dynamic> org) async {
     final followers = List<String>.from(org['followers'] ?? []);
     final chatId = org['chatId'] as String?;
-    final existingParticipants = await _getParticipants(chatId);
+    final existingParticipants =
+        (chatId != null ? _participantsCache[chatId] : null) ??
+        await _getParticipants(chatId);
 
     final potentialMembers = followers
         .where((f) => !existingParticipants.contains(f))
@@ -953,82 +1015,115 @@ class _OrganizationManagementScreenState
       return;
     }
 
+    final profileRepo = ref.read(profileRepositoryProvider);
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        minChildSize: 0.4,
-        maxChildSize: 0.9,
-        expand: false,
-        builder: (context, scrollController) {
-          return Column(
-            children: [
-              const Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Text(
-                  'Add Chat Participant',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-              ),
-              Expanded(
-                child: ListView.builder(
-                  controller: scrollController,
-                  itemCount: potentialMembers.length,
-                  itemBuilder: (context, index) {
-                    final userId = potentialMembers[index];
-                    return FutureBuilder(
-                      future: ref
-                          .read(profileRepositoryProvider)
-                          .getUserProfile(userId),
-                      builder: (context, snapshot) {
-                        final userData = snapshot.data;
-                        if (userData == null) return const SizedBox.shrink();
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Theme.of(sheetCtx).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: DraggableScrollableSheet(
+            initialChildSize: 0.6,
+            minChildSize: 0.4,
+            maxChildSize: 0.9,
+            expand: false,
+            builder: (context, scrollController) {
+              return Column(
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Text(
+                      'Add Chat Participant',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView.builder(
+                      controller: scrollController,
+                      itemCount: potentialMembers.length,
+                      itemBuilder: (context, index) {
+                        final userId = potentialMembers[index];
+                        return FutureBuilder<ProfileData?>(
+                          initialData: profileRepo.getCachedProfile(userId),
+                          future: profileRepo.getUserProfile(userId),
+                          builder: (context, snapshot) {
+                            final userData = snapshot.data;
+                            if (userData == null) {
+                              return const SizedBox.shrink();
+                            }
 
-                        return ListTile(
-                          leading: CircleAvatar(
-                            backgroundImage: userData.profileImage.isNotEmpty
-                                ? NetworkImage(userData.profileImage)
-                                : null,
-                            child: userData.profileImage.isEmpty
-                                ? Text(userData.firstName[0])
-                                : null,
-                          ),
-                          title: Text(
-                            '${userData.firstName} ${userData.lastName}',
-                          ),
-                          trailing: IconButton(
-                            icon: const Icon(
-                              LucideIcons.userPlus,
-                              color: Colors.blue,
-                            ),
-                            onPressed: () async {
-                              await ref
-                                  .read(organizationRepositoryProvider)
-                                  .addChatMember(org['id'], userId);
-                              if (context.mounted) {
-                                Navigator.pop(context);
-                                setState(() {});
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('User added to chat.'),
-                                  ),
-                                );
-                              }
-                            },
-                          ),
+                            return ListTile(
+                              leading: CircleAvatar(
+                                backgroundImage:
+                                    userData.profileImage.isNotEmpty
+                                    ? NetworkImage(userData.profileImage)
+                                    : null,
+                                child: userData.profileImage.isEmpty
+                                    ? Text(userData.firstName[0])
+                                    : null,
+                              ),
+                              title: Text(
+                                '${userData.firstName} ${userData.lastName}',
+                              ),
+                              trailing: IconButton(
+                                icon: const Icon(
+                                  LucideIcons.userPlus,
+                                  color: Colors.blue,
+                                ),
+                                onPressed: () {
+                                  Navigator.pop(sheetCtx);
+                                  if (chatId != null) {
+                                    final current = List<String>.from(
+                                      _participantsCache[chatId] ?? [],
+                                    );
+                                    if (!current.contains(userId)) {
+                                      current.add(userId);
+                                      setState(() {
+                                        _participantsCache[chatId] = current;
+                                      });
+                                    }
+                                  }
+                                  ScaffoldMessenger.of(this.context)
+                                      .showSnackBar(
+                                        const SnackBar(
+                                          content: Text('User added to chat.'),
+                                        ),
+                                      );
+                                  unawaited(
+                                    ref
+                                        .read(organizationRepositoryProvider)
+                                        .addChatMember(org['id'], userId)
+                                        .catchError((Object e) {
+                                          if (mounted && chatId != null) {
+                                            setState(() {
+                                              _participantsCache[chatId]
+                                                  ?.remove(userId);
+                                            });
+                                          }
+                                        }),
+                                  );
+                                },
+                              ),
+                            );
+                          },
                         );
                       },
-                    );
-                  },
-                ),
-              ),
-            ],
-          );
-        },
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
       ),
     );
   }

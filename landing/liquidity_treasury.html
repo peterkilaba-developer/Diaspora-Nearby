@@ -419,7 +419,7 @@
         onSnapshot(doc(db, 'system_stats', 'dsp_supply'), (snap) => {
             const data = snap.data() || {};
             liveData.totalMinted = data.totalMinted || 0;
-            updateDynamicPricing();
+            scheduleDynamicPricingUpdate();
         });
 
         // Listen to treasury (burned + fiatGDP)
@@ -427,14 +427,14 @@
             const data = snap.data() || {};
             liveData.totalBurned = (data.totalBurnedUtility || 0) + (data.burnedPoints || 0) + (data.totalBurnedTde || 0);
             liveData.fiatGdpUsd = (data.totalFiatGdpUsd || 0);
-            updateDynamicPricing();
+            scheduleDynamicPricingUpdate();
         });
 
         // Listen to global member count
         onSnapshot(doc(db, 'communities', 'global_community'), (snap) => {
             const data = snap.data() || {};
             liveData.totalUsers = data.memberCount || 0;
-            updateDynamicPricing();
+            scheduleDynamicPricingUpdate();
         });
     </script>
 </body>

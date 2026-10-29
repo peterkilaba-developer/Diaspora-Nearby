@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -78,13 +79,16 @@ class _PeerListingDetailScreenState
     super.initState();
     _prefillHotelDates();
     _prefillGuestAddressFromProfile();
+    final repo = ref.read(peerListingRepositoryProvider);
+    _isSaved = repo.isListingSavedSync(widget.listing.id);
+    if (_isOwner) {
+      _ownerBookings = repo.getCachedListingBookings(widget.listing.id);
+      _dashboardLoading = false;
+      _loadOwnerBookings();
+    }
     // Track view & check saved state
     _recordView();
     _checkSavedState();
-    // Load owner bookings lazily after the first frame
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_isOwner) _loadOwnerBookings();
-    });
   }
 
   void _prefillHotelDates() {
@@ -374,8 +378,9 @@ class _PeerListingDetailScreenState
           'Guest Address: ${_composeGuestAddressSummary()}',
       ].join('\n');
 
+      final bookingId = repo.generateBookingId();
       final booking = PeerBooking(
-        id: '',
+        id: bookingId,
         listingId: widget.listing.id,
         listingType: widget.listing.type,
         listingTitle: widget.listing.title,
@@ -391,11 +396,19 @@ class _PeerListingDetailScreenState
         notes: combinedNotes.isEmpty ? null : combinedNotes,
       );
 
-      await repo.createBooking(booking);
+      repo.cacheBooking(booking);
 
       if (mounted) {
+        setState(() => _isBooking = false);
         _showBookingConfirmation();
       }
+
+      unawaited(
+        repo.createBooking(booking).catchError((e) {
+          debugPrint('Booking background persist failed: $e');
+          return bookingId;
+        }),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1559,7 +1572,7 @@ class _PeerListingDetailScreenState
   Future<void> _toggleListingStatus(PeerListing listing) async {
     final repo = ref.read(peerListingRepositoryProvider);
     final newStatus = listing.status == 'active' ? 'paused' : 'active';
-    await repo.toggleListingStatus(listing.id, newStatus);
+    repo.cacheListing(listing.copyWith(status: newStatus));
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1571,6 +1584,7 @@ class _PeerListingDetailScreenState
       );
       Navigator.pop(context, true);
     }
+    unawaited(repo.toggleListingStatus(listing.id, newStatus));
   }
 
   // ─── Guest Booking Section ────────────────────────────────────────

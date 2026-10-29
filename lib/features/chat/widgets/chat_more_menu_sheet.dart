@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -274,8 +276,10 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                           context: rootContext,
                           isScrollControlled: true,
                           backgroundColor: Colors.transparent,
-                          builder: (_) =>
-                              RelationshipResponseModal(request: request),
+                          builder: (_) => BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                            child: RelationshipResponseModal(request: request),
+                          ),
                         );
                       },
                     )
@@ -303,15 +307,17 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                         onQRExchange!();
                         return;
                       }
-                      // Capture root context & providers before popping the sheet,
-                      // because Navigator.pop(context) unmounts the bottom sheet's context.
                       final rootContext = Navigator.of(
                         context,
                         rootNavigator: true,
                       ).context;
                       final user = ref.read(authRepositoryProvider).currentUser;
-                      final cachedProfile = ref.read(userProfileProvider).value;
                       final profileRepo = ref.read(profileRepositoryProvider);
+                      final cachedProfile =
+                          ref.read(userProfileProvider).value ??
+                          (user != null
+                              ? profileRepo.getCachedProfile(user.uid)
+                              : null);
                       Navigator.pop(context);
                       if (user != null) {
                         final myProfile =
@@ -321,8 +327,10 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                           showDialog(
                             context: rootContext,
                             useRootNavigator: true,
-                            builder: (_) =>
-                                ProfileQRCodeDialog(profile: myProfile),
+                            builder: (_) => BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                              child: ProfileQRCodeDialog(profile: myProfile),
+                            ),
                           );
                         }
                       }
@@ -508,9 +516,12 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                                 : (isJob
                                       ? 'Let applicants know this position is filled'
                                       : 'Let shoppers know this item is sold'),
-                            onTap: () async {
+                            onTap: () {
                               final messenger = ScaffoldMessenger.maybeOf(
                                 context,
+                              );
+                              final marketplaceRepo = ref.read(
+                                marketplaceRepositoryProvider,
                               );
                               Navigator.pop(context);
                               final newStatus = showRelist
@@ -521,27 +532,32 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                                   : (isJob
                                         ? 'Position marked as Filled'
                                         : 'Item marked as Sold');
-                              try {
-                                await ref
-                                    .read(marketplaceRepositoryProvider)
-                                    .updateListingStatus(listingId, newStatus);
-                                ref.invalidate(
-                                  _shopListingMenuProvider(listingId),
-                                );
-                                await repo.sendTextMessage(
-                                  chat.id,
-                                  statusText,
-                                  type: 'system',
-                                  participants: chat.participants,
-                                );
-                                messenger?.showSnackBar(
-                                  SnackBar(content: Text(statusText)),
-                                );
-                              } catch (e) {
-                                debugPrint(
-                                  'Error updating shop listing status: $e',
-                                );
-                              }
+                              messenger?.showSnackBar(
+                                SnackBar(content: Text(statusText)),
+                              );
+                              unawaited(() async {
+                                try {
+                                  await Future.wait([
+                                    marketplaceRepo.updateListingStatus(
+                                      listingId,
+                                      newStatus,
+                                    ),
+                                    repo.sendTextMessage(
+                                      chat.id,
+                                      statusText,
+                                      type: 'system',
+                                      participants: chat.participants,
+                                    ),
+                                  ]);
+                                  ref.invalidate(
+                                    _shopListingMenuProvider(listingId),
+                                  );
+                                } catch (e) {
+                                  debugPrint(
+                                    'Error updating shop listing status: $e',
+                                  );
+                                }
+                              }());
                             },
                           );
                         },

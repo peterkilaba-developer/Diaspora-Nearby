@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -373,35 +374,21 @@ class _CreateRealEstateListingScreenState
       final user = ref.read(authRepositoryProvider).currentUser;
       if (user == null || profile == null) throw Exception('Not logged in');
 
-      // Upload new images to Firebase Storage
-      final newImageUrls = <String>[];
-      for (int i = 0; i < _selectedImages.length; i++) {
-        final file = File(_selectedImages[i].path);
-        final storageRef = FirebaseStorage.instance.ref().child(
-          'real_estate/${user.uid}/${DateTime.now().millisecondsSinceEpoch}_$i.jpg',
-        );
-        await storageRef.putFile(file);
-        final url = await storageRef.getDownloadURL();
-        newImageUrls.add(url);
-        if (mounted) setState(() => _uploadedCount = i + 1);
-      }
-
-      setState(() => _isUploading = false);
-
-      // Combine existing + newly uploaded photos
-      final allPhotos = [..._existingPhotoUrls, ...newImageUrls];
-
       final repo = ref.read(realEstateRepositoryProvider);
+      final isEditing = widget.existing != null;
+      final listingId = isEditing ? widget.existing!.id : repo.generateListingId();
+      final imagesToUpload = List<XFile>.from(_selectedImages);
+      final existingPhotoUrls = List<String>.from(_existingPhotoUrls);
 
-      final listing = RealEstateListing(
-        id: widget.existing?.id ?? '',
+      final optimisticListing = RealEstateListing(
+        id: listingId,
         category: _category,
         ownerId: user.uid,
         ownerName: profile.fullName,
         ownerPhoto: profile.profileImage,
         title: _generateTitle(),
         description: _descC.text.trim(),
-        photos: allPhotos,
+        photos: existingPhotoUrls,
         price: double.tryParse(_priceC.text.trim()) ?? 0,
         city: _cityC.text.trim(),
         country:
@@ -446,7 +433,7 @@ class _CreateRealEstateListingScreenState
             : null,
         soilType: _category == 'farm' ? _soilType : null,
         crops: _category == 'farm' && _selectedCrops.isNotEmpty
-            ? _selectedCrops
+            ? List<String>.from(_selectedCrops)
             : null,
         hasIrrigation: _category == 'farm' ? _hasIrrigation : null,
         hasStorage: _category == 'farm' ? _hasStorage : null,
@@ -466,45 +453,58 @@ class _CreateRealEstateListingScreenState
             : null,
         livingAreaUnit: _category == 'house' ? _livingAreaUnit : null,
         amenities: _category == 'house' && _selectedAmenities.isNotEmpty
-            ? _selectedAmenities
+            ? List<String>.from(_selectedAmenities)
             : null,
         hasGarage: _category == 'house' ? _hasGarage : null,
         hasGarden: _category == 'house' ? _hasGarden : null,
       );
 
-      if (widget.existing != null) {
-        await repo.updateListing(widget.existing!.id, listing.toJson());
-        if (mounted) {
-          Navigator.pop(context, true);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Listing updated!'),
-              behavior: SnackBarBehavior.floating,
+      repo.cacheListing(optimisticListing);
+
+      if (mounted) {
+        final messenger = ScaffoldMessenger.of(context);
+        final navigator = Navigator.of(context);
+        navigator.pop(true);
+        if (!isEditing) {
+          navigator.push(
+            MaterialPageRoute(
+              builder: (_) => RealEstateDetailScreen(listing: optimisticListing),
             ),
           );
         }
-      } else {
-        final newId = await repo.createListing(listing);
-        // Fetch the newly created listing to navigate to its detail page
-        final created = await repo.getListing(newId);
-        if (mounted) {
-          Navigator.pop(context, true); // Pop the create screen
-          if (created != null) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => RealEstateDetailScreen(listing: created),
-              ),
-            );
-          }
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Listing created!'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(isEditing ? 'Listing updated!' : 'Listing created!'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
+
+      unawaited(() async {
+        try {
+          final timestamp = DateTime.now().millisecondsSinceEpoch;
+          final newImageUrls = await Future.wait(
+            List.generate(imagesToUpload.length, (i) async {
+              final file = File(imagesToUpload[i].path);
+              final storageRef = FirebaseStorage.instance.ref().child(
+                'real_estate/${user.uid}/${timestamp}_$i.jpg',
+              );
+              await storageRef.putFile(file);
+              return storageRef.getDownloadURL();
+            }),
+          );
+          final allPhotos = [...existingPhotoUrls, ...newImageUrls];
+          final finalListing = optimisticListing.copyWith(photos: allPhotos);
+          repo.cacheListing(finalListing);
+          if (isEditing) {
+            await repo.updateListing(listingId, finalListing.toJson());
+          } else {
+            await repo.createListing(finalListing);
+          }
+        } catch (e) {
+          debugPrint('RealEstateListing save error: $e');
+        }
+      }());
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -515,7 +515,12 @@ class _CreateRealEstateListingScreenState
         );
       }
     } finally {
-      if (mounted) setState(() => _isSaving = false);
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+          _isUploading = false;
+        });
+      }
     }
   }
 

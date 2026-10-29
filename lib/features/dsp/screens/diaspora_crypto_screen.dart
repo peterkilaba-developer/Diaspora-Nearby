@@ -81,6 +81,11 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
     try {
       final user = ref.read(authRepositoryProvider).currentUser;
       if (user == null) return;
+      final profile = ref.read(userProfileProvider).value;
+      if (profile?.walletAddress != null &&
+          profile!.walletAddress!.isNotEmpty) {
+        return;
+      }
       final doc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -1277,18 +1282,13 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
 
   Widget _buildMyWalletSection(BuildContext context) {
     final walletAsync = ref.watch(userWalletProvider);
+    final cachedAddr = ref.read(userProfileProvider).value?.walletAddress;
 
     return walletAsync.when(
-      loading: () => Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: const Center(
-          child: CircularProgressIndicator(color: Colors.white),
-        ),
+      loading: () => _buildSmartWalletContent(
+        cachedAddr != null && cachedAddr.isNotEmpty
+            ? SmartWalletData(address: cachedAddr)
+            : null,
       ),
       error: (_, _) => _buildSmartWalletContent(null),
       data: (walletData) {

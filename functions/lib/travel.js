@@ -492,15 +492,22 @@ function cacheHotelMeta(meta) {
 }
 
 async function buildHotelEntryFromPlace(place, apiKey, cityCode = '') {
-  const details = await fetchHotelPlaceDetails(place.place_id, apiKey, false);
-  let photoRefs = details.photoRefs;
-  const resolvedCountryCode = details.countryCode || '';
+  let photoRefs = Array.isArray(place.photos) ?
+    place.photos.map((p) => p?.photo_reference).filter(Boolean).slice(0, 4) :
+    [];
+  let resolvedCountryCode = '';
 
-  if (photoRefs.length === 0 && Array.isArray(place.photos)) {
-    photoRefs = place.photos
-      .map((p) => p?.photo_reference)
-      .filter(Boolean)
-      .slice(0, 4);
+  if (photoRefs.length === 0) {
+    const details = await fetchHotelPlaceDetails(place.place_id, apiKey, false);
+    photoRefs = details.photoRefs;
+    resolvedCountryCode = details.countryCode || '';
+  } else if (Array.isArray(place.address_components)) {
+    const countryComp = place.address_components.find(
+      (c) => Array.isArray(c.types) && c.types.includes('country'),
+    );
+    if (countryComp?.short_name) {
+      resolvedCountryCode = String(countryComp.short_name).toUpperCase();
+    }
   }
 
   const resolvedPhotos = (

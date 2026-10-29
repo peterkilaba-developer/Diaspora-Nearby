@@ -23,7 +23,7 @@
           ],
           "hostRegion": "USA (Houston, DC/DMV, Dallas, Columbus, NY)",
           "lang": "sw",
-          "adminCode": "ADMTZUSA"
+          "adminCode": "PETER-TZ-CC57"
         },
         {
           "id": "tz_uk_tauk",
@@ -38,7 +38,7 @@
           ],
           "hostRegion": "UK (London, Reading, Birmingham, Manchester)",
           "lang": "sw",
-          "adminCode": "ADMTZUK"
+          "adminCode": "PETER-TZ-CC57"
         },
         {
           "id": "tz_uae_dubai",
@@ -54,7 +54,7 @@
           ],
           "hostRegion": "UAE & Oman (Dubai, Abu Dhabi, Sharjah, Muscat)",
           "lang": "sw",
-          "adminCode": "ADMTZUAE"
+          "adminCode": "PETER-TZ-CC57"
         },
         {
           "id": "tz_south_africa",
@@ -67,7 +67,7 @@
           ],
           "hostRegion": "South Africa (Johannesburg, Pretoria, Cape Town, Durban)",
           "lang": "sw",
-          "adminCode": "ADMTZSA"
+          "adminCode": "PETER-TZ-CC57"
         },
         {
           "id": "tz_kenya",
@@ -79,7 +79,7 @@
           ],
           "hostRegion": "Kenya (Nairobi, Mombasa)",
           "lang": "sw",
-          "adminCode": "ADMTZKE"
+          "adminCode": "PETER-TZ-CC57"
         },
         {
           "id": "tz_canada",
@@ -94,7 +94,7 @@
           ],
           "hostRegion": "Canada (Toronto, Ottawa, Montreal, Calgary)",
           "lang": "sw",
-          "adminCode": "ADMTZCA"
+          "adminCode": "PETER-TZ-CC57"
         },
         {
           "id": "tz_europe_germany",
@@ -112,7 +112,7 @@
           ],
           "hostRegion": "Europe (Berlin, Frankfurt, Stockholm, Istanbul)",
           "lang": "sw",
-          "adminCode": "ADMTZEU"
+          "adminCode": "PETER-TZ-CC57"
         },
         {
           "id": "tz_china_india",
@@ -125,7 +125,7 @@
           ],
           "hostRegion": "Asia (Guangzhou, Beijing, Wuhan, Bangalore, Delhi)",
           "lang": "sw",
-          "adminCode": "ADMTZASIA"
+          "adminCode": "PETER-TZ-CC57"
         }
       ],
       "templates": {
@@ -155,7 +155,7 @@
           ],
           "hostRegion": "Dar es Salaam (Masaki, Oysterbay, Mikocheni, Upanga)",
           "lang": "en",
-          "adminCode": "ADMDAREX"
+          "adminCode": "PETER-TZ-CC57"
         },
         {
           "id": "expats_arusha_un",
@@ -176,7 +176,7 @@
           ],
           "hostRegion": "Arusha & Moshi (Njiro, Usa River, Diplomatic Hub)",
           "lang": "en",
-          "adminCode": "ADMARUEX"
+          "adminCode": "PETER-TZ-CC57"
         },
         {
           "id": "expats_zanzibar_nomads",
@@ -190,7 +190,7 @@
           ],
           "hostRegion": "Zanzibar (Stone Town, Paje, Nungwi, Jambiani)",
           "lang": "en",
-          "adminCode": "ADMZNZEX"
+          "adminCode": "PETER-TZ-CC57"
         },
         {
           "id": "kenyans_in_tz",
@@ -203,7 +203,7 @@
           ],
           "hostRegion": "Dar es Salaam & Arusha",
           "lang": "en",
-          "adminCode": "ADMKENYATZ"
+          "adminCode": "PETER-TZ-CC57"
         },
         {
           "id": "south_africans_in_tz",
@@ -215,7 +215,7 @@
           ],
           "hostRegion": "Dar es Salaam, Arusha & Mwanza",
           "lang": "en",
-          "adminCode": "ADMSATZ"
+          "adminCode": "PETER-TZ-CC57"
         },
         {
           "id": "francophones_in_tz",
@@ -228,7 +228,7 @@
           ],
           "hostRegion": "Dar es Salaam, Arusha & Kigoma",
           "lang": "fr",
-          "adminCode": "ADMFRTZ"
+          "adminCode": "PETER-TZ-CC57"
         },
         {
           "id": "indians_in_tz",
@@ -244,7 +244,7 @@
           ],
           "hostRegion": "Dar es Salaam (Upanga, Masaki), Arusha & Zanzibar",
           "lang": "hi",
-          "adminCode": "ADMINDTZ"
+          "adminCode": "PETER-TZ-CC57"
         },
         {
           "id": "chinese_in_tz",
@@ -256,7 +256,7 @@
           ],
           "hostRegion": "Dar es Salaam, Arusha & Zanzibar",
           "lang": "zh",
-          "adminCode": "ADMZHTZ"
+          "adminCode": "PETER-TZ-CC57"
         },
         {
           "id": "arab_community_in_tz",
@@ -268,7 +268,7 @@
           ],
           "hostRegion": "Zanzibar & Dar es Salaam",
           "lang": "ar",
-          "adminCode": "ADMARTZ"
+          "adminCode": "PETER-TZ-CC57"
         },
         {
           "id": "german_dach_in_tz",
@@ -281,7 +281,7 @@
           ],
           "hostRegion": "Arusha, Dar es Salaam & Zanzibar",
           "lang": "de",
-          "adminCode": "ADMDETZ"
+          "adminCode": "PETER-TZ-CC57"
         }
       ],
       "templates": {

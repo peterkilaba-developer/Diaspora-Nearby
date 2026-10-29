@@ -69,18 +69,17 @@
                 var rawPath = window.location.pathname.replace(/\/+$/, '') || '/';
                 if (rawPath === '/invite' || rawPath === '/download') {
                     var params = new URLSearchParams(window.location.search);
-                    var code = params.get('code') || params.get('ref');
+                    var code = params.get('code') || params.get('ref') || 'PETER-TZ-CC57';
                     if (code) {
                         try { localStorage.setItem('dn_referral_code', code); } catch(e) {}
                     }
                     var ua = navigator.userAgent || '';
                     var isAndroid = /android/i.test(ua);
-                    var isIOS = (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) || (/Mac/.test(ua) && navigator.maxTouchPoints > 1);
+                    var isInAppWebView = /FBAN|FBAV|Instagram|Line|MicroMessenger/i.test(ua);
 
-                    if (isIOS) {
-                        // iOS Universal Links require a direct user tap on <a href="https://testflight.apple.com/join/...">;
-                        // script.js renders the 1-tap TestFlight join overlay.
-                    } else if (isAndroid) {
+                    // Only auto-redirect Android when NOT inside Facebook/Instagram's broken WebView;
+                    // inside in-app WebViews, script.js renders the 1-tap Native Play Store Intent + WhatsApp card.
+                    if (isAndroid && !isInAppWebView) {
                         var playUrl = 'https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby';
                         if (code) {
                             playUrl += '&referrer=' + encodeURIComponent('utm_source=invite&referral_code=' + code);
@@ -2142,34 +2141,56 @@
         window._serverTimestamp = serverTimestamp;
         window._addPlayStoreTester = httpsCallable(funcs, 'addPlayStoreTester');
 
-        // ── Real-time Epoch Progress ──
+        // ── Real-time Epoch Progress (0ms localStorage hydration + live onSnapshot) ──
         const GENESIS_MILESTONE = 1000000;
+        const EPOCH_CACHE_KEY = 'dn_epoch_stats_cache';
         const fmt = (n) => n.toLocaleString('en-US');
 
-        // Listen to DSP supply
-        onSnapshot(doc(db, 'system_stats', 'dsp_supply'), (snap) => {
-            const data = snap.data() || {};
-            const totalMinted = data.totalMinted || 0;
+        function renderEpochMinted(totalMinted) {
             const el = document.getElementById('epoch-dsp-earned');
             if (el) el.textContent = fmt(totalMinted) + ' DSP';
-            // Update progress bar
             const pct = Math.min((totalMinted / GENESIS_MILESTONE) * 100, 100);
             const bar = document.getElementById('epoch-bar-fill');
             if (bar) bar.style.width = Math.max(pct, 0.5) + '%';
             const pctEl = document.getElementById('epoch-pct');
             if (pctEl) pctEl.textContent = pct.toFixed(1) + '%';
+        }
+
+        function renderEpochMembers(count) {
+            const el = document.getElementById('epoch-members');
+            if (el) el.textContent = fmt(count);
+        }
+
+        let cachedEpochStats = { totalMinted: 0, memberCount: 0 };
+        try {
+            const raw = localStorage.getItem(EPOCH_CACHE_KEY);
+            if (raw) {
+                cachedEpochStats = JSON.parse(raw) || cachedEpochStats;
+                if (cachedEpochStats.totalMinted > 0) renderEpochMinted(cachedEpochStats.totalMinted);
+                if (cachedEpochStats.memberCount > 0) renderEpochMembers(cachedEpochStats.memberCount);
+            }
+        } catch (e) {}
+
+        // Listen to DSP supply
+        onSnapshot(doc(db, 'system_stats', 'dsp_supply'), (snap) => {
+            const data = snap.data() || {};
+            const totalMinted = data.totalMinted || 0;
+            renderEpochMinted(totalMinted);
+            cachedEpochStats.totalMinted = totalMinted;
+            try { localStorage.setItem(EPOCH_CACHE_KEY, JSON.stringify(cachedEpochStats)); } catch (e) {}
         });
 
         // Listen to member count
         onSnapshot(doc(db, 'communities', 'global_community'), (snap) => {
             const data = snap.data() || {};
             const count = data.memberCount || 0;
-            const el = document.getElementById('epoch-members');
-            if (el) el.textContent = fmt(count);
+            renderEpochMembers(count);
+            cachedEpochStats.memberCount = count;
+            try { localStorage.setItem(EPOCH_CACHE_KEY, JSON.stringify(cachedEpochStats)); } catch (e) {}
         });
     </script>
 
-    <script src="script.js?v=20261026a"></script>
+    <script src="script.js?v=20261028a"></script>
 </body>
 
 </html>

@@ -7,6 +7,7 @@ class Relationship {
   final DateTime createdAt;
   final String status;
   final String? flag; // [NEW] Country flag emoji
+  final String? photoUrl;
 
   Relationship({
     required this.id,
@@ -15,7 +16,28 @@ class Relationship {
     required this.createdAt,
     required this.status,
     this.flag,
+    this.photoUrl,
   });
+
+  Relationship copyWith({
+    String? id,
+    String? type,
+    String? name,
+    DateTime? createdAt,
+    String? status,
+    String? flag,
+    String? photoUrl,
+  }) {
+    return Relationship(
+      id: id ?? this.id,
+      type: type ?? this.type,
+      name: name ?? this.name,
+      createdAt: createdAt ?? this.createdAt,
+      status: status ?? this.status,
+      flag: flag ?? this.flag,
+      photoUrl: photoUrl ?? this.photoUrl,
+    );
+  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -25,6 +47,7 @@ class Relationship {
       'createdAt': Timestamp.fromDate(createdAt),
       'status': status,
       'flag': flag,
+      if (photoUrl != null) 'photoUrl': photoUrl,
     };
   }
 
@@ -47,6 +70,7 @@ class Relationship {
       createdAt: parsedDate,
       status: map['status'] ?? 'active',
       flag: map['flag'],
+      photoUrl: map['photoUrl'] as String?,
     );
   }
 }

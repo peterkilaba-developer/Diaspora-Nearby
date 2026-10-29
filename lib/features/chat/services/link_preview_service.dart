@@ -75,8 +75,14 @@ class LinkPreviewService {
   static final Map<String, Future<LinkPreviewData?>> _inFlight = {};
   static final Map<String, LinkPreviewData> _memoryCache = {};
 
-  /// Generic CSR shell titles that platforms return when metadata is missing,
-  /// behind a login wall, or age-gated.
+  /// Synchronous lookup of cached [LinkPreviewData] for [rawUrl] so chat
+  /// bubbles render link previews on frame 0 without layout shift.
+  static LinkPreviewData? getCachedPreviewSync(String rawUrl) {
+    final normalizedUrl = _normalizeUrl(rawUrl);
+    if (normalizedUrl == null) return null;
+    return _memoryCache[normalizedUrl];
+  }
+
   static final Set<String> _genericTitles = {
     'instagram',
     'login • instagram',
@@ -161,16 +167,11 @@ class LinkPreviewService {
       }
 
       result ??= await _fetchStandardOpenGraphPreview(client, url);
-
-      // If a known social media post/reel/video link is behind a login wall or
-      // age-restricted and returned no OpenGraph metadata, build a clean
-      // platform fallback card so the user still sees a rich link card.
       result ??= buildSocialFallback(url);
 
       if (result != null && result.hasValidContent) {
         if (httpClient == null) {
           _memoryCache[url] = result;
-          // Cache full previews for 7 days, or fallback cards for 6 hours
           final effectiveTtl = result.isFallbackCard
               ? const Duration(hours: 6)
               : cacheTtl;
@@ -189,9 +190,6 @@ class LinkPreviewService {
     }
   }
 
-  /// Builds a branded fallback card for known social media content URLs
-  /// (Instagram Reels/Posts/Stories, TikTok videos, Facebook Reels/Watch, X)
-  /// when the platform withholds OpenGraph tags due to login/age restrictions.
   @visibleForTesting
   static LinkPreviewData? buildSocialFallback(String url) {
     final uri = Uri.tryParse(url);
@@ -271,8 +269,6 @@ class LinkPreviewService {
     return null;
   }
 
-  /// Extracts YouTube video ID from standard watch URLs, youtu.be, embed,
-  /// shorts (`/shorts/<id>`), and live (`/live/<id>`) links.
   @visibleForTesting
   static String? extractYouTubeVideoId(String url) {
     final regExp = RegExp(
@@ -331,16 +327,11 @@ class LinkPreviewService {
     return null;
   }
 
-  /// Resolves TikTok short links (`tiktok.com/t/...`, `vm.tiktok.com/...`) and
-  /// extracts rich caption, author, and video cover from TikTok's rehydration
-  /// script or crawler OpenGraph tags.
   static Future<LinkPreviewData?> _fetchTikTokPreview(
     http.Client client,
     String originalUrl,
   ) async {
     try {
-      // 1. Fetch with browser User-Agent to get __UNIVERSAL_DATA_FOR_REHYDRATION__
-      //    (which contains both the video caption and cover image).
       final browserResult = await _fetchWithRedirects(
         client,
         originalUrl,
@@ -412,8 +403,6 @@ class LinkPreviewService {
         }
       }
 
-      // 2. If cover image or title is still missing, try crawler User-Agent on
-      //    the resolved video URL for OpenGraph tags.
       if (imageUrl == null || title == null || _isGenericTitle(title)) {
         final crawlerResult = await _fetchWithRedirects(
           client,
@@ -438,9 +427,6 @@ class LinkPreviewService {
         }
       }
 
-      // 3. If the video is classified/restricted so TikTok withheld the video
-      //    cover, try fetching the @author profile OpenGraph avatar so the card
-      //    still has a clean creator thumbnail.
       if (imageUrl == null) {
         final authorMatch = RegExp(
           r'tiktok\.com\/(@[A-Za-z0-9_.-]+)',
@@ -488,7 +474,6 @@ class LinkPreviewService {
     String originalUrl,
   ) async {
     try {
-      // Try fxtwitter / vxtwitter API / OpenGraph or TelegramBot UA for X/Twitter status links
       final statusMatch = RegExp(
         r'(?:x\.com|twitter\.com)\/([A-Za-z0-9_]+)\/status\/(\d+)',
         caseSensitive: false,
@@ -554,8 +539,6 @@ class LinkPreviewService {
     http.Client client,
     String originalUrl,
   ) async {
-    // 1. Primary request with social crawler User-Agent (facebookexternalhit/1.1)
-    //    so Instagram, Facebook, YouTube Shorts, etc. serve SSR OpenGraph tags.
     final crawlerResult = await _fetchWithRedirects(
       client,
       originalUrl,
@@ -587,8 +570,6 @@ class LinkPreviewService {
       }
     }
 
-    // 2. Fallback with standard modern browser User-Agent for sites that block
-    //    the Facebook crawler User-Agent.
     final browserResult = await _fetchWithRedirects(
       client,
       originalUrl,
@@ -612,8 +593,6 @@ class LinkPreviewService {
     return null;
   }
 
-  /// Parses HTML into [LinkPreviewData] while filtering out generic login/error
-  /// titles, base64 splash icons, and unescaped HTML entities.
   @visibleForTesting
   static LinkPreviewData? parseHtmlMetadata(
     String html, {
@@ -668,7 +647,6 @@ class LinkPreviewService {
           _getMeta(document, 'name', 'application-name'),
     );
 
-    // Choose best non-generic title
     String? title;
     for (final candidate in [ogTitle, twitterTitle, docTitle]) {
       if (candidate != null && !_isGenericTitle(candidate, url: url)) {
@@ -688,13 +666,8 @@ class LinkPreviewService {
       }
     }
 
-    // Note: Intentionally do NOT fall back to the first `<img>` in `<body>`
-    // because CSR shells (like Instagram, Facebook, etc.) place a base64 app
-    // icon or tracking pixel in `<body>` when OpenGraph tags are absent.
     final imageUrl = ogImage ?? twitterImage;
 
-    // If title was generic (e.g. "Facebook" or "Instagram") but we have a real
-    // non-generic description, promote the description or keep siteName as title.
     if (title == null && description != null) {
       title = siteName ?? _formatHostName(url);
     }
@@ -760,7 +733,6 @@ class LinkPreviewService {
         if (location == null || location.trim().isEmpty) {
           return _RedirectFetchResult(response, currentUri.toString());
         }
-        // Resolve relative redirects properly against currentUri
         currentUri = currentUri.resolve(location.trim());
         continue;
       }
@@ -809,7 +781,6 @@ class LinkPreviewService {
     final unescaped = _unescapeHtmlEntities(rawImageUrl).trim();
     if (unescaped.isEmpty || unescaped.toLowerCase() == 'null') return null;
 
-    // Reject base64 data URIs (such as Instagram's splash icon) and broken assets
     if (unescaped.startsWith('data:')) return null;
     if (unescaped.contains(
       'any_link_preview/blob/master/lib/assets/giphy.gif',
@@ -837,8 +808,6 @@ class LinkPreviewService {
     return unescaped;
   }
 
-  /// Decodes numeric (`&#123;`, `&#x1F600;`) and named (`&amp;`, `&quot;`, etc.)
-  /// HTML entities that social platforms include in `<meta>` attributes.
   @visibleForTesting
   static String unescapeHtml(String input) => _unescapeHtmlEntities(input);
 
@@ -856,7 +825,6 @@ class LinkPreviewService {
         .replaceAll('&bull;', '•')
         .replaceAll('&middot;', '·');
 
-    // Hex numeric entities: &#x2022;
     result = result.replaceAllMapped(RegExp(r'&#x([0-9a-fA-F]+);'), (match) {
       final code = int.tryParse(match.group(1)!, radix: 16);
       if (code == null) return match.group(0)!;
@@ -867,7 +835,6 @@ class LinkPreviewService {
       }
     });
 
-    // Decimal numeric entities: &#064;
     result = result.replaceAllMapped(RegExp(r'&#(\d+);'), (match) {
       final code = int.tryParse(match.group(1)!);
       if (code == null) return match.group(0)!;

@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -9,7 +11,6 @@ import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/core/utils/location_utils.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'dart:async';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
@@ -35,6 +36,12 @@ class ProfileQRCodeDialog extends ConsumerStatefulWidget {
 }
 
 class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
+  // [PERF] Static in-memory cache for QR handshake tokens so reopening the QR dialog
+  // renders the QR code in 0ms without waiting on a Cloud Function round-trip.
+  static final Map<String, ({String token, DateTime fetchedAt})>
+  _cachedTokenByUid = {};
+  static const Duration _tokenCacheTtl = Duration(minutes: 4);
+
   bool _isScanning = false;
   final MobileScannerController _scannerController = MobileScannerController(
     formats: const [BarcodeFormat.qrCode],
@@ -56,6 +63,25 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
     super.initState();
     _currentProfile = widget.profile;
     _lastConnectionUid = widget.profile.firstQrConnection?.otherUid;
+    _cachedAddress = _fallbackHostLocation();
+
+    // [PERF] Seed handshake token synchronously from memory cache if fresh
+    final uid = widget.profile.uid;
+    if (uid != null) {
+      final cachedEntry = _cachedTokenByUid[uid];
+      if (cachedEntry != null &&
+          DateTime.now().difference(cachedEntry.fetchedAt) < _tokenCacheTtl) {
+        _handshakeToken = cachedEntry.token;
+      }
+    }
+
+    // [PERF] Seed known connection profile synchronously from memory cache
+    if (_lastConnectionUid != null) {
+      _knownConnectionProfile = ref
+          .read(profileRepositoryProvider)
+          .getCachedProfile(_lastConnectionUid!);
+    }
+
     _checkProfileCompleteness();
     _startListeningForConnections();
     _preCacheLocation();
@@ -70,14 +96,21 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
           .httpsCallable('createQrHandshake')
           .call();
       final data = Map<String, dynamic>.from(response.data as Map);
+      final token = data['token'] as String?;
+      final uid = widget.profile.uid;
+      if (uid != null && token != null && token.isNotEmpty) {
+        _cachedTokenByUid[uid] = (token: token, fetchedAt: DateTime.now());
+      }
       if (!mounted) return;
       setState(() {
-        _handshakeToken = data['token'] as String?;
+        _handshakeToken = token;
         _handshakeError = null;
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() => _handshakeError = 'Unable to create a secure QR code.');
+      if (_handshakeToken == null) {
+        setState(() => _handshakeError = 'Unable to create a secure QR code.');
+      }
       debugPrint('QR challenge creation failed: $error');
     }
   }
@@ -142,7 +175,6 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
     final countryCode = p.isoCountryCode;
     if (countryCode != null &&
         country_data.hasStateLevelHierarchyFromData(countryCode)) {
-      // State-level countries (US, India, etc.): "City, State, Country"
       final state = p.administrativeArea;
       if (state != null && state.isNotEmpty) {
         final parts = [city, formatLocationName(state)];
@@ -151,7 +183,6 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
       }
     }
 
-    // Other countries or no state: "City, Country"
     if (country != null) return '$city, $country';
     return city;
   }
@@ -178,10 +209,6 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
   }
 
   Future<String?> _resolveLocationAddress() async {
-    if (_cachedAddress != null && _cachedAddress!.isNotEmpty) {
-      return _cachedAddress;
-    }
-
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
@@ -263,7 +290,6 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
 
           debugPrint("ProfileQRCodeDialog: Detected exchange from $fromUid");
 
-          // If this is a NEW connection we haven't processed yet
           if (fromUid != _lastConnectionUid) {
             _lastConnectionUid = fromUid;
 
@@ -299,13 +325,10 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
           final host = uri.host.toLowerCase();
           final path = uri.path;
 
-          // Support both diasporanearby.com and www.diasporanearby.com
           final isOurDomain =
               host == 'diasporanearby.com' || host == 'www.diasporanearby.com';
 
           if (isOurDomain && path.startsWith('/profile/')) {
-            // Extract UID from path segments to ignore query parameters
-            // Path segments for "/profile/123" are ["profile", "123"]
             if (uri.pathSegments.length < 2) continue;
 
             final targetUid = uri.pathSegments[1];
@@ -337,10 +360,9 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
             _scannerController.stop();
             if (mounted) setState(() => _isScanning = false);
 
-            // Resolve location address (instant last known / GPS / profile fallback)
-            final finalAddress = await _resolveLocationAddress();
+            // [PERF] Never block QR scan on GPS; use pre-cached address or host location fallback in 0ms
+            final finalAddress = _cachedAddress ?? _fallbackHostLocation();
 
-            // Perform Exchange
             debugPrint(
               'QR: Starting exchange from $currentUid to $targetUid with address: $finalAddress',
             );
@@ -366,6 +388,13 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
     String? address,
   ) async {
     try {
+      final profileRepo = ref.read(profileRepositoryProvider);
+      // Pre-fetch target profile in parallel with QR exchange
+      final cachedTarget = profileRepo.getCachedProfile(toUid);
+      final targetProfileFuture = cachedTarget != null
+          ? Future.value(cachedTarget)
+          : profileRepo.getUserProfile(toUid);
+
       final int earnedPoints = await ref
           .read(trustServiceProvider)
           .performQRExchange(
@@ -376,99 +405,106 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
           );
 
       if (mounted) {
-        // Fetch target user's name for the success dialog
-        final targetProfile = await ref
-            .read(profileRepositoryProvider)
-            .getUserProfile(toUid);
+        final targetProfile = await targetProfileFuture;
         if (!mounted) return;
 
         // Show Success Dialog
         await showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (ctx) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-            ),
-            title: Row(
-              children: [
-                const Icon(
-                  LucideIcons.checkCircle2,
-                  color: Colors.green,
-                  size: 28,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Connection Successful!',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey.shade800,
+          builder: (ctx) => BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: AlertDialog(
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 24,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              title: Row(
+                children: [
+                  const Icon(
+                    LucideIcons.checkCircle2,
+                    color: Colors.green,
+                    size: 28,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Connection Successful!',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey.shade800,
+                      ),
                     ),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'You are now connected in-person with ${targetProfile?.fullName ?? 'your peer'}.',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                    if (earnedPoints > 0) ...[
+                      const SizedBox(height: 20),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade50,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              LucideIcons.coins,
+                              color: Colors.amber,
+                              size: 24,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              '${NumberFormat('#,###').format(earnedPoints)} DSP EARNED!',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: Colors.amber,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0, right: 8.0),
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 0,
+                    ),
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('View Profile'),
                   ),
                 ),
               ],
             ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'You are now connected in-person with ${targetProfile?.fullName ?? 'your peer'}.',
-                    style: TextStyle(fontSize: 16, color: Colors.grey.shade700),
-                  ),
-                  if (earnedPoints > 0) ...[
-                    const SizedBox(height: 20),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.shade50,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            LucideIcons.coins,
-                            color: Colors.amber,
-                            size: 24,
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            '${NumberFormat('#,###').format(earnedPoints)} DSP EARNED!',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              color: Colors.amber,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            actions: [
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8.0, right: 8.0),
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 0, // Ensure no shadow/border feel
-                  ),
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('View Profile'),
-                ),
-              ),
-            ],
           ),
         );
 
@@ -479,6 +515,15 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
       }
     } on AlreadyConnectedException catch (e) {
       if (!mounted) return;
+      final cached = ref
+          .read(profileRepositoryProvider)
+          .getCachedProfile(e.otherUid);
+      if (cached != null) {
+        setState(() {
+          _knownConnectionProfile = cached;
+        });
+        return;
+      }
       try {
         final profile = await ref
             .read(profileRepositoryProvider)
@@ -501,18 +546,14 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
       if (!mounted) return;
 
       if (e.isOwnProfile) {
-        // Show modal to complete OWN profile
         final success = await _showCompleteProfileModal(e.missingFields);
         if (success == true) {
-          // Re-trigger exchange now that profile is updated
           await _performExchange(fromUid, toUid, handshakeToken, address);
         } else {
-          // User cancelled or failed - restart scanner
           setState(() => _isScanning = true);
           _scannerController.start();
         }
       } else {
-        // OTHER user profile is incomplete
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -522,7 +563,6 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
             duration: const Duration(seconds: 5),
           ),
         );
-        // Restart scanner
         setState(() => _isScanning = true);
         _scannerController.start();
       }
@@ -534,7 +574,6 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
             backgroundColor: Colors.red,
           ),
         );
-        // Restart scanner on error
         setState(() => _isScanning = true);
         _scannerController.start();
       }
@@ -544,10 +583,13 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
   }
 
   Future<bool?> _showCompleteProfileModal(List<String> missingFields) async {
-    // Fetch latest profile data to ensure modal has current state
-    final latestProfile = await ref
-        .read(profileRepositoryProvider)
-        .getUserProfile(_currentProfile.uid!);
+    // [PERF] Use synchronous cached profile so modal opens in 0ms
+    final latestProfile =
+        ref.read(userProfileProvider).value ??
+        ref
+            .read(profileRepositoryProvider)
+            .getCachedProfile(_currentProfile.uid!) ??
+        _currentProfile;
 
     if (!mounted) return false;
 
@@ -556,7 +598,7 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => CompleteProfileModal(
-        profile: latestProfile ?? _currentProfile,
+        profile: latestProfile,
         missingFields: missingFields,
       ),
     );
@@ -604,35 +646,61 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
                         showUserCard: false,
                         isFinishProfile: true,
                         onSave: (updated, newImage) async {
-                          try {
-                            String imageUrl = updated.profileImage;
-                            if (newImage != null) {
-                              imageUrl = await ref
-                                  .read(profileRepositoryProvider)
-                                  .uploadProfileImage(updated.uid!, newImage);
-                            }
+                          final profileRepo = ref.read(
+                            profileRepositoryProvider,
+                          );
+                          final profileNotifier = ref.read(
+                            userProfileProvider.notifier,
+                          );
+                          final provisionalProfile = updated.copyWith(
+                            profileImage: newImage != null
+                                ? newImage.path
+                                : updated.profileImage,
+                          );
 
-                            final finalProfile = updated.copyWith(
-                              profileImage: imageUrl,
+                          // [PERF] Transition to QR view immediately on frame 0 (0ms)
+                          if (mounted) {
+                            setState(() {
+                              _currentProfile = provisionalProfile;
+                              _isCompletingProfile = false;
+                            });
+                            profileRepo.cacheProfile(
+                              provisionalProfile.uid!,
+                              provisionalProfile,
                             );
-                            await ref
-                                .read(profileRepositoryProvider)
-                                .saveUserProfile(
-                                  finalProfile.uid!,
-                                  finalProfile,
-                                );
-
-                            if (mounted) {
-                              setState(() {
-                                _currentProfile = finalProfile;
-                                _isCompletingProfile = false;
-                              });
+                            profileNotifier.updateProfile(provisionalProfile);
+                            if (_handshakeToken == null) {
                               _refreshHandshake();
                             }
-                          } catch (e) {
-                            debugPrint('Error saving profile in QR dialog: $e');
-                            rethrow;
                           }
+
+                          unawaited(() async {
+                            try {
+                              String imageUrl = updated.profileImage;
+                              if (newImage != null) {
+                                imageUrl = await profileRepo.uploadProfileImage(
+                                  updated.uid!,
+                                  newImage,
+                                );
+                              }
+                              final finalProfile = updated.copyWith(
+                                profileImage: imageUrl,
+                              );
+                              await profileRepo.saveUserProfile(
+                                finalProfile.uid!,
+                                finalProfile,
+                              );
+                              profileRepo.cacheProfile(
+                                finalProfile.uid!,
+                                finalProfile,
+                              );
+                              profileNotifier.updateProfile(finalProfile);
+                            } catch (e) {
+                              debugPrint(
+                                'Error saving profile in QR dialog: $e',
+                              );
+                            }
+                          }());
                         },
                       ),
                     ),
@@ -814,8 +882,6 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
                           ),
                           textAlign: TextAlign.center,
                         ),
-
-                        // Display location if available in their record
                         if (_knownConnectionProfile!
                                     .firstQrConnection
                                     ?.locationAddress !=
@@ -857,7 +923,6 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
                             ],
                           ),
                         ],
-
                         const SizedBox(height: 32),
                         SizedBox(
                           width: double.infinity,

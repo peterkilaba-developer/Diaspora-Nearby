@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -149,8 +151,21 @@ class UserProfileView extends ConsumerWidget {
                     .read(authRepositoryProvider)
                     .currentUser;
                 if (currentUser == null) return;
-                var myProfile = ref.read(userProfileProvider).value;
-                myProfile ??= await ref
+                var myProfile =
+                    ref.read(userProfileProvider).value ??
+                    ref
+                        .read(profileRepositoryProvider)
+                        .getCachedProfile(currentUser.uid);
+                if (myProfile != null) {
+                  showDialog(
+                    context: context,
+                    useRootNavigator: true,
+                    builder: (context) =>
+                        ProfileQRCodeDialog(profile: myProfile!),
+                  );
+                  return;
+                }
+                myProfile = await ref
                     .read(profileRepositoryProvider)
                     .getUserProfile(currentUser.uid);
                 if (!context.mounted) return;
@@ -2124,10 +2139,10 @@ class UserProfileView extends ConsumerWidget {
   // [UPDATED] Sent Requests Widget — theme-aware with cancel button
   Widget _buildSentRequests(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final relRepo = ref.read(relationshipRepositoryProvider);
     return StreamBuilder<List<RelationshipRequest>>(
-      stream: ref
-          .read(relationshipRepositoryProvider)
-          .getSentRequests(profile.uid!),
+      initialData: relRepo.getCachedSentRequests(profile.uid!),
+      stream: relRepo.getSentRequests(profile.uid!),
       builder: (context, snapshot) {
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return const SizedBox.shrink();
@@ -2219,14 +2234,15 @@ class UserProfileView extends ConsumerWidget {
                         Row(
                           children: [
                             Expanded(
-                              child: OutlinedButton.icon(
+                              child: FilledButton.tonalIcon(
                                 onPressed: null, // Disabled — info only
                                 icon: const Icon(LucideIcons.clock, size: 14),
                                 label: const Text('Pending'),
-                                style: OutlinedButton.styleFrom(
+                                style: FilledButton.styleFrom(
                                   foregroundColor: Colors.orange,
                                   disabledForegroundColor: Colors.orange,
-                                  side: BorderSide.none,
+                                  disabledBackgroundColor: Colors.orange
+                                      .withValues(alpha: 0.08),
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 8,
                                   ),
@@ -2238,14 +2254,15 @@ class UserProfileView extends ConsumerWidget {
                             ),
                             const SizedBox(width: 10),
                             Expanded(
-                              child: OutlinedButton.icon(
+                              child: FilledButton.tonalIcon(
                                 onPressed: () =>
                                     _handleCancelSentRequest(context, ref, req),
                                 icon: const Icon(LucideIcons.x, size: 14),
                                 label: const Text('Cancel'),
-                                style: OutlinedButton.styleFrom(
+                                style: FilledButton.styleFrom(
                                   foregroundColor: theme.colorScheme.error,
-                                  side: BorderSide.none,
+                                  backgroundColor: theme.colorScheme.error
+                                      .withValues(alpha: 0.1),
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 8,
                                   ),
@@ -2348,10 +2365,10 @@ class UserProfileView extends ConsumerWidget {
   // [UPDATED] Incoming Requests Widget — theme-aware
   Widget _buildIncomingRequests(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final relRepo = ref.read(relationshipRepositoryProvider);
     return StreamBuilder<List<RelationshipRequest>>(
-      stream: ref
-          .read(relationshipRepositoryProvider)
-          .getIncomingRequests(profile.uid!),
+      initialData: relRepo.getCachedIncomingRequests(profile.uid!),
+      stream: relRepo.getIncomingRequests(profile.uid!),
       builder: (context, snapshot) {
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return const SizedBox.shrink();
@@ -2455,14 +2472,15 @@ class UserProfileView extends ConsumerWidget {
                         Row(
                           children: [
                             Expanded(
-                              child: OutlinedButton.icon(
+                              child: FilledButton.tonalIcon(
                                 onPressed: () =>
                                     _handleRejectRequest(context, ref, req),
                                 icon: const Icon(LucideIcons.x, size: 14),
                                 label: const Text('Decline'),
-                                style: OutlinedButton.styleFrom(
+                                style: FilledButton.styleFrom(
                                   foregroundColor: theme.colorScheme.error,
-                                  side: BorderSide.none,
+                                  backgroundColor: theme.colorScheme.error
+                                      .withValues(alpha: 0.1),
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 8,
                                   ),
@@ -2513,9 +2531,6 @@ class UserProfileView extends ConsumerWidget {
     try {
       final repository = ref.read(relationshipRepositoryProvider);
 
-      // Determine possible reciprocal types logic
-      // e.g. if my request says "Father", I must be "Son" or "Daughter" (or "Child")
-      // Logic should be in Repository to map "Father" -> ["Son", "Daughter"]
       List<String> possibleTypes = repository.getPossibleReciprocalTypes(
         req.relationshipType,
       );
@@ -2525,84 +2540,89 @@ class UserProfileView extends ConsumerWidget {
       if (possibleTypes.length == 1) {
         selectedType = possibleTypes.first;
       } else {
-        // Show Selection Dialog
         selectedType = await showDialog<String>(
           context: context,
           barrierDismissible: false,
           builder: (context) {
             String? tempSelected = possibleTypes.first;
-            return StatefulBuilder(
-              builder: (context, setState) {
-                return AlertDialog(
-                  title: const Text('Accept as...'),
-                  content: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        RadioGroup<String>(
-                          groupValue: tempSelected,
-                          onChanged: (val) =>
-                              setState(() => tempSelected = val),
-                          child: Column(
-                            children: possibleTypes
-                                .map(
-                                  (type) => RadioListTile<String>(
-                                    title: Text(type),
-                                    value: type,
-                                  ),
-                                )
-                                .toList(),
+            return BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: StatefulBuilder(
+                builder: (context, setState) {
+                  return AlertDialog(
+                    insetPadding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 24,
+                    ),
+                    title: const Text('Accept as...'),
+                    content: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          RadioGroup<String>(
+                            groupValue: tempSelected,
+                            onChanged: (val) =>
+                                setState(() => tempSelected = val),
+                            child: Column(
+                              children: possibleTypes
+                                  .map(
+                                    (type) => RadioListTile<String>(
+                                      title: Text(type),
+                                      value: type,
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: Colors.amber.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Icon(
-                                Icons.warning_amber_rounded,
-                                size: 18,
-                                color: Colors.amber,
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  'Binding Commitment: Accepting directly ties your trust and economic fortune together. If either member is penalized for misconduct or fraud, identical DSP & PCT penalties will be deducted from your account.',
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(fontSize: 11, height: 1.3),
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(
+                                  Icons.warning_amber_rounded,
+                                  size: 18,
+                                  color: Colors.amber,
                                 ),
-                              ),
-                            ],
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    'Binding Commitment: Accepting directly ties your trust and economic fortune together. If either member is penalized for misconduct or fraud, identical DSP & PCT penalties will be deducted from your account.',
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(fontSize: 11, height: 1.3),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel'),
-                    ),
-                    ElevatedButton(
-                      onPressed: () => Navigator.pop(context, tempSelected),
-                      child: const Text('Confirm'),
-                    ),
-                  ],
-                );
-              },
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancel'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () => Navigator.pop(context, tempSelected),
+                        child: const Text('Confirm'),
+                      ),
+                    ],
+                  );
+                },
+              ),
             );
           },
         );
       }
 
       if (selectedType != null) {
-        // Get my flag
         String myFlag = '';
         if (profile.homeCountryCode != null) {
           try {
@@ -2613,12 +2633,19 @@ class UserProfileView extends ConsumerWidget {
           } catch (_) {}
         }
 
-        await repository.acceptRequest(req, myFlag, selectedType);
+        // [PERF] Show instant confirmation on frame 0 (0ms) and accept in background
         if (context.mounted) {
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(const SnackBar(content: Text('Request accepted!')));
         }
+        unawaited(
+          repository.acceptRequest(req, myFlag, selectedType).catchError((
+            Object e,
+          ) {
+            debugPrint('Error accepting request: $e');
+          }),
+        );
       }
     } catch (e) {
       if (context.mounted) {
@@ -2634,43 +2661,43 @@ class UserProfileView extends ConsumerWidget {
     WidgetRef ref,
     RelationshipRequest req,
   ) async {
-    // Confirm rejection (warn about PCT penalty if desired, or simpler)
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('Reject Relationship?'),
-        content: const Text(
-          'Rejecting this request will signal that you do NOT know this person as claimed. This may affect their Community Trust score.',
+      builder: (c) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          title: const Text('Reject Relationship?'),
+          content: const Text(
+            'Rejecting this request will signal that you do NOT know this person as claimed. This may affect their Community Trust score.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(c, true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Reject & Penalize'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(c, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(c, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Reject & Penalize'),
-          ),
-        ],
       ),
     );
 
     if (confirm == true) {
-      try {
-        await ref.read(relationshipRepositoryProvider).rejectRequest(req);
-        if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Request rejected.')));
-        }
-      } catch (e) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Error rejecting: $e')));
-        }
+      final repo = ref.read(relationshipRepositoryProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Request rejected.')));
       }
+      unawaited(
+        repo.rejectRequest(req).catchError((Object e) {
+          debugPrint('Error rejecting request: $e');
+        }),
+      );
     }
   }
 
@@ -2682,42 +2709,43 @@ class UserProfileView extends ConsumerWidget {
   ) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('Cancel Request?'),
-        content: Text(
-          'Cancel your ${req.relationshipType} request to ${req.toUserName}?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(c, false),
-            child: const Text('Keep'),
+      builder: (c) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          title: const Text('Cancel Request?'),
+          content: Text(
+            'Cancel your ${req.relationshipType} request to ${req.toUserName}?',
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(c, true),
-            style: TextButton.styleFrom(
-              foregroundColor: Theme.of(c).colorScheme.error,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Keep'),
             ),
-            child: const Text('Cancel Request'),
-          ),
-        ],
+            TextButton(
+              onPressed: () => Navigator.pop(c, true),
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(c).colorScheme.error,
+              ),
+              child: const Text('Cancel Request'),
+            ),
+          ],
+        ),
       ),
     );
 
     if (confirm == true) {
-      try {
-        await ref.read(relationshipRepositoryProvider).cancelSentRequest(req);
-        if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Request cancelled.')));
-        }
-      } catch (e) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Error cancelling: $e')));
-        }
+      final repo = ref.read(relationshipRepositoryProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Request cancelled.')));
       }
+      unawaited(
+        repo.cancelSentRequest(req).catchError((Object e) {
+          debugPrint('Error cancelling request: $e');
+        }),
+      );
     }
   }
 
@@ -2726,15 +2754,69 @@ class UserProfileView extends ConsumerWidget {
     WidgetRef ref,
     String requestId,
   ) {
-    // Fetch request or wait for stream?
-    // Since this is a one-off, fetching directly via stream might be tricky.
-    // But _buildIncomingRequests is already streaming.
-    // If the request is pending, it will show up in the list.
-    // However, to show a *Dialog*, we need the request object.
-    // I'll fetch it from collection directly for the dialog?
-    // Or just let the user see it in the list (highlighted?).
-    // The requirement said "automatic accept/reject dialog".
-    // I will trigger a simple fetch for the dialog.
+    void openDialogForRequest(RelationshipRequest req) {
+      if (!context.mounted) return;
+      showDialog(
+        context: context,
+        builder: (c) => BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: AlertDialog(
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 24,
+            ),
+            title: const Text('Review Relationship Request'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${req.fromUserName} wants to add you as ${req.relationshipType}',
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(c);
+                        _handleRejectRequest(context, ref, req);
+                      },
+                      child: const Text(
+                        'Reject',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(c);
+                        _handleAcceptRequest(context, ref, req);
+                      },
+                      child: const Text('Accept'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // [PERF] Check cached incoming requests synchronously first (0ms)
+    final cachedIncoming = ref
+        .read(relationshipRepositoryProvider)
+        .getCachedIncomingRequests(profile.uid ?? '');
+    if (cachedIncoming != null) {
+      final match = cachedIncoming
+          .where((r) => r.id == requestId && r.status == 'pending')
+          .firstOrNull;
+      if (match != null) {
+        openDialogForRequest(match);
+        return;
+      }
+    }
+
     FirebaseFirestore.instance
         .collection('relationship_requests')
         .doc(requestId)
@@ -2744,48 +2826,7 @@ class UserProfileView extends ConsumerWidget {
             final data = doc.data()!;
             if (data['status'] == 'pending') {
               final req = RelationshipRequest.fromMap(data, doc.id);
-              // Show the same card but in dialog
-              if (context.mounted) {
-                showDialog(
-                  context: context,
-                  builder: (c) => AlertDialog(
-                    title: const Text('Review Relationship Request'),
-                    content: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '${req.fromUserName} wants to add you as ${req.relationshipType}',
-                        ),
-                        const SizedBox(height: 16),
-                        // Could reuse card logic or buttons
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            TextButton(
-                              onPressed: () {
-                                Navigator.pop(c);
-                                _handleRejectRequest(context, ref, req);
-                              },
-                              child: const Text(
-                                'Reject',
-                                style: TextStyle(color: Colors.red),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            ElevatedButton(
-                              onPressed: () {
-                                Navigator.pop(c);
-                                _handleAcceptRequest(context, ref, req);
-                              },
-                              child: const Text('Accept'),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }
+              openDialogForRequest(req);
             }
           }
         });
@@ -3063,10 +3104,10 @@ class UserProfileView extends ConsumerWidget {
       );
     }
 
+    final trustRepo = ref.read(trustRepositoryProvider);
     return FutureBuilder<Map<String, Map<String, dynamic>>>(
-      future: ref
-          .read(trustRepositoryProvider)
-          .getQrExchangeRecords(profileUid),
+      initialData: trustRepo.getCachedQrExchangeRecords(profileUid),
+      future: trustRepo.getQrExchangeRecords(profileUid),
       builder: (context, snapshot) {
         final records = snapshot.data ?? {};
 
@@ -3081,86 +3122,86 @@ class UserProfileView extends ConsumerWidget {
               return Consumer(
                 builder: (context, ref, _) {
                   final profileAsync = ref.watch(userProfileByIdProvider(uid));
-                  return profileAsync.when(
-                    data: (userProfile) {
-                      if (userProfile == null) return const SizedBox.shrink();
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (roleLabel != null && roleLabel.isNotEmpty)
-                              _buildRelationshipAboveCardLabel(
-                                context,
-                                roleLabel,
-                              ),
-                            UserCardView(
-                              user: userProfile,
-                              searchQuery: '',
-                              onNameTap: () => context.push('/profile/$uid'),
-                              onChatTap: () =>
-                                  context.push('/chat/direct/$uid'),
-                              isStatic: false,
+                  final cachedProfile = ref
+                      .read(profileRepositoryProvider)
+                      .getCachedProfile(uid);
+                  final resolvedProfile = profileAsync.value ?? cachedProfile;
+                  if (resolvedProfile != null) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (roleLabel != null && roleLabel.isNotEmpty)
+                            _buildRelationshipAboveCardLabel(
+                              context,
+                              roleLabel,
                             ),
-                            if (exchangeData != null)
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                  left: 12,
-                                  right: 12,
-                                  bottom: 8,
-                                ),
-                                child: Row(
-                                  children: [
-                                    // Location
-                                    if (exchangeData['locationAddress'] !=
-                                            null &&
-                                        exchangeData['locationAddress'] !=
-                                            'Location Unavailable') ...[
-                                      const Icon(
-                                        LucideIcons.mapPin,
-                                        size: 12,
-                                        color: Colors.grey,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Flexible(
-                                        child: Text(
-                                          exchangeData['locationAddress']
-                                              as String,
-                                          style: const TextStyle(
-                                            fontSize: 11,
-                                            color: Colors.grey,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                    ],
-                                    // Timestamp
-                                    if (exchangeData['timestamp'] != null) ...[
-                                      const Icon(
-                                        LucideIcons.calendar,
-                                        size: 12,
-                                        color: Colors.grey,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        _formatExchangeTimestamp(
-                                          exchangeData['timestamp'],
-                                        ),
+                          UserCardView(
+                            user: resolvedProfile,
+                            searchQuery: '',
+                            onNameTap: () => context.push('/profile/$uid'),
+                            onChatTap: () => context.push('/chat/direct/$uid'),
+                            isStatic: false,
+                          ),
+                          if (exchangeData != null)
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                left: 12,
+                                right: 12,
+                                bottom: 8,
+                              ),
+                              child: Row(
+                                children: [
+                                  if (exchangeData['locationAddress'] != null &&
+                                      exchangeData['locationAddress'] !=
+                                          'Location Unavailable') ...[
+                                    const Icon(
+                                      LucideIcons.mapPin,
+                                      size: 12,
+                                      color: Colors.grey,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Flexible(
+                                      child: Text(
+                                        exchangeData['locationAddress']
+                                            as String,
                                         style: const TextStyle(
                                           fontSize: 11,
                                           color: Colors.grey,
                                         ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                    ],
+                                    ),
+                                    const SizedBox(width: 8),
                                   ],
-                                ),
+                                  if (exchangeData['timestamp'] != null) ...[
+                                    const Icon(
+                                      LucideIcons.calendar,
+                                      size: 12,
+                                      color: Colors.grey,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      _formatExchangeTimestamp(
+                                        exchangeData['timestamp'],
+                                      ),
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
-                          ],
-                        ),
-                      );
-                    },
+                            ),
+                        ],
+                      ),
+                    );
+                  }
+                  return profileAsync.when(
+                    data: (_) => const SizedBox.shrink(),
                     loading: () => Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Container(
@@ -3251,10 +3292,10 @@ class UserProfileView extends ConsumerWidget {
           minChildSize: 0.4,
           maxChildSize: 0.95,
           builder: (context, scrollController) {
+            final trustRepo = ref.read(trustRepositoryProvider);
             return FutureBuilder<Map<String, Map<String, dynamic>>>(
-              future: ref
-                  .read(trustRepositoryProvider)
-                  .getQrExchangeRecords(profileUid),
+              initialData: trustRepo.getCachedQrExchangeRecords(profileUid),
+              future: trustRepo.getQrExchangeRecords(profileUid),
               builder: (context, snapshot) {
                 final records = snapshot.data ?? {};
                 final allQrIds = <String>{
@@ -3562,30 +3603,34 @@ class UserProfileView extends ConsumerWidget {
           return Consumer(
             builder: (context, ref, _) {
               final profileAsync = ref.watch(userProfileByIdProvider(uid));
+              final cachedProfile = ref
+                  .read(profileRepositoryProvider)
+                  .getCachedProfile(uid);
+              final resolvedProfile = profileAsync.value ?? cachedProfile;
               final roleLabel = showRoleAboveCard
                   ? roleByUserId[uid]?.trim()
                   : null;
+              if (resolvedProfile != null) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (roleLabel != null && roleLabel.isNotEmpty)
+                        _buildRelationshipAboveCardLabel(context, roleLabel),
+                      UserCardView(
+                        user: resolvedProfile,
+                        searchQuery: '',
+                        onNameTap: () => context.push('/profile/$uid'),
+                        onChatTap: () => context.push('/chat/direct/$uid'),
+                        isStatic: false,
+                      ),
+                    ],
+                  ),
+                );
+              }
               return profileAsync.when(
-                data: (profile) {
-                  if (profile == null) return const SizedBox.shrink();
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (roleLabel != null && roleLabel.isNotEmpty)
-                          _buildRelationshipAboveCardLabel(context, roleLabel),
-                        UserCardView(
-                          user: profile,
-                          searchQuery: '',
-                          onNameTap: () => context.push('/profile/$uid'),
-                          onChatTap: () => context.push('/chat/direct/$uid'),
-                          isStatic: false,
-                        ),
-                      ],
-                    ),
-                  );
-                },
+                data: (_) => const SizedBox.shrink(),
                 loading: () => Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   child: Container(
@@ -4233,10 +4278,10 @@ class _PendingRequestMonitorState
     if (currentUser == null) return const SizedBox.shrink();
 
     // Listen to MY incoming requests
+    final relRepo = ref.watch(relationshipRepositoryProvider);
     return StreamBuilder<List<RelationshipRequest>>(
-      stream: ref
-          .watch(relationshipRepositoryProvider)
-          .getIncomingRequests(currentUser.uid),
+      initialData: relRepo.getCachedIncomingRequests(currentUser.uid),
+      stream: relRepo.getIncomingRequests(currentUser.uid),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const SizedBox.shrink();
 
@@ -4317,7 +4362,81 @@ class _MilestoneContactsSheetState
   @override
   void initState() {
     super.initState();
+    _seedFromCache();
     _loadContactsWithMessages();
+  }
+
+  void _seedFromCache() {
+    final currentUserId = ref.read(authRepositoryProvider).currentUser?.uid;
+    if (currentUserId == null) return;
+
+    final chatRepo = ref.read(chatRepositoryProvider);
+    final profileRepo = ref.read(profileRepositoryProvider);
+    final relRepo = ref.read(relationshipRepositoryProvider);
+
+    final isRelationshipMode =
+        widget.mode == _MilestoneConnectMode.family ||
+        widget.mode == _MilestoneConnectMode.friend;
+    if (isRelationshipMode) {
+      final cachedRels = relRepo.getCachedRelationships(currentUserId);
+      final cachedSent = relRepo.getCachedSentRequests(currentUserId);
+      final cachedIncoming = relRepo.getCachedIncomingRequests(currentUserId);
+      if (cachedRels != null) {
+        for (final r in cachedRels) {
+          if (r.status == 'active' && r.id.isNotEmpty) {
+            _alreadyRelatedOrRequestedUserIds.add(r.id);
+          }
+        }
+      }
+      if (cachedSent != null) {
+        for (final req in cachedSent) {
+          if (req.status == 'pending' && req.toUserId.isNotEmpty) {
+            _alreadyRelatedOrRequestedUserIds.add(req.toUserId);
+          }
+        }
+      }
+      if (cachedIncoming != null) {
+        for (final req in cachedIncoming) {
+          if (req.status == 'pending' && req.fromUserId.isNotEmpty) {
+            _alreadyRelatedOrRequestedUserIds.add(req.fromUserId);
+          }
+        }
+      }
+    }
+
+    final cachedChats = chatRepo.cachedChats;
+    if (cachedChats.isNotEmpty) {
+      final seeded = <ProfileData>[];
+      final seenUids = <String>{};
+      for (final chat in cachedChats) {
+        final isDirect = chat.type == 'direct' || chat.id.startsWith('direct_');
+        final hasMessages =
+            chat.lastMessage != null &&
+            (chat.lastMessage!.timestamp > 0 ||
+                chat.lastMessage!.content.trim().isNotEmpty);
+        if (isDirect && hasMessages) {
+          for (final uid in chat.participants) {
+            if (uid != currentUserId &&
+                uid.isNotEmpty &&
+                seenUids.add(uid)) {
+              _chatIdByUserId[uid] = chat.id;
+              final cachedProfile = profileRepo.getCachedProfile(uid);
+              if (cachedProfile != null) {
+                seeded.add(cachedProfile);
+              }
+            }
+          }
+        }
+      }
+      if (seeded.isNotEmpty) {
+        seeded.sort(
+          (a, b) =>
+              a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()),
+        );
+        _contacts = seeded;
+        _isLoading = false;
+      }
+    }
   }
 
   @override
@@ -4336,21 +4455,33 @@ class _MilestoneContactsSheetState
     try {
       final chatRepo = ref.read(chatRepositoryProvider);
       final relRepo = ref.read(relationshipRepositoryProvider);
+      final profileRepo = ref.read(profileRepositoryProvider);
 
-      // Load active relationships + pending sent/incoming requests
       final isRelationshipMode =
           widget.mode == _MilestoneConnectMode.family ||
           widget.mode == _MilestoneConnectMode.friend;
-      if (isRelationshipMode) {
-        try {
-          final results = await Future.wait([
+
+      // Run chats fetch and relationships/requests fetch in parallel
+      final parallelResults = await Future.wait<dynamic>([
+        chatRepo.getUserChats(),
+        if (isRelationshipMode)
+          Future.wait<Object>([
             relRepo.getRelationshipsList(currentUserId),
             relRepo.getSentRequests(currentUserId).first,
             relRepo.getIncomingRequests(currentUserId).first,
-          ]);
-          final activeRels = results[0] as List<Relationship>;
-          final sentReqs = results[1] as List<RelationshipRequest>;
-          final incomingReqs = results[2] as List<RelationshipRequest>;
+          ]).catchError((Object e) {
+            debugPrint('Error checking existing relationships/requests: $e');
+            return const <Object>[];
+          }),
+      ]);
+
+      final chats = parallelResults[0] as List;
+      if (isRelationshipMode && parallelResults.length > 1) {
+        final relResults = parallelResults[1] as List;
+        if (relResults.length == 3) {
+          final activeRels = relResults[0] as List<Relationship>;
+          final sentReqs = relResults[1] as List<RelationshipRequest>;
+          final incomingReqs = relResults[2] as List<RelationshipRequest>;
 
           for (final r in activeRels) {
             if (r.status == 'active' && r.id.isNotEmpty) {
@@ -4367,12 +4498,8 @@ class _MilestoneContactsSheetState
               _alreadyRelatedOrRequestedUserIds.add(req.fromUserId);
             }
           }
-        } catch (e) {
-          debugPrint('Error checking existing relationships/requests: $e');
         }
       }
-
-      final chats = await chatRepo.getUserChats();
 
       final contactIds = <String>{};
       for (final chat in chats) {
@@ -4401,23 +4528,41 @@ class _MilestoneContactsSheetState
         return;
       }
 
-      final idList = contactIds.toList();
       final List<ProfileData> loadedProfiles = [];
-      final firestore = FirebaseFirestore.instance;
+      final missingIds = <String>[];
+      for (final uid in contactIds) {
+        final cached = profileRepo.getCachedProfile(uid);
+        if (cached != null) {
+          loadedProfiles.add(cached);
+        } else {
+          missingIds.add(uid);
+        }
+      }
 
-      for (var i = 0; i < idList.length; i += 10) {
-        final chunk = idList.sublist(
-          i,
-          i + 10 > idList.length ? idList.length : i + 10,
-        );
-        final snap = await firestore
-            .collection('users')
-            .where(FieldPath.documentId, whereIn: chunk)
-            .get();
-        for (final doc in snap.docs) {
-          final data = Map<String, dynamic>.from(doc.data());
-          data['uid'] ??= doc.id;
-          loadedProfiles.add(ProfileData.fromJson(data));
+      if (missingIds.isNotEmpty) {
+        final firestore = FirebaseFirestore.instance;
+        final chunkFutures = <Future<QuerySnapshot<Map<String, dynamic>>>>[];
+        for (var i = 0; i < missingIds.length; i += 10) {
+          final chunk = missingIds.sublist(
+            i,
+            i + 10 > missingIds.length ? missingIds.length : i + 10,
+          );
+          chunkFutures.add(
+            firestore
+                .collection('users')
+                .where(FieldPath.documentId, whereIn: chunk)
+                .get(),
+          );
+        }
+        final chunkSnapshots = await Future.wait(chunkFutures);
+        for (final snap in chunkSnapshots) {
+          for (final doc in snap.docs) {
+            final data = Map<String, dynamic>.from(doc.data());
+            data['uid'] ??= doc.id;
+            final p = ProfileData.fromJson(data);
+            profileRepo.cacheProfile(doc.id, p);
+            loadedProfiles.add(p);
+          }
         }
       }
 
@@ -4528,47 +4673,59 @@ class _MilestoneContactsSheetState
     if (targetUid == null || targetUid.isEmpty) return;
 
     final messenger = ScaffoldMessenger.maybeOf(context);
-    try {
-      final chatRepo = ref.read(chatRepositoryProvider);
-      String? chatId = _chatIdByUserId[targetUid];
-      chatId ??= await chatRepo.getExistingDirectChat(targetUid);
-      if (chatId == null) {
-        final chat = await chatRepo.createDirectChat(targetUid);
-        chatId = chat?.id;
-      }
-      if (chatId == null) {
-        messenger?.showSnackBar(
-          const SnackBar(content: Text('Unable to open direct chat.')),
-        );
-        return;
-      }
+    final chatRepo = ref.read(chatRepositoryProvider);
 
-      final contactFirst = contact.firstName.trim().isNotEmpty
-          ? contact.firstName.trim()
-          : contact.fullName.trim();
-      final messageText =
-          'Hi $contactFirst, could you please verify my profile on Diaspora Nearby? '
-          'You can open our chat menu (⋯) and tap "Verify & Vouch" to help me complete my Community Verifications milestone. Thank you!';
-
-      await chatRepo.sendTextMessage(chatId, messageText);
-
-      if (mounted) {
-        setState(() {
-          _sentSolicitationUserIds.add(targetUid);
-        });
-      }
-      messenger?.showSnackBar(
-        SnackBar(
-          content: Text(
-            'Verification request sent to ${contact.fullName} in chat!',
-          ),
-        ),
-      );
-    } catch (e) {
-      messenger?.showSnackBar(
-        SnackBar(content: Text('Failed to send request: $e')),
-      );
+    // [PERF] Optimistically mark solicitation sent and show feedback on frame 0 (0ms)!
+    if (mounted) {
+      setState(() {
+        _sentSolicitationUserIds.add(targetUid);
+      });
     }
+    messenger?.showSnackBar(
+      SnackBar(
+        content: Text(
+          'Verification request sent to ${contact.fullName} in chat!',
+        ),
+      ),
+    );
+
+    unawaited(() async {
+      try {
+        String? chatId =
+            _chatIdByUserId[targetUid] ??
+            chatRepo.getCachedDirectChatWith(targetUid)?.id;
+        chatId ??= await chatRepo.getExistingDirectChat(targetUid);
+        if (chatId == null) {
+          final chat = await chatRepo.createDirectChat(targetUid);
+          chatId = chat?.id;
+        }
+        if (chatId == null) {
+          if (mounted) {
+            setState(() => _sentSolicitationUserIds.remove(targetUid));
+          }
+          messenger?.showSnackBar(
+            const SnackBar(content: Text('Unable to open direct chat.')),
+          );
+          return;
+        }
+
+        final contactFirst = contact.firstName.trim().isNotEmpty
+            ? contact.firstName.trim()
+            : contact.fullName.trim();
+        final messageText =
+            'Hi $contactFirst, could you please verify my profile on Diaspora Nearby? '
+            'You can open our chat menu (⋯) and tap "Verify & Vouch" to help me complete my Community Verifications milestone. Thank you!';
+
+        await chatRepo.sendTextMessage(chatId, messageText);
+      } catch (e) {
+        if (mounted) {
+          setState(() => _sentSolicitationUserIds.remove(targetUid));
+        }
+        messenger?.showSnackBar(
+          SnackBar(content: Text('Failed to send request: $e')),
+        );
+      }
+    }());
   }
 
   @override

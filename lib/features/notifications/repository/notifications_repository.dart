@@ -23,6 +23,28 @@ class NotificationsRepository {
 
   NotificationsRepository(this._firestore);
 
+  static final Map<String, List<NotificationItem>> _notificationsCache = {};
+
+  List<NotificationItem>? getCachedNotifications(String userId) =>
+      _notificationsCache[userId];
+
+  List<NotificationItem>? getCachedActionRequired(String userId) =>
+      _notificationsCache[userId]
+          ?.where((n) => n.actionRequired && !n.actionCompleted)
+          .toList();
+
+  List<NotificationItem>? getCachedCompletedActions(String userId) =>
+      _notificationsCache[userId]
+          ?.where((n) => n.actionRequired && n.actionCompleted)
+          .toList();
+
+  int? getCachedUnreadCount(String userId) =>
+      _notificationsCache[userId]?.where((n) => !n.isRead).length;
+
+  int? getCachedPendingActionCount(String userId) => _notificationsCache[userId]
+      ?.where((n) => n.actionRequired && !n.actionCompleted)
+      .length;
+
   /// Subcollection path for a user's notifications.
   CollectionReference<Map<String, dynamic>> _userNotifications(String userId) {
     return _firestore
@@ -90,6 +112,12 @@ class NotificationsRepository {
 
   /// Mark a single notification as read.
   Future<void> markAsRead(String userId, String notificationId) async {
+    final cached = _notificationsCache[userId];
+    if (cached != null) {
+      _notificationsCache[userId] = cached
+          .map((n) => n.id == notificationId ? n.copyWith(isRead: true) : n)
+          .toList();
+    }
     try {
       await _userNotifications(
         userId,
@@ -101,6 +129,12 @@ class NotificationsRepository {
 
   /// Mark all notifications as read.
   Future<void> markAllAsRead(String userId) async {
+    final cached = _notificationsCache[userId];
+    if (cached != null) {
+      _notificationsCache[userId] = cached
+          .map((n) => n.copyWith(isRead: true))
+          .toList();
+    }
     try {
       final unread = await _userNotifications(
         userId,
@@ -120,6 +154,16 @@ class NotificationsRepository {
 
   /// Mark a notification's action as completed.
   Future<void> markActionCompleted(String userId, String notificationId) async {
+    final cached = _notificationsCache[userId];
+    if (cached != null) {
+      _notificationsCache[userId] = cached
+          .map(
+            (n) => n.id == notificationId
+                ? n.copyWith(actionCompleted: true, isRead: true)
+                : n,
+          )
+          .toList();
+    }
     try {
       await _userNotifications(
         userId,
@@ -136,6 +180,16 @@ class NotificationsRepository {
     String userId,
     String dedupKey,
   ) async {
+    final cached = _notificationsCache[userId];
+    if (cached != null) {
+      _notificationsCache[userId] = cached
+          .map(
+            (n) => n.payload['dedupKey'] == dedupKey
+                ? n.copyWith(actionCompleted: true, isRead: true)
+                : n,
+          )
+          .toList();
+    }
     try {
       final snap = await _userNotifications(
         userId,
@@ -160,6 +214,12 @@ class NotificationsRepository {
 
   /// Delete a single notification.
   Future<void> deleteNotification(String userId, String notificationId) async {
+    final cached = _notificationsCache[userId];
+    if (cached != null) {
+      _notificationsCache[userId] = cached
+          .where((n) => n.id != notificationId)
+          .toList();
+    }
     try {
       await _userNotifications(userId).doc(notificationId).delete();
     } catch (e) {
@@ -169,6 +229,7 @@ class NotificationsRepository {
 
   /// Clear all notifications for a user.
   Future<void> clearAll(String userId) async {
+    _notificationsCache[userId] = const [];
     try {
       final all = await _userNotifications(userId).limit(500).get();
       final batch = _firestore.batch();
@@ -185,64 +246,123 @@ class NotificationsRepository {
 
   /// Stream all notifications for a user, ordered by createdAt descending.
   Stream<List<NotificationItem>> watchNotifications(String userId) {
-    return _userNotifications(userId)
-        .orderBy('createdAt', descending: true)
-        .limit(100)
-        .snapshots()
-        .map(
-          (snap) => snap.docs
-              .map((doc) => NotificationItem.fromMap(doc.id, doc.data()))
-              .toList(),
-        );
+    return Stream.multi((controller) {
+      final cached = _notificationsCache[userId];
+      if (cached != null) {
+        controller.add(cached);
+      }
+      final sub = _userNotifications(userId)
+          .orderBy('createdAt', descending: true)
+          .limit(100)
+          .snapshots()
+          .listen(
+            (snap) {
+              final list = snap.docs
+                  .map((doc) => NotificationItem.fromMap(doc.id, doc.data()))
+                  .toList();
+              _notificationsCache[userId] = list;
+              controller.add(list);
+            },
+            onError: controller.addError,
+            onDone: controller.close,
+          );
+      controller.onCancel = sub.cancel;
+    });
   }
 
   /// Stream only actionable (action required & not completed) notifications.
   Stream<List<NotificationItem>> watchActionRequired(String userId) {
-    return _userNotifications(userId)
-        .where('actionRequired', isEqualTo: true)
-        .where('actionCompleted', isEqualTo: false)
-        .orderBy('createdAt', descending: true)
-        .limit(100)
-        .snapshots()
-        .map(
-          (snap) => snap.docs
-              .map((doc) => NotificationItem.fromMap(doc.id, doc.data()))
-              .toList(),
-        );
+    return Stream.multi((controller) {
+      final cached = getCachedActionRequired(userId);
+      if (cached != null) {
+        controller.add(cached);
+      }
+      final sub = _userNotifications(userId)
+          .where('actionRequired', isEqualTo: true)
+          .where('actionCompleted', isEqualTo: false)
+          .orderBy('createdAt', descending: true)
+          .limit(100)
+          .snapshots()
+          .listen(
+            (snap) {
+              final list = snap.docs
+                  .map((doc) => NotificationItem.fromMap(doc.id, doc.data()))
+                  .toList();
+              controller.add(list);
+            },
+            onError: controller.addError,
+            onDone: controller.close,
+          );
+      controller.onCancel = sub.cancel;
+    });
   }
 
   /// Stream completed action-required notifications.
   Stream<List<NotificationItem>> watchCompletedActions(String userId) {
-    return _userNotifications(userId)
-        .where('actionRequired', isEqualTo: true)
-        .where('actionCompleted', isEqualTo: true)
-        .orderBy('createdAt', descending: true)
-        .limit(50)
-        .snapshots()
-        .map(
-          (snap) => snap.docs
-              .map((doc) => NotificationItem.fromMap(doc.id, doc.data()))
-              .toList(),
-        );
+    return Stream.multi((controller) {
+      final cached = getCachedCompletedActions(userId);
+      if (cached != null) {
+        controller.add(cached);
+      }
+      final sub = _userNotifications(userId)
+          .where('actionRequired', isEqualTo: true)
+          .where('actionCompleted', isEqualTo: true)
+          .orderBy('createdAt', descending: true)
+          .limit(50)
+          .snapshots()
+          .listen(
+            (snap) {
+              final list = snap.docs
+                  .map((doc) => NotificationItem.fromMap(doc.id, doc.data()))
+                  .toList();
+              controller.add(list);
+            },
+            onError: controller.addError,
+            onDone: controller.close,
+          );
+      controller.onCancel = sub.cancel;
+    });
   }
 
   /// Stream count of unread notifications.
   Stream<int> watchUnreadCount(String userId) {
-    return _userNotifications(userId)
-        .where('isRead', isEqualTo: false)
-        .limit(500)
-        .snapshots()
-        .map((snap) => snap.docs.length);
+    return Stream.multi((controller) {
+      final cached = getCachedUnreadCount(userId);
+      if (cached != null) {
+        controller.add(cached);
+      }
+      final sub = _userNotifications(userId)
+          .where('isRead', isEqualTo: false)
+          .limit(500)
+          .snapshots()
+          .listen(
+            (snap) => controller.add(snap.docs.length),
+            onError: controller.addError,
+            onDone: controller.close,
+          );
+      controller.onCancel = sub.cancel;
+    });
   }
 
   /// Stream count of pending action-required notifications (not yet completed).
   Stream<int> watchPendingActionCount(String userId) {
-    return _userNotifications(userId)
-        .where('actionRequired', isEqualTo: true)
-        .where('actionCompleted', isEqualTo: false)
-        .limit(500)
-        .snapshots()
-        .map((snap) => snap.docs.length);
+    return Stream.multi((controller) {
+      final cached = getCachedPendingActionCount(userId);
+      if (cached != null) {
+        controller.add(cached);
+      }
+      final sub = _userNotifications(userId)
+          .where('actionRequired', isEqualTo: true)
+          .where('actionCompleted', isEqualTo: false)
+          .limit(500)
+          .snapshots()
+          .listen(
+            (snap) => controller.add(snap.docs.length),
+            onError: controller.addError,
+            onDone: controller.close,
+          );
+      controller.onCancel = sub.cancel;
+    });
   }
 
   /// One-shot fetch of all notifications for a user.
@@ -250,8 +370,10 @@ class NotificationsRepository {
     final snap = await _userNotifications(
       userId,
     ).orderBy('createdAt', descending: true).limit(200).get();
-    return snap.docs
+    final list = snap.docs
         .map((d) => NotificationItem.fromMap(d.id, d.data()))
         .toList();
+    _notificationsCache[userId] = list;
+    return list;
   }
 }

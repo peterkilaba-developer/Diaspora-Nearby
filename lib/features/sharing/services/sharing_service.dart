@@ -9,6 +9,27 @@ class SharingService {
   SharingService._();
   static final SharingService instance = SharingService._();
 
+  static File? _cachedLogoFile;
+
+  Future<File> _getLogoFile() async {
+    if (_cachedLogoFile != null && _cachedLogoFile!.existsSync()) {
+      return _cachedLogoFile!;
+    }
+    final byteData = await rootBundle.load(
+      'assets/icons/logo-transparent-128.png',
+    );
+    final tempDir = await getTemporaryDirectory();
+    final file = File('${tempDir.path}/logo.png');
+    await file.writeAsBytes(
+      byteData.buffer.asUint8List(
+        byteData.offsetInBytes,
+        byteData.lengthInBytes,
+      ),
+    );
+    _cachedLogoFile = file;
+    return file;
+  }
+
   // Basic App Invite
   Future<void> shareApp({String? referralCode}) async {
     final appLink = referralCode != null && referralCode.isNotEmpty
@@ -18,18 +39,7 @@ class SharingService {
         'For my family and Friends at home and abroad. Join and connect with me in this platform.: $appLink';
 
     try {
-      // Load logo from assets
-      final byteData = await rootBundle.load(
-        'assets/icons/logo-transparent-128.png',
-      );
-      final tempDir = await getTemporaryDirectory();
-      final file = File('${tempDir.path}/logo.png');
-      await file.writeAsBytes(
-        byteData.buffer.asUint8List(
-          byteData.offsetInBytes,
-          byteData.lengthInBytes,
-        ),
-      );
+      final file = await _getLogoFile();
 
       // Share image + text
       await SharePlus.instance.share(

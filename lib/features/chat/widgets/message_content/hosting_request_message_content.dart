@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -33,7 +35,8 @@ class HostingRequestMessageContent extends ConsumerStatefulWidget {
 
 class _HostingRequestMessageContentState
     extends ConsumerState<HostingRequestMessageContent> {
-  bool _isShowingInterest = false;
+  final bool _isShowingInterest = false;
+  bool _optimisticInterested = false;
 
   Map<String, dynamic> get _meta => widget.message.metadata ?? {};
 
@@ -71,44 +74,52 @@ class _HostingRequestMessageContentState
     final reqId = _requestId;
     if (reqId == null || reqId.isEmpty) return;
 
-    // Validate 91+ Trust Score for Host
     final trustService = ref.read(trustServiceProvider);
-    final trustScore = await trustService.calculateTrustScore(null);
-    if (trustScore < 91) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Trust Score of 91+ required to offer Peer Hosting.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-      return;
-    }
+    final hostingService = ref.read(hostingServiceProvider);
+    final messenger = ScaffoldMessenger.of(context);
 
-    setState(() => _isShowingInterest = true);
-    try {
-      await ref.read(hostingServiceProvider).showInterest(reqId);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Interest shown! The traveler will be notified.'),
-            backgroundColor: AppTheme.accent,
-          ),
-        );
+    // Optimistic 0ms update
+    setState(() => _optimisticInterested = true);
+
+    unawaited(() async {
+      try {
+        final trustScore = await trustService.calculateTrustScore(null);
+        if (trustScore < 91) {
+          if (mounted) {
+            setState(() => _optimisticInterested = false);
+            messenger.showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Trust Score of 91+ required to offer Peer Hosting.',
+                ),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        }
+
+        await hostingService.showInterest(reqId);
+        if (mounted) {
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('Interest shown! The traveler will be notified.'),
+              backgroundColor: AppTheme.accent,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() => _optimisticInterested = false);
+          final message = e is Exception
+              ? e.toString().replaceFirst('Exception: ', '')
+              : 'Something went wrong. Please try again.';
+          messenger.showSnackBar(
+            SnackBar(content: Text(message), backgroundColor: Colors.red),
+          );
+        }
       }
-    } catch (e) {
-      if (mounted) {
-        final message = e is Exception
-            ? e.toString().replaceFirst('Exception: ', '')
-            : 'Something went wrong. Please try again.';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isShowingInterest = false);
-    }
+    }());
   }
 
   @override
@@ -129,16 +140,19 @@ class _HostingRequestMessageContentState
 
     // Find this specific request in the stream
     int interestedCount = 0;
-    bool alreadyInterested = false;
+    bool alreadyInterested = _optimisticInterested;
     bool isMatched = false;
     if (requestAsync != null) {
       final requests = requestAsync.value ?? [];
       final thisReq = requests.where((r) => r.id == _requestId).firstOrNull;
       if (thisReq != null) {
-        interestedCount = thisReq.interestedHostIds.length;
-        alreadyInterested =
+        final streamHasMe =
             currentUserId != null &&
             thisReq.interestedHostIds.contains(currentUserId);
+        interestedCount =
+            thisReq.interestedHostIds.length +
+            ((_optimisticInterested && !streamHasMe) ? 1 : 0);
+        alreadyInterested = _optimisticInterested || streamHasMe;
         isMatched = thisReq.status != HostingRequestStatus.pending;
       }
     }
@@ -488,7 +502,10 @@ class _HostingRequestMessageContentState
                         context: context,
                         isScrollControlled: true,
                         backgroundColor: Colors.transparent,
-                        builder: (_) => InterestedHostsSheet(request: thisReq),
+                        builder: (_) => BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                          child: InterestedHostsSheet(request: thisReq),
+                        ),
                       );
                     }
                   },

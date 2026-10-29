@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -149,8 +150,13 @@ class _CreateStayListingScreenState
         }
       }
 
+      final isEditing = widget.existing != null;
+      final listingId = isEditing
+          ? widget.existing!.id
+          : repo.generateListingId();
+
       final listing = PeerListing(
-        id: widget.existing?.id ?? '',
+        id: listingId,
         type: 'stay',
         isPeerHosting: _isPeerHosting,
         ownerId: user.uid,
@@ -174,41 +180,41 @@ class _CreateStayListingScreenState
         beds: _beds,
         baths: _baths,
         maxGuests: _maxGuests,
-        amenities: _selectedAmenities,
+        amenities: List<String>.from(_selectedAmenities),
       );
 
-      if (widget.existing != null) {
-        await repo.updateListing(widget.existing!.id, listing.toJson());
-        if (mounted) {
-          Navigator.pop(context, true);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Listing updated!'),
-              behavior: SnackBarBehavior.floating,
+      repo.cacheListing(listing);
+
+      if (mounted) {
+        final navigator = Navigator.of(context);
+        final messenger = ScaffoldMessenger.of(context);
+        navigator.pop(true);
+        if (!isEditing) {
+          navigator.push(
+            MaterialPageRoute(
+              builder: (_) => PeerListingDetailScreen(listing: listing),
             ),
           );
         }
-      } else {
-        final newId = await repo.createListing(listing);
-        final created = await repo.getListing(newId);
-        if (mounted) {
-          Navigator.pop(context, true);
-          if (created != null) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => PeerListingDetailScreen(listing: created),
-              ),
-            );
-          }
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Listing created!'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(isEditing ? 'Listing updated!' : 'Listing created!'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
+
+      unawaited(() async {
+        try {
+          if (isEditing) {
+            await repo.updateListing(listingId, listing.toJson());
+          } else {
+            await repo.createListing(listing);
+          }
+        } catch (e) {
+          debugPrint('CreateStayListingScreen save error: $e');
+        }
+      }());
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

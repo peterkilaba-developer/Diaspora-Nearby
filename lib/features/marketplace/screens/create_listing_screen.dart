@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -19,7 +21,6 @@ import 'package:diaspora_nearby/features/travel/widgets/vin_scanner_widget.dart'
 import 'package:diaspora_nearby/features/marketplace/data/electronics_data.dart';
 import 'package:diaspora_nearby/core/services/google_places_service.dart';
 import 'package:diaspora_nearby/features/shared/models/google_places_models.dart';
-import 'package:diaspora_nearby/core/utils/location_utils.dart';
 import 'package:diaspora_nearby/features/marketplace/utils/currency_helper.dart';
 import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 import 'package:diaspora_nearby/features/marketplace/screens/listing_detail_screen.dart';
@@ -2020,18 +2021,21 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) => _ModelSearchSheet(
-        allModels: allModels,
-        selectedModels: _compatibleModels,
-        onToggle: (model) {
-          setState(() {
-            if (_compatibleModels.contains(model)) {
-              _compatibleModels.remove(model);
-            } else {
-              _compatibleModels.add(model);
-            }
-          });
-        },
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: _ModelSearchSheet(
+          allModels: allModels,
+          selectedModels: _compatibleModels,
+          onToggle: (model) {
+            setState(() {
+              if (_compatibleModels.contains(model)) {
+                _compatibleModels.remove(model);
+              } else {
+                _compatibleModels.add(model);
+              }
+            });
+          },
+        ),
       ),
     );
   }
@@ -2125,13 +2129,16 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) => _SearchableListSheet(
-        title: title,
-        items: items,
-        onSelected: (v) {
-          onSelected(v);
-          Navigator.of(ctx).pop();
-        },
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: _SearchableListSheet(
+          title: title,
+          items: items,
+          onSelected: (v) {
+            onSelected(v);
+            Navigator.of(ctx).pop();
+          },
+        ),
       ),
     );
   }
@@ -3126,9 +3133,9 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
 
       // Gate: Members offering services MUST have completed Proof of Humanity (PoH)
       if (_listingType == ListingType.service) {
-        final trustData = await ref
-            .read(trustServiceProvider)
-            .getTrustData(user.uid);
+        final trustData =
+            ref.read(userTrustProvider(user.uid)).value ??
+            await ref.read(trustServiceProvider).getTrustData(user.uid);
         final isPoHComplete =
             (trustData?.uniqueFamilyCount ?? 0) >= 10 &&
             (trustData?.uniqueFriendCount ?? 0) >= 10 &&
@@ -3143,18 +3150,6 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             'Providing services requires completing all 7 Proof of Humanity (PoH) milestones to protect community trust.',
           );
         }
-      }
-
-      // Upload images
-      final imageUrls = <String>[];
-      for (int i = 0; i < _selectedImages.length; i++) {
-        final file = File(_selectedImages[i].path);
-        final storageRef = FirebaseStorage.instance.ref().child(
-          'marketplace/${user.uid}/${DateTime.now().millisecondsSinceEpoch}_$i.jpg',
-        );
-        await storageRef.putFile(file);
-        final url = await storageRef.getDownloadURL();
-        imageUrls.add(url);
       }
 
       // Parse tags
@@ -3256,8 +3251,16 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         };
       }
 
-      final listing = MarketplaceListing(
-        id: '',
+      final repo = ref.read(marketplaceRepositoryProvider);
+      final chatRepo = ref.read(chatRepositoryProvider);
+      final listingId = _isEditing
+          ? widget.existingListing!.id
+          : repo.generateListingId();
+      final existingImages = widget.existingListing?.images ?? <String>[];
+      final selectedFiles = List<XFile>.from(_selectedImages);
+
+      final optimisticListing = MarketplaceListing(
+        id: listingId,
         sellerId: user.uid,
         sellerName: profile.fullName,
         sellerPhoto: profile.profileImage.isNotEmpty
@@ -3285,25 +3288,26 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         electronicsDetails: electronicsDetails,
         serviceDetails: serviceDetails,
         jobDetails: jobDetails,
-        images: imageUrls,
+        images: existingImages,
         tags: tags.isEmpty ? null : tags,
         location: ListingLocation(
           city: profile.hostLocation.city,
           country: profile.hostCountry,
           countryCode: profile.hostCountryCode,
         ),
-        deliveryOptions: _deliveryOptions.isEmpty ? null : _deliveryOptions,
+        deliveryOptions: _deliveryOptions.isEmpty
+            ? null
+            : List<String>.from(_deliveryOptions),
         contactMethod: _contactMethod,
         communityIds: profile.communityMemberships,
+        createdAt: widget.existingListing?.createdAt ?? DateTime.now(),
         expiresAt: DateTime.now().add(const Duration(days: 30)),
       );
 
-      final repo = ref.read(marketplaceRepositoryProvider);
+      // Optimistic cache update on Frame 0
+      repo.cacheListing(optimisticListing);
 
       if (_isEditing) {
-        // Update existing listing
-        await repo.updateListing(widget.existingListing!.id, listing.toMap());
-
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -3313,28 +3317,31 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           );
           context.pop();
         }
+        unawaited(() async {
+          try {
+            final uploadedUrls = await Future.wait(
+              List.generate(selectedFiles.length, (i) async {
+                final file = File(selectedFiles[i].path);
+                final storageRef = FirebaseStorage.instance.ref().child(
+                  'marketplace/${user.uid}/${DateTime.now().millisecondsSinceEpoch}_$i.jpg',
+                );
+                await storageRef.putFile(file);
+                return storageRef.getDownloadURL();
+              }),
+            );
+            final finalImages = uploadedUrls.isNotEmpty
+                ? [...existingImages, ...uploadedUrls]
+                : existingImages;
+            final finalListing = optimisticListing.copyWith(
+              images: finalImages,
+            );
+            repo.cacheListing(finalListing);
+            await repo.updateListing(listingId, finalListing.toMap());
+          } catch (e) {
+            debugPrint('⚠️ [Marketplace] Background update error: $e');
+          }
+        }());
       } else {
-        final listingId = await repo.createListing(listing);
-
-        // Create the public group chat for this listing
-        try {
-          await ref
-              .read(chatRepositoryProvider)
-              .createListingChat(
-                otherUserId: user.uid, // Seller is the creator/admin
-                listingId: listingId,
-                listingTitle: listing.title,
-                listingType: listing.listingType,
-                sellerRole: _getSellerRole(listing.category),
-                listingImageUrl: imageUrls.isNotEmpty ? imageUrls.first : null,
-              );
-          debugPrint(
-            '✅ [Marketplace] Listing group chat created for $listingId',
-          );
-        } catch (e) {
-          debugPrint('⚠️ [Marketplace] Failed to create listing chat: $e');
-        }
-
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -3350,6 +3357,37 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             ),
           );
         }
+        unawaited(() async {
+          try {
+            final uploadedUrls = await Future.wait(
+              List.generate(selectedFiles.length, (i) async {
+                final file = File(selectedFiles[i].path);
+                final storageRef = FirebaseStorage.instance.ref().child(
+                  'marketplace/${user.uid}/${DateTime.now().millisecondsSinceEpoch}_$i.jpg',
+                );
+                await storageRef.putFile(file);
+                return storageRef.getDownloadURL();
+              }),
+            );
+            final finalListing = optimisticListing.copyWith(
+              images: uploadedUrls,
+            );
+            repo.cacheListing(finalListing);
+            await repo.createListing(finalListing);
+            await chatRepo.createListingChat(
+              otherUserId: user.uid,
+              listingId: listingId,
+              listingTitle: finalListing.title,
+              listingType: finalListing.listingType,
+              sellerRole: _getSellerRole(finalListing.category),
+              listingImageUrl: uploadedUrls.isNotEmpty
+                  ? uploadedUrls.first
+                  : null,
+            );
+          } catch (e) {
+            debugPrint('⚠️ [Marketplace] Background create error: $e');
+          }
+        }());
       }
     } catch (e) {
       if (mounted) {
@@ -3586,13 +3624,16 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) => _LocationSearchSheet(
-        title: title,
-        placesService: ref.read(googlePlacesServiceProvider),
-        onSelected: (display, placeId) {
-          Navigator.pop(ctx);
-          onSelected(display, placeId);
-        },
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: _LocationSearchSheet(
+          title: title,
+          placesService: ref.read(googlePlacesServiceProvider),
+          onSelected: (display, placeId) {
+            Navigator.pop(ctx);
+            onSelected(display, placeId);
+          },
+        ),
       ),
     );
   }
@@ -3802,41 +3843,8 @@ class _LocationSearchSheetState extends State<_LocationSearchSheet> {
   }
 
   Future<void> _selectPrediction(AutocompletePrediction prediction) async {
-    try {
-      final response = await widget.placesService.getPlaceDetails(
-        prediction.placeId,
-      );
-      if (response == null) {
-        widget.onSelected(prediction.fullText, prediction.placeId);
-        return;
-      }
-      final place = response.place;
-
-      // Build display using app's standard location convention
-      String display = prediction.fullText;
-      if (place.addressComponents != null &&
-          place.addressComponents!.isNotEmpty) {
-        final parsed = parseLocationComponents(
-          place.address ?? prediction.fullText,
-          place.addressComponents!,
-        );
-        if (parsed != null) {
-          final parts = <String>[
-            if (parsed.sublocality != null)
-              formatLocationName(parsed.sublocality!),
-            if (parsed.city != null) formatLocationName(parsed.city!),
-            if (parsed.state != null) formatLocationName(parsed.state!),
-            formatLocationName(parsed.country),
-          ].where((s) => s.isNotEmpty).toList();
-          if (parts.isNotEmpty) display = parts.join(', ');
-        }
-      }
-
-      widget.onSelected(display, prediction.placeId);
-    } catch (_) {
-      // Fall back to using the prediction text
-      widget.onSelected(prediction.fullText, prediction.placeId);
-    }
+    // Immediate 0ms selection using prediction text; refine in background
+    widget.onSelected(prediction.fullText, prediction.placeId);
   }
 
   @override

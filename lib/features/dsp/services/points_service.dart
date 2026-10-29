@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -29,23 +30,9 @@ class PointsService {
   void _validateAmount(int amount, String action) {
     if (!_allowedAmounts.contains(amount)) {
       // No-log warning
-      // We could throw but for now we'll just log and let it through if we must?
-      // No, the user said "any other amount is invalid".
-      // I'll clamp it or throw. Actually, better to fix all call sites.
     }
   }
 
-  // Halving Threshold: 1 Billion DSP
-
-  // [UPDATED] Epoch Multiplier Logic
-  // User Decision: Remove Halving. Multiplier stays at 1.0x.
-  // Scarcity is driven by TGE Burn Protocols (Gated Access), not earning suppression.
-
-  // --- Core Calculation Logic ---
-
-  // Calculate Reward based on Activity + Global Epoch Multiplier
-  // [UPDATED] Removed Individual Time-Decay (Deprecated in favor of Global Epochs)
-  // --- Core Calculation Logic ---
   /// Checks if a new day has started and resets counters if needed.
   Future<void> _checkAndResetDaily(String userId, UserPoints userPoints) async {
     final now = DateTime.now();
@@ -60,13 +47,23 @@ class PointsService {
     }
   }
 
-  /// Centralized DSP awarder that handles community tribute
-  /// When [skipTreasury] is true, the award only writes to user_points and
-  /// points_transactions, skipping community treasury distribution. This is
-  /// needed for cross-user awards (e.g., referral bonuses) where the caller
-  /// doesn't have write access to the target user's community treasuries.
-  /// Also skips daily counter resets and user_points initialization for
-  /// cross-user awards, as those write fields the caller can't modify.
+  UserPoints? _safeGetCachedPoints(String userId) {
+    try {
+      return _repository.getCachedUserPoints(userId);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _safeCachePoints(String userId, UserPoints points) {
+    try {
+      _repository.cacheUserPoints(userId, points);
+    } catch (_) {}
+  }
+
+  /// Centralized DSP awarder that handles community tribute.
+  /// Optimistically updates in-memory PointsRepository cache on frame 0
+  /// and runs server-side award without redundant sequential pre-flight reads.
   Future<void> _addPoints(
     String userId,
     int points,
@@ -74,9 +71,6 @@ class PointsService {
     Map<String, dynamic>? metadata,
     bool skipTreasury = false,
   }) async {
-    // For cross-user awards (or skipTreasury), skip initialization and daily reset
-    // since those write fields the calling user doesn't have permission to modify
-    // on another user's document (e.g., dailyMessageCount, signupDate, etc.).
     bool isCurrentUser = true;
     try {
       final currentUid = FirebaseAuth.instance.currentUser?.uid;
@@ -86,52 +80,52 @@ class PointsService {
     } catch (_) {
       isCurrentUser = true;
     }
-    if (!skipTreasury && isCurrentUser) {
-      UserPoints? oldPoints = await _repository.getUserPoints(userId);
-      // [SAFETY] If user doesn't have a points doc yet (e.g. initial set failed),
-      // initialize it first to ensure base fields (signupDate, streak, etc) exist.
-      if (oldPoints == null) {
-        await initializeUserPoints(userId);
-        oldPoints = await _repository.getUserPoints(
-          userId,
-        ); // Re-fetch after initialization
-      }
 
-      if (oldPoints != null) {
-        await _checkAndResetDaily(userId, oldPoints);
-      }
+    // Optimistic local cache update in 0ms
+    final cachedPoints = _safeGetCachedPoints(userId);
+    if (cachedPoints != null) {
+      final updatedEarnings = Map<String, int>.from(
+        cachedPoints.lifetimeEarnings,
+      );
+      updatedEarnings[action] = (updatedEarnings[action] ?? 0) + points;
+      _safeCachePoints(
+        userId,
+        cachedPoints.copyWith(
+          totalPoints: cachedPoints.totalPoints + points,
+          availablePoints: cachedPoints.availablePoints + points,
+          lastUpdated: DateTime.now(),
+          lifetimeEarnings: updatedEarnings,
+        ),
+      );
     }
 
     _validateAmount(points, action);
-    await _repository.addPoints(
-      userId,
-      points,
-      action,
-      metadata: metadata,
-      skipTreasury: skipTreasury,
-    );
 
-    // Streak increment removed from here to ensure it only counts for SHARING
+    final futures = <Future<void>>[
+      _repository.addPoints(
+        userId,
+        points,
+        action,
+        metadata: metadata,
+        skipTreasury: skipTreasury,
+      ),
+    ];
+
+    if (!skipTreasury && isCurrentUser && cachedPoints != null) {
+      futures.add(_checkAndResetDaily(userId, cachedPoints));
+    }
+
+    await Future.wait(futures);
   }
-
-  /// Calculates a proportional penalty based on current total points.
-  /// Used to ensure penalties scale with user involvement and earnings.
-  // Removed _calculateProportionalPenalty as it creates invalid DSP amounts
-
-  // --- [DEPRECATED v8] Bad Actor Penalties moved to PCT milestones ---
-  // All penalties now handled via PCT deductions in TrustService.
-  // -10 PCT per 10 unique occurrences (milestone model).
 
   // [DEPRECATED v8] Block penalty → -10 PCT / 10 blocks (in TrustService)
   Future<void> trackBlockPenalty(String userId, int newBlocksCount) async {
-    // DSP penalty removed — PCT milestone handled in TrustService
     debugPrint('DSP: Block penalty deprecated — PCT handled in TrustService');
     await _trustService.updateTrustForUser(userId);
   }
 
   // [DEPRECATED v8] Flag penalty → -10 PCT / 10 flags (in TrustService)
   Future<void> trackFlagPenalty(String userId, int newFlagCount) async {
-    // DSP penalty removed — PCT milestone handled in TrustService
     debugPrint('DSP: Flag penalty deprecated — PCT handled in TrustService');
     await _trustService.updateTrustForUser(userId);
   }
@@ -165,10 +159,10 @@ class PointsService {
 
   // [RESTORED] Message sending awards 10 DSP.
   Future<void> trackMessageSent(String userId, {String? receiverId}) async {
-    await _addPoints(userId, 10, 'message_sent');
-    if (receiverId != null) {
-      await _addPoints(receiverId, 10, 'message_received');
-    }
+    await Future.wait([
+      _addPoints(userId, 10, 'message_sent'),
+      if (receiverId != null) _addPoints(receiverId, 10, 'message_received'),
+    ]);
   }
 
   // [RESTORED] Community messages award 100 DSP.
@@ -183,18 +177,20 @@ class PointsService {
 
   // [RESTORED] New DM awards 100 DSP.
   Future<void> trackNewDM(String userId, String targetUserId) async {
-    await _addPoints(
-      userId,
-      100,
-      'new_dm_conversation',
-      metadata: {'targetUserId': targetUserId},
-    );
-    await _addPoints(
-      targetUserId,
-      100,
-      'new_dm_received',
-      metadata: {'starterUserId': userId},
-    );
+    await Future.wait([
+      _addPoints(
+        userId,
+        100,
+        'new_dm_conversation',
+        metadata: {'targetUserId': targetUserId},
+      ),
+      _addPoints(
+        targetUserId,
+        100,
+        'new_dm_received',
+        metadata: {'starterUserId': userId},
+      ),
+    ]);
   }
 
   // [UPDATED v9] Verifier Reward: 1,000 DSP (10x scale)
@@ -202,19 +198,17 @@ class PointsService {
     String userId, {
     String? verifiedUserId,
   }) async {
-    // 1. Award per-action reward — 1,000 DSP per verification
-    await _addPoints(userId, 1000, 'verifier_reward');
-    if (verifiedUserId != null) {
-      await _addPoints(verifiedUserId, 1000, 'verified_by_peer');
-    }
+    await Future.wait([
+      _addPoints(userId, 1000, 'verifier_reward'),
+      if (verifiedUserId != null)
+        _addPoints(verifiedUserId, 1000, 'verified_by_peer'),
+      _repository.incrementVerifiedCount(userId),
+    ]);
 
-    // 2. Increment count & Trigger Trust Recalculation (Milestones handled in TrustService)
-    await _repository.incrementVerifiedCount(userId);
     await _trustService.updateTrustForUser(userId);
   }
 
   // [UPDATED v9] Vouch Consensus Vote: +100 (agree) or -100 (disagree) to voucher (10x scale).
-  // Called by community members voting on whether the vouch is trustworthy.
   Future<void> trackVouchConsensusVote({
     required String voucherId,
     required bool isAgree,
@@ -236,9 +230,6 @@ class PointsService {
 
   // [RESTORED] External shares award 100 DSP.
   Future<bool> trackExternalShare(String userId, String contentType) async {
-    // External share-sheet completion is not proof that content was actually
-    // delivered. Keep the action non-economic until a verifiable attribution
-    // event exists.
     return false;
   }
 
@@ -247,10 +238,7 @@ class PointsService {
     String userId,
     String contentType, {
     String? sharerId,
-  }) async {
-    // The platform import sheet does not yet create a server-verifiable share.
-    // Do not manufacture balances from a client assertion.
-  }
+  }) async {}
 
   // Process referral: Returns referrerId for relationship connection (No immediate reward)
   Future<String?> processReferral(String code, String newUserId) async {
@@ -300,16 +288,12 @@ class PointsService {
     required String senderId,
     required String receiverId,
     required String status,
-    String? relationshipType, // [NEW] added type
+    String? relationshipType,
   }) async {
     try {
       if (status == 'accepted') {
-        // [FIX] DSP is NOT awarded here anymore.
-        // Genesis milestone DSP (1,000 per connection) is handled exclusively
-        // by TrustService.recalculateTrustScore → checkAndAward to avoid
-        // double-awarding (was previously 2,000 DSP per connection).
+        final futures = <Future<void>>[];
 
-        // Increment family connection count for legacy tracking
         if (relationshipType != null) {
           const Set<String> familyTypes = {
             'wife',
@@ -332,23 +316,29 @@ class PointsService {
               currentUid = FirebaseAuth.instance.currentUser?.uid;
             } catch (_) {}
             if (currentUid == null) {
-              await _repository.incrementFamilyConnectionCount(senderId);
-              await _repository.incrementFamilyConnectionCount(receiverId);
+              futures.add(_repository.incrementFamilyConnectionCount(senderId));
+              futures.add(
+                _repository.incrementFamilyConnectionCount(receiverId),
+              );
             } else if (currentUid == senderId) {
-              await _repository.incrementFamilyConnectionCount(senderId);
+              futures.add(_repository.incrementFamilyConnectionCount(senderId));
             } else if (currentUid == receiverId) {
-              await _repository.incrementFamilyConnectionCount(receiverId);
+              futures.add(
+                _repository.incrementFamilyConnectionCount(receiverId),
+              );
             }
           }
         }
 
-        // Trigger trust recalculation for ALL relationship types
-        // (Family + Friend) so genesis milestone DSP + PCT are awarded
-        await _trustService.updateTrustForUser(senderId);
-        await _trustService.updateTrustForUser(receiverId);
+        if (futures.isNotEmpty) {
+          await Future.wait(futures);
+        }
+
+        await Future.wait([
+          _trustService.updateTrustForUser(senderId),
+          _trustService.updateTrustForUser(receiverId),
+        ]);
       } else if (status == 'rejected') {
-        // [DEPRECATED v8] Rejection penalty removed — could be accidental.
-        // No DSP penalty or compensation for rejections.
         debugPrint('DSP: Relationship rejection penalty removed (v8)');
       }
     } catch (e) {
@@ -370,23 +360,23 @@ class PointsService {
   }
 
   Future<void> trackProfileCompletion(String userId) async {
-    // [UPDATED v9] Profile completion awards 10,000 DSP + 10 PCT via server-authoritative callable
     try {
-      await FirebaseFunctions.instance
-          .httpsCallable('evaluateProfileMilestone')
-          .call<Map<String, dynamic>>({'userId': userId});
+      await Future.wait([
+        FirebaseFunctions.instance
+            .httpsCallable('evaluateProfileMilestone')
+            .call<Map<String, dynamic>>({'userId': userId}),
+        _trustService.updateTrustForUser(userId),
+      ]);
     } catch (e) {
       debugPrint('DSP: evaluateProfileMilestone fallback: $e');
-      // Fallback: if callable is not yet deployed, ensure 10,000 DSP is awarded when all 12 fields are complete
       await trackCompleteProfile(userId);
     }
-    await _trustService.updateTrustForUser(userId);
   }
 
   Future<void> trackCompleteProfile(String userId) async {
-    // [UPDATED v9] Legacy fallback/manual trigger
-    // Ensure 10,000 DSP is awarded if the milestone hasn't been hit yet
-    final points = await _repository.getUserPoints(userId);
+    final points =
+        _safeGetCachedPoints(userId) ??
+        await _repository.getUserPoints(userId);
     final alreadyEarned =
         (points?.lifetimeEarnings['profile_completion'] ?? 0) >= 10000;
     if (points != null &&
@@ -394,15 +384,14 @@ class PointsService {
         !points.completedExplorationActions.contains(
           'milestone_10_profile_fields',
         )) {
-      await awardManualPoints(userId, 10000, 'profile_completion');
-      await _repository.markExplorationActionCompleted(
-        userId,
-        'milestone_10_profile_fields',
-      );
-      await _repository.markExplorationActionCompleted(
-        userId,
-        'complete_profile',
-      );
+      await Future.wait([
+        awardManualPoints(userId, 10000, 'profile_completion'),
+        _repository.markExplorationActionCompleted(
+          userId,
+          'milestone_10_profile_fields',
+        ),
+        _repository.markExplorationActionCompleted(userId, 'complete_profile'),
+      ]);
       await _trustService.updateTrustForUser(userId);
     }
   }
@@ -425,10 +414,12 @@ class PointsService {
 
   // [RESTORED] Daily check-in awards 10 DSP.
   Future<void> trackDailyCheckIn(String userId) async {
-    // Still ensure points doc exists for new users (welcome bonus)
-    var pointsData = await _repository.getUserPoints(userId);
-    if (pointsData == null) {
-      await initializeUserPoints(userId);
+    final cached = _safeGetCachedPoints(userId);
+    if (cached == null) {
+      final pointsData = await _repository.getUserPoints(userId);
+      if (pointsData == null) {
+        await initializeUserPoints(userId);
+      }
     }
     await FirebaseFunctions.instance.httpsCallable('recordDailyCheckIn').call();
   }
@@ -439,20 +430,21 @@ class PointsService {
     String targetId, {
     String? receiverId,
   }) async {
-    await _addPoints(
-      userId,
-      10,
-      'content_reaction',
-      metadata: {'targetId': targetId},
-    );
-    if (receiverId != null) {
-      await _addPoints(
-        receiverId,
+    await Future.wait([
+      _addPoints(
+        userId,
         10,
-        'reaction_received',
+        'content_reaction',
         metadata: {'targetId': targetId},
-      );
-    }
+      ),
+      if (receiverId != null)
+        _addPoints(
+          receiverId,
+          10,
+          'reaction_received',
+          metadata: {'targetId': targetId},
+        ),
+    ]);
   }
 
   // [NEW] Track Event Creation
@@ -487,7 +479,6 @@ class PointsService {
   }
 
   // [UPDATED] Host a Traveler: 1000 DSP + 100 DSP per night to both host and traveler.
-  // Both parties earn for creating real-world economic/social value.
   Future<void> trackHostATraveler(
     String userId,
     String guestUserId, {
@@ -496,32 +487,32 @@ class PointsService {
     try {
       final totalDsp = 1000 + (100 * nights);
 
-      // Award DSP to HOST
-      await _addPoints(
-        userId,
-        totalDsp,
-        'host_traveler_host_reward',
-        metadata: {'guestUserId': guestUserId, 'nights': nights},
-      );
+      await Future.wait([
+        _addPoints(
+          userId,
+          totalDsp,
+          'host_traveler_host_reward',
+          metadata: {'guestUserId': guestUserId, 'nights': nights},
+        ),
+        _addPoints(
+          guestUserId,
+          totalDsp,
+          'host_traveler_guest_reward',
+          metadata: {'hostUserId': userId, 'nights': nights},
+          skipTreasury: true,
+        ),
+      ]);
 
-      // Award DSP to TRAVELER (cross-user, skip treasury)
-      await _addPoints(
-        guestUserId,
-        totalDsp,
-        'host_traveler_guest_reward',
-        metadata: {'hostUserId': userId, 'nights': nights},
-        skipTreasury: true,
-      );
-
-      await _trustService.updateTrustForUser(userId);
-      await _trustService.updateTrustForUser(guestUserId);
+      await Future.wait([
+        _trustService.updateTrustForUser(userId),
+        _trustService.updateTrustForUser(guestUserId),
+      ]);
     } catch (e) {
       debugPrint('DSP: Error tracking host a traveler: $e');
     }
   }
 
   // [DEPRECATED v7] Travel booking no longer earns flat DSP.
-  // Real economy value now tracked via trackEconomyTransaction.
   Future<void> trackTravelBooking(
     String userId,
     String bookingType, {
@@ -529,11 +520,10 @@ class PointsService {
     double? fiatAmount,
     String? countryCode,
   }) async {
-    // If fiat value is known, award economy DSP ($1 = 1 DSP to buyer)
     if (fiatAmount != null && fiatAmount > 0 && countryCode != null) {
       await trackEconomyTransaction(
         buyerUserId: userId,
-        sellerUserId: userId, // Self-booking, buyer only
+        sellerUserId: userId,
         fiatAmount: fiatAmount,
         countryCode: countryCode,
         transactionType: 'travel_booking_$bookingType',
@@ -567,7 +557,7 @@ class PointsService {
   // [DEPRECATED] Emergency Help Fee removed from PSA.
   Future<bool> trackEmergencyHelpFee(String userId) async {
     debugPrint('DSP: trackEmergencyHelpFee is deprecated');
-    return true; // No-op, always returns true to not block callers
+    return true;
   }
 
   // [DEPRECATED] Legacy method — no longer awards DSP.
@@ -580,34 +570,24 @@ class PointsService {
     String otherUid, {
     bool isServiceProvider = false,
   }) async {
-    // [FIX] DSP is NOT awarded here anymore.
-    // Genesis milestone DSP (1,000 per QR exchange) is handled exclusively
-    // by TrustService.recalculateTrustScore → checkAndAward to avoid
-    // double-awarding (performQRExchange → updateTrustForUser already triggers it).
-
-    // Legacy: Increment QR connection count for backward compatibility
     await _repository.incrementQrConnectionCount(userId);
   }
 
   // --- [DEPRECATED v8] All DSP penalties removed — PCT milestones in TrustService ---
 
-  // [DEPRECATED v8] Event No-Show → -10 PCT / 10 no-shows (in TrustService)
   Future<void> recordEventNoShowPenalty(String userId) async {
     debugPrint('DSP: Event no-show penalty deprecated — PCT in TrustService');
     await _trustService.updateTrustForUser(userId);
   }
 
-  // [DEPRECATED v8] Misinformation removed (no way to verify)
   Future<void> recordMisinformationPenalty(String userId) async {
     debugPrint('DSP: Misinformation penalty removed (v8)');
   }
 
-  // [DEPRECATED v8] Deceptive org removed (no way to verify)
   Future<void> recordDeceptiveOrgPenalty(String userId) async {
     debugPrint('DSP: Deceptive org penalty removed (v8)');
   }
 
-  // [DEPRECATED v8] Unresponsive liaison removed
   Future<void> recordUnresponsiveLiaisonPenalty(String userId) async {
     debugPrint('DSP: Unresponsive liaison penalty removed (v8)');
   }
@@ -623,7 +603,6 @@ class PointsService {
       _repository.getReferralCode(userId);
 
   /// Transfers liquid on-chain assets ($DIASPORA tokens) between users via Smart Wallets.
-  /// Note: Off-chain DSP points are strictly non-transferable to preserve PCT conversion integrity.
   Future<void> transferAsset({
     required String fromUserId,
     required String toUserId,
@@ -646,16 +625,6 @@ class PointsService {
   Future<void> syncTreasuryBalances() => _repository.syncTreasuryBalances();
 
   /// Records a completed real-economy transaction as fiat GDP.
-  ///
-  /// Converts the [amount] from the seller/transaction's local currency
-  /// (identified by [countryCode]) to USD and persists it.
-  ///
-  /// Call this at the point of transaction completion for:
-  ///   - Marketplace purchases
-  ///   - Service hires
-  ///   - Flight / hotel bookings
-  ///   - Remittances
-  ///   - Paid event tickets
   Future<void> recordFiatGdp({
     required double amount,
     required String? countryCode,
@@ -669,10 +638,6 @@ class PointsService {
   }
 
   // --- Economy Transaction Reward ($1 USD = 1 DSP) ---
-  /// Real economy transactions: converts local fiat → USD → DSP.
-  /// Awards DSP to BOTH buyer and seller at $1 = 1 DSP rate.
-  /// This rate anchors DSP valuation — do NOT scale with 10x multiplier.
-  /// Used for marketplace purchases, remittances, service hires, etc.
   Future<void> trackEconomyTransaction({
     required String buyerUserId,
     required String sellerUserId,
@@ -682,103 +647,92 @@ class PointsService {
     Map<String, dynamic>? metadata,
   }) async {
     try {
-      // Convert local fiat to USD equivalent
       final usdAmount = CurrencyHelper.toUsd(fiatAmount, countryCode);
       if (usdAmount <= 0) return;
 
-      // $1 USD = 1 DSP (valuation anchor, rounded to nearest integer)
       final dspAmount = usdAmount.round();
       if (dspAmount <= 0) return;
 
-      // Award DSP to buyer
-      await _addPoints(
-        buyerUserId,
-        dspAmount,
-        'economy_transaction_buyer',
-        metadata: {
-          'usdAmount': usdAmount,
-          'fiatAmount': fiatAmount,
-          'countryCode': countryCode,
-          'transactionType': transactionType ?? 'purchase',
-          'otherParty': sellerUserId,
-          ...?metadata,
-        },
-      );
-
-      // Award DSP to seller (skip treasury for cross-user)
-      if (sellerUserId != buyerUserId) {
-        await _addPoints(
-          sellerUserId,
+      await Future.wait([
+        _addPoints(
+          buyerUserId,
           dspAmount,
-          'economy_transaction_seller',
+          'economy_transaction_buyer',
           metadata: {
             'usdAmount': usdAmount,
             'fiatAmount': fiatAmount,
             'countryCode': countryCode,
-            'transactionType': transactionType ?? 'sale',
-            'otherParty': buyerUserId,
+            'transactionType': transactionType ?? 'purchase',
+            'otherParty': sellerUserId,
             ...?metadata,
           },
-          skipTreasury: true,
-        );
-      }
-
-      // Record fiat GDP for macro tracking
-      await recordFiatGdp(
-        amount: fiatAmount,
-        countryCode: countryCode,
-        activityType: transactionType ?? 'economy_transaction',
-        metadata: {
-          'buyerUserId': buyerUserId,
-          'sellerUserId': sellerUserId,
-          ...?metadata,
-        },
-      );
+        ),
+        if (sellerUserId != buyerUserId)
+          _addPoints(
+            sellerUserId,
+            dspAmount,
+            'economy_transaction_seller',
+            metadata: {
+              'usdAmount': usdAmount,
+              'fiatAmount': fiatAmount,
+              'countryCode': countryCode,
+              'transactionType': transactionType ?? 'sale',
+              'otherParty': buyerUserId,
+              ...?metadata,
+            },
+            skipTreasury: true,
+          ),
+        recordFiatGdp(
+          amount: fiatAmount,
+          countryCode: countryCode,
+          activityType: transactionType ?? 'economy_transaction',
+          metadata: {
+            'buyerUserId': buyerUserId,
+            'sellerUserId': sellerUserId,
+            ...?metadata,
+          },
+        ),
+      ]);
     } catch (e) {
       debugPrint('DSP: Error tracking economy transaction: $e');
     }
   }
 
   // --- [UPDATED v9] Community Event Attendance (QR Check-in, 10x scale) ---
-  /// Attendee: 1,000 DSP per event (QR check-in verified).
-  /// Host: 1,000 DSP per verified attendee.
   Future<void> trackEventAttendance({
     required String attendeeUserId,
     required String hostUserId,
     required String eventId,
   }) async {
     try {
-      // Award 1,000 DSP to ATTENDEE
-      await _addPoints(
-        attendeeUserId,
-        1000,
-        'event_attendance',
-        metadata: {'eventId': eventId, 'hostUserId': hostUserId},
-      );
-
-      // Award 1,000 DSP to HOST per attendee (skip treasury for cross-user)
-      if (hostUserId != attendeeUserId) {
-        await _addPoints(
-          hostUserId,
+      await Future.wait([
+        _addPoints(
+          attendeeUserId,
           1000,
-          'event_hosting_per_attendee',
-          metadata: {'eventId': eventId, 'attendeeUserId': attendeeUserId},
-          skipTreasury: true,
-        );
-      }
+          'event_attendance',
+          metadata: {'eventId': eventId, 'hostUserId': hostUserId},
+        ),
+        if (hostUserId != attendeeUserId)
+          _addPoints(
+            hostUserId,
+            1000,
+            'event_hosting_per_attendee',
+            metadata: {'eventId': eventId, 'attendeeUserId': attendeeUserId},
+            skipTreasury: true,
+          ),
+      ]);
 
-      // Update trust for both
-      await _trustService.updateTrustForUser(attendeeUserId);
-      await _trustService.updateTrustForUser(hostUserId);
+      await Future.wait([
+        _trustService.updateTrustForUser(attendeeUserId),
+        if (hostUserId != attendeeUserId)
+          _trustService.updateTrustForUser(hostUserId),
+      ]);
     } catch (e) {
       debugPrint('DSP: Error tracking event attendance: $e');
     }
   }
 
   /// Community Pillar / Peer Visit Reward:
-  /// Awards 1,000 DSP to both Host and Visitor when a member visits another
-  /// member for >1 hour at their home / location.
-  /// Anti-Sybil Safeguard: Max 1 reward per host-visitor pair per 7 days.
   Future<bool> trackPeerVisitReward({
     required String hostUserId,
     required String visitorUserId,
@@ -787,7 +741,6 @@ class PointsService {
     try {
       if (hostUserId == visitorUserId) return false;
 
-      // Check anti-sybil rate limit: 7 days window
       final lastVisitTime = await _repository.getLastPeerVisitTime(
         hostUserId: hostUserId,
         visitorUserId: visitorUserId,
@@ -805,38 +758,37 @@ class PointsService {
         }
       }
 
-      // Record visit timestamp in Firestore
-      await _repository.recordPeerVisit(
-        hostUserId: hostUserId,
-        visitorUserId: visitorUserId,
-        locationAddress: locationAddress,
-      );
+      await Future.wait([
+        _repository.recordPeerVisit(
+          hostUserId: hostUserId,
+          visitorUserId: visitorUserId,
+          locationAddress: locationAddress,
+        ),
+        _addPoints(
+          hostUserId,
+          1000,
+          'peer_visit_host_reward',
+          metadata: {
+            'visitorUserId': visitorUserId,
+            'locationAddress': locationAddress,
+          },
+        ),
+        _addPoints(
+          visitorUserId,
+          1000,
+          'peer_visit_visitor_reward',
+          metadata: {
+            'hostUserId': hostUserId,
+            'locationAddress': locationAddress,
+          },
+          skipTreasury: true,
+        ),
+      ]);
 
-      // Award 1,000 DSP to HOST
-      await _addPoints(
-        hostUserId,
-        1000,
-        'peer_visit_host_reward',
-        metadata: {
-          'visitorUserId': visitorUserId,
-          'locationAddress': locationAddress,
-        },
-      );
-
-      // Award 1,000 DSP to VISITOR (skip treasury for cross-user)
-      await _addPoints(
-        visitorUserId,
-        1000,
-        'peer_visit_visitor_reward',
-        metadata: {
-          'hostUserId': hostUserId,
-          'locationAddress': locationAddress,
-        },
-        skipTreasury: true,
-      );
-
-      await _trustService.updateTrustForUser(hostUserId);
-      await _trustService.updateTrustForUser(visitorUserId);
+      await Future.wait([
+        _trustService.updateTrustForUser(hostUserId),
+        _trustService.updateTrustForUser(visitorUserId),
+      ]);
 
       debugPrint(
         '🤝 [PEER VISIT] Awarded 1,000 DSP each to Host ($hostUserId) & Visitor ($visitorUserId)',
@@ -848,22 +800,19 @@ class PointsService {
     }
   }
 
-  /// Awards 1,000 DSP + full community treasury distribution the first time
-  /// a user changes their host location. Once per user lifetime.
-  /// Calls the repository directly to skip the redundant getUserPoints
-  /// re-read and _checkAndResetDaily overhead inside _addPoints (irrelevant
-  /// for once-per-lifetime events). Errors propagate to the caller.
   Future<void> trackHostLocationMove(String userId) async {
-    final userPoints = await _repository.getUserPoints(userId);
+    final userPoints =
+        _safeGetCachedPoints(userId) ??
+        await _repository.getUserPoints(userId);
     if (userPoints == null) return;
     if ((userPoints.lifetimeEarnings['host_location_moved'] ?? 0) > 0) return;
     await _repository.addPoints(userId, 1000, 'host_location_moved');
   }
 
-  /// Awards 1,000 DSP + full community treasury distribution the first time
-  /// a user manually adds an "also lived in" past location. Once per user lifetime.
   Future<void> trackAlsoLivedInAdded(String userId) async {
-    final userPoints = await _repository.getUserPoints(userId);
+    final userPoints =
+        _safeGetCachedPoints(userId) ??
+        await _repository.getUserPoints(userId);
     if (userPoints == null) return;
     if ((userPoints.lifetimeEarnings['also_lived_in_added'] ?? 0) > 0) return;
     await _repository.addPoints(userId, 1000, 'also_lived_in_added');
@@ -886,8 +835,6 @@ class PointsService {
     await _repository.deductPoints(userId, amount, reason);
   }
 
-  // [SIMPLIFIED] Connection fee REMOVED — all connections now reward 1000 DSP.
-  // Kept for backward compatibility, always returns true (no fee).
   Future<bool> trackConnectionFee({
     required String userId,
     required String relationshipType,

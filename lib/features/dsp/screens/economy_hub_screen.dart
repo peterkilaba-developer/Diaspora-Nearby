@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -26,6 +27,7 @@ class EconomyHubScreen extends ConsumerStatefulWidget {
 class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
     with WidgetsBindingObserver {
   bool _locationAlwaysGranted = false;
+  bool? _optimisticNotificationsEnabled;
 
   @override
   void initState() {
@@ -62,7 +64,6 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
       }
     } catch (e) {
       debugPrint('Error checking locationAlways: $e');
-      // Treat as granted if we can't check, to avoid confusion
       if (mounted) setState(() => _locationAlwaysGranted = true);
     }
   }
@@ -70,7 +71,6 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
   Future<void> _requestLocationAlways() async {
     if (kIsWeb) return;
     try {
-      // Ensure foreground location is granted first
       final fgStatus = await Permission.location.status;
       if (!fgStatus.isGranted && !fgStatus.isLimited) {
         await Permission.location.request();
@@ -78,7 +78,6 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
 
       final status = await Permission.locationAlways.request();
       if (status.isPermanentlyDenied || status.isDenied) {
-        // On most Android versions, locationAlways requires going to Settings
         await openAppSettings();
       }
       await _checkLocationAlwaysStatus();
@@ -317,7 +316,6 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
                     onTap: () => context.push('/dsp/crypto'),
                     useLogoImage: true,
                   ),
-                  // Remittances (Admin only)
                   if (isAdmin)
                     _buildRow(
                       context,
@@ -330,7 +328,6 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
                       onTap: () => context.push('/dsp/remittances'),
                       isComingSoon: true,
                     ),
-                  // DDI — Town Community Business Loans (Admin only)
                   if (isAdmin)
                     _buildRow(
                       context,
@@ -344,7 +341,6 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
                       onTap: () => context.push('/dsp/dfdi'),
                       isComingSoon: true,
                     ),
-                  // DDI — Country Member Loans (Admin only)
                   if (isAdmin)
                     _buildRow(
                       context,
@@ -375,7 +371,7 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
               context,
               child: Column(
                 children: [
-                  // Notification toggle
+                  // Notification toggle (0ms optimistic toggle)
                   _buildToggleRow(
                     context,
                     ref: ref,
@@ -383,18 +379,32 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
                     iconColor: Colors.purple,
                     title: AppLocalizations.tr(ref, 'Push Notifications'),
                     subtitle: 'Receive updates & alerts',
-                    value: profile?.notificationsEnabled ?? false,
+                    value:
+                        _optimisticNotificationsEnabled ??
+                        (profile?.notificationsEnabled ?? false),
                     onChanged: (val) async {
                       final uid = profile?.uid;
                       if (uid == null) return;
-                      if (val) {
-                        await ref
-                            .read(pushNotificationServiceProvider)
-                            .registerForUser(uid);
-                      } else {
-                        await ref
-                            .read(pushNotificationServiceProvider)
-                            .disableNotifications(uid);
+                      final prev =
+                          _optimisticNotificationsEnabled ??
+                          (profile?.notificationsEnabled ?? false);
+                      setState(() => _optimisticNotificationsEnabled = val);
+                      try {
+                        if (val) {
+                          await ref
+                              .read(pushNotificationServiceProvider)
+                              .registerForUser(uid);
+                        } else {
+                          await ref
+                              .read(pushNotificationServiceProvider)
+                              .disableNotifications(uid);
+                        }
+                      } catch (_) {
+                        if (mounted) {
+                          setState(
+                            () => _optimisticNotificationsEnabled = prev,
+                          );
+                        }
                       }
                     },
                   ),
@@ -409,12 +419,11 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
                       subtitle: 'Allow background location updates',
                       value: _locationAlwaysGranted,
                       onChanged: (val) async {
+                        setState(() => _locationAlwaysGranted = val);
                         if (val) {
                           await _requestLocationAlways();
                         } else {
-                          // Can't revoke programmatically — send to settings
                           await openAppSettings();
-                          // Re-check after returning from settings
                           await _checkLocationAlwaysStatus();
                         }
                       },
@@ -528,7 +537,7 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
 
     final effectiveOnTap = explorationAction != null
         ? () {
-            _trackExploration(context, ref, explorationAction);
+            unawaited(_trackExploration(context, ref, explorationAction));
             onTap();
           }
         : onTap;

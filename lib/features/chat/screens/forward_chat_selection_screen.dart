@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'dart:ui'; // Import for ImageFilter
+import 'package:diaspora_nearby/features/chat/models/chat.dart';
 import 'package:diaspora_nearby/features/chat/widgets/chat_card.dart';
 import 'package:diaspora_nearby/features/chat/screens/chats_list_screen.dart'; // Import for provider
 import 'package:diaspora_nearby/features/chat/models/message.dart'; // [NEW]
@@ -30,6 +32,99 @@ class _ForwardChatSelectionScreenState
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Widget _buildChatsList(List<Chat> chats, Color greenColor) {
+    final filteredChats =
+        (_searchQuery.isEmpty
+              ? List.of(chats)
+              : chats.where((chat) {
+                  return chat.name.toLowerCase().contains(
+                    _searchQuery.toLowerCase(),
+                  );
+                }).toList())
+          ..sort(ChatRepository.compareChatsByLatest);
+
+    if (filteredChats.isEmpty) {
+      return const Center(child: Text('No chats found'));
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.only(
+        top: 120,
+        left: 8,
+        right: 8,
+        bottom: 120,
+      ), // Increased bottom padding for floating bar
+      itemCount: filteredChats.length,
+      itemBuilder: (context, index) {
+        final chat = filteredChats[index];
+        final isSelected = _selectedChatIds.contains(chat.id);
+
+        return GestureDetector(
+          onTap: () {
+            setState(() {
+              if (isSelected) {
+                _selectedChatIds.remove(chat.id);
+              } else {
+                _selectedChatIds.add(chat.id);
+              }
+            });
+          },
+          child: Stack(
+            children: [
+              // Base Chat Card (pixel perfect reuse)
+              AbsorbPointer(
+                // Absorb tap so GestureDetector above handles it
+                child: ChatCard(
+                  chat: chat,
+                  searchQuery: _searchQuery.isNotEmpty ? _searchQuery : null,
+                  onTap: () {}, // Handled by parent
+                ),
+              ),
+
+              // Selection Overlay
+              if (isSelected)
+                Positioned.fill(
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(
+                      vertical: 4,
+                    ), // Match ChatCard margin if any?
+                    decoration: BoxDecoration(
+                      color: greenColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(
+                        12,
+                      ), // Match typical card radius
+                    ),
+                  ),
+                ),
+
+              // Checkmark Badge
+              Positioned(
+                right: 16,
+                bottom:
+                    18, // Aligned with bottom row (last message) to avoid timestamp overlap
+                child: Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isSelected ? greenColor : Colors.transparent,
+                  ),
+                  child: isSelected
+                      ? const Icon(
+                          LucideIcons.check,
+                          size: 16,
+                          color: Colors.white,
+                        )
+                      : null,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -115,104 +210,17 @@ class _ForwardChatSelectionScreenState
         children: [
           // List Content
           chatsAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, stack) => Center(child: Text('Error: $error')),
-            data: (chats) {
-              final filteredChats =
-                  (_searchQuery.isEmpty
-                        ? List.of(chats)
-                        : chats.where((chat) {
-                            return chat.name.toLowerCase().contains(
-                              _searchQuery.toLowerCase(),
-                            );
-                          }).toList())
-                    ..sort(ChatRepository.compareChatsByLatest);
-
-              if (filteredChats.isEmpty) {
-                return const Center(child: Text('No chats found'));
+            skipLoadingOnReload: true,
+            skipLoadingOnRefresh: true,
+            loading: () {
+              final cached = ref.read(chatRepositoryProvider).cachedChats;
+              if (cached.isNotEmpty) {
+                return _buildChatsList(cached, greenColor);
               }
-
-              return ListView.builder(
-                padding: const EdgeInsets.only(
-                  top: 120,
-                  left: 8,
-                  right: 8,
-                  bottom: 120,
-                ), // Increased bottom padding for floating bar
-                itemCount: filteredChats.length,
-                itemBuilder: (context, index) {
-                  final chat = filteredChats[index];
-                  final isSelected = _selectedChatIds.contains(chat.id);
-
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        if (isSelected) {
-                          _selectedChatIds.remove(chat.id);
-                        } else {
-                          _selectedChatIds.add(chat.id);
-                        }
-                      });
-                    },
-                    child: Stack(
-                      children: [
-                        // Base Chat Card (pixel perfect reuse)
-                        AbsorbPointer(
-                          // Absorb tap so GestureDetector above handles it
-                          child: ChatCard(
-                            chat: chat,
-                            searchQuery: _searchQuery.isNotEmpty
-                                ? _searchQuery
-                                : null,
-                            onTap: () {}, // Handled by parent
-                          ),
-                        ),
-
-                        // Selection Overlay
-                        if (isSelected)
-                          Positioned.fill(
-                            child: Container(
-                              margin: const EdgeInsets.symmetric(
-                                vertical: 4,
-                              ), // Match ChatCard margin if any?
-                              decoration: BoxDecoration(
-                                color: greenColor.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(
-                                  12,
-                                ), // Match typical card radius
-                              ),
-                            ),
-                          ),
-
-                        // Checkmark Badge
-                        Positioned(
-                          right: 16,
-                          bottom:
-                              18, // Aligned with bottom row (last message) to avoid timestamp overlap
-                          child: Container(
-                            width: 24,
-                            height: 24,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: isSelected
-                                  ? greenColor
-                                  : Colors.transparent,
-                            ),
-                            child: isSelected
-                                ? const Icon(
-                                    LucideIcons.check,
-                                    size: 16,
-                                    color: Colors.white,
-                                  )
-                                : null,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              );
+              return const Center(child: CircularProgressIndicator());
             },
+            error: (error, stack) => Center(child: Text('Error: $error')),
+            data: (chats) => _buildChatsList(chats, greenColor),
           ),
 
           // Sticky Bottom Bar
@@ -234,38 +242,33 @@ class _ForwardChatSelectionScreenState
                         child: SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
-                            onPressed: () async {
+                            onPressed: () {
                               final chatRepo = ref.read(chatRepositoryProvider);
                               final chats = _selectedChatIds.toList();
+                              final messenger = ScaffoldMessenger.of(context);
 
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Forwarding message...'),
+                              // Pop immediately in 0ms and dispatch forwarding in background
+                              context.pop();
+                              messenger.showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Forwarded to ${chats.length} chat${chats.length > 1 ? 's' : ''}',
+                                  ),
                                 ),
                               );
 
-                              // Forward to all selected chats
-                              for (final chatId in chats) {
-                                await chatRepo.sendTextMessage(
-                                  chatId,
-                                  widget.message.content,
-                                  type: widget.message.type, // Preserve type
-                                  metadata: widget
-                                      .message
-                                      .metadata, // Preserve metadata
-                                );
-                              }
-
-                              if (context.mounted) {
-                                context.pop(); // Close screen
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'Forwarded to ${chats.length} chats',
+                              unawaited(
+                                Future.wait(
+                                  chats.map(
+                                    (chatId) => chatRepo.sendTextMessage(
+                                      chatId,
+                                      widget.message.content,
+                                      type: widget.message.type,
+                                      metadata: widget.message.metadata,
                                     ),
                                   ),
-                                );
-                              }
+                                ),
+                              );
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: greenColor,

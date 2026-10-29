@@ -493,6 +493,88 @@ Examples:
       process.exit(0);
     }
 
+    if (args.includes("--scan-fb-comments")) {
+      const outreachBot = require(path.resolve(__dirname, "../functions/lib/outreach_bot"));
+      console.log("🔍 Scanning Diaspora Nearby Facebook Page posts for Home/Host city replies...\n");
+      const res = await outreachBot.pollFacebookPageComments({ limitPosts: 25 });
+      if (!res.ok) {
+        console.error("❌ Scan failed:", res.error);
+        process.exit(1);
+      }
+      console.log(`✅ Posts scanned: ${res.postsScanned}`);
+      console.log(`✅ New comments processed & replied: ${res.commentsProcessed}`);
+      if (res.processed && res.processed.length > 0) {
+        for (const item of res.processed) {
+          console.log(`\n👤 ${item.commenterName || item.commenterId}: "${item.messageText}"`);
+          console.log(`   📍 Parsed: Home=${item.homeCity || "auto"} -> Host=${item.hostCity || "auto"}`);
+          console.log(`   🔗 Invite: ${item.inviteUrl}`);
+          console.log(`   💬 Reply:  ${item.publicReplyText}`);
+        }
+      }
+      process.exit(0);
+    }
+
+    if (args.includes("--fb-reply")) {
+      const idx = args.indexOf("--fb-reply");
+      const rawInput = args[idx + 1] || "";
+      if (!rawInput) {
+        console.error('❌ Provide a comment: --fb-reply "Juma Bakari | Arusha -> Houston"');
+        process.exit(1);
+      }
+      const outreachBot = require(path.resolve(__dirname, "../functions/lib/outreach_bot"));
+      const parts = rawInput.includes("|") ? rawInput.split("|") : ["", rawInput];
+      const commenterName = parts[0].trim();
+      const commentText = parts.slice(1).join("|").trim();
+      const onboarding = outreachBot.buildFacebookCommentOnboarding({
+        commentText,
+        commenterName,
+        commenterId: commenterName || commentText,
+      });
+
+      console.log("\n========================================================");
+      console.log(`👤 Commenter:   ${commenterName || "(Anonymous)"}`);
+      console.log(`💬 Raw Reply:   "${commentText}"`);
+      console.log(`📍 Home -> Host: ${onboarding.homeCity || "Auto"} → ${onboarding.hostCity || "Auto"}`);
+      console.log(`🎁 Invite Code: ${onboarding.code}`);
+      console.log(`🔗 Onboard URL: ${onboarding.inviteUrl}`);
+      console.log("--------------------------------------------------------");
+      console.log("1️⃣ PUBLIC COMMENT REPLY (Copy & Paste under their comment):\n");
+      console.log(onboarding.publicReplyText);
+      console.log("\n--------------------------------------------------------");
+      console.log("2️⃣ MESSENGER DM (Copy & Paste to their Messenger):\n");
+      console.log(onboarding.dmText);
+      console.log("========================================================\n");
+      process.exit(0);
+    }
+
+    if (args.includes("--fb-extract-snippet")) {
+      console.log("\n================================================================================");
+      console.log("  FACEBOOK COMMENT EXTRACTOR & ONBOARDING GENERATOR (Personal Profile / Groups)");
+      console.log("================================================================================\n");
+      console.log("1. Open your Facebook post with comments in Chrome/Edge and expand the comments.");
+      console.log("2. Press F12 -> Console, paste this snippet, and press Enter:\n");
+      console.log(`(() => {
+  const articles = [...document.querySelectorAll('[role="article"]')];
+  const comments = [];
+  for (const el of articles) {
+    const aria = el.getAttribute('aria-label') || '';
+    if (!/comment by|maoni ya/i.test(aria) && comments.length === 0 && articles.indexOf(el) === 0) continue;
+    const authorEl = el.querySelector('a[role="link"] span[dir="auto"]');
+    const textEls = [...el.querySelectorAll('div[dir="auto"]')];
+    const name = authorEl ? authorEl.innerText.trim() : '';
+    const text = textEls.map(t => t.innerText.trim()).filter(t => t && t !== name).join(' ');
+    if (name && text && text.length < 300) {
+      comments.push({ name, text });
+    }
+  }
+  console.log('✅ Extracted ' + comments.length + ' comments:', JSON.stringify(comments, null, 2));
+  return comments;
+})();\n`);
+      console.log("3. Then generate personalized replies for any commenter via:");
+      console.log('   node scripts/social-publisher.cjs --fb-reply "Juma | Dar es Salaam -> Houston"\n');
+      process.exit(0);
+    }
+
     if (args.includes("--linkedin-setup")) {
       const clientId = process.env.LINKEDIN_CLIENT_ID;
       const redirectUri =

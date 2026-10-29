@@ -44,36 +44,43 @@ const detectedPlatform = detectPlatform();
     // /invite or /download: redirect mobile users directly to their phone platform store
     if (rawPath === '/invite' || rawPath === '/download') {
         const platform = detectedPlatform;
+        const effectiveCode = code || 'PETER-TZ-CC57';
+        const ua = navigator.userAgent || '';
+        const isInAppWebView = /FBAN|FBAV|Instagram|Line|MicroMessenger/i.test(ua);
 
         if (platform === 'ios') {
-            renderRedirectScreen('ios', TESTFLIGHT_URL);
+            renderRedirectScreen('ios', TESTFLIGHT_URL, effectiveCode);
             // Do NOT call window.location.href/replace on iOS: iOS blocks Universal Links
             // on script-initiated navigations, and itms-beta:// opens TestFlight to the Redeem Code screen.
             // A direct user tap on the <a href="https://testflight.apple.com/join/vB3XzPKg"> button
             // triggers the iOS Universal Link into Diaspora Nearby's Accept/Install sheet.
             return;
         } else if (platform === 'android') {
-            let androidUrl = PLAY_STORE_URL;
-            if (code) {
-                androidUrl += '&referrer=' + encodeURIComponent('utm_source=invite&referral_code=' + code);
+            const referrerParam = encodeURIComponent('utm_source=invite&referral_code=' + effectiveCode);
+            const androidWebUrl = PLAY_STORE_URL + '&referrer=' + referrerParam;
+            // Android native intent:// URL breaks out of Facebook/Instagram WebView directly into Google Play Store app
+            const androidIntentUrl =
+                'intent://details?id=com.diasporanearby.diasporanearby&referrer=' + referrerParam +
+                '#Intent;scheme=market;package=com.android.vending;S.browser_fallback_url=' +
+                encodeURIComponent(androidWebUrl) + ';end';
+
+            renderRedirectScreen('android', isInAppWebView ? androidIntentUrl : androidWebUrl, effectiveCode);
+            if (!isInAppWebView) {
+                window.location.replace(androidWebUrl);
             }
-            renderRedirectScreen('android', androidUrl);
-            window.location.replace(androidUrl);
             return;
         } else {
-            // Desktop / Mac / PC: show landing page, scroll to #get-app
+            // Desktop / Mac / PC: show landing page, scroll to #get-app immediately
             document.addEventListener('DOMContentLoaded', () => {
                 const getAppSection = document.getElementById('get-app');
                 if (getAppSection) {
-                    setTimeout(() => {
-                        const offset = 64;
-                        const y = getAppSection.getBoundingClientRect().top + window.pageYOffset - offset;
-                        window.scrollTo({ top: y, behavior: 'smooth' });
-                    }, 300);
+                    const offset = 64;
+                    const y = getAppSection.getBoundingClientRect().top + window.pageYOffset - offset;
+                    window.scrollTo({ top: y, behavior: 'smooth' });
                 }
 
-                if (code) {
-                    showInviteToast(code);
+                if (effectiveCode) {
+                    showInviteToast(effectiveCode);
                 }
             });
         }
@@ -87,10 +94,10 @@ const detectedPlatform = detectPlatform();
 })();
 
 // ── Fallback UI for mobile in-app browsers ──
-function renderRedirectScreen(platform, targetUrl) {
+function renderRedirectScreen(platform, targetUrl, inviteCode) {
     const isIOS = platform === 'ios';
-    const storeName = isIOS ? 'Apple TestFlight' : 'Google Play Store';
-    const btnLabel = isIOS ? 'Open in TestFlight' : 'Open in Google Play';
+    const cleanCode = inviteCode || 'PETER-TZ-CC57';
+    const btnLabel = isIOS ? 'Open in Apple TestFlight' : 'Install on Google Play';
 
     const inject = () => {
         if (document.getElementById('platform-redirect-overlay')) return;
@@ -100,18 +107,12 @@ function renderRedirectScreen(platform, targetUrl) {
         overlay.innerHTML = `
             <div class="redirect-card">
                 <img src="icons/Icon-192.png" alt="Diaspora Nearby" class="redirect-app-icon" onerror="this.src='favicon.png'">
-                ${isIOS ? '' : '<div class="redirect-spinner"></div>'}
-                <h2>${isIOS ? 'Join Diaspora Nearby on iOS' : 'Opening Diaspora Nearby...'}</h2>
-                <p>${isIOS ? 'Tap below to open the beta directly in <strong>Apple TestFlight</strong> (no invite code needed).' : `Redirecting you to <strong>${storeName}</strong> to download the app.`}</p>
-                <a href="${targetUrl}" class="btn-primary-redirect" id="redirect-now-btn">
+                <h2>Karibu Diaspora Nearby</h2>
+                <p style="margin-bottom: 20px;">Find your people, build community trust and create wealth by simply socializing.</p>
+                <a href="${targetUrl}" class="btn-primary-redirect" id="redirect-now-btn" onclick="try { navigator.clipboard && navigator.clipboard.writeText('${cleanCode}'); } catch(e) {}" style="width: 100%; justify-content: center;">
                     <span>${btnLabel}</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a>${isIOS ? `<div style="margin-top: 16px; padding: 14px; border-radius: 12px; background: var(--surface-hover, rgba(128,128,128,0.08)); border: none; font-size: 13px; color: var(--fg-muted); text-align: left; line-height: 1.55; width: 100%;"><strong style="color: var(--fg); display: block; margin-bottom: 6px;">First time using TestFlight?</strong>1. <a href="${TESTFLIGHT_APP_STORE_URL}" target="_blank" rel="noopener" style="color: var(--sage); font-weight: 600; text-decoration: underline;">Install Apple TestFlight</a> from the App Store first.<br>2. <strong>Come back to this page</strong> and tap <strong>Open in TestFlight</strong> above (do <em>not</em> open TestFlight from the App Store or tap "Redeem"—no invite code is needed).<br><span style="display:block; margin-top:6px; font-size:12px; opacity:0.85;">💡 If you opened this inside WhatsApp/Instagram and it asks for a code, tap the browser icon in the corner to <strong>Open in Safari</strong>.</span></div>` : ''}<a style="display:none">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
                 </a>
-                <div style="margin-top: 18px;">
-                    <button type="button" class="redirect-cancel-link" onclick="dismissRedirectOverlay(event)">
-                        Or view full website
-                    </button>
-                </div>
             </div>
         `;
         document.body.prepend(overlay);
@@ -135,10 +136,9 @@ function showInviteToast(code) {
     const toast = document.createElement('div');
     toast.className = 'invite-toast';
     toast.innerHTML = `
-        <span style="font-size: 20px;">🎉</span>
         <div style="text-align: left;">
-            <div style="font-size: 13px; font-weight: 700; color: var(--fg);">You were invited to Diaspora Nearby!</div>
-            <div style="font-size: 12px; color: var(--fg-muted);">Referral code <code>${code}</code> saved for signup.</div>
+            <div style="font-size: 13px; font-weight: 700; color: var(--fg);">Karibu Diaspora Nearby</div>
+            <div style="font-size: 12px; color: var(--fg-muted);">Find your people, build community trust and create wealth by simply socializing.</div>
         </div>
         <button type="button" style="background:none;border:none;color:var(--fg-muted);cursor:pointer;padding:4px;margin-left:8px;font-size:16px;" onclick="this.parentElement.remove()">✕</button>
     `;
@@ -337,7 +337,7 @@ function initPlatformUI() {
 // Initialize after DOM is ready
 document.addEventListener('DOMContentLoaded', initPlatformUI);
 
-// ── Early Access Signup ──
+// ── Early Access Signup (Optimistic 0ms UI) ──
 async function submitEarlyAccess(formPrefix) {
     const emailInput = document.getElementById(formPrefix + '-email');
     const msgEl = document.getElementById(formPrefix + '-signup-message');
@@ -350,20 +350,35 @@ async function submitEarlyAccess(formPrefix) {
         return;
     }
 
-    btn.disabled = true;
-    const originalText = btnText?.textContent;
-    if (btnText) btnText.textContent = 'Signing up\u2026';
+    const addPlayStoreTester = window._addPlayStoreTester;
+    if (!addPlayStoreTester) {
+        showMessage(msgEl, 'Something went wrong. Please try again.', 'error');
+        return;
+    }
+
+    // 0ms Optimistic UI update
+    const prevEmailValue = emailInput.value;
+    if (detectedPlatform === 'android') {
+        showMessage(
+            msgEl,
+            '\u2713 Signup recorded! Follow the steps below to install:',
+            'success'
+        );
+        emailInput.value = '';
+        hideFormAfterSignup(formPrefix);
+        showTesterSteps(msgEl);
+    } else if (detectedPlatform === 'ios') {
+        showMessage(msgEl, 'You\u2019re in! Opening TestFlight now (no invite code required)...', 'success');
+        emailInput.value = '';
+        hideFormAfterSignup(formPrefix);
+    } else {
+        showMessage(msgEl, 'You\u2019re in! We\u2019ll notify you when the native app is ready for your platform.', 'success');
+        emailInput.value = '';
+        hideFormAfterSignup(formPrefix);
+    }
 
     try {
-        const addPlayStoreTester = window._addPlayStoreTester;
-
-        if (!addPlayStoreTester) {
-            throw new Error('Secure signup service is unavailable');
-        }
-
-        // Capture referral code from invite link (if any)
         const referralCode = localStorage.getItem('dn_referral_code') || null;
-
         const signupType = detectedPlatform === 'android'
             ? 'play_store_closed_test'
             : detectedPlatform === 'ios' ? 'testflight' : 'early_access';
@@ -373,38 +388,25 @@ async function submitEarlyAccess(formPrefix) {
             signupType,
             referralCode,
         });
-        const response = result.data;
-
-        if (detectedPlatform === 'android') {
-            showMessage(
-                msgEl,
-                response.alreadyTester
-                    ? '✓ You\'re already signed up!'
-                    : '✓ Signup recorded! Follow the steps below to install:',
-                'success'
-            );
-            emailInput.value = '';
-            hideFormAfterSignup(formPrefix);
-            showTesterSteps(msgEl);
-        } else if (detectedPlatform === 'ios') {
-            showMessage(msgEl, 'You\u2019re in! Opening TestFlight now (no invite code required)...', 'success');
-            // Do NOT call window.location.href/replace on iOS: iOS blocks Universal Links
-            // on script-initiated navigations, and itms-beta:// opens TestFlight to the Redeem Code screen.
-            // A direct user tap on the <a href="https://testflight.apple.com/join/vB3XzPKg"> button
-            // triggers the iOS Universal Link into Diaspora Nearby's Accept/Install sheet.
-            emailInput.value = '';
-            hideFormAfterSignup(formPrefix);
-        } else {
-            showMessage(msgEl, 'You\u2019re in! We\u2019ll notify you when the native app is ready for your platform.', 'success');
-            emailInput.value = '';
-            hideFormAfterSignup(formPrefix);
+        const response = result?.data;
+        if (detectedPlatform === 'android' && response?.alreadyTester) {
+            showMessage(msgEl, '\u2713 You\'re already signed up!', 'success');
         }
     } catch (err) {
         console.error('Signup error:', err);
+        // Rollback optimistic UI on failure
+        localStorage.removeItem('dn_signup_' + formPrefix);
+        if (emailInput) {
+            emailInput.value = prevEmailValue;
+            emailInput.style.display = '';
+        }
+        if (btn) {
+            btn.disabled = false;
+            btn.style.display = '';
+        }
+        const stepsContainer = document.getElementById('tester-steps');
+        if (stepsContainer) stepsContainer.style.display = 'none';
         showMessage(msgEl, 'Something went wrong. Please try again.', 'error');
-    } finally {
-        btn.disabled = false;
-        if (btnText) btnText.textContent = originalText;
     }
 }
 
@@ -459,19 +461,16 @@ function showTesterSteps(msgEl) {
  */
 function markJoinGroupDone() {
     localStorage.setItem('dn_join_group_clicked', 'done');
-    // Hide the step card with a short delay so the link navigates first
-    setTimeout(() => {
-        const stepEl = document.getElementById('tester-step-join-group');
-        if (stepEl) {
-            stepEl.style.transition = 'opacity 0.3s, max-height 0.3s';
-            stepEl.style.opacity = '0';
-            stepEl.style.maxHeight = '0';
-            stepEl.style.overflow = 'hidden';
-            stepEl.style.padding = '0';
-            stepEl.style.margin = '0';
-            setTimeout(() => stepEl.remove(), 400);
-        }
-    }, 300);
+    const stepEl = document.getElementById('tester-step-join-group');
+    if (stepEl) {
+        stepEl.style.transition = 'opacity 0.2s, max-height 0.2s';
+        stepEl.style.opacity = '0';
+        stepEl.style.maxHeight = '0';
+        stepEl.style.overflow = 'hidden';
+        stepEl.style.padding = '0';
+        stepEl.style.margin = '0';
+        setTimeout(() => stepEl.remove(), 200);
+    }
 }
 
 function openPlayStoreListing() {
@@ -1063,18 +1062,44 @@ document.addEventListener('DOMContentLoaded', () => {
         { code: 'ZW', name: 'Zimbabwe', flag: '🇿🇼', continent: 'Africa', langs: ['sn', 'en', 'ny'] }
     ];
 
+    const LANG_BY_CODE = new Map();
+    const COUNTRIES_BY_LANG = new Map();
+    for (const l of WORLD_LANGUAGES) {
+        LANG_BY_CODE.set(l.code.toLowerCase(), l);
+        COUNTRIES_BY_LANG.set(l.code, []);
+    }
+    for (const c of WORLD_COUNTRIES) {
+        for (const lc of c.langs) {
+            if (!COUNTRIES_BY_LANG.has(lc)) COUNTRIES_BY_LANG.set(lc, []);
+            COUNTRIES_BY_LANG.get(lc).push(c);
+        }
+    }
+    for (const l of WORLD_LANGUAGES) {
+        const countries = COUNTRIES_BY_LANG.get(l.code) || [];
+        const countryTerms = countries.map(c => `${c.name} ${c.continent}`).join(' ');
+        l._searchKey = `${l.name} ${l.nativeName} ${l.code} ${countryTerms}`.toLowerCase();
+        l._countryNamesPreview = countries.slice(0, 3).map(c => c.name).join(', ');
+    }
+    for (const c of WORLD_COUNTRIES) {
+        const langTerms = c.langs.map(code => {
+            const l = LANG_BY_CODE.get(code.toLowerCase()) || WORLD_LANGUAGES[0];
+            return `${l.name} ${l.nativeName}`;
+        }).join(' ');
+        c._searchKey = `${c.name} ${c.code} ${c.continent} ${langTerms}`.toLowerCase();
+    }
+
     function getLangByCode(code) {
         if (!code) return WORLD_LANGUAGES[0];
         const lower = code.toLowerCase();
         return (
-            WORLD_LANGUAGES.find(l => l.code.toLowerCase() === lower) ||
+            LANG_BY_CODE.get(lower) ||
             WORLD_LANGUAGES.find(l => l.code.toLowerCase().split('-')[0] === lower.split('-')[0]) ||
             WORLD_LANGUAGES[0]
         );
     }
 
     function getCountriesForLangCode(code) {
-        return WORLD_COUNTRIES.filter(c => c.langs.includes(code));
+        return COUNTRIES_BY_LANG.get(code) || [];
     }
 
     function getInitialLangCode() {
@@ -1196,20 +1221,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const q = searchQuery.trim().toLowerCase();
 
         if (!byCountryMode) {
-            const filtered = WORLD_LANGUAGES.filter(l => {
-                if (!q) return true;
-                if (
-                    l.name.toLowerCase().includes(q) ||
-                    l.nativeName.toLowerCase().includes(q) ||
-                    l.code.toLowerCase().includes(q)
-                ) {
-                    return true;
-                }
-                const countries = getCountriesForLangCode(l.code);
-                return countries.some(
-                    c => c.name.toLowerCase().includes(q) || c.continent.toLowerCase().includes(q)
-                );
-            });
+            const filtered = q
+                ? WORLD_LANGUAGES.filter(l => l._searchKey.includes(q))
+                : WORLD_LANGUAGES;
 
             if (filtered.length === 0) {
                 body.innerHTML = `<div style="padding:32px;text-align:center;color:var(--fg-muted);font-size:14px;">No matching languages or countries found.</div>`;
@@ -1219,9 +1233,7 @@ document.addEventListener('DOMContentLoaded', () => {
             body.innerHTML = `<div class="lang-grid">${filtered
                 .map(l => {
                     const isActive = l.code.toLowerCase() === currentLangCode.toLowerCase();
-                    const countries = getCountriesForLangCode(l.code);
-                    const countryNames = countries.slice(0, 3).map(c => c.name).join(', ');
-                    const sub = countryNames ? `${l.name} • ${countryNames}` : l.name;
+                    const sub = l._countryNamesPreview ? `${l.name} • ${l._countryNamesPreview}` : l.name;
                     return `
                         <button type="button" class="lang-item ${isActive ? 'active' : ''}" data-lang="${l.code}">
                             <span class="lang-item-flag">${l.flag}</span>
@@ -1235,23 +1247,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 })
                 .join('')}</div>`;
         } else {
-            const filteredCountries = WORLD_COUNTRIES.filter(c => {
-                if (!q) return true;
-                if (
-                    c.name.toLowerCase().includes(q) ||
-                    c.code.toLowerCase().includes(q) ||
-                    c.continent.toLowerCase().includes(q)
-                ) {
-                    return true;
-                }
-                return c.langs.some(code => {
-                    const l = getLangByCode(code);
-                    return (
-                        l.name.toLowerCase().includes(q) ||
-                        l.nativeName.toLowerCase().includes(q)
-                    );
-                });
-            });
+            const filteredCountries = q
+                ? WORLD_COUNTRIES.filter(c => c._searchKey.includes(q))
+                : WORLD_COUNTRIES;
 
             if (filteredCountries.length === 0) {
                 body.innerHTML = `<div style="padding:32px;text-align:center;color:var(--fg-muted);font-size:14px;">No matching countries found.</div>`;
@@ -1283,13 +1281,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 })
                 .join('')}</div>`;
         }
-
-        body.querySelectorAll('[data-lang]').forEach(el => {
-            el.addEventListener('click', () => {
-                const chosen = el.getAttribute('data-lang');
-                selectLanguage(chosen);
-            });
-        });
     }
 
     function selectLanguage(code) {
@@ -1373,6 +1364,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderModalList();
             });
 
+            document.getElementById('lang-modal-body').addEventListener('click', e => {
+                const target = e.target.closest('[data-lang]');
+                if (target) {
+                    selectLanguage(target.getAttribute('data-lang'));
+                }
+            });
+
             document.addEventListener('keydown', e => {
                 if (e.key === 'Escape' && overlay.classList.contains('open')) {
                     closeModal();
@@ -1380,10 +1378,11 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
+        ensureGoogleTranslateLoaded();
         renderModalList();
         overlay.classList.add('open');
         const input = document.getElementById('lang-search-input');
-        if (input) setTimeout(() => input.focus(), 60);
+        if (input) requestAnimationFrame(() => input.focus());
     }
 
     function closeModal() {

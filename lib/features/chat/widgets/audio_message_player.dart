@@ -51,6 +51,8 @@ class _AudioMessagePlayerState extends ConsumerState<AudioMessagePlayer>
 
   void _initAudioListeners() {
     final service = ref.read(audioPlaybackServiceProvider);
+    // Pre-cache remote audio to disk in the background so playback starts in 0ms
+    unawaited(service.prefetchAudio(widget.audioUrl));
 
     // 1. Listen to active ID changes
     _idSub = service.currentIdStream.listen((activeId) {
@@ -106,8 +108,9 @@ class _AudioMessagePlayerState extends ConsumerState<AudioMessagePlayer>
     super.didUpdateWidget(oldWidget);
     if (widget.audioUrl != oldWidget.audioUrl) {
       _totalDuration = Duration(seconds: widget.durationSeconds);
-      // If URL changed, we should probably stop if we were playing.
-      // The service will handle stop if we try to play new URL.
+      unawaited(
+        ref.read(audioPlaybackServiceProvider).prefetchAudio(widget.audioUrl),
+      );
     }
   }
 

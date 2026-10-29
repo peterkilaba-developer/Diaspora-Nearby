@@ -64,9 +64,38 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
   Airport? _resolvedOriginAirport;
   Airport? _resolvedDestAirport;
 
+  // Static caches for 0ms repeat screen opens
+  static Map<String, List<FlightOffer>> _cachedDateGroupedOffers = {};
+  static List<FlightOffer> _cachedFlightOffers = [];
+  static Airport? _cachedOriginAirport;
+  static Airport? _cachedDestAirport;
+  static String? _cachedCheapestDate;
+  static String? _cachedHomeCountry;
+
   @override
   void initState() {
     super.initState();
+    if (_cachedDateGroupedOffers.isNotEmpty) {
+      _dateGroupedOffers = Map.of(_cachedDateGroupedOffers);
+      _flightOffers = List.of(_cachedFlightOffers);
+      _resolvedOriginAirport = _cachedOriginAirport;
+      _resolvedDestAirport = _cachedDestAirport;
+      _cheapestDate = _cachedCheapestDate;
+      _homeCountry = _cachedHomeCountry;
+      if (_resolvedOriginAirport != null) {
+        _originIata = _resolvedOriginAirport!.iataCode;
+        _originController.text =
+            '${_resolvedOriginAirport!.iataCode} - ${_resolvedOriginAirport!.name}';
+      }
+      if (_resolvedDestAirport != null) {
+        _destIata = _resolvedDestAirport!.iataCode;
+        _destController.text =
+            '${_resolvedDestAirport!.iataCode} - ${_resolvedDestAirport!.name}';
+      }
+      _setDefaultDates();
+      _initialLoading = false;
+      _autoSearchComplete = true;
+    }
     _autoPopulateAndSearch();
   }
 
@@ -101,9 +130,9 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
         return;
       }
 
-      final profileData = await ref
-          .read(profileRepositoryProvider)
-          .getUserProfile(userId);
+      final profileData =
+          ref.read(userProfileProvider).value ??
+          await ref.read(profileRepositoryProvider).getUserProfile(userId);
       if (profileData == null || !mounted) {
         debugPrint('✈️ [FlightSearch] No profile data, skipping auto-populate');
         if (mounted) setState(() => _initialLoading = false);
@@ -123,6 +152,7 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
             .getClosestInternationalAirport(lat, lng);
         if (originAirport != null && mounted) {
           _resolvedOriginAirport = originAirport;
+          _cachedOriginAirport = originAirport;
           setState(() {
             _originIata = originAirport.iataCode;
             _originController.text =
@@ -149,6 +179,7 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
         );
         if (destAirport != null && mounted) {
           _resolvedDestAirport = destAirport;
+          _cachedDestAirport = destAirport;
           setState(() {
             _destIata = destAirport.iataCode;
             _destController.text =
@@ -164,6 +195,7 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
 
       // Store home country for contextual empty state
       if (profileData.homeCountry != null && mounted) {
+        _cachedHomeCountry = profileData.homeCountry;
         setState(() {
           _homeCountry = profileData.homeCountry;
         });
@@ -194,12 +226,15 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
   Future<void> _autoSearchMultiDay() async {
     if (!mounted) return;
 
+    final hasCachedResults = _dateGroupedOffers.isNotEmpty;
     setState(() {
-      _isAutoSearching = true;
-      _autoSearchComplete = false;
+      _isAutoSearching = !hasCachedResults;
+      _autoSearchComplete = hasCachedResults;
       _autoSearchDaysLoaded = 0;
-      _dateGroupedOffers = {};
-      _cheapestDate = null;
+      if (!hasCachedResults) {
+        _dateGroupedOffers = {};
+        _cheapestDate = null;
+      }
       _showSearchForm = false;
       _initialLoading = false;
     });
@@ -213,7 +248,7 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
       return dateFormat.format(today.add(Duration(days: i + 1)));
     });
 
-    // Fire parallel requests
+    // Fire parallel requests and stream each day as soon as it resolves
     final futures = dates.map((date) async {
       try {
         final offers = await amadeus.searchFlights(
@@ -234,21 +269,28 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
       }
     }).toList();
 
-    // Process results as they come in
     for (final future in futures) {
-      final entry = await future;
-      if (!mounted) return;
-
-      setState(() {
-        _autoSearchDaysLoaded++;
-        if (entry.value.isNotEmpty) {
-          _dateGroupedOffers[entry.key] = entry.value;
-        }
-
-        // Track cheapest date
-        _updateCheapestDate();
+      future.then((entry) {
+        if (!mounted) return;
+        setState(() {
+          _autoSearchDaysLoaded++;
+          if (entry.value.isNotEmpty) {
+            _dateGroupedOffers[entry.key] = entry.value;
+            // Render immediately as soon as the first day with results arrives!
+            _autoSearchComplete = true;
+            _isAutoSearching = false;
+          }
+          _updateCheapestDate();
+          _flightOffers = _dateGroupedOffers.values.expand((e) => e).toList();
+          _flightOffers.sort((a, b) => a.totalPrice.compareTo(b.totalPrice));
+          _cachedDateGroupedOffers = Map.of(_dateGroupedOffers);
+          _cachedFlightOffers = List.of(_flightOffers);
+          _cachedCheapestDate = _cheapestDate;
+        });
       });
     }
+
+    await Future.wait(futures);
 
     if (!mounted) return;
     debugPrint(
@@ -260,6 +302,9 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
       // Flatten all results for the standard results view fallback
       _flightOffers = _dateGroupedOffers.values.expand((e) => e).toList();
       _flightOffers.sort((a, b) => a.totalPrice.compareTo(b.totalPrice));
+      _cachedDateGroupedOffers = Map.of(_dateGroupedOffers);
+      _cachedFlightOffers = List.of(_flightOffers);
+      _cachedCheapestDate = _cheapestDate;
     });
   }
 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cross_file/cross_file.dart'; // [NEW]
@@ -53,101 +54,84 @@ class _ShareChatSelectionScreenState
   Future<void> _handleSend() async {
     if (_isSending) return;
 
-    setState(() => _isSending = true);
-
     final messagingService = ref.read(chatMessagingServiceProvider);
     final currentUser = ref.read(authRepositoryProvider).currentUser;
 
     if (currentUser == null) return;
 
-    // [DEBUG] Log shared files
-    for (final file in widget.sharedFiles) {
-      debugPrint(
-        '📤 Sharing File: Path=${file.path}, Type=${file.type}, Thumbnail=${file.thumbnail}',
-      );
-    }
+    final targetChatIds = List<String>.from(_selectedChatIds);
+    final filesToSend = List<SharedMediaFile>.from(widget.sharedFiles);
+    if (targetChatIds.isEmpty || filesToSend.isEmpty) return;
 
-    try {
-      for (final chatId in _selectedChatIds) {
-        // Send files
-        for (final file in widget.sharedFiles) {
-          final metadata = {'isShared': true};
+    setState(() => _isSending = true);
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Sent successfully!')),
+    );
+    context.go('/chats');
 
-          switch (file.type) {
-            case SharedMediaType.image:
-              await messagingService.sendImageMessage(
-                chatId,
-                XFile(file.path),
-                caption: null,
-                metadata: metadata,
-              );
-              break;
-            case SharedMediaType.video:
-              await messagingService.sendVideoMessage(
-                chatId,
-                XFile(file.path),
-                caption: null,
-                metadata: metadata,
-              );
-              break;
+    unawaited(() async {
+      try {
+        await Future.wait(
+          targetChatIds.map((chatId) async {
+            for (final file in filesToSend) {
+              final metadata = {'isShared': true};
 
-            case SharedMediaType.text:
-            case SharedMediaType.url:
-              if (file.path.trim().isNotEmpty) {
-                await messagingService.sendTextMessage(
-                  chatId,
-                  file.path,
-                  metadata: metadata,
-                );
-              } else {
-                debugPrint(
-                  '⚠️ [SHARE] Skipped empty text content from ${file.type}',
-                );
+              switch (file.type) {
+                case SharedMediaType.image:
+                  await messagingService.sendImageMessage(
+                    chatId,
+                    XFile(file.path),
+                    caption: null,
+                    metadata: metadata,
+                  );
+                  break;
+                case SharedMediaType.video:
+                  await messagingService.sendVideoMessage(
+                    chatId,
+                    XFile(file.path),
+                    caption: null,
+                    metadata: metadata,
+                  );
+                  break;
+                case SharedMediaType.text:
+                case SharedMediaType.url:
+                  if (file.path.trim().isNotEmpty) {
+                    await messagingService.sendTextMessage(
+                      chatId,
+                      file.path,
+                      metadata: metadata,
+                    );
+                  }
+                  break;
+                case SharedMediaType.file:
+                  final path = file.path.toLowerCase();
+                  if (path.endsWith('.mp3') ||
+                      path.endsWith('.m4a') ||
+                      path.endsWith('.wav') ||
+                      path.endsWith('.aac')) {
+                    await messagingService.sendAudioFileMessage(
+                      chatId,
+                      XFile(file.path),
+                      metadata: metadata,
+                    );
+                  } else {
+                    await messagingService.sendDocumentMessage(
+                      chatId,
+                      XFile(file.path),
+                      metadata: metadata,
+                    );
+                  }
+                  break;
               }
-              break;
-            case SharedMediaType.file:
-              // Basic extension check for audio vs document
-              final path = file.path.toLowerCase();
-              if (path.endsWith('.mp3') ||
-                  path.endsWith('.m4a') ||
-                  path.endsWith('.wav') ||
-                  path.endsWith('.aac')) {
-                await messagingService.sendAudioFileMessage(
-                  chatId,
-                  XFile(file.path),
-                  metadata: metadata,
-                );
-              } else {
-                await messagingService.sendDocumentMessage(
-                  chatId,
-                  XFile(file.path),
-                  metadata: metadata,
-                );
-              }
-              break;
-          }
-        }
+            }
+          }),
+        );
+      } catch (e) {
+        debugPrint("Share Send Error: $e");
+        messenger.showSnackBar(SnackBar(content: Text('Error sending: $e')));
       }
-
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Sent successfully!')));
-        // Close app or navigate home?
-        // SystemNavigator.pop() might be too aggressive if they want to browse.
-        // Let's go to chats list or close if it was a deep link launch.
-        context.go('/chats');
-      }
-    } catch (e) {
-      debugPrint("Share Send Error: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error sending: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _isSending = false);
-    }
+    }());
   }
 
   @override
@@ -227,10 +211,17 @@ class _ShareChatSelectionScreenState
       ),
       body: Stack(
         children: [
-          chatsAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, stack) => Center(child: Text('Error: $error')),
-            data: (chats) {
+          Builder(
+            builder: (context) {
+              final chats =
+                  chatsAsync.asData?.value ??
+                  ref.read(chatRepositoryProvider).cachedChats;
+              if (chatsAsync.isLoading && chats.isEmpty) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (chatsAsync.hasError && chats.isEmpty) {
+                return Center(child: Text('Error: ${chatsAsync.error}'));
+              }
               final filteredChats =
                   (_searchQuery.isEmpty
                         ? List.of(chats)
@@ -402,26 +393,30 @@ class _ShareChatSelectionScreenState
   void _showSendConfirmation(BuildContext context, dynamic chat) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Send to ${chat.name}?'),
-        content: const Text('Do you want to send this content?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              setState(() {
-                _selectedChatIds.clear();
-                _selectedChatIds.add(chat.id);
-                _handleSend();
-              });
-            },
-            child: const Text('Send'),
-          ),
-        ],
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          title: Text('Send to ${chat.name}?'),
+          content: const Text('Do you want to send this content?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                setState(() {
+                  _selectedChatIds.clear();
+                  _selectedChatIds.add(chat.id);
+                  _handleSend();
+                });
+              },
+              child: const Text('Send'),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -33,6 +35,20 @@ final _allPendingRequestsProvider =
           );
     });
 
+class _OptimisticHandledRequestsNotifier extends Notifier<Set<String>> {
+  @override
+  Set<String> build() => const {};
+
+  void markHandled(String id) => state = {...state, id};
+  void unmarkHandled(String id) =>
+      state = state.where((e) => e != id).toSet();
+}
+
+final _optimisticHandledRequestsProvider =
+    NotifierProvider<_OptimisticHandledRequestsNotifier, Set<String>>(
+      _OptimisticHandledRequestsNotifier.new,
+    );
+
 /// Admin dashboard screen: review pending chamber leadership requests and
 /// approve / reject them. Flipping `approved: true` here triggers the
 /// `onChamberLeadershipRequestApproved` Cloud Function which performs the
@@ -43,6 +59,7 @@ class AdminChamberRequestsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final requestsAsync = ref.watch(_allPendingRequestsProvider);
+    final handledIds = ref.watch(_optimisticHandledRequestsProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -58,7 +75,10 @@ class AdminChamberRequestsScreen extends ConsumerWidget {
             child: Text('Error loading requests: $e'),
           ),
         ),
-        data: (requests) {
+        data: (rawRequests) {
+          final requests = rawRequests
+              .where((r) => !handledIds.contains(r.id))
+              .toList();
           if (requests.isEmpty) {
             return _buildEmpty(context);
           }
@@ -111,42 +131,39 @@ class _RequestCard extends ConsumerStatefulWidget {
 }
 
 class _RequestCardState extends ConsumerState<_RequestCard> {
-  bool _busy = false;
+  final bool _busy = false;
 
   Future<void> _approve() async {
     final adminUid = ref.read(authRepositoryProvider).currentUser?.uid;
     if (adminUid == null) return;
-    setState(() => _busy = true);
-    try {
-      await FirebaseFirestore.instance
-          .collection('leadershipRequests')
-          .doc(widget.request.id)
-          .update({
-            'approved': true,
-            'decidedBy': adminUid,
-            'decidedAt': FieldValue.serverTimestamp(),
-          });
-      // The trigger function will flip status to 'approved' and perform
-      // the actual appointment server-side. We just removed this card
-      // from the pending stream by setting approved=true (status updated
-      // by the trigger shortly after).
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Approved — performing appointment for ${ChamberRoles.displayName(widget.request.role)}.',
-            ),
-          ),
-        );
+    final reqId = widget.request.id;
+    final roleName = ChamberRoles.displayName(widget.request.role);
+    final messenger = ScaffoldMessenger.of(context);
+    final notifier = ref.read(_optimisticHandledRequestsProvider.notifier);
+
+    // 0ms optimistic removal & feedback
+    notifier.markHandled(reqId);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Approved — performing appointment for $roleName.'),
+      ),
+    );
+
+    unawaited(() async {
+      try {
+        await FirebaseFirestore.instance
+            .collection('leadershipRequests')
+            .doc(reqId)
+            .update({
+              'approved': true,
+              'decidedBy': adminUid,
+              'decidedAt': FieldValue.serverTimestamp(),
+            });
+      } catch (e) {
+        notifier.unmarkHandled(reqId);
+        messenger.showSnackBar(SnackBar(content: Text('Approve failed: $e')));
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _busy = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Approve failed: $e')));
-      }
-    }
+    }());
   }
 
   Future<void> _reject() async {
@@ -154,73 +171,86 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
     if (adminUid == null) return;
 
     final note = await _promptNote(context);
-    if (note == null) return; // user cancelled
+    if (note == null || !mounted) return; // user cancelled
 
-    setState(() => _busy = true);
-    try {
-      await FirebaseFirestore.instance
-          .collection('leadershipRequests')
-          .doc(widget.request.id)
-          .update({
-            'status': ChamberLeadershipRequest.statusRejected,
-            'approved': false,
-            'decisionNote': note.isEmpty ? null : note,
-            'decidedBy': adminUid,
-            'decidedAt': FieldValue.serverTimestamp(),
-          });
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Request rejected.')));
+    final reqId = widget.request.id;
+    final messenger = ScaffoldMessenger.of(context);
+    final notifier = ref.read(_optimisticHandledRequestsProvider.notifier);
+
+    // 0ms optimistic removal & feedback
+    notifier.markHandled(reqId);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Request rejected.')),
+    );
+
+    unawaited(() async {
+      try {
+        await FirebaseFirestore.instance
+            .collection('leadershipRequests')
+            .doc(reqId)
+            .update({
+              'status': ChamberLeadershipRequest.statusRejected,
+              'approved': false,
+              'decisionNote': note.isEmpty ? null : note,
+              'decidedBy': adminUid,
+              'decidedAt': FieldValue.serverTimestamp(),
+            });
+      } catch (e) {
+        notifier.unmarkHandled(reqId);
+        messenger.showSnackBar(SnackBar(content: Text('Reject failed: $e')));
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _busy = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Reject failed: $e')));
-      }
-    }
+    }());
   }
 
   Future<String?> _promptNote(BuildContext context) async {
     final controller = TextEditingController();
+    final theme = Theme.of(context);
     return showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Reject Request'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Optional note explaining the decision. Sent to the requester as the rejection reason.',
-              style: TextStyle(fontSize: 13),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              maxLines: 3,
-              maxLength: 200,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: 'e.g. Please build chamber tenure first.',
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          title: const Text('Reject Request'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Optional note explaining the decision. Sent to the requester as the rejection reason.',
+                style: TextStyle(fontSize: 13),
               ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                maxLines: 3,
+                maxLength: 200,
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: theme.colorScheme.surfaceContainerHighest
+                      .withValues(alpha: 0.4),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  hintText: 'e.g. Please build chamber tenure first.',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppTheme.error),
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: const Text('Reject'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppTheme.error),
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('Reject'),
-          ),
-        ],
       ),
     );
   }

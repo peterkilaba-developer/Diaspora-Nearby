@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -8,12 +10,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 /// Detects native-only feature attempts on web and shows an email capture
 /// dialog for TestFlight / Play Store beta invites.
-///
-/// • First native-only hit (no email submitted) → full dialog with email field
-/// • Submitted email before → snackbar reminder
-/// • Dismissed without submitting → re-prompt on next native-only hit
 class NativeAppPrompt {
   static const _prefKey = 'native_app_email_submitted';
+  static bool? _cachedSubmitted;
 
   /// Call this from any native-only guard.
   /// Returns `true` if the user is on web (action was intercepted).
@@ -26,8 +25,12 @@ class NativeAppPrompt {
   }) async {
     if (!kIsWeb) return false;
 
-    final prefs = await SharedPreferences.getInstance();
-    final alreadySubmitted = prefs.getBool(_prefKey) ?? false;
+    bool alreadySubmitted = _cachedSubmitted ?? false;
+    if (_cachedSubmitted == null) {
+      final prefs = await SharedPreferences.getInstance();
+      alreadySubmitted = prefs.getBool(_prefKey) ?? false;
+      _cachedSubmitted = alreadySubmitted;
+    }
 
     if (!context.mounted) return true;
 
@@ -61,23 +64,23 @@ class NativeAppPrompt {
       return true;
     }
 
-    // Show full dialog
     await showDialog(
       context: context,
       barrierDismissible: true,
-      builder: (ctx) => _NativeAppDialog(
-        feature: feature,
-        description: description,
-        icon: icon,
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: _NativeAppDialog(
+          feature: feature,
+          description: description,
+          icon: icon,
+        ),
       ),
     );
 
     return true;
   }
 
-  /// Detect the user's mobile platform from web user agent
   static String detectPlatform() {
-    // On web we detect in the dialog via user agent; this is a fallback
     return 'unknown';
   }
 }
@@ -100,7 +103,7 @@ class _NativeAppDialog extends StatefulWidget {
 class _NativeAppDialogState extends State<_NativeAppDialog> {
   final _emailController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
-  bool _isSubmitting = false;
+  final bool _isSubmitting = false;
   String _detectedPlatform = 'unknown';
 
   @override
@@ -112,7 +115,6 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
 
   void _detectPlatform() {
     if (kIsWeb) {
-      // Use defaultTargetPlatform which detects mobile browsers on web
       final tp = defaultTargetPlatform;
       if (tp == TargetPlatform.iOS || tp == TargetPlatform.macOS) {
         setState(() => _detectedPlatform = 'ios');
@@ -143,10 +145,13 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
 
   Future<void> _openDirectStoreLink() async {
     final url = _detectedPlatform == 'ios' ? _testFlightWebUrl : _playStoreUrl;
-    try {
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-      if (mounted) Navigator.of(context).pop();
-    } catch (_) {}
+    if (mounted) Navigator.of(context).pop();
+    unawaited(
+      launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.externalApplication,
+      ).catchError((_) => false),
+    );
   }
 
   Future<void> _submit() async {
@@ -156,57 +161,52 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
     }
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _isSubmitting = true);
+    final email = _emailController.text.trim();
+    final feature = widget.feature;
+    final platform = _detectedPlatform;
+    final messenger = ScaffoldMessenger.maybeOf(context);
 
-    try {
-      await FirebaseFunctions.instance.httpsCallable('submitAppRequest').call({
-        'email': _emailController.text.trim(),
-        'feature': widget.feature,
-        'platform': _detectedPlatform,
-      });
-
-      // Mark as submitted
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(NativeAppPrompt._prefKey, true);
-
-      if (mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: const Color(0xFF2A2A2A),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+    // [PERF] Close dialog and show thank-you feedback immediately (0ms)
+    NativeAppPrompt._cachedSubmitted = true;
+    Navigator.of(context).pop();
+    messenger?.showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFF2A2A2A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        content: const Row(
+          children: [
+            Icon(LucideIcons.checkCircle, size: 18, color: Color(0xFF9CAF88)),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Thanks! We\'ll send you the download link soon 🎉',
+                style: TextStyle(color: Colors.white, fontSize: 13),
+              ),
             ),
-            content: const Row(
-              children: [
-                Icon(
-                  LucideIcons.checkCircle,
-                  size: 18,
-                  color: Color(0xFF9CAF88),
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Thanks! We\'ll send you the download link soon 🎉',
-                    style: TextStyle(color: Colors.white, fontSize: 13),
-                  ),
-                ),
-              ],
-            ),
-            duration: const Duration(seconds: 4),
+          ],
+        ),
+        duration: const Duration(seconds: 4),
+      ),
+    );
+
+    unawaited(() async {
+      try {
+        await Future.wait([
+          FirebaseFunctions.instance.httpsCallable('submitAppRequest').call({
+            'email': email,
+            'feature': feature,
+            'platform': platform,
+          }),
+          SharedPreferences.getInstance().then(
+            (prefs) => prefs.setBool(NativeAppPrompt._prefKey, true),
           ),
-        );
+        ]);
+      } catch (e) {
+        debugPrint('NativeAppPrompt: Error saving: $e');
+        NativeAppPrompt._cachedSubmitted = false;
       }
-    } catch (e) {
-      debugPrint('NativeAppPrompt: Error saving: $e');
-      if (mounted) {
-        setState(() => _isSubmitting = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
+    }());
   }
 
   @override
@@ -215,7 +215,7 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
 
     return Dialog(
       backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
       child: Container(
         constraints: const BoxConstraints(maxWidth: 400),
         decoration: BoxDecoration(
@@ -237,7 +237,6 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Logo
                   ClipRRect(
                     borderRadius: BorderRadius.circular(16),
                     child: Image.asset(
@@ -248,7 +247,6 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Title
                   Text(
                     'Get the Diaspora Nearby App',
                     style: TextStyle(
@@ -260,7 +258,6 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
                   ),
                   const SizedBox(height: 12),
 
-                  // Feature-specific message
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
@@ -306,7 +303,6 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Platform badge
                   if (_detectedPlatform != 'unknown')
                     Padding(
                       padding: const EdgeInsets.only(bottom: 16),
@@ -339,7 +335,6 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
                       ),
                     ),
 
-                  // Email field (only shown on desktop where direct store links aren't native)
                   if (_detectedPlatform != 'ios' &&
                       _detectedPlatform != 'android') ...[
                     TextFormField(
@@ -384,7 +379,6 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
                     const SizedBox(height: 16),
                   ],
 
-                  // Submit / Open Store button
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
@@ -425,7 +419,6 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
                   ),
                   const SizedBox(height: 10),
 
-                  // Dismiss
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(),
                     child: Text(

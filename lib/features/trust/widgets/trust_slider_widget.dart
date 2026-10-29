@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -5,9 +7,11 @@ import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 import 'package:diaspora_nearby/features/trust/repository/trust_repository.dart';
 import 'package:diaspora_nearby/features/shared/utils/app_snackbar.dart';
-import 'package:diaspora_nearby/features/shared/utils/loading_mixin.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/relationship_repository.dart';
+import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
+import 'package:diaspora_nearby/features/profile/models/relationship.dart';
+import 'package:diaspora_nearby/features/profile/models/relationship_request.dart';
 
 class TrustSliderWidget extends ConsumerStatefulWidget {
   static const Set<String> familyRelationshipTypes = {
@@ -36,6 +40,7 @@ class TrustSliderWidget extends ConsumerStatefulWidget {
   final String currentUserId;
   final String? displayName;
   final double? initialRating;
+  final VoidCallback? onRated;
 
   const TrustSliderWidget({
     super.key,
@@ -43,19 +48,19 @@ class TrustSliderWidget extends ConsumerStatefulWidget {
     required this.currentUserId,
     this.displayName,
     this.initialRating,
+    this.onRated,
   });
 
   @override
   ConsumerState<TrustSliderWidget> createState() => _TrustSliderWidgetState();
 }
 
-class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
-    with ConsumerLoadingMixin {
+class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget> {
   late double _currentValue;
   double? _previousValue;
   bool _wasFullTrust = false;
   bool _wasNoTrust = false;
-  bool _isLoadingPrevious = true;
+  bool _isLoadingPrevious = false;
   bool _isFamilyMember = false;
   bool _isFriendMember = false;
   bool _isOwnProfileIncomplete = false;
@@ -63,99 +68,144 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
   @override
   void initState() {
     super.initState();
-    _currentValue = widget.initialRating ?? 0.0;
-    _previousValue = _currentValue;
-    _wasFullTrust = _currentValue > 90;
+    final profileRepo = ref.read(profileRepositoryProvider);
+    final relRepo = ref.read(relationshipRepositoryProvider);
+    final trustRepo = ref.read(trustRepositoryProvider);
+
+    final cachedMyProfile =
+        ref.read(userProfileProvider).value ??
+        profileRepo.getCachedProfile(widget.currentUserId);
+    if (cachedMyProfile != null && !cachedMyProfile.isComplete) {
+      _isOwnProfileIncomplete = true;
+    }
+
+    final cachedRel = relRepo.getCachedRelationship(
+      widget.currentUserId,
+      widget.targetUserId,
+    );
+    if (cachedRel != null && cachedRel.status == 'active') {
+      if (TrustSliderWidget.isFamilyRelationshipType(cachedRel.type)) {
+        _isFamilyMember = true;
+      } else {
+        _isFriendMember = true;
+      }
+    }
+
+    final cachedPendingSent = relRepo.getCachedPendingSentRequest(
+      fromUserId: widget.currentUserId,
+      toUserId: widget.targetUserId,
+    );
+    final cachedPendingIncoming = relRepo.getCachedPendingIncomingRequest(
+      userId: widget.currentUserId,
+      fromUserId: widget.targetUserId,
+    );
+    if (TrustSliderWidget.isFamilyRelationshipType(
+          cachedPendingSent?.relationshipType,
+        ) ||
+        TrustSliderWidget.isFamilyRelationshipType(
+          cachedPendingIncoming?.relationshipType,
+        )) {
+      _isFamilyMember = true;
+    } else if (cachedPendingSent != null || cachedPendingIncoming != null) {
+      _isFriendMember = true;
+    }
+
+    final cachedRating =
+        widget.initialRating ??
+        trustRepo.getCachedRating(
+          fromUserId: widget.currentUserId,
+          toUserId: widget.targetUserId,
+        );
+    final initialScore = cachedRating ?? 0.0;
+    _currentValue = _isFriendMember && initialScore > 0
+        ? initialScore.clamp(11.0, 90.0)
+        : initialScore;
+    _previousValue = initialScore;
+    _wasFullTrust = initialScore > 90;
+    _wasNoTrust = initialScore >= 1 && initialScore <= 10;
+
     _loadPreviousRating();
   }
 
   Future<void> _loadPreviousRating() async {
     try {
-      final myProfile = await ref
-          .read(profileRepositoryProvider)
-          .getUserProfile(widget.currentUserId);
-      if (mounted && (myProfile == null || !myProfile.isComplete)) {
-        setState(() {
-          _isOwnProfileIncomplete = true;
-        });
-      }
-
+      final profileRepo = ref.read(profileRepositoryProvider);
       final relRepo = ref.read(relationshipRepositoryProvider);
-      final existingRel = await relRepo.getRelationship(
-        userId: widget.currentUserId,
-        relatedUserId: widget.targetUserId,
-      );
+      final trustRepo = ref.read(trustRepositoryProvider);
+
+      final results = await Future.wait<dynamic>([
+        profileRepo.getUserProfile(widget.currentUserId),
+        relRepo.getRelationship(
+          userId: widget.currentUserId,
+          relatedUserId: widget.targetUserId,
+        ),
+        relRepo.getPendingSentRequest(
+          fromUserId: widget.currentUserId,
+          toUserId: widget.targetUserId,
+        ),
+        relRepo.getPendingIncomingRequest(
+          userId: widget.currentUserId,
+          fromUserId: widget.targetUserId,
+        ),
+        trustRepo.getRating(
+          fromUserId: widget.currentUserId,
+          toUserId: widget.targetUserId,
+        ),
+      ]);
+
+      if (!mounted) return;
+
+      final myProfile = results[0] as ProfileData?;
+      final existingRel = results[1] as Relationship?;
+      final pendingSent = results[2] as RelationshipRequest?;
+      final pendingIncoming = results[3] as RelationshipRequest?;
+      final existingScore = results[4] as double?;
+
+      bool isFamily = false;
+      bool isFriend = false;
+
       if (existingRel != null && existingRel.status == 'active') {
         if (TrustSliderWidget.isFamilyRelationshipType(existingRel.type)) {
-          if (mounted) {
-            setState(() {
-              _isFamilyMember = true;
-              _isLoadingPrevious = false;
-            });
-          }
-          return;
+          isFamily = true;
         } else {
-          if (mounted) {
-            setState(() {
-              _isFriendMember = true;
-            });
-          }
+          isFriend = true;
         }
       }
 
-      final pendingSent = await relRepo.getPendingSentRequest(
-        fromUserId: widget.currentUserId,
-        toUserId: widget.targetUserId,
-      );
-      final pendingIncoming = await relRepo.getPendingIncomingRequest(
-        userId: widget.currentUserId,
-        fromUserId: widget.targetUserId,
-      );
       if (TrustSliderWidget.isFamilyRelationshipType(
             pendingSent?.relationshipType,
           ) ||
           TrustSliderWidget.isFamilyRelationshipType(
             pendingIncoming?.relationshipType,
           )) {
-        if (mounted) {
-          setState(() {
-            _isFamilyMember = true;
-            _isLoadingPrevious = false;
-          });
-        }
-        return;
+        isFamily = true;
       } else if (pendingSent != null || pendingIncoming != null) {
-        if (mounted) {
-          setState(() {
-            _isFriendMember = true;
-          });
-        }
+        isFriend = true;
       }
 
-      final existingScore = await ref
-          .read(trustRepositoryProvider)
-          .getRating(
-            fromUserId: widget.currentUserId,
-            toUserId: widget.targetUserId,
-          );
-      if (existingScore != null && mounted) {
-        final clampedScore = _isFriendMember && existingScore > 0
-            ? existingScore.clamp(11.0, 90.0)
-            : existingScore;
-        setState(() {
-          _currentValue = clampedScore;
+      setState(() {
+        _isOwnProfileIncomplete = myProfile == null || !myProfile.isComplete;
+        _isFamilyMember = isFamily;
+        _isFriendMember = isFriend;
+        if (existingScore != null) {
+          final clampedScore = isFriend && existingScore > 0
+              ? existingScore.clamp(11.0, 90.0)
+              : existingScore;
+          // Only overwrite _currentValue if the user hasn't actively dragged it
+          if (_currentValue == (_previousValue ?? 0.0)) {
+            _currentValue = clampedScore;
+          }
           _previousValue = existingScore;
           _wasFullTrust = existingScore > 90;
           _wasNoTrust = existingScore >= 1 && existingScore <= 10;
-          _isLoadingPrevious = false;
-        });
-        return;
-      }
+        }
+        _isLoadingPrevious = false;
+      });
     } catch (e) {
       debugPrint('Error loading previous rating: $e');
-    }
-    if (mounted) {
-      setState(() => _isLoadingPrevious = false);
+      if (mounted) {
+        setState(() => _isLoadingPrevious = false);
+      }
     }
   }
 
@@ -192,18 +242,25 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
     return _getDecile(_currentValue) != _getDecile(_previousValue!);
   }
 
-  Future<void> _submitRating({bool isStakeConfirm = false}) => withLoading(
-    () async {
-      // Gate: must have a fully completed profile to vouch/verify
-      final myProfile = await ref
-          .read(profileRepositoryProvider)
-          .getUserProfile(widget.currentUserId);
-      if (myProfile == null || !myProfile.isComplete) {
-        if (mounted) {
-          setState(() => _currentValue = _previousValue ?? 0.0);
-          await showDialog(
-            context: context,
-            builder: (ctx) => AlertDialog(
+  Future<void> _submitRating({bool isStakeConfirm = false}) async {
+    final profileRepo = ref.read(profileRepositoryProvider);
+    final myProfile =
+        ref.read(userProfileProvider).value ??
+        profileRepo.getCachedProfile(widget.currentUserId) ??
+        await profileRepo.getUserProfile(widget.currentUserId);
+
+    if (myProfile == null || !myProfile.isComplete) {
+      if (mounted) {
+        setState(() => _currentValue = _previousValue ?? 0.0);
+        await showDialog(
+          context: context,
+          builder: (ctx) => BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: AlertDialog(
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 24,
+              ),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -225,91 +282,115 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
                 ),
               ],
             ),
-          );
-        }
+          ),
+        );
+      }
+      return;
+    }
+
+    final isNowStaked = _isStaked;
+    final wasStakedLocal = _wasFullTrust || _wasNoTrust;
+
+    // If transitioning to a staked tier but NOT from the stake confirm button, just wait
+    if (isNowStaked && !wasStakedLocal && !isStakeConfirm) {
+      return;
+    }
+
+    // Show exit confirmation if leaving a staked tier
+    if (!isNowStaked && wasStakedLocal) {
+      final confirmed = await _showExitConfirmation(_wasFullTrust);
+      if (!confirmed) {
+        setState(() => _currentValue = _previousValue ?? 50.0);
         return;
       }
+    }
 
-      final isNowStaked = _isStaked;
-      final wasStakedLocal = _wasFullTrust || _wasNoTrust;
+    final prevVal = _previousValue;
+    final prevFull = _wasFullTrust;
+    final prevNo = _wasNoTrust;
+    final submittedScore = _currentValue;
 
-      // If transitioning to a staked tier but NOT from the stake confirm button, just wait
-      if (isNowStaked && !wasStakedLocal && !isStakeConfirm) {
-        return;
+    setState(() {
+      _previousValue = submittedScore;
+      _wasFullTrust = _isFullTrust;
+      _wasNoTrust = _isNoTrust;
+    });
+
+    widget.onRated?.call();
+
+    if (mounted) {
+      if (isStakeConfirm) {
+        AppSnackbar.success(
+          context,
+          _isNoTrust
+              ? 'No trust staked! 1,000 DSP locked.'
+              : 'Full trust staked! 1,000 DSP locked.',
+        );
+      } else {
+        AppSnackbar.success(context, 'Trust rating updated');
       }
+    }
 
-      // Show exit confirmation if leaving a staked tier
-      if (!isNowStaked && wasStakedLocal) {
-        final confirmed = await _showExitConfirmation(_wasFullTrust);
-        if (!confirmed) {
-          // Revert slider to previous value
-          setState(() => _currentValue = _previousValue ?? 50.0);
-          return;
-        }
-      }
-
-      await ref
+    unawaited(
+      ref
           .read(trustServiceProvider)
           .rateUser(
             fromUserId: widget.currentUserId,
             toUserId: widget.targetUserId,
-            score: _currentValue,
-          );
-
-      _previousValue = _currentValue;
-      _wasFullTrust = _isFullTrust;
-      _wasNoTrust = _isNoTrust;
-
-      if (mounted) {
-        if (isStakeConfirm) {
-          AppSnackbar.success(
-            context,
-            _isNoTrust
-                ? 'No trust staked! 1,000 DSP locked.'
-                : 'Full trust staked! 1,000 DSP locked.',
-          );
-        } else {
-          AppSnackbar.success(context, 'Trust rating updated');
-        }
-      }
-    },
-    onError: (e, _) {
-      if (mounted) AppSnackbar.error(context, 'Error: $e');
-    },
-  );
+            score: submittedScore,
+          )
+          .catchError((Object e) {
+            if (mounted) {
+              setState(() {
+                _previousValue = prevVal;
+                _wasFullTrust = prevFull;
+                _wasNoTrust = prevNo;
+              });
+              AppSnackbar.error(context, 'Error: $e');
+            }
+          }),
+    );
+  }
 
   Future<bool> _showExitConfirmation(bool wasFullTrustLocal) async {
     final title = wasFullTrustLocal ? 'Remove Full Trust' : 'Remove No Trust';
     final keepText = wasFullTrustLocal ? 'Keep Full Trust' : 'Keep No Trust';
     return await showDialog<bool>(
           context: context,
-          builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            title: Row(
-              children: [
-                Icon(LucideIcons.shieldOff, color: Colors.amber.shade700),
-                const SizedBox(width: 8),
-                Text(title),
+          builder: (context) => BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: AlertDialog(
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 24,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: Row(
+                children: [
+                  Icon(LucideIcons.shieldOff, color: Colors.amber.shade700),
+                  const SizedBox(width: 8),
+                  Text(title),
+                ],
+              ),
+              content: const Text(
+                'Your remaining staked DSP will be refunded to your balance.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: Text(keepText),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.amber.shade700,
+                  ),
+                  child: const Text('Remove & Refund'),
+                ),
               ],
             ),
-            content: const Text(
-              'Your remaining staked DSP will be refunded to your balance.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text(keepText),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.amber.shade700,
-                ),
-                child: const Text('Remove & Refund'),
-              ),
-            ],
           ),
         ) ??
         false;
@@ -370,40 +451,7 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
         (myProfileAsync.value == null && _isOwnProfileIncomplete);
 
     if (_isLoadingPrevious) {
-      return Card(
-        elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Padding(
-          padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding * 2),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Community Trust',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
-                  Container(
-                    width: 80,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              const LinearProgressIndicator(minHeight: 2),
-              const SizedBox(height: 12),
-            ],
-          ),
-        ),
-      );
+      return const SizedBox.shrink();
     }
 
     final effectiveValue = isFriend && _currentValue > 0
@@ -454,9 +502,7 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: isStaked
-                        ? color.withValues(alpha: 0.15)
-                        : color.withValues(alpha: 0.15),
+                    color: color.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
@@ -520,81 +566,78 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
                       },
               ),
             ),
-            if (isLoading)
-              const Center(child: LinearProgressIndicator(minHeight: 2))
-            else
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${effectiveValue.round()}%',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: color,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${effectiveValue.round()}%',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+                if (wasStakedLocal && isStaked)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          LucideIcons.coins,
+                          size: 14,
+                          color: Color(0xFF7A9E7E),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '1,000 DSP staked',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.6),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  if (wasStakedLocal && isStaked)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            LucideIcons.coins,
-                            size: 14,
-                            color: Color(0xFF7A9E7E),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '1,000 DSP staked',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurface.withValues(alpha: 0.6),
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: canSubmit
+                        ? () => _submitRating(
+                            isStakeConfirm: isStaked && !wasStakedLocal,
+                          )
+                        : null,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: canSubmit
+                          ? color
+                          : Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.12),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: canSubmit
-                          ? () => _submitRating(
-                              isStakeConfirm: isStaked && !wasStakedLocal,
-                            )
-                          : null,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: canSubmit
-                            ? color
+                    child: Text(
+                      buttonText,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: canSubmit ? 14 : 12,
+                        color: canSubmit
+                            ? null
                             : Theme.of(
                                 context,
-                              ).colorScheme.onSurface.withValues(alpha: 0.12),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      child: Text(
-                        buttonText,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: canSubmit ? 14 : 12,
-                          color: canSubmit
-                              ? null
-                              : Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withValues(alpha: 0.38),
-                        ),
+                              ).colorScheme.onSurface.withValues(alpha: 0.38),
                       ),
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
+            ),
           ],
         ),
       ),

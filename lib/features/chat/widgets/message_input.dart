@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:universal_io/io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -214,7 +215,21 @@ class _MessageInputState extends ConsumerState<MessageInput>
 
     try {
       final repo = ref.read(profileRepositoryProvider);
-      // Fetch concurrently
+      // Seed synchronously from memory cache first
+      final syncCached = <ProfileData>[];
+      for (final id in widget.participantIds) {
+        final p = repo.getCachedProfile(id);
+        if (p != null) {
+          syncCached.add(p);
+        }
+      }
+      if (syncCached.isNotEmpty && mounted) {
+        setState(() {
+          _cachedParticipants = syncCached;
+        });
+      }
+
+      // Fetch any missing concurrently
       final futures = widget.participantIds.map(
         (id) => repo.getUserProfile(id),
       );
@@ -412,12 +427,6 @@ class _MessageInputState extends ConsumerState<MessageInput>
       if (path != null) {
         final file = XFile(path);
 
-        // Note: MessageInput's internal _audioPlayer is not used for the preview widget (AudioMessagePlayer),
-        // so we don't strictly need to set it up here.
-        // If legacy code needs it, we wrap in try-catch to not break the UI flow.
-        // Internal player setup removed to avoid file locking with AudioMessagePlayer
-        // _audioPlayer.setFilePath(path);
-
         if (mounted) {
           setState(() {
             _isRecording = false;
@@ -427,8 +436,6 @@ class _MessageInputState extends ConsumerState<MessageInput>
             _pendingAttachments = [file];
             _pendingAttachmentType = 'audio';
             _pendingAudioDuration = _recordDurationSeconds;
-
-            // _playbackDuration removed
           });
         }
       } else {
@@ -459,7 +466,6 @@ class _MessageInputState extends ConsumerState<MessageInput>
         _isRecording = false;
         _recordedFile = null;
         _recordDurationSeconds = 0;
-        // _playbackPosition removed
 
         // Clear pending
         _pendingAttachments = [];
@@ -548,7 +554,7 @@ class _MessageInputState extends ConsumerState<MessageInput>
       final text = _controller.text.trim();
       final caption = text.isNotEmpty ? text : null;
 
-      // Capture state for async handling
+      // Capture state for synchronous dispatch
       final attachments = List<XFile>.from(_pendingAttachments);
       final type = _pendingAttachmentType;
       final audioDuration = _pendingAudioDuration;
@@ -561,49 +567,40 @@ class _MessageInputState extends ConsumerState<MessageInput>
       final location = _pendingLocation;
 
       // Optimistic UI Reset: Clear input immediately
-      // Do not delete file here, repository needs it.
       _cancelRecording(deleteFile: false);
       _controller.clear();
 
-      // Yield to UI thread to prevent freeze
-      Future.delayed(Duration.zero, () {
-        if (!mounted) return;
-
-        if (type == 'audio') {
-          // Voice message
-          widget.onSendAudio(
-            attachments.first,
-            audioDuration,
-            caption: caption,
-          );
-        } else if (type == 'audio_file') {
-          // Audio File
-          widget.onSendAudioFile(attachments.first, caption);
-        } else if (type == 'document') {
-          widget.onSendDocument(attachments.first, caption);
-        } else if ((type == 'token_transfer' || type == 'dsp_transfer') &&
-            tokenAmount != null) {
-          widget.onSendToken(tokenAmount, caption);
-        } else if ((type == 'money-transfer' || type == 'fiat_transfer') &&
-            fiatAmount != null) {
-          widget.onSendFiat?.call(
-            fiatAmount,
-            fiatCurrency ?? 'USD',
-            fiatConvertedAmount ?? fiatAmount,
-            fiatReceiverCurrency ?? 'USD',
-            fiatExchangeRate ?? 1.0,
-            caption,
-          );
-        } else if (type == 'location' && location != null) {
-          if (widget.onSendLocation != null) {
-            widget.onSendLocation!(location, caption);
-          }
-        } else {
-          // Image/Video
-          // Ensure type is not null, default to 'image' if unclear
-          widget.onSendMedia(attachments, type ?? 'image', caption);
+      // Dispatch synchronously on frame 0 so optimistic bubble renders in 0ms
+      if (type == 'audio') {
+        widget.onSendAudio(
+          attachments.first,
+          audioDuration,
+          caption: caption,
+        );
+      } else if (type == 'audio_file') {
+        widget.onSendAudioFile(attachments.first, caption);
+      } else if (type == 'document') {
+        widget.onSendDocument(attachments.first, caption);
+      } else if ((type == 'token_transfer' || type == 'dsp_transfer') &&
+          tokenAmount != null) {
+        widget.onSendToken(tokenAmount, caption);
+      } else if ((type == 'money-transfer' || type == 'fiat_transfer') &&
+          fiatAmount != null) {
+        widget.onSendFiat?.call(
+          fiatAmount,
+          fiatCurrency ?? 'USD',
+          fiatConvertedAmount ?? fiatAmount,
+          fiatReceiverCurrency ?? 'USD',
+          fiatExchangeRate ?? 1.0,
+          caption,
+        );
+      } else if (type == 'location' && location != null) {
+        if (widget.onSendLocation != null) {
+          widget.onSendLocation!(location, caption);
         }
-      });
+      } else {
+        widget.onSendMedia(attachments, type ?? 'image', caption);
+      }
       return;
     }
 
@@ -656,60 +653,62 @@ class _MessageInputState extends ConsumerState<MessageInput>
       context: context,
       isScrollControlled: true, // [Fix] Allow modal to resize with keyboard
       backgroundColor: Colors.transparent,
-      builder: (context) => _AttachmentPickerModal(
-        chatId: widget.chatId,
-        recipientUserId: widget.recipientUserId, // [NEW]
-        onPickImage: () => _pickMedia(ImageSource.gallery, 'image'),
-        onPickCamera: () {
-          _pickMedia(ImageSource.camera, 'image');
-        },
-        onPickVideo: () => _pickMedia(ImageSource.gallery, 'video'),
-        onPickDocument: _pickDocument,
-        onPickAudio: _pickAudio,
-        onPickLocation: () async {
-          Navigator.pop(context);
-          if (widget.onPickLocation != null) {
-            setState(() => _isProcessingAttachment = true);
-            final loc = await widget.onPickLocation!();
-            if (loc != null && mounted) {
-              setState(() {
-                _pendingLocation = loc;
-                _pendingAttachmentType = 'location';
-                _pendingAttachments = [XFile('')]; // Dummy for hasAttachment
-                _isProcessingAttachment = false;
-              });
-            } else {
-              if (mounted) setState(() => _isProcessingAttachment = false);
+      builder: (context) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: _AttachmentPickerModal(
+          chatId: widget.chatId,
+          recipientUserId: widget.recipientUserId, // [NEW]
+          onPickImage: () => _pickMedia(ImageSource.gallery, 'image'),
+          onPickCamera: () {
+            _pickMedia(ImageSource.camera, 'image');
+          },
+          onPickVideo: () => _pickMedia(ImageSource.gallery, 'video'),
+          onPickDocument: _pickDocument,
+          onPickAudio: _pickAudio,
+          onPickLocation: () async {
+            Navigator.pop(context);
+            if (widget.onPickLocation != null) {
+              final loc = await widget.onPickLocation!();
+              if (loc != null && mounted) {
+                setState(() {
+                  _pendingLocation = loc;
+                  _pendingAttachmentType = 'location';
+                  _pendingAttachments = [XFile('')]; // Dummy for hasAttachment
+                  _isProcessingAttachment = false;
+                });
+              } else {
+                if (mounted) setState(() => _isProcessingAttachment = false);
+              }
             }
-          }
-        },
-        onPickToken: (amount) {
-          Navigator.pop(context);
-          setState(() {
-            _pendingAttachments = [
-              XFile(''),
-            ]; // Dummy file to satisfy hasAttachment logic
-            _pendingAttachmentType = 'token_transfer';
-            _pendingTokenAmount = amount;
-            _isProcessingAttachment = false;
-          });
-        },
-        onPickFiat:
-            (amount, currency, convertedAmount, receiverCurrency, rate) {
-              Navigator.pop(context);
-              setState(() {
-                _pendingAttachments = [
-                  XFile(''),
-                ]; // Dummy file to satisfy hasAttachment logic
-                _pendingAttachmentType = 'money-transfer';
-                _pendingFiatAmount = amount;
-                _pendingFiatCurrency = currency;
-                _pendingFiatConvertedAmount = convertedAmount;
-                _pendingFiatReceiverCurrency = receiverCurrency;
-                _pendingFiatExchangeRate = rate;
-                _isProcessingAttachment = false;
-              });
-            },
+          },
+          onPickToken: (amount) {
+            Navigator.pop(context);
+            setState(() {
+              _pendingAttachments = [
+                XFile(''),
+              ]; // Dummy file to satisfy hasAttachment logic
+              _pendingAttachmentType = 'token_transfer';
+              _pendingTokenAmount = amount;
+              _isProcessingAttachment = false;
+            });
+          },
+          onPickFiat:
+              (amount, currency, convertedAmount, receiverCurrency, rate) {
+                Navigator.pop(context);
+                setState(() {
+                  _pendingAttachments = [
+                    XFile(''),
+                  ]; // Dummy file to satisfy hasAttachment logic
+                  _pendingAttachmentType = 'money-transfer';
+                  _pendingFiatAmount = amount;
+                  _pendingFiatCurrency = currency;
+                  _pendingFiatConvertedAmount = convertedAmount;
+                  _pendingFiatReceiverCurrency = receiverCurrency;
+                  _pendingFiatExchangeRate = rate;
+                  _isProcessingAttachment = false;
+                });
+              },
+        ),
       ),
     );
   }
@@ -767,7 +766,6 @@ class _MessageInputState extends ConsumerState<MessageInput>
       debugPrint('Error picking media: $e');
       if (mounted) setState(() => _isProcessingAttachment = false);
     }
-    // Logic for direct state update was here, removed duplicate check
   }
 
   Future<void> _pickDocument() async {
@@ -1655,7 +1653,13 @@ class _AttachmentPickerModalState
     final recipientProfileAsync = widget.recipientUserId != null
         ? ref.watch(userProfileByIdProvider(widget.recipientUserId!))
         : null;
-    final recipientProfile = recipientProfileAsync?.asData?.value;
+    final recipientProfile =
+        recipientProfileAsync?.asData?.value ??
+        (widget.recipientUserId != null
+            ? ref
+                  .read(profileRepositoryProvider)
+                  .getCachedProfile(widget.recipientUserId!)
+            : null);
     final receiverCurrentCountryCode =
         recipientProfile?.currentLocation?.countryCode ??
         recipientProfile?.hostCountryCode ??
@@ -2131,14 +2135,19 @@ class _AttachmentPickerModalState
   Widget _buildRecipientRow(ThemeData theme) {
     return Consumer(
       builder: (context, ref, _) {
+        final cachedRecipient = ref
+            .read(profileRepositoryProvider)
+            .getCachedProfile(widget.recipientUserId!);
         final recipientAsync = ref.watch(
           userProfileByIdProvider(widget.recipientUserId!),
         );
-        final recipient = recipientAsync.asData?.value;
+        final recipient = recipientAsync.asData?.value ?? cachedRecipient;
         final walletAddress = recipient?.walletAddress;
         final displayAddress = walletAddress != null
             ? '${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}'
-            : (recipientAsync.isLoading ? 'Loading...' : 'No address linked');
+            : (recipientAsync.isLoading && recipient == null
+                  ? 'Loading...'
+                  : 'No address linked');
 
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
@@ -2198,10 +2207,13 @@ class _AttachmentPickerModalState
 
     return Consumer(
       builder: (context, ref, _) {
+        final cachedRecipient = ref
+            .read(profileRepositoryProvider)
+            .getCachedProfile(widget.recipientUserId!);
         final recipientAsync = ref.watch(
           userProfileByIdProvider(widget.recipientUserId!),
         );
-        final recipient = recipientAsync.asData?.value;
+        final recipient = recipientAsync.asData?.value ?? cachedRecipient;
 
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
@@ -2985,8 +2997,3 @@ class _AttachmentPickerModalState
     );
   }
 }
-
-// [NEW] Mention List Item
-
-// Ensure proper imports are added if missing.
-// userProfileProvider needs to be found.

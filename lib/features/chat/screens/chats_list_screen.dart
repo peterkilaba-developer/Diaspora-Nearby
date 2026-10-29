@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,10 +12,9 @@ import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/discovery/providers/global_search_provider.dart';
 import 'package:diaspora_nearby/features/shared/ui/skeleton_loader.dart';
 import 'package:diaspora_nearby/core/providers/view_mode_provider.dart';
-import 'package:diaspora_nearby/features/dsp/services/points_service.dart'; // [NEW]
-import 'package:diaspora_nearby/features/shared/widgets/confetti_overlay.dart'; // [NEW]
-import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW]
-
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
+import 'package:diaspora_nearby/features/shared/widgets/confetti_overlay.dart';
+import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 import 'package:diaspora_nearby/core/providers/global_feature_provider.dart';
 
 final userChatsStreamProvider = StreamProvider<List<Chat>>((ref) {
@@ -21,7 +22,6 @@ final userChatsStreamProvider = StreamProvider<List<Chat>>((ref) {
   final chatRepo = ref.watch(chatRepositoryProvider);
   final userId = authState.value?.uid;
 
-  // If user is not authenticated, return empty stream
   if (userId == null) {
     return const Stream.empty();
   }
@@ -45,11 +45,34 @@ class ChatsListScreen extends ConsumerStatefulWidget {
 }
 
 class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
-  @override
-  void initState() {
-    super.initState();
-    // Sync communities on startup - REMOVED to prevent refresh loop
-    // _syncCommunities() writes to DB -> triggers stream -> rebuilds UI -> loop/flash
+  static const String _founderUid = 'yJ2REewPGWZQyS3zhisK1KziJJD3';
+  static final Set<String> _ensuredFounderChatForUids = <String>{};
+
+  void _ensureFounderDirectChatIfMissing(String? currentUid, List<Chat> chats) {
+    if (currentUid == null ||
+        currentUid.isEmpty ||
+        currentUid == _founderUid ||
+        _ensuredFounderChatForUids.contains(currentUid)) {
+      return;
+    }
+    final hasFounderChat = chats.any(
+      (chat) =>
+          chat.isDirect &&
+          (chat.participants.contains(_founderUid) ||
+              chat.getOtherParticipantId(currentUid) == _founderUid),
+    );
+    if (hasFounderChat) {
+      _ensuredFounderChatForUids.add(currentUid);
+      return;
+    }
+    _ensuredFounderChatForUids.add(currentUid);
+    FirebaseFunctions.instance
+        .httpsCallable('ensureDirectChat')
+        .call<Map<String, dynamic>>({
+          'otherUserId': _founderUid,
+          'isFounderWelcome': true,
+        })
+        .ignore();
   }
 
   Future<void> _syncCommunities() async {
@@ -71,8 +94,79 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
     }
   }
 
-  // [PERF] Removed _precacheChatAvatars — CachedNetworkImage already handles
-  // caching internally. Calling precacheImage on every stream emit was redundant.
+  Widget _buildGlobalDiscoverableList(
+    BuildContext context,
+    ThemeData theme,
+    List<Chat> allResults,
+    String searchQuery,
+  ) {
+    final results = allResults
+        .where(
+          (chat) =>
+              chat.type == 'organization' ||
+              chat.type == 'event' ||
+              chat.type == 'group',
+        )
+        .toList();
+
+    if (results.isEmpty) {
+      return _buildEmptyState(
+        theme,
+        false,
+        isGlobal: true,
+        hasQuery: searchQuery.isNotEmpty,
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      itemCount: results.length,
+      itemBuilder: (context, index) {
+        final chat = results[index];
+        return RepaintBoundary(
+          child: ChatCard(
+            chat: chat,
+            searchQuery: searchQuery,
+            onTap: () {
+              // Navigate immediately in 0ms
+              if (chat.type == 'event') {
+                if (chat.eventId != null) {
+                  context.push('/events/${chat.eventId}');
+                }
+              } else if (chat.type == 'organization') {
+                context.push('/organization/${chat.communityId}');
+              } else if (chat.type == 'community' || chat.isCommunity) {
+                context.push('/communities/${chat.communityId}');
+              } else if (chat.type == 'group') {
+                context.push('/chats/${chat.id}');
+              }
+
+              // Track Discovery Click in background
+              final user = ref.read(authRepositoryProvider).currentUser;
+              if (user != null) {
+                final actionId = 'action_discover_chat_${chat.id}';
+                unawaited(
+                  ref
+                      .read(pointsServiceProvider)
+                      .trackExplorationReward(user.uid, actionId)
+                      .then((rewarded) {
+                        if (rewarded && context.mounted) {
+                          confettiOverlayKey.currentState?.play();
+                          showExplorationRewardToast(
+                            context,
+                            message: 'Discovered ${chat.name}',
+                            points: 100,
+                          );
+                        }
+                      }),
+                );
+              }
+            },
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -83,93 +177,35 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
 
     // GLOBAL SEARCH MODE
     if (chatsMode == ViewMode.global) {
-      // Show all or filtered based on query
       final discoverableAsync = ref.watch(
         discoverableChatsProvider(searchQuery),
       );
 
       return discoverableAsync.when(
-        loading: () => const SkeletonList(skeleton: ChatCardSkeleton()),
-        error: (error, stack) =>
-            const Center(child: Text('Error searching chats')),
-        data: (allResults) {
-          // Filter to show ONLY Organization and Event chats in Global mode
-          final results = allResults
-              .where(
-                (chat) =>
-                    chat.type == 'organization' ||
-                    chat.type == 'event' ||
-                    chat.type == 'group',
-              )
-              .toList();
-
-          if (results.isEmpty) {
-            return _buildEmptyState(
+        skipLoadingOnReload: true,
+        skipLoadingOnRefresh: true,
+        loading: () {
+          final cachedDiscoverable = ref
+              .read(chatRepositoryProvider)
+              .filterDiscoverableChatsSync(searchQuery);
+          if (cachedDiscoverable != null) {
+            return _buildGlobalDiscoverableList(
+              context,
               theme,
-              false,
-              isGlobal: true,
-              hasQuery: searchQuery.isNotEmpty,
+              cachedDiscoverable,
+              searchQuery,
             );
           }
-
-          return ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            itemCount: results.length,
-            itemBuilder: (context, index) {
-              final chat = results[index];
-              return RepaintBoundary(
-                child: ChatCard(
-                  chat: chat,
-                  searchQuery: searchQuery,
-                  onTap: () async {
-                    // [NEW] Track Discovery Click
-                    final user = ref.read(authRepositoryProvider).currentUser;
-                    if (user != null) {
-                      final actionId = 'action_discover_chat_${chat.id}';
-                      final rewarded = await ref
-                          .read(pointsServiceProvider)
-                          .trackExplorationReward(user.uid, actionId);
-                      if (rewarded && context.mounted) {
-                        confettiOverlayKey.currentState?.play();
-                        showExplorationRewardToast(
-                          context,
-                          message: 'Discovered ${chat.name}',
-                          points: 100,
-                        );
-                      }
-                    }
-
-                    // Navigate to entity details instead of chat screen
-                    if (chat.type == 'event') {
-                      // Ensure we pass eventId if available, otherwise we might have issues if chat.eventId is null
-                      if (chat.eventId != null) {
-                        if (context.mounted) {
-                          context.push('/events/${chat.eventId}');
-                        }
-                      }
-                    } else if (chat.type == 'organization') {
-                      // We used communityId to store orgId in searchDiscoverableChats
-                      if (context.mounted) {
-                        context.push('/organization/${chat.communityId}');
-                      }
-                    } else if (chat.type == 'community' || chat.isCommunity) {
-                      if (context.mounted) {
-                        // Navigate to community detail page for discovery/joining
-                        context.push('/communities/${chat.communityId}');
-                      }
-                    } else if (chat.type == 'group') {
-                      // [NEW]
-                      if (context.mounted) {
-                        // For public groups, go to chat. ChatScreen should handle non-member view (Join button).
-                        context.push('/chats/${chat.id}');
-                      }
-                    }
-                  },
-                ),
-              );
-            },
-          );
+          return const SkeletonList(skeleton: ChatCardSkeleton());
         },
+        error: (error, stack) =>
+            const Center(child: Text('Error searching chats')),
+        data: (allResults) => _buildGlobalDiscoverableList(
+          context,
+          theme,
+          allResults,
+          searchQuery,
+        ),
       );
     }
 
@@ -180,6 +216,8 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
     }
 
     return chatsAsync.when(
+      skipLoadingOnReload: true,
+      skipLoadingOnRefresh: true,
       loading: () => const SkeletonList(skeleton: ChatCardSkeleton()),
       error: (error, stack) => Center(
         child: Column(
@@ -202,7 +240,6 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
       ),
       data: (chats) => _buildHomeChatsList(context, theme, chats, searchQuery),
     );
-    // ... (rest of build)
   }
 
   Widget _buildHomeChatsList(
@@ -211,10 +248,8 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
     List<Chat> chats,
     String searchQuery,
   ) {
-    // Pre-warm partner profiles so DM cards render with names on first paint.
-    // keepAlive() on chatPartnerProvider ensures these are fetched only once
-    // per app session, not re-fetched on every tab switch.
     final currentUid = ref.read(authRepositoryProvider).currentUser?.uid;
+    _ensureFounderDirectChatIfMissing(currentUid, chats);
     if (currentUid != null) {
       for (final chat in chats) {
         if (chat.isDirect) {

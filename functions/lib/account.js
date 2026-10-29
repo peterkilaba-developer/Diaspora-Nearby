@@ -189,9 +189,11 @@ exports.deleteMyAccount = functions
       ["flight_bookings", "userId"],
       ["leadershipRequests", "userId"],
     ];
-    for (const [collection, field] of ownedQueries) {
-      await deleteQuery(db.collection(collection).where(field, "==", uid));
-    }
+    await Promise.all(
+      ownedQueries.map(([collection, field]) =>
+        deleteQuery(db.collection(collection).where(field, "==", uid)),
+      ),
+    );
 
     const directDocuments = [
       "user_private", "user_points", "trust_data", "trust_scores", "stripe_customers",
@@ -202,13 +204,15 @@ exports.deleteMyAccount = functions
       db.collection(collection).doc(uid).delete()));
 
     const userRef = db.collection("users").doc(uid);
-    await db.recursiveDelete(db.collection("user_blocks").doc(uid));
-    await db.recursiveDelete(userRef);
-    await Promise.all(messages.storagePaths.map((path) =>
-      admin.storage().bucket().file(path).delete({ignoreNotFound: true})));
-    await admin.storage().bucket().deleteFiles({
-      prefix: `profile_photos/${uid}/`,
-    });
+    await Promise.all([
+      db.recursiveDelete(db.collection("user_blocks").doc(uid)),
+      db.recursiveDelete(userRef),
+      Promise.all(messages.storagePaths.map((path) =>
+        admin.storage().bucket().file(path).delete({ignoreNotFound: true}))),
+      admin.storage().bucket().deleteFiles({
+        prefix: `profile_photos/${uid}/`,
+      }),
+    ]);
     await admin.auth().deleteUser(uid);
     return { success: true };
   });

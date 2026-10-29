@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:diaspora_nearby/features/events/models/event_data.dart';
+import 'package:diaspora_nearby/features/events/repository/event_repository.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
-import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart'; // [FIX] Added import
+import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/shared/widgets/user_card.dart';
 import 'package:diaspora_nearby/core/utils/location_utils.dart';
 import 'package:go_router/go_router.dart';
-import 'package:lucide_icons/lucide_icons.dart'; // [FIX] Added LucideIcons import
+import 'package:lucide_icons/lucide_icons.dart';
 
 class EventAttendeesScreen extends ConsumerStatefulWidget {
   final String eventId;
@@ -25,8 +26,17 @@ class _EventAttendeesScreenState extends ConsumerState<EventAttendeesScreen> {
   @override
   Widget build(BuildContext context) {
     final profileRepo = ref.read(profileRepositoryProvider);
-    final currentUserProfile = ref.watch(userProfileProvider).value;
+    final eventRepo = ref.read(eventRepositoryProvider);
     final currentUserId = ref.watch(authRepositoryProvider).currentUser?.uid;
+    final currentUserProfile =
+        ref.watch(userProfileProvider).value ??
+        (currentUserId != null
+            ? profileRepo.getCachedProfile(currentUserId)
+            : null);
+
+    final fallbackAttendeeIds =
+        widget.event?.attendees ??
+        eventRepo.getCachedEvent(widget.eventId)?.attendees;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Attendees')),
@@ -37,32 +47,41 @@ class _EventAttendeesScreenState extends ConsumerState<EventAttendeesScreen> {
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting &&
-              !snapshot.hasData) {
+              !snapshot.hasData &&
+              fallbackAttendeeIds == null) {
             return const Center(child: CircularProgressIndicator());
           }
           final data = snapshot.data?.data();
           final attendeeIds =
               (data?['attendees'] as List?)?.whereType<String>().toList() ??
-              widget.event?.attendees ??
+              fallbackAttendeeIds ??
               const <String>[];
           if (attendeeIds.isEmpty) {
             return const Center(child: Text('No attendees yet.'));
           }
 
-          // Fetch profiles for all attendees
+          final cachedProfiles = attendeeIds
+              .map((uid) => profileRepo.getCachedProfile(uid))
+              .toList();
+          final hasCachedProfiles = cachedProfiles.any((p) => p != null);
+
+          // Fetch profiles for all attendees with synchronous cache seed
           return FutureBuilder<List<ProfileData?>>(
+            initialData: hasCachedProfiles ? cachedProfiles : null,
             future: Future.wait(
               attendeeIds.map((uid) => profileRepo.getUserProfile(uid)),
             ),
             builder: (context, profileSnapshot) {
+              final rawProfiles =
+                  profileSnapshot.data ??
+                  (hasCachedProfiles ? cachedProfiles : null);
               if (profileSnapshot.connectionState == ConnectionState.waiting &&
-                  !profileSnapshot.hasData) {
+                  rawProfiles == null) {
                 return const Center(child: CircularProgressIndicator());
               }
 
               final profiles =
-                  (profileSnapshot.data?.whereType<ProfileData>().toList() ??
-                          [])
+                  (rawProfiles?.whereType<ProfileData>().toList() ?? [])
                       .map(
                         (p) => p.copyWith(
                           distance: calculateProfileDistanceKm(
@@ -84,7 +103,6 @@ class _EventAttendeesScreenState extends ConsumerState<EventAttendeesScreen> {
                 );
               }
 
-              // [NEW] Congratulatory Message
               if (profiles.length == 1 && profiles.first.uid == currentUserId) {
                 return Center(
                   child: Padding(

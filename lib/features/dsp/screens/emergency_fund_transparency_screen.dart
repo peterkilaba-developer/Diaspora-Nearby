@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
@@ -11,9 +12,6 @@ import 'package:diaspora_nearby/features/shared/widgets/user_card.dart';
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 
 /// Public transparency dashboard for the Ubuntu Emergency Fund.
-/// Shows: treasury $DIASPORA balance, total direct contributions, member
-/// & interest counts, and the full on-chain ledger of every contribution
-/// and disbursement with recipient info + tx hash.
 class EmergencyFundTransparencyScreen extends ConsumerStatefulWidget {
   const EmergencyFundTransparencyScreen({super.key});
 
@@ -24,37 +22,42 @@ class EmergencyFundTransparencyScreen extends ConsumerStatefulWidget {
 
 class _EmergencyFundTransparencyScreenState
     extends ConsumerState<EmergencyFundTransparencyScreen> {
-  Map<String, dynamic>? _stats;
-  bool _loading = true;
+  static Map<String, dynamic>? _cachedStats;
+  late Map<String, dynamic> _stats;
+  bool _loading = false;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _stats =
+        _cachedStats ??
+        {
+          'treasuryAddress': null,
+          'treasuryBalanceDiaspora': '—',
+          'totalContributedUsd': 0,
+          'interestedCount': 0,
+          'activeMembers': 0,
+        };
+    unawaited(_load());
   }
 
   Future<void> _load() async {
-    setState(() {
-      _loading = true;
-    });
-
     // Try the Cloud Function first (gives live on-chain treasury balance).
-    // Cap the wait so a slow/unreachable function doesn't strand the UI on a spinner.
     try {
       final res = await FirebaseFunctions.instance
           .httpsCallable('getEmergencyFundStats')
           .call()
           .timeout(const Duration(seconds: 6));
+      final nextStats = Map<String, dynamic>.from(res.data as Map);
+      _cachedStats = nextStats;
       if (mounted) {
         setState(() {
-          _stats = Map<String, dynamic>.from(res.data as Map);
+          _stats = nextStats;
           _loading = false;
         });
       }
       return;
     } catch (e) {
-      // Function not deployed yet, slow, or transient failure — fall back
-      // to Firestore aggregates so the page is still useful.
       debugPrint('[Transparency] Cloud Function fallback: $e');
     }
 
@@ -63,45 +66,54 @@ class _EmergencyFundTransparencyScreenState
     int members = 0;
     String? treasuryAddr;
 
-    try {
-      final interestAgg = await fs
+    final results = await Future.wait<Object?>([
+      fs
           .collection('emergency_fund_interest')
           .count()
-          .get();
-      interested = interestAgg.count ?? 0;
-    } catch (e) {
-      debugPrint('[Transparency] interest fallback: $e');
-    }
-    try {
-      final memberAgg = await fs
+          .get()
+          .then<int>((agg) => agg.count ?? 0)
+          .catchError((Object e) {
+            debugPrint('[Transparency] interest fallback: $e');
+            return 0;
+          }),
+      fs
           .collection('emergency_fund_memberships')
           .where('status', isEqualTo: 'active')
           .count()
-          .get();
-      members = memberAgg.count ?? 0;
-    } catch (e) {
-      debugPrint('[Transparency] members fallback: $e');
-    }
-    try {
-      final cached = await fs
+          .get()
+          .then<int>((agg) => agg.count ?? 0)
+          .catchError((Object e) {
+            debugPrint('[Transparency] members fallback: $e');
+            return 0;
+          }),
+      fs
           .collection('system_stats')
           .doc('emergency_fund')
-          .get();
-      treasuryAddr = cached.data()?['treasuryWallet'] as String?;
-    } catch (e) {
-      debugPrint('[Transparency] cached treasury fallback: $e');
-    }
+          .get()
+          .then<String?>((doc) => doc.data()?['treasuryWallet'] as String?)
+          .catchError((Object e) {
+            debugPrint('[Transparency] cached treasury fallback: $e');
+            return null;
+          }),
+    ]);
+
+    interested = results[0] as int;
+    members = results[1] as int;
+    treasuryAddr = results[2] as String?;
+
+    final nextStats = {
+      'treasuryAddress': treasuryAddr,
+      'treasuryBalanceDiaspora': '—',
+      'totalContributedUsd': members * 100,
+      'interestedCount': interested,
+      'activeMembers': members,
+      'degraded': true,
+    };
+    _cachedStats = nextStats;
 
     if (mounted) {
       setState(() {
-        _stats = {
-          'treasuryAddress': treasuryAddr,
-          'treasuryBalanceDiaspora': '—',
-          'totalContributedUsd': members * 100,
-          'interestedCount': interested,
-          'activeMembers': members,
-          'degraded': true,
-        };
+        _stats = nextStats;
         _loading = false;
       });
     }
@@ -168,8 +180,8 @@ class _EmergencyFundTransparencyScreenState
           else ...[
             _statsCard(theme),
             const SizedBox(height: 16),
-            if (_stats!['treasuryAddress'] != null)
-              _walletRow(theme, _stats!['treasuryAddress'] as String),
+            if (_stats['treasuryAddress'] != null)
+              _walletRow(theme, _stats['treasuryAddress'] as String),
             const SizedBox(height: 24),
           ],
 
@@ -196,7 +208,8 @@ class _EmergencyFundTransparencyScreenState
                 .limit(100)
                 .snapshots(),
             builder: (context, snap) {
-              if (snap.connectionState == ConnectionState.waiting) {
+              if (snap.connectionState == ConnectionState.waiting &&
+                  !snap.hasData) {
                 return const Padding(
                   padding: EdgeInsets.all(24),
                   child: Center(child: CircularProgressIndicator()),
@@ -236,13 +249,13 @@ class _EmergencyFundTransparencyScreenState
       return NumberFormat.compact().format(v);
     }
 
-    final treasuryRaw = _stats!['treasuryBalanceDiaspora']?.toString() ?? '—';
+    final treasuryRaw = _stats['treasuryBalanceDiaspora']?.toString() ?? '—';
     final treasury = (treasuryRaw == '—' || treasuryRaw.isEmpty)
         ? '—'
         : NumberFormat.compact().format(double.tryParse(treasuryRaw) ?? 0);
-    final contributedUsd = fmtNum(_stats!['totalContributedUsd']);
-    final interested = fmtNum(_stats!['interestedCount']);
-    final members = fmtNum(_stats!['activeMembers']);
+    final contributedUsd = fmtNum(_stats['totalContributedUsd']);
+    final interested = fmtNum(_stats['interestedCount']);
+    final members = fmtNum(_stats['activeMembers']);
     return Column(
       children: [
         Row(
@@ -457,9 +470,6 @@ class _EmergencyFundTransparencyScreenState
 
 enum _UserListSource { interested, members }
 
-/// Renders a list of users using the shared [UserCardView] (with the
-/// current-location row hidden), grouped/sorted alphabetically by the
-/// user's host country. The Interested variant is rendered greyed-out.
 class _CountrySortedUserList extends ConsumerWidget {
   final _UserListSource source;
   const _CountrySortedUserList({required this.source});
@@ -528,7 +538,7 @@ class _CountrySortedUserList extends ConsumerWidget {
     return StreamBuilder<List<String>>(
       stream: _idsStream(ref),
       builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
+        if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
         final ids = snap.data ?? const <String>[];
@@ -544,7 +554,12 @@ class _CountrySortedUserList extends ConsumerWidget {
           );
         }
         final repo = ref.read(profileRepositoryProvider);
+        final cachedProfiles = ids
+            .map(repo.getCachedProfile)
+            .whereType<ProfileData>()
+            .toList();
         return FutureBuilder<List<ProfileData?>>(
+          initialData: cachedProfiles.isNotEmpty ? cachedProfiles : null,
           future: Future.wait(ids.map(repo.getUserProfile)),
           builder: (context, profSnap) {
             if (!profSnap.hasData) {
@@ -571,7 +586,6 @@ class _CountrySortedUserList extends ConsumerWidget {
                 ),
               );
             }
-            // Group by host country (already sorted alphabetically).
             final groups = <String, List<ProfileData>>{};
             for (final p in profiles) {
               final code = (p.homeCountryCode ?? '').toUpperCase();

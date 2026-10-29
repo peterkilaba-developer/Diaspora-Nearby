@@ -26,6 +26,17 @@ class CountryPickerSheet extends StatefulWidget {
 
 class _CountryPickerSheetState extends State<CountryPickerSheet>
     with SingleTickerProviderStateMixin {
+  static final List<({country_data.Country country, String nameLower, String codeLower})>
+  _indexedCountries = country_data.countries
+      .map(
+        (c) => (
+          country: c,
+          nameLower: c.name.toLowerCase(),
+          codeLower: c.code.toLowerCase(),
+        ),
+      )
+      .toList(growable: false);
+
   final TextEditingController _searchController = TextEditingController();
   List<country_data.Country> _filteredCountries = country_data.countries;
   late AnimationController _animationController;
@@ -37,7 +48,10 @@ class _CountryPickerSheetState extends State<CountryPickerSheet>
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 1500),
       vsync: this,
-    )..repeat(reverse: true);
+    );
+    if (widget.onUseGlobalView != null) {
+      _animationController.repeat(reverse: true);
+    }
     _scaleAnimation = Tween<double>(begin: 1.0, end: 1.3).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
@@ -56,11 +70,15 @@ class _CountryPickerSheetState extends State<CountryPickerSheet>
       if (query.isEmpty) {
         _filteredCountries = country_data.countries;
       } else {
-        _filteredCountries = country_data.countries.where((c) {
-          return c.name.toLowerCase().contains(query) ||
-              c.dialCode.contains(query) ||
-              c.code.toLowerCase().contains(query);
-        }).toList();
+        _filteredCountries = _indexedCountries
+            .where(
+              (entry) =>
+                  entry.nameLower.contains(query) ||
+                  entry.country.dialCode.contains(query) ||
+                  entry.codeLower.contains(query),
+            )
+            .map((entry) => entry.country)
+            .toList();
       }
     });
   }

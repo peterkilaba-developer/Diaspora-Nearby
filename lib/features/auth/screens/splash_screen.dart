@@ -14,37 +14,24 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _checkAuth();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkAuth());
   }
 
-  Future<void> _checkAuth() async {
-    // Artificial delay for splash effect
-    await Future.delayed(const Duration(seconds: 2));
-
-    // Auth state is handled by the router redirect usually, but for explicit splash logic:
+  void _checkAuth() {
+    if (!mounted) return;
     final authState = ref.read(authStateProvider);
+    final currentUser =
+        authState.value ?? ref.read(authRepositoryProvider).currentUser;
 
-    authState.when(
-      data: (user) {
-        if (user != null) {
-          if (mounted) context.go('/nearby');
-        } else {
-          if (mounted) context.go('/auth/phone');
-        }
-      },
-      loading: () {
-        // Wait and retry or let stream listener handle it.
-        // Better pattern: Listen to the provider in build or use a listener
-      },
-      error: (err, stack) {
-        if (mounted) context.go('/auth/phone');
-      },
-    );
+    if (currentUser != null) {
+      context.go('/nearby');
+    } else if (!authState.isLoading) {
+      context.go('/auth/phone');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Listener to react to state changes if the initial check was loading
     ref.listen(authStateProvider, (prev, next) {
       next.whenData((user) {
         if (user != null) {
@@ -56,12 +43,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     });
 
     return Scaffold(
-      backgroundColor: Colors.white, // Or brand color
+      backgroundColor: Colors.white,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Logo
             Image.asset(
               'assets/icons/logo-transparent-128.png',
               width: 150,

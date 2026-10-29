@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/shared/models/location.dart';
 import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
@@ -30,60 +31,87 @@ class _ProfileVerificationModalState
   final Map<String, String> _fieldValues =
       {}; // Stores actual values for display
   Set<String> _verifiedFields = {}; // Fields already verified by community
-  bool _isLoadingEligibility = true;
+  bool _isLoadingEligibility = false;
 
   @override
   void initState() {
     super.initState();
     _initializeFields();
 
-    // Defer async check to next frame to be safe, or just run it. Using Future.microtask is safer for riverpod reads if needed.
+    final service = ref.read(trustServiceProvider);
+    final targetUid = widget.targetUser.uid;
+    if (targetUid != null) {
+      final cachedVerified = service.getCachedVerifiedFields(targetUid);
+      if (cachedVerified != null) {
+        _verifiedFields = Set<String>.from(cachedVerified);
+      }
+    }
+
     Future.microtask(() => _checkEligibility());
+  }
+
+  void _showIneligibleAlert(String reason) {
+    VerificationAlertType type = VerificationAlertType.error;
+    String title = 'Ineligible';
+
+    if (reason.contains('already verified')) {
+      type = VerificationAlertType.alreadyVerified;
+      title = 'Already Verified';
+    } else if (reason.contains('limit reached')) {
+      type = VerificationAlertType.limit;
+      title = 'Daily Limit';
+    } else if (reason.contains('relative')) {
+      type = VerificationAlertType.conflict;
+      title = 'Conflict of Interest';
+    } else if (reason.contains('complete your profile') ||
+        reason.contains('PCT score') ||
+        reason.contains('acquired at least')) {
+      type = VerificationAlertType.requirements;
+      title = 'Requirements Not Met';
+    }
+
+    Navigator.pop(context);
+
+    VerificationAlertModal.show(
+      context,
+      type: type,
+      title: title,
+      message: reason,
+    );
   }
 
   Future<void> _checkEligibility() async {
     try {
-      setState(() => _isLoadingEligibility = true);
+      final targetUid = widget.targetUser.uid;
+      if (targetUid == null) return;
+
       final service = ref.read(trustServiceProvider);
-      final reason = await service.checkVerificationEligibility(
+      if (service.hasCachedVerificationEligibility(
         widget.currentUserId,
-        widget.targetUser.uid!,
-      );
-
-      if (reason != null && mounted) {
-        // Determine Alert Type based on reason string
-        VerificationAlertType type = VerificationAlertType.error;
-        String title = 'Ineligible';
-
-        if (reason.contains('already verified')) {
-          type = VerificationAlertType.alreadyVerified;
-          title = 'Already Verified';
-        } else if (reason.contains('limit reached')) {
-          type = VerificationAlertType.limit;
-          title = 'Daily Limit';
-        } else if (reason.contains('relative')) {
-          type = VerificationAlertType.conflict;
-          title = 'Conflict of Interest';
-        } else if (reason.contains('complete your profile') ||
-            reason.contains('PCT score') ||
-            reason.contains('acquired at least')) {
-          type = VerificationAlertType.requirements;
-          title = 'Requirements Not Met';
-        }
-
-        // Close bottom sheet and show specialized alert
-        Navigator.pop(context);
-
-        VerificationAlertModal.show(
-          context,
-          type: type,
-          title: title,
-          message: reason,
+        targetUid,
+      )) {
+        final cachedReason = service.getCachedVerificationEligibility(
+          widget.currentUserId,
+          targetUid,
         );
-        return;
+        if (cachedReason != null && mounted) {
+          _showIneligibleAlert(cachedReason);
+          return;
+        }
       }
 
-      final verified = await service.getVerifiedFields(widget.targetUser.uid!);
+      final results = await Future.wait<dynamic>([
+        service.checkVerificationEligibility(widget.currentUserId, targetUid),
+        service.getVerifiedFields(targetUid),
+      ]);
+
+      final reason = results[0] as String?;
+      final verified = results[1] as Set<String>;
+
+      if (reason != null && mounted) {
+        _showIneligibleAlert(reason);
+        return;
+      }
 
       if (mounted) {
         setState(() {
@@ -96,16 +124,6 @@ class _ProfileVerificationModalState
         setState(() {
           _isLoadingEligibility = false;
         });
-
-        VerificationAlertModal.show(
-          context,
-          type: VerificationAlertType.error,
-          title: 'Error',
-          message:
-              'Unable to verify eligibility at this time. Please try again later.',
-        );
-
-        Navigator.pop(context);
       }
     }
   }
@@ -146,9 +164,6 @@ class _ProfileVerificationModalState
       for (var location in user.pastLocations!) {
         final locStr = formatLocation(location.location);
         if (locStr != null) {
-          // Unique key for each past location to allow individual verification if needed
-          // For simplicity, we can aggregate or list them.
-          // Let's use specific label if possible, or just 'Past Location (${location.until})'
           addField('Past Host Town (${location.until})', locStr);
         }
       }
@@ -158,9 +173,6 @@ class _ProfileVerificationModalState
     if (user.occupation != null) addField('Occupation', user.occupation);
 
     if (user.education != null && user.education!.isNotEmpty) {
-      // Format education list as a single string or handle complex verification?
-      // Requirement says "add each of field... that is not empty".
-      // Let's format first item or summary for now, or multi-line string.
       final eduString = user.education!
           .map((e) => '${e.institution} (${e.degree})')
           .join('\n');
@@ -309,9 +321,7 @@ class _ProfileVerificationModalState
 
   Widget _buildPhotoVerificationCard(ProfileData user) {
     final theme = Theme.of(context);
-    final label = 'Profile Photo';
-
-    // Re-using color logic mostly, but specific layout
+    const label = 'Profile Photo';
 
     return Container(
       padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding * 2),
@@ -334,7 +344,7 @@ class _ProfileVerificationModalState
             backgroundImage: NetworkImage(user.profileImage),
           ),
           const SizedBox(height: 16),
-          _buildToggleRow(label), // Use helper for the buttons
+          _buildToggleRow(label),
         ],
       ),
     );
@@ -342,9 +352,7 @@ class _ProfileVerificationModalState
 
   Widget _buildTristateField(String label, String? value) {
     final theme = Theme.of(context);
-
-    // Clean label for display
-    String displayLabel = label;
+    final String displayLabel = label;
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -402,7 +410,7 @@ class _ProfileVerificationModalState
 
     return Row(
       children: [
-        // False (Red) - Expanded for full width feel
+        // False (Red)
         Expanded(
           child: GestureDetector(
             onTap: () => _setFieldVerification(label, false),
@@ -430,21 +438,8 @@ class _ProfileVerificationModalState
               height: 44,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: state == null
-                    ? theme.highlightColor
-                    : theme
-                          .cardColor, // Highlight if selected (null is default state though? No, null is 'unselected/neutral')
-                // Wait, usually neutral is default. If I select False, state is False. If I select True, state is True. If I tap Neutral, state becomes null.
-                // Logic: _setFieldVerification(label, null).
-                // If state is null, it's "selected" as neutral? Or just no opinion?
-                // The previous logic was: state == null ? theme.highlightColor : null.
-                // Let's keep it simple: If state is null, highlight it? No, if state is null, it means "I haven't decided" or "Skip".
-                // Actually, if I verify ONE field, acts as "I verify this".
-                // The user said "verify exactly ONE field".
-                // So neutral is basically "ignore".
-                // Let's style it clearly.
+                color: state == null ? theme.highlightColor : theme.cardColor,
                 borderRadius: BorderRadius.circular(8),
-                border: const Border(),
               ),
               child: Icon(
                 LucideIcons.minus,
@@ -510,46 +505,47 @@ class _ProfileVerificationModalState
       return;
     }
 
-    try {
-      final trustService = ref.read(trustServiceProvider);
-      final toUserId = widget.targetUser.uid;
-      if (toUserId == null) throw Exception("Target user ID is missing.");
+    final toUserId = widget.targetUser.uid;
+    if (toUserId == null) return;
 
-      final Map<String, bool> submittedFields = {};
-      _fieldVerifications.forEach((key, value) {
-        if (value != null) {
-          if (key.startsWith('Relative:')) {
-            submittedFields['Relatives'] = value;
-          } else {
-            submittedFields[key] = value;
-          }
+    final Map<String, bool> submittedFields = {};
+    _fieldVerifications.forEach((key, value) {
+      if (value != null) {
+        if (key.startsWith('Relative:')) {
+          submittedFields['Relatives'] = value;
+        } else {
+          submittedFields[key] = value;
         }
-      });
-
-      if (submittedFields.isNotEmpty) {
-        await trustService.saveVerificationEvent(
-          fromUserId: widget.currentUserId,
-          toUserId: toUserId,
-          fields: submittedFields,
-        );
       }
+    });
 
-      if (!mounted) return;
-      Navigator.pop(context);
+    final trustService = ref.read(trustServiceProvider);
+    final updatedVerified = Set<String>.from(_verifiedFields);
+    submittedFields.forEach((key, value) {
+      if (value) updatedVerified.add(key);
+    });
+    trustService.cacheVerifiedFields(toUserId, updatedVerified);
 
-      VerificationAlertModal.show(
-        context,
-        type: VerificationAlertType.success,
-        title: 'Verification Success',
-        message: 'Thank you for contributing to the community trust.',
-      );
-    } catch (e) {
-      if (!mounted) return;
-      VerificationAlertModal.show(
-        context,
-        type: VerificationAlertType.error,
-        title: 'Submission Failed',
-        message: 'We couldn\'t save your verification. Error: $e',
+    Navigator.pop(context);
+
+    VerificationAlertModal.show(
+      context,
+      type: VerificationAlertType.success,
+      title: 'Verification Success',
+      message: 'Thank you for contributing to the community trust.',
+    );
+
+    if (submittedFields.isNotEmpty) {
+      unawaited(
+        trustService
+            .saveVerificationEvent(
+              fromUserId: widget.currentUserId,
+              toUserId: toUserId,
+              fields: submittedFields,
+            )
+            .catchError((Object e) {
+              debugPrint('Error saving verification event: $e');
+            }),
       );
     }
   }

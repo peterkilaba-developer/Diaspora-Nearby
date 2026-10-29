@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -28,7 +29,22 @@ class EventDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
-  bool _isRsvpLoading = false;
+  bool _prewarmedQr = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final repo = ref.read(eventRepositoryProvider);
+    if (widget.event != null && repo.getCachedEvent(widget.eventId) == null) {
+      repo.cacheEvent(widget.event!);
+    }
+    final ev = widget.event ?? repo.getCachedEvent(widget.eventId);
+    final currentUserId = ref.read(authRepositoryProvider).currentUser?.uid;
+    if (ev != null && currentUserId != null && ev.creatorId == currentUserId) {
+      _prewarmedQr = true;
+      unawaited(repo.prewarmAttendanceCode(widget.eventId));
+    }
+  }
 
   void _openDirections(String location) async {
     final query = Uri.encodeComponent(location);
@@ -48,11 +64,11 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    final asyncEvent = ref.watch(eventDetailsProvider(widget.eventId));
+    final asyncEvent = ref.watch(eventDetailsStreamProvider(widget.eventId));
     final cachedEvent = ref
         .read(eventRepositoryProvider)
         .getCachedEvent(widget.eventId);
-    final event = asyncEvent.value ?? widget.event ?? cachedEvent;
+    final event = asyncEvent.value ?? cachedEvent ?? widget.event;
 
     if (event == null) {
       if (asyncEvent.isLoading) {
@@ -102,17 +118,11 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         endDateStr = DateFormat('EEE, MMM d, y').format(end);
         displayEndTime = formatToAmPm(event.endTime!);
       } catch (_) {
-        // Fallback
         endDateStr = event.endDate;
         displayEndTime = event.endTime;
       }
     } else {
-      // Fallback default end (3h later) logic from card?
-      // Details page should explicitly show what IS there.
-      // If null, we might show "Until Late" or calculate it.
-      // For consistency with card "starts in", we kept that logic in model.
-      // Visual consistency:
-      endDateStr = endDateStr ?? dateStr; // Same day default
+      endDateStr = endDateStr ?? dateStr;
 
       if (startDate != null) {
         final end = startDate.add(const Duration(hours: 3));
@@ -127,9 +137,16 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         ref.read(authRepositoryProvider).currentUser?.uid;
     final isCreator = currentUserId != null && currentUserId == event.creatorId;
 
+    if (isCreator && !_prewarmedQr) {
+      _prewarmedQr = true;
+      unawaited(
+        ref.read(eventRepositoryProvider).prewarmAttendanceCode(event.id),
+      );
+    }
+
     return Scaffold(
       body: SafeArea(
-        top: false, // SliverAppBar handles top notch
+        top: false,
         child: CustomScrollView(
           slivers: [
             SliverAppBar(
@@ -302,7 +319,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Organizer Section (Moved from bottom)
+                      // Organizer Section (0-latency denormalized + cached profile)
                       Consumer(
                         builder: (context, ref, _) {
                           final currentUserId = ref
@@ -310,216 +327,194 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                               .currentUser
                               ?.uid;
 
-                          // [NEW] Organization Display Logic
                           if (event.organizationId != null) {
                             final orgAsync = ref.watch(
                               organizationByIdProvider(event.organizationId!),
                             );
-                            return orgAsync.when(
-                              data: (org) {
-                                if (org == null) return const SizedBox.shrink();
-                                return InkWell(
-                                  onTap: () {
-                                    // TODO: Navigate to Org Profile if needed
-                                  },
+                            final org = orgAsync.value;
+                            final logoUrl =
+                                (org?['logoUrl'] ?? org?['profileImage'])
+                                    as String?;
+                            final orgName =
+                                (org?['name'] ??
+                                        org?['businessName'] ??
+                                        event.organizationName ??
+                                        'Organization')
+                                    as String;
+
+                            return InkWell(
+                              onTap: () {},
+                              borderRadius: BorderRadius.circular(16),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: theme
+                                      .colorScheme
+                                      .surfaceContainerHighest
+                                      .withValues(alpha: 0.2),
                                   borderRadius: BorderRadius.circular(16),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 8,
+                                ),
+                                child: Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 18,
+                                      backgroundImage:
+                                          logoUrl != null && logoUrl.isNotEmpty
+                                          ? CachedNetworkImageProvider(logoUrl)
+                                          : null,
+                                      child: logoUrl == null || logoUrl.isEmpty
+                                          ? const Icon(
+                                              LucideIcons.building2,
+                                              size: 18,
+                                            )
+                                          : null,
                                     ),
-                                    decoration: BoxDecoration(
-                                      color: theme
-                                          .colorScheme
-                                          .surfaceContainerHighest
-                                          .withValues(alpha: 0.2),
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        CircleAvatar(
-                                          radius: 18,
-                                          backgroundImage:
-                                              (org['logoUrl'] ??
-                                                      org['profileImage']) !=
-                                                  null
-                                              ? CachedNetworkImageProvider(
-                                                  org['logoUrl'] ??
-                                                      org['profileImage'],
-                                                )
-                                              : null,
-                                          child:
-                                              (org['logoUrl'] ??
-                                                      org['profileImage']) ==
-                                                  null
-                                              ? const Icon(
-                                                  LucideIcons.building2,
-                                                  size: 18,
-                                                )
-                                              : null,
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                'Organized by',
-                                                style: theme
-                                                    .textTheme
-                                                    .labelSmall
-                                                    ?.copyWith(
-                                                      color: theme
-                                                          .colorScheme
-                                                          .primary,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                              ),
-                                              Text(
-                                                org['name'] ??
-                                                    org['businessName'] ??
-                                                    event.organizationName ??
-                                                    'Organization',
-                                                style: theme
-                                                    .textTheme
-                                                    .titleSmall
-                                                    ?.copyWith(
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ],
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Organized by',
+                                            style: theme.textTheme.labelSmall
+                                                ?.copyWith(
+                                                  color:
+                                                      theme.colorScheme.primary,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
                                           ),
-                                        ),
-                                      ],
+                                          Text(
+                                            orgName,
+                                            style: theme.textTheme.titleSmall
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                );
-                              },
-                              loading: () => const SizedBox(
-                                height: 40,
-                                child: Center(child: LinearProgressIndicator()),
+                                  ],
+                                ),
                               ),
-                              error: (_, _) => const SizedBox.shrink(),
                             );
                           }
 
                           final creatorProfileAsync = ref.watch(
                             userProfileByIdProvider(event.creatorId),
                           );
+                          final profile =
+                              creatorProfileAsync.value ??
+                              ref
+                                  .read(profileRepositoryProvider)
+                                  .getCachedProfile(event.creatorId);
+                          final photoUrl =
+                              profile?.profileImage ?? event.creatorPhoto;
+                          final organizerName = profile != null
+                              ? '${profile.firstName} ${profile.lastName}'
+                                    .trim()
+                              : (event.creatorName != null &&
+                                        event.creatorName!.isNotEmpty
+                                    ? event.creatorName!
+                                    : 'Event Organizer');
 
-                          return creatorProfileAsync.when(
-                            data: (profile) {
-                              return InkWell(
-                                onTap: () =>
-                                    context.push('/profile/${event.creatorId}'),
+                          return InkWell(
+                            onTap: () =>
+                                context.push('/profile/${event.creatorId}'),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 0,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.surfaceContainerHighest
+                                    .withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(16),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 0,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: theme
-                                        .colorScheme
-                                        .surfaceContainerHighest
-                                        .withValues(alpha: 0.2),
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  child: Column(
+                              ),
+                              child: Column(
+                                children: [
+                                  Row(
                                     children: [
-                                      Row(
-                                        children: [
-                                          CircleAvatar(
-                                            radius: 18,
-                                            backgroundImage:
-                                                profile?.profileImage != null
-                                                ? CachedNetworkImageProvider(
-                                                    profile!.profileImage,
-                                                  )
-                                                : null,
-                                            child: profile?.profileImage == null
-                                                ? const Icon(
-                                                    LucideIcons.user,
-                                                    size: 18,
-                                                  )
-                                                : null,
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  'Organized by',
-                                                  style: theme
-                                                      .textTheme
-                                                      .labelSmall
-                                                      ?.copyWith(
-                                                        color: theme
-                                                            .colorScheme
-                                                            .primary,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                      ),
-                                                ),
-                                                Text(
-                                                  '${profile?.firstName ?? 'Event'} ${profile?.lastName ?? 'Organizer'}',
-                                                  style: theme
-                                                      .textTheme
-                                                      .titleSmall
-                                                      ?.copyWith(
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                      ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          if (currentUserId != event.creatorId)
-                                            IconButton(
-                                              icon: const Icon(
-                                                LucideIcons.messageCircle,
-                                                size: 20,
-                                              ),
-                                              onPressed: () => context.push(
-                                                '/chat/direct/${event.creatorId}',
-                                              ),
-                                              color: theme.colorScheme.primary,
-                                              visualDensity:
-                                                  VisualDensity.compact,
-                                            ),
-                                        ],
+                                      CircleAvatar(
+                                        radius: 18,
+                                        backgroundImage:
+                                            photoUrl != null &&
+                                                photoUrl.isNotEmpty
+                                            ? CachedNetworkImageProvider(
+                                                photoUrl,
+                                              )
+                                            : null,
+                                        child:
+                                            photoUrl == null || photoUrl.isEmpty
+                                            ? const Icon(
+                                                LucideIcons.user,
+                                                size: 18,
+                                              )
+                                            : null,
                                       ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Organized by',
+                                              style: theme.textTheme.labelSmall
+                                                  ?.copyWith(
+                                                    color: theme
+                                                        .colorScheme
+                                                        .primary,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                            ),
+                                            Text(
+                                              organizerName,
+                                              style: theme.textTheme.titleSmall
+                                                  ?.copyWith(
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      if (currentUserId != event.creatorId)
+                                        IconButton(
+                                          icon: const Icon(
+                                            LucideIcons.messageCircle,
+                                            size: 20,
+                                          ),
+                                          onPressed: () => context.push(
+                                            '/chat/direct/${event.creatorId}',
+                                          ),
+                                          color: theme.colorScheme.primary,
+                                          visualDensity: VisualDensity.compact,
+                                        ),
                                     ],
                                   ),
-                                ),
-                              );
-                            },
-                            loading: () => const SizedBox(
-                              height: 40,
-                              child: Center(child: LinearProgressIndicator()),
+                                ],
+                              ),
                             ),
-                            error: (_, _) => const SizedBox.shrink(),
                           );
                         },
                       ),
 
                       const SizedBox(height: 8),
 
-                      // Stats (Going \u2022 Interested) - Synced with EventCard
+                      // Stats (Going • Interested) - Synced with EventCard
                       Padding(
                         padding: const EdgeInsets.only(
                           left: 8,
                           right: 8,
                           top: 8,
                           bottom: 24,
-                        ), // Added 16px extra bottom padding
+                        ),
                         child: InkWell(
                           borderRadius: BorderRadius.circular(12),
                           onTap: () => context.push(
@@ -561,7 +556,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                       ),
 
                       // Logistics Cards
-                      // Split Date & Time
                       Row(
                         children: [
                           Expanded(
@@ -594,9 +588,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                  const SizedBox(
-                                    height: 2,
-                                  ), // Tighter spacing like card
+                                  const SizedBox(height: 2),
                                   Row(
                                     children: [
                                       Icon(
@@ -627,9 +619,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                               ),
                             ),
                           ),
-                          const SizedBox(
-                            width: 8,
-                          ), // 8px spacer like card (was 12)
+                          const SizedBox(width: 8),
                           Expanded(
                             child: Container(
                               padding: const EdgeInsets.symmetric(
@@ -639,9 +629,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                               decoration: BoxDecoration(
                                 color: theme.colorScheme.surfaceContainerHighest
                                     .withValues(alpha: 0.3),
-                                borderRadius: BorderRadius.circular(
-                                  12,
-                                ), // 12px radius like card (was 16)
+                                borderRadius: BorderRadius.circular(12),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -696,7 +684,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                         ],
                       ),
 
-                      // [NEW] 16px padding
                       const SizedBox(height: 16),
 
                       // Calculate distance in real time for details page
@@ -746,84 +733,79 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                           final creatorProfileAsync = ref.watch(
                             userProfileByIdProvider(event.creatorId),
                           );
-                          return creatorProfileAsync.maybeWhen(
-                            data: (profile) {
-                              if (profile
-                                      ?.businessProfile
-                                      ?.isBusinessVerified ==
-                                  true) {
-                                return Padding(
-                                  padding: const EdgeInsets.only(top: 24),
-                                  child: Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.all(16),
-                                    decoration: AppTheme.cardDecoration(context)
-                                        .copyWith(
-                                          borderRadius: BorderRadius.circular(
-                                            20,
-                                          ),
-                                        ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+                          final profile =
+                              creatorProfileAsync.value ??
+                              ref
+                                  .read(profileRepositoryProvider)
+                                  .getCachedProfile(event.creatorId);
+                          if (profile?.businessProfile?.isBusinessVerified ==
+                              true) {
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 24),
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(16),
+                                decoration: AppTheme.cardDecoration(context)
+                                    .copyWith(
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
                                       children: [
-                                        Row(
-                                          children: [
-                                            Icon(
-                                              LucideIcons.building2,
-                                              size: 16,
-                                              color: theme.colorScheme.primary,
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              profile
-                                                      ?.businessProfile
-                                                      ?.businessName ??
-                                                  'Verified Business',
-                                              style: theme.textTheme.labelLarge
-                                                  ?.copyWith(
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                            ),
-                                            const Spacer(),
-                                            const Icon(
-                                              LucideIcons.checkCircle2,
-                                              size: 16,
-                                              color: Colors.green,
-                                            ),
-                                          ],
+                                        Icon(
+                                          LucideIcons.building2,
+                                          size: 16,
+                                          color: theme.colorScheme.primary,
                                         ),
-                                        if (profile
-                                                ?.businessProfile
-                                                ?.businessDescription !=
-                                            null) ...[
-                                          const SizedBox(height: 8),
-                                          Text(
-                                            profile!
-                                                .businessProfile!
-                                                .businessDescription,
-                                            style: theme.textTheme.bodySmall
-                                                ?.copyWith(
-                                                  color: theme
-                                                      .colorScheme
-                                                      .onSurfaceVariant,
-                                                ),
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ],
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          profile
+                                                  ?.businessProfile
+                                                  ?.businessName ??
+                                              'Verified Business',
+                                          style: theme.textTheme.labelLarge
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                        ),
+                                        const Spacer(),
+                                        const Icon(
+                                          LucideIcons.checkCircle2,
+                                          size: 16,
+                                          color: Colors.green,
+                                        ),
                                       ],
                                     ),
-                                  ),
-                                );
-                              }
-                              return const SizedBox.shrink();
-                            },
-                            orElse: () => const SizedBox.shrink(),
-                          );
+                                    if (profile
+                                            ?.businessProfile
+                                            ?.businessDescription !=
+                                        null) ...[
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        profile!
+                                            .businessProfile!
+                                            .businessDescription,
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(
+                                              color: theme
+                                                  .colorScheme
+                                                  .onSurfaceVariant,
+                                            ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            );
+                          }
+                          return const SizedBox.shrink();
                         },
                       ),
-                      const SizedBox(height: 120), // Padding for FAB
+                      const SizedBox(height: 120),
                     ],
                   ),
                 ),
@@ -865,25 +847,14 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   Widget _buildStickyActionBar(BuildContext context, Event event) {
     final theme = Theme.of(context);
     final userAsync = ref.watch(authStateProvider);
-    // Fallback to synchronous currentUser if stream is loading
     final currentUserId =
         userAsync.value?.uid ??
         ref.read(authRepositoryProvider).currentUser?.uid;
-
-    // DEBUG LOG
-    debugPrint(
-      'DEBUG: StickyBar Build - Loading: $_isRsvpLoading, UserId: $currentUserId, AsyncLoading: ${userAsync.isLoading}',
-    );
 
     final isAttending = event.attendees?.contains(currentUserId) ?? false;
     final isFull =
         event.maxAttendees != null &&
         (event.attendeeCount ?? 0) >= event.maxAttendees!;
-
-    // Chat Navigation Logic
-    // We navigate to the specific chat based on event.chatId
-    // If it doesn't exist, we might need to create it or handle it.
-    // Assuming backend/creation ensures chatId exists.
 
     return Container(
       padding: EdgeInsets.fromLTRB(
@@ -914,9 +885,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                     : 'Free Entry',
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
-                  color: event.isPaid == true && (event.ticketPrice ?? 0) > 0
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.primary,
+                  color: theme.colorScheme.primary,
                 ),
               ),
               Text(
@@ -938,7 +907,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
               padding: const EdgeInsets.only(right: 12.0),
               child: IconButton.filledTonal(
                 onPressed: () {
-                  // Check if chatId is present, if not use event_${event.id} as fallback
                   final chatId = event.chatId ?? 'event_${event.id}';
                   context.push('/chats/$chatId');
                 },
@@ -968,81 +936,50 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
               ),
             )
           else
-            // RSVP Button
+            // 0-Latency Optimistic RSVP Button
             Expanded(
               flex: 2,
               child: FilledButton.icon(
-                onPressed: (_isRsvpLoading || currentUserId == null)
+                onPressed: currentUserId == null
                     ? null
                     : () async {
-                        setState(() => _isRsvpLoading = true);
+                        final repo = ref.read(eventRepositoryProvider);
+                        final uid = currentUserId;
+                        final prevAttendees = List<String>.from(
+                          event.attendees ?? const [],
+                        );
+
+                        // [PERF] Apply optimistic RSVP update immediately on frame 0
+                        setState(() {
+                          if (isAttending) {
+                            event.attendees = prevAttendees
+                                .where((id) => id != uid)
+                                .toList();
+                            event.attendeeCount = event.attendees!.length;
+                          } else {
+                            event.attendees = <String>{
+                              ...prevAttendees,
+                              uid,
+                            }.toList();
+                            event.attendeeCount = event.attendees!.length;
+                          }
+                        });
+                        repo.cacheEvent(event);
 
                         try {
-                          final repo = ref.read(eventRepositoryProvider);
-                          // Use the same fallback logic for profile/user
-                          final userAsync = ref.read(authStateProvider);
-                          final uid =
-                              userAsync.value?.uid ??
-                              ref.read(authRepositoryProvider).currentUser?.uid;
-
-                          if (uid == null) {
-                            debugPrint('DEBUG: User ID is null in onPressed');
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Please log in to RSVP.'),
-                              ),
-                            );
-                            setState(() => _isRsvpLoading = false);
-                            return;
-                          }
-
-                          final prevAttendees = List<String>.from(
-                            event.attendees ?? const [],
-                          );
-
-                          // [PERF] Apply optimistic RSVP update immediately
-                          setState(() {
-                            _isRsvpLoading = false;
-                            if (isAttending) {
-                              event.attendees = prevAttendees
-                                  .where((id) => id != uid)
-                                  .toList();
-                              event.attendeeCount = event.attendees!.length;
-                            } else {
-                              event.attendees = <String>{
-                                ...prevAttendees,
-                                uid,
-                              }.toList();
-                              event.attendeeCount = event.attendees!.length;
-                            }
-                          });
-
                           if (isAttending) {
                             await repo.leaveEvent(event.id, uid);
                           } else {
                             await repo.joinEvent(event.id, uid);
                           }
-
-                          if (mounted) setState(() => _isRsvpLoading = false);
                         } catch (e) {
                           debugPrint('RSVP Error: $e');
                           if (mounted) {
                             setState(() {
-                              _isRsvpLoading = false;
-                              // Revert optimistic update on error
-                              if (isAttending) {
-                                event.attendees = <String>{
-                                  ...?event.attendees,
-                                  currentUserId,
-                                }.toList();
-                              } else {
-                                event.attendees = event.attendees
-                                    ?.where((id) => id != currentUserId)
-                                    .toList();
-                              }
-                              event.attendeeCount =
-                                  event.attendees?.length ?? 0;
+                              event.attendees = prevAttendees;
+                              event.attendeeCount = prevAttendees.length;
                             });
+                            repo.cacheEvent(event);
                           }
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -1062,22 +999,11 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                       : theme.colorScheme.onPrimary,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-                icon: _isRsvpLoading
-                    ? SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: isAttending
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.onPrimary,
-                        ),
-                      )
-                    : Icon(
-                        isAttending
-                            ? LucideIcons.check
-                            : (isFull ? LucideIcons.ban : LucideIcons.ticket),
-                      ),
+                icon: Icon(
+                  isAttending
+                      ? LucideIcons.check
+                      : (isFull ? LucideIcons.ban : LucideIcons.ticket),
+                ),
                 label: Text(
                   isAttending
                       ? 'Going'

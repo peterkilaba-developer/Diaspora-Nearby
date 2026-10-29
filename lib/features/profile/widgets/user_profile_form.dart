@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -531,7 +533,7 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
       );
 
       await widget.onSave(updatedProfile, _newProfileImage);
-      await _trackCompletionRewards(updatedProfile);
+      unawaited(_trackCompletionRewards(updatedProfile));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -561,63 +563,61 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
       }
     }
 
-    await check(
-      ExplorationAction.profileSetupBio,
-      (profile.bio?.isNotEmpty ?? false),
-    );
-    await check(
-      ExplorationAction.profileSetupOccupation,
-      (profile.occupation?.isNotEmpty ?? false),
-    );
-    await check(
-      ExplorationAction.profileSetupProfession,
-      (profile.profession?.isNotEmpty ?? false),
-    );
-    await check(
-      ExplorationAction.profileSetupIndustry,
-      (profile.industry?.isNotEmpty ?? false),
-    );
-    await check(
-      ExplorationAction.profileSetupLanguages,
-      (profile.languages?.isNotEmpty ?? false),
-    );
-    await check(
-      ExplorationAction.profileSetupInterests,
-      (profile.interests?.isNotEmpty ?? false),
-    );
-    await check(
-      ExplorationAction.profileSetupServices,
-      (profile.servicesOffered?.isNotEmpty ?? false),
-    );
-    await check(
-      ExplorationAction.profileSetupLookingFor,
-      (profile.lookingFor?.isNotEmpty ?? false),
-    );
-    await check(
-      ExplorationAction.profileSetupAvailability,
-      (profile.availability?.isNotEmpty ?? false),
-    );
-    await check(
-      ExplorationAction.profileSetupMeetingPrefs,
-      (profile.meetingPreferences?.isNotEmpty ?? false),
-    );
-    await check(
-      ExplorationAction.profileSetupPastLocations,
-      (profile.pastLocations?.isNotEmpty ?? false),
-    );
-
-    bool hasPhoto =
+    final bool hasPhoto =
         (profile.profileImage.isNotEmpty || _newProfileImage != null) &&
         !profile.profileImage.contains('ui-avatars.com');
-    await check(ExplorationAction.profileSetupPhoto, hasPhoto);
+
+    await Future.wait([
+      check(
+        ExplorationAction.profileSetupBio,
+        (profile.bio?.isNotEmpty ?? false),
+      ),
+      check(
+        ExplorationAction.profileSetupOccupation,
+        (profile.occupation?.isNotEmpty ?? false),
+      ),
+      check(
+        ExplorationAction.profileSetupProfession,
+        (profile.profession?.isNotEmpty ?? false),
+      ),
+      check(
+        ExplorationAction.profileSetupIndustry,
+        (profile.industry?.isNotEmpty ?? false),
+      ),
+      check(
+        ExplorationAction.profileSetupLanguages,
+        (profile.languages?.isNotEmpty ?? false),
+      ),
+      check(
+        ExplorationAction.profileSetupInterests,
+        (profile.interests?.isNotEmpty ?? false),
+      ),
+      check(
+        ExplorationAction.profileSetupServices,
+        (profile.servicesOffered?.isNotEmpty ?? false),
+      ),
+      check(
+        ExplorationAction.profileSetupLookingFor,
+        (profile.lookingFor?.isNotEmpty ?? false),
+      ),
+      check(
+        ExplorationAction.profileSetupAvailability,
+        (profile.availability?.isNotEmpty ?? false),
+      ),
+      check(
+        ExplorationAction.profileSetupMeetingPrefs,
+        (profile.meetingPreferences?.isNotEmpty ?? false),
+      ),
+      check(
+        ExplorationAction.profileSetupPastLocations,
+        (profile.pastLocations?.isNotEmpty ?? false),
+      ),
+      check(ExplorationAction.profileSetupPhoto, hasPhoto),
+      if (profile.isComplete) points.trackProfileCompletion(uid),
+    ]);
 
     if (anyRewarded && mounted) {
       showExplorationRewardToast(context, message: 'Profile complete bonus!');
-    }
-
-    // [NEW] Check for profile completion milestone (all 12 required fields)
-    if (profile.isComplete) {
-      await points.trackProfileCompletion(uid);
     }
   }
 
@@ -647,14 +647,53 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
   }
 
   Future<void> _selectPlace(String placeId) async {
+    final tappedPrediction = _predictions
+        .where((p) => p.placeId == placeId)
+        .firstOrNull;
+    final optimisticText = tappedPrediction != null
+        ? (tappedPrediction.fullText.isNotEmpty
+              ? tappedPrediction.fullText
+              : tappedPrediction.primaryText)
+        : null;
+
     _hostLocationSearchSeq++;
     setState(() {
       _predictions = [];
+      if (optimisticText != null && optimisticText.isNotEmpty) {
+        _searchController.text = optimisticText;
+      }
       _isUpdatingLocation = true;
     });
+    FocusScope.of(context).unfocus();
+
     try {
       final places = ref.read(googlePlacesServiceProvider);
-      final response = await places.getPlaceDetails(placeId);
+
+      Future<Position> resolvePosition() async {
+        LocationPermission permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied) {
+          permission = await Geolocator.requestPermission();
+          if (permission == LocationPermission.denied) {
+            throw Exception('Location permission denied');
+          }
+        }
+        final lastKnown = await Geolocator.getLastKnownPosition();
+        if (lastKnown != null) return lastKnown;
+        return Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium,
+          ),
+        );
+      }
+
+      // [PERF] Fetch place details and GPS position in parallel
+      final results = await Future.wait<dynamic>([
+        places.getPlaceDetails(placeId),
+        resolvePosition(),
+      ]);
+
+      final response = results[0] as FetchPlaceResponse?;
+      final position = results[1] as Position;
       final place = response?.place;
 
       if (place == null) throw Exception('Could not fetch place details');
@@ -674,19 +713,6 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
         throw Exception('Could not parse location components');
       }
 
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          throw Exception('Location permission denied');
-        }
-      }
-
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.medium,
-        ),
-      );
       final distanceKm = loc_utils.calculateDistance(
         position.latitude,
         position.longitude,
@@ -702,6 +728,7 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
         );
         setState(() {
           _predictions = [];
+          _tempSelectedLocation = null;
           _searchController.clear();
         });
         return;
@@ -728,7 +755,6 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
           _predictions = [];
           _searchController.text = newLocation.formattedAddress;
         });
-        FocusScope.of(context).unfocus();
       }
     } catch (e) {
       if (mounted) {
@@ -745,17 +771,21 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
   void _showVerificationErrorDialog(String targetCity, double distanceKm) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Location Verification Failed'),
-        content: Text(
-          'You are ${distanceKm.round()}km away from $targetCity.\n\nTo ensure community integrity, you must be physically located in/near your host city to update it.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Understand'),
+      builder: (context) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          title: const Text('Location Verification Failed'),
+          content: Text(
+            'You are ${distanceKm.round()}km away from $targetCity.\n\nTo ensure community integrity, you must be physically located in/near your host city to update it.',
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Understand'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1246,9 +1276,10 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
         const SizedBox(height: 8),
         Container(
           decoration: isHighlighted
-              ? AppTheme.innerDecoration(
-                  context,
-                ).copyWith(border: const Border())
+              ? BoxDecoration(
+                  color: AppTheme.error.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                )
               : AppTheme.innerDecoration(context),
           child: DropdownButtonFormField<String>(
             initialValue: _selectedYearsInHost.isNotEmpty
@@ -1484,9 +1515,12 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
           },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            decoration: AppTheme.innerDecoration(
-              context,
-            ).copyWith(border: isHighlighted ? const Border() : null),
+            decoration: isHighlighted
+                ? BoxDecoration(
+                    color: AppTheme.error.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  )
+                : AppTheme.innerDecoration(context),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -1584,58 +1618,64 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
     final confirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSt) => AlertDialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
-          title: const Row(
-            children: [
-              Icon(Icons.warning_amber_rounded, color: Colors.orange),
-              SizedBox(width: 8),
-              Expanded(child: Text('Hide City — Permanent Loss')),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Hiding your current city will permanently forfeit your +10 City '
-                'Visibility PCT.',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                '• You will lose 10 PCT from your trust score immediately.\n'
-                '• Turning visibility back on later will NOT restore the +10.\n'
-                '• This is a one-way action — there is no second chance.\n'
-                '• Lower PCT means lower DSP → \$DIASPORA distribution during TDE releases.',
-                style: TextStyle(fontSize: 13, height: 1.4),
-              ),
-              const SizedBox(height: 16),
-              CheckboxListTile(
-                value: acknowledged,
-                onChanged: (val) => setSt(() => acknowledged = val ?? false),
-                title: const Text(
-                  'I understand this is permanent and cannot be undone.',
-                  style: TextStyle(fontSize: 13),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: StatefulBuilder(
+          builder: (ctx, setSt) => AlertDialog(
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 24,
+            ),
+            title: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                SizedBox(width: 8),
+                Expanded(child: Text('Hide City — Permanent Loss')),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Hiding your current city will permanently forfeit your +10 City '
+                  'Visibility PCT.',
+                  style: TextStyle(fontWeight: FontWeight.w600),
                 ),
-                controlAffinity: ListTileControlAffinity.leading,
-                contentPadding: EdgeInsets.zero,
-                dense: true,
+                const SizedBox(height: 12),
+                const Text(
+                  '• You will lose 10 PCT from your trust score immediately.\n'
+                  '• Turning visibility back on later will NOT restore the +10.\n'
+                  '• This is a one-way action — there is no second chance.\n'
+                  '• Lower PCT means lower DSP → \$DIASPORA distribution during TDE releases.',
+                  style: TextStyle(fontSize: 13, height: 1.4),
+                ),
+                const SizedBox(height: 16),
+                CheckboxListTile(
+                  value: acknowledged,
+                  onChanged: (val) => setSt(() => acknowledged = val ?? false),
+                  title: const Text(
+                    'I understand this is permanent and cannot be undone.',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Keep City Visible'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                onPressed: acknowledged ? () => Navigator.pop(ctx, true) : null,
+                child: const Text('Hide & Forfeit +10 PCT'),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Keep City Visible'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Colors.red),
-              onPressed: acknowledged ? () => Navigator.pop(ctx, true) : null,
-              child: const Text('Hide & Forfeit +10 PCT'),
-            ),
-          ],
         ),
       ),
     );

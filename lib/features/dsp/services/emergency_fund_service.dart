@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
@@ -89,21 +90,24 @@ class EmergencyFundService {
       );
     }
 
-    // 1. Profile Check
-    final profile = await _profileRepo.getUserProfile(userId);
-    final isProfileComplete = profile?.isComplete ?? false;
-
-    // 2. In-person QR scan check — read PCT trust data
-    int qrScanCount = 0;
-    try {
-      final trustDoc = await _firestore
+    final results = await Future.wait<Object?>([
+      _profileRepo.getUserProfile(userId),
+      _firestore
           .collection('trust_scores')
           .doc(userId)
-          .get();
-      if (trustDoc.exists) {
-        qrScanCount = (trustDoc.data()?['uniqueQrCount'] as num?)?.toInt() ?? 0;
-      }
-    } catch (_) {}
+          .get()
+          .then<DocumentSnapshot<Map<String, dynamic>>?>((doc) => doc)
+          .catchError((_) => null),
+    ]);
+
+    final profile = results[0] as ProfileData?;
+    final trustDoc = results[1] as DocumentSnapshot<Map<String, dynamic>>?;
+
+    final isProfileComplete = profile?.isComplete ?? false;
+    int qrScanCount = 0;
+    if (trustDoc != null && trustDoc.exists) {
+      qrScanCount = (trustDoc.data()?['uniqueQrCount'] as num?)?.toInt() ?? 0;
+    }
 
     return EligibilityResult(
       isProfileComplete: isProfileComplete,
@@ -209,7 +213,10 @@ class EmergencyFundService {
   // Helper to fetch potential proxies from active DM chats (Verified Users Only)
   Future<List<ProfileData>> getPotentialProxies(String userId) async {
     try {
-      final chats = await _chatRepo.getUserChats();
+      final cachedChats = _chatRepo.cachedChats;
+      final chats = cachedChats.isNotEmpty
+          ? cachedChats
+          : await _chatRepo.getUserChats();
       final directChats = chats.where((c) => c.isDirect).toList();
 
       final potentialIds = directChats
@@ -221,20 +228,28 @@ class EmergencyFundService {
 
       if (potentialIds.isEmpty) return [];
 
-      // Fetch profiles
-      final profilesFutures = potentialIds.map(
-        (id) => _profileRepo.getUserProfile(id),
+      // Fetch profiles in parallel
+      final profiles = await Future.wait(
+        potentialIds.map((id) => _profileRepo.getUserProfile(id)),
       );
-      final profiles = await Future.wait(profilesFutures);
 
-      // Filter by Verification (and remove nulls)
+      final validProfiles = profiles
+          .whereType<ProfileData>()
+          .where((p) => p.uid != null)
+          .toList();
+
+      if (validProfiles.isEmpty) return [];
+
+      // Fetch all trust data in parallel instead of sequential loop
+      final trustList = await Future.wait(
+        validProfiles.map((p) => _trustRepo.getTrustData(p.uid!)),
+      );
+
       final verifiedProfiles = <ProfileData>[];
-      for (final p in profiles) {
-        if (p == null || p.uid == null) continue;
-
-        final trust = await _trustRepo.getTrustData(p.uid!);
+      for (var i = 0; i < validProfiles.length; i++) {
+        final trust = trustList[i];
         if (trust != null && trust.isVerified) {
-          verifiedProfiles.add(p);
+          verifiedProfiles.add(validProfiles[i]);
         }
       }
 
@@ -422,30 +437,37 @@ class EmergencyFundService {
         .call();
     debugPrint('✅ [EmergencyFund] User $userId staked 1,000 DSP promissory');
 
-    // Fire notification
-    try {
-      await _notificationsRepo.addNotification(
-        userId,
-        NotificationItem(
-          id: '',
-          type: NotificationType.emergencyFundStaked,
-          title: 'DSP Staked Successfully',
-          body:
-              'You staked 1,000 DSP promissory for the Ubuntu Emergency Fund. Complete your annual contribution to activate membership.',
-          createdAt: DateTime.now(),
-        ),
-      );
-    } catch (e) {
-      debugPrint('⚠️ [EmergencyFund] Failed to create stake notification: $e');
-    }
+    // Fire notification asynchronously without blocking the caller
+    unawaited(
+      _notificationsRepo
+          .addNotification(
+            userId,
+            NotificationItem(
+              id: '',
+              type: NotificationType.emergencyFundStaked,
+              title: 'DSP Staked Successfully',
+              body:
+                  'You staked 1,000 DSP promissory for the Ubuntu Emergency Fund. Complete your annual contribution to activate membership.',
+              createdAt: DateTime.now(),
+            ),
+          )
+          .then<void>((_) {})
+          .catchError((Object e) {
+            debugPrint(
+              '⚠️ [EmergencyFund] Failed to create stake notification: $e',
+            );
+          }),
+    );
   }
 
   /// Checks whether a user has completed an active contribution to the Ubuntu Emergency Fund.
   Future<bool> hasStaked(String userId) async {
-    final memDoc = await _firestore
-        .collection('emergency_fund_memberships')
-        .doc(userId)
-        .get();
+    final docs = await Future.wait([
+      _firestore.collection('emergency_fund_memberships').doc(userId).get(),
+      _firestore.collection('emergency_fund_stakers').doc(userId).get(),
+    ]);
+
+    final memDoc = docs[0];
     if (memDoc.exists) {
       final data = memDoc.data() ?? const <String, dynamic>{};
       final hasPaymentProof =
@@ -456,10 +478,7 @@ class EmergencyFundService {
       }
     }
 
-    final doc = await _firestore
-        .collection('emergency_fund_stakers')
-        .doc(userId)
-        .get();
+    final doc = docs[1];
     if (!doc.exists) return false;
     final stakerData = doc.data() ?? const <String, dynamic>{};
     final hasTxProof =

@@ -26,9 +26,14 @@ class ElectionHistoryScreen extends ConsumerStatefulWidget {
 }
 
 class _ElectionHistoryScreenState extends ConsumerState<ElectionHistoryScreen> {
+  late Future<List<ElectionResult>> _historyFuture;
+
   @override
   void initState() {
     super.initState();
+    _historyFuture = ref
+        .read(governanceRepositoryProvider)
+        .getElectionHistory(widget.unitId);
     _trackExploration();
   }
 
@@ -49,6 +54,9 @@ class _ElectionHistoryScreenState extends ConsumerState<ElectionHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cachedHistory = ref
+        .read(governanceRepositoryProvider)
+        .getCachedElectionHistory(widget.unitId);
     return Scaffold(
       appBar: AppBar(
         title: Text('${widget.unitName} History'),
@@ -56,11 +64,11 @@ class _ElectionHistoryScreenState extends ConsumerState<ElectionHistoryScreen> {
         foregroundColor: Colors.white,
       ),
       body: FutureBuilder<List<ElectionResult>>(
-        future: ref
-            .read(governanceRepositoryProvider)
-            .getElectionHistory(widget.unitId),
+        initialData: cachedHistory,
+        future: _historyFuture,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              snapshot.data == null) {
             return const Center(child: CircularProgressIndicator());
           }
 

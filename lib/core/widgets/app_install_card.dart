@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -7,15 +8,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:diaspora_nearby/theme/app_theme.dart';
+import 'package:diaspora_nearby/core/providers/theme_provider.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/core/services/pwa_install_service.dart';
 
 /// Combined PWA install + native-app tester signup widget.
 /// Shown only on web and only when NOT running as a standalone PWA.
-///
-/// Platform is auto-detected (android / ios / both for desktop).
-/// On Android the single submit button triggers PWA install AND tester signup.
-/// On iOS the PWA section shows Safari "Add to Home Screen" steps.
 class AppInstallCard extends ConsumerStatefulWidget {
   const AppInstallCard({super.key});
 
@@ -26,7 +24,7 @@ class AppInstallCard extends ConsumerStatefulWidget {
 class _AppInstallCardState extends ConsumerState<AppInstallCard> {
   final _emailController = TextEditingController();
   bool _testerSignedUp = false;
-  bool _submitting = false;
+  final bool _submitting = false;
   bool _isStandalone = false;
   bool _showEmailError = false;
 
@@ -66,10 +64,7 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
     _loadState();
   }
 
-  Future<void> _loadState() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (!mounted) return;
-
+  void _loadState() {
     bool standalone = false;
     if (kIsWeb) {
       try {
@@ -78,10 +73,21 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
       } catch (_) {}
     }
 
-    setState(() {
+    try {
+      final prefs = ref.read(sharedPreferencesProvider);
       _testerSignedUp = prefs.getBool(_testerSignedUpKey) ?? false;
       _isStandalone = standalone;
-    });
+      return;
+    } catch (_) {}
+
+    _isStandalone = standalone;
+    unawaited(() async {
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
+      setState(() {
+        _testerSignedUp = prefs.getBool(_testerSignedUpKey) ?? false;
+      });
+    }());
   }
 
   @override
@@ -91,6 +97,7 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
   }
 
   /// Single action: installs PWA (on Android/desktop) AND submits tester signup.
+  /// [PERF] Optimistically updates UI and shows confirmation in 0ms.
   Future<void> _installAndSignUp() async {
     final email = _emailController.text.trim();
     if (email.isEmpty || !email.contains('@')) {
@@ -98,64 +105,56 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
       return;
     }
 
-    setState(() => _submitting = true);
+    // 1. Trigger PWA install prompt on Android/desktop immediately
+    if (_isAndroidOrDesktop) {
+      try {
+        final notifier = ref.read(pwaInstallServiceProvider.notifier);
+        unawaited(notifier.promptInstall());
+      } catch (_) {}
+    }
 
-    try {
-      // 1. Trigger PWA install prompt on Android/desktop
-      if (_isAndroidOrDesktop) {
-        try {
-          final notifier = ref.read(pwaInstallServiceProvider.notifier);
-          await notifier.promptInstall();
-        } catch (_) {}
-      }
+    // 2. Optimistically mark signed up & show confirmation immediately
+    setState(() {
+      _testerSignedUp = true;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(LucideIcons.checkCircle, color: Colors.white, size: 18),
+            const SizedBox(width: 8),
+            Text('Signed up! We\'ll send an invite to $email'),
+          ],
+        ),
+        backgroundColor: AppTheme.accent,
+      ),
+    );
 
-      // 2. Write tester signup to Firestore
-      final userId = ref.read(authRepositoryProvider).currentUser?.uid ?? '';
-
-      await FirebaseFirestore.instance
-          .collection('app_testers')
-          .doc(userId)
-          .set({
+    // 3. Persist tester signup in the background
+    final userId = ref.read(authRepositoryProvider).currentUser?.uid ?? '';
+    unawaited(() async {
+      try {
+        await Future.wait([
+          FirebaseFirestore.instance.collection('app_testers').doc(userId).set({
             'email': email,
             'platform': _detectedPlatform,
             'userId': userId,
             'signedUpAt': FieldValue.serverTimestamp(),
             'status': 'pending',
-          });
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_testerSignedUpKey, true);
-
-      if (mounted) {
-        setState(() {
-          _testerSignedUp = true;
-          _submitting = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(
-                  LucideIcons.checkCircle,
-                  color: Colors.white,
-                  size: 18,
-                ),
-                const SizedBox(width: 8),
-                Text('Signed up! We\'ll send an invite to $email'),
-              ],
-            ),
-            backgroundColor: AppTheme.accent,
+          }),
+          SharedPreferences.getInstance().then(
+            (prefs) => prefs.setBool(_testerSignedUpKey, true),
           ),
-        );
+        ]);
+      } catch (e) {
+        if (mounted) {
+          setState(() => _testerSignedUp = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          );
+        }
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _submitting = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
+    }());
   }
 
   @override
@@ -200,7 +199,6 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── iOS: Safari instructions ──
                 if (_isIOS) ...[
                   _buildIosInstructions(theme),
                   const SizedBox(height: 12),
@@ -210,8 +208,6 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
                   ),
                   const SizedBox(height: 12),
                 ],
-
-                // ── Tester signup ──
                 _buildTesterSection(theme),
               ],
             ),
@@ -221,7 +217,6 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
     );
   }
 
-  // ── iOS PWA instructions ──
   Widget _buildIosInstructions(ThemeData theme) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -273,9 +268,7 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
     );
   }
 
-  // ── Tester signup section ──
   Widget _buildTesterSection(ThemeData theme) {
-    // Subtitle varies by platform
     final platformHint = _isIOS
         ? 'Get early access to the iOS app via TestFlight'
         : _detectedPlatform == 'android'
@@ -331,7 +324,6 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
             ),
           ),
         ] else if (_testerSignedUp) ...[
-          // ✅ Already signed up
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(10),
@@ -357,7 +349,6 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
             ),
           ),
         ] else ...[
-          // Email field
           TextField(
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
@@ -376,11 +367,11 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: _showEmailError ? BorderSide.none : BorderSide.none,
+                borderSide: BorderSide.none,
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: _showEmailError ? BorderSide.none : BorderSide.none,
+                borderSide: BorderSide.none,
               ),
               errorText: _showEmailError ? 'Please enter a valid email' : null,
               errorStyle: const TextStyle(fontSize: 11),
@@ -393,7 +384,6 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
           ),
           const SizedBox(height: 10),
 
-          // Combined submit button — triggers PWA install + tester signup
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
@@ -430,7 +420,6 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
     );
   }
 
-  // ── iOS step row ──
   Widget _iosStep(String number, String text, IconData icon) {
     final theme = Theme.of(context);
     return Padding(

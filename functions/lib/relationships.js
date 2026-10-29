@@ -109,12 +109,13 @@ function directPairRef(firstUserId, secondUserId) {
 }
 
 async function findDirectChatCandidate(firstUserId, secondUserId) {
-  const pair = await directPairRef(firstUserId, secondUserId).get();
+  const pairDocRef = directPairRef(firstUserId, secondUserId);
+  const deterministic = directChatRef(firstUserId, secondUserId);
+  const [pair, detSnap] = await db.getAll(pairDocRef, deterministic);
   if (pair.exists && validId(pair.data().chatId)) {
     return db.collection("chats").doc(pair.data().chatId);
   }
-  const deterministic = directChatRef(firstUserId, secondUserId);
-  if ((await deterministic.get()).exists) return deterministic;
+  if (detSnap.exists) return deterministic;
   const legacy = await db.collection("chats")
       .where("participants", "array-contains", firstUserId)
       .where("type", "==", "direct")
@@ -534,39 +535,41 @@ exports.respondRelationshipRequest = functions.https.onCall(async (data, context
           awardedAt: now,
         });
 
-        for (const [uid, relType, peerId] of [
-          [fromUserId, requestedType, responderId],
-          [responderId, reciprocal, fromUserId],
-        ]) {
-          const isFamily = FAMILY_TYPES.has(String(relType || "").toLowerCase());
-          const action = isFamily ? "family_connection" : "friend_connection";
-          const points = 1000;
-          const upRef = db.collection("user_points").doc(uid);
-          rewardBatch.set(
-              upRef,
-              {
-                userId: uid,
-                totalPoints: admin.firestore.FieldValue.increment(points),
-                availablePoints: admin.firestore.FieldValue.increment(points),
-                ...(isFamily ? {familyConnectionCount: admin.firestore.FieldValue.increment(1)} : {}),
-                lastUpdated: now,
-                lifetimeEarnings: {
-                  [action]: admin.firestore.FieldValue.increment(points),
+        await Promise.all(
+          [
+            [fromUserId, requestedType, responderId],
+            [responderId, reciprocal, fromUserId],
+          ].map(async ([uid, relType, peerId]) => {
+            const isFamily = FAMILY_TYPES.has(String(relType || "").toLowerCase());
+            const action = isFamily ? "family_connection" : "friend_connection";
+            const points = 1000;
+            const upRef = db.collection("user_points").doc(uid);
+            rewardBatch.set(
+                upRef,
+                {
+                  userId: uid,
+                  totalPoints: admin.firestore.FieldValue.increment(points),
+                  availablePoints: admin.firestore.FieldValue.increment(points),
+                  ...(isFamily ? {familyConnectionCount: admin.firestore.FieldValue.increment(1)} : {}),
+                  lastUpdated: now,
+                  lifetimeEarnings: {
+                    [action]: admin.firestore.FieldValue.increment(points),
+                  },
                 },
-              },
-              {merge: true},
-          );
-          rewardBatch.set(db.collection("points_transactions").doc(), {
-            userId: uid,
-            type: "earn",
-            action,
-            points,
-            amount: points,
-            timestamp: now,
-            metadata: {peerId, relationshipType: relType},
-          });
-          await distributeUbuntuMatchingSupply(rewardBatch, uid, points, now, `${action}_match`);
-        }
+                {merge: true},
+            );
+            rewardBatch.set(db.collection("points_transactions").doc(), {
+              userId: uid,
+              type: "earn",
+              action,
+              points,
+              amount: points,
+              timestamp: now,
+              metadata: {peerId, relationshipType: relType},
+            });
+            await distributeUbuntuMatchingSupply(rewardBatch, uid, points, now, `${action}_match`);
+          })
+        );
         await rewardBatch.commit();
       }
     } catch (rewardErr) {
@@ -611,14 +614,201 @@ exports.cancelRelationshipRequest = functions.https.onCall(async (data, context)
   return {success: true};
 });
 
+const CANONICAL_FOUNDER_UID = "yJ2REewPGWZQyS3zhisK1KziJJD3";
+const CANONICAL_FOUNDER_ALIAS = "founder_peter_swai";
+
+async function resolveFounderAccount() {
+  const targetUid = (process.env.FOUNDER_USER_ID && validId(process.env.FOUNDER_USER_ID)) ?
+    process.env.FOUNDER_USER_ID : CANONICAL_FOUNDER_UID;
+  const canonicalSnap = await db.collection("users").doc(targetUid).get();
+  if (canonicalSnap.exists) {
+    return {uid: canonicalSnap.id, profile: canonicalSnap.data() || {}};
+  }
+  const byName = await db.collection("users")
+      .where("firstName", "==", "Peter")
+      .where("lastName", "==", "Swai")
+      .limit(1)
+      .get();
+  if (!byName.empty) {
+    const doc = byName.docs[0];
+    return {uid: doc.id, profile: doc.data() || {}};
+  }
+  return {
+    uid: CANONICAL_FOUNDER_UID,
+    profile: {
+      uid: CANONICAL_FOUNDER_UID,
+      firstName: "Peter",
+      lastName: "Swai",
+      fullName: "Peter Swai",
+      homeCountry: "Tanzania",
+      homeCountryCode: "TZ",
+      hostCountry: "United States",
+      hostCountryCode: "US",
+    },
+  };
+}
+
+function buildFounderInAppWelcomeText(profile = {}) {
+  const firstName = String(profile.firstName || "").trim();
+  const enPrefix = firstName ? `Welcome ${firstName}` : "Welcome";
+  return `${enPrefix}, my name is Peter Swai, Founder of this platform. If you have any questions at all, please feel free to ask anytime. Welcome!`;
+}
+
+async function ensureFounderWelcomeChatForUser(userId, profileOverride = null) {
+  if (!validId(userId)) return null;
+  const founder = await resolveFounderAccount();
+  const founderUid = founder.uid;
+  if (!founderUid || founderUid === userId) return null;
+
+  const candidateChatRef = await findDirectChatCandidate(userId, founderUid);
+  const pairRef = directPairRef(userId, founderUid);
+  let resultChatId = null;
+
+  await db.runTransaction(async (transaction) => {
+    const userRef = db.collection("users").doc(userId);
+    const [userSnap, pairSnapshot] = await Promise.all([
+      transaction.get(userRef),
+      transaction.get(pairRef),
+    ]);
+    if (!userSnap.exists && !profileOverride) return;
+    const memberProfile = Object.assign({}, userSnap.data() || {}, profileOverride || {});
+
+    const chatRef = pairSnapshot.exists && validId(pairSnapshot.data().chatId) ?
+      db.collection("chats").doc(pairSnapshot.data().chatId) : candidateChatRef;
+    const welcomeMsgRef = chatRef.collection("messages").doc("welcome_from_founder");
+    const userChatRef = db.collection("users").doc(userId).collection("userChats").doc(chatRef.id);
+    const founderChatRef = db.collection("users").doc(founderUid).collection("userChats").doc(chatRef.id);
+    const [chatSnapshot, welcomeMsgSnap, userChatSnap, founderChatSnap] = await Promise.all([
+      transaction.get(chatRef),
+      transaction.get(welcomeMsgRef),
+      transaction.get(userChatRef),
+      transaction.get(founderChatRef),
+    ]);
+
+    const users = [userId, founderUid].sort();
+    transaction.set(pairRef, {
+      chatId: chatRef.id,
+      users,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, {merge: true});
+
+    const existingChatData = chatSnapshot.exists ? (chatSnapshot.data() || {}) : {};
+    if (chatSnapshot.exists && existingChatData.lastMessage) {
+      if (!userChatSnap.exists || userChatSnap.data().isDeleted) {
+        transaction.set(userChatRef, {
+          chatId: chatRef.id,
+          type: "direct",
+          lastMessage: existingChatData.lastMessage,
+          updatedAt: typeof existingChatData.updatedAt === "number" ? existingChatData.updatedAt : Date.now(),
+          isDeleted: false,
+        }, {merge: true});
+      }
+      if (!founderChatSnap.exists || founderChatSnap.data().isDeleted) {
+        transaction.set(founderChatRef, {
+          chatId: chatRef.id,
+          type: "direct",
+          lastMessage: existingChatData.lastMessage,
+          updatedAt: typeof existingChatData.updatedAt === "number" ? existingChatData.updatedAt : Date.now(),
+          isDeleted: false,
+        }, {merge: true});
+      }
+      resultChatId = chatRef.id;
+      return;
+    }
+
+    writeDirectChat(transaction, chatRef, users, founderUid, chatSnapshot.exists);
+
+    if (!welcomeMsgSnap.exists) {
+      const nowMs = Date.now() + 1000;
+      const welcomeContent = buildFounderInAppWelcomeText(memberProfile);
+      const founderPhoto = profilePhoto(founder.profile);
+      const messageData = {
+        id: "welcome_from_founder",
+        chatId: chatRef.id,
+        senderId: founderUid,
+        senderName: "Peter Swai",
+        senderHomeCountryCode: founder.profile.homeCountryCode || "TZ",
+        senderHostCountryCode: founder.profile.hostCountryCode || "US",
+        ...(founderPhoto ? {senderImage: founderPhoto} : {}),
+        content: welcomeContent,
+        type: "text",
+        timestamp: nowMs,
+        status: "sent",
+      };
+      const lastMessageData = {
+        id: "welcome_from_founder",
+        content: welcomeContent,
+        timestamp: nowMs,
+        senderId: founderUid,
+        senderName: "Peter Swai",
+        type: "text",
+        status: "sent",
+      };
+      transaction.set(welcomeMsgRef, messageData);
+      transaction.set(chatRef, {
+        lastMessage: lastMessageData,
+        updatedAt: nowMs,
+      }, {merge: true});
+      transaction.set(
+          userChatRef,
+          {
+            chatId: chatRef.id,
+            type: "direct",
+            name: null,
+            photoUrl: null,
+            subtype: null,
+            lastMessage: lastMessageData,
+            lastDeliveredMessageId: "welcome_from_founder",
+            updatedAt: nowMs,
+            unreadCount: 1,
+            unreadNotificationLines: [welcomeContent.slice(0, 500)],
+            isDeleted: false,
+          },
+          {merge: true},
+      );
+      transaction.set(
+          founderChatRef,
+          {
+            chatId: chatRef.id,
+            type: "direct",
+            name: null,
+            photoUrl: null,
+            subtype: null,
+            lastMessage: lastMessageData,
+            lastDeliveredMessageId: "welcome_from_founder",
+            updatedAt: nowMs,
+            unreadCount: 0,
+            unreadNotificationLines: [],
+            lastRead: nowMs,
+            isDeleted: false,
+          },
+          {merge: true},
+      );
+    }
+
+    resultChatId = chatRef.id;
+  });
+
+  return resultChatId;
+}
+
+exports.ensureFounderWelcomeChatForUser = ensureFounderWelcomeChatForUser;
+
 exports.ensureDirectChat = functions.https.onCall(async (data, context) => {
   requireAppCheck(context);
   const userId = requireAuth(context);
   await consumeRateLimit("direct-chat-create", userId, 100, 60 * 60 * 1000);
   const otherUserId = data && data.otherUserId;
+  const isFounderWelcome = Boolean(data && data.isFounderWelcome === true);
   const create = !data || data.create !== false;
   if (!validId(otherUserId) || otherUserId === userId) {
     throw new functions.https.HttpsError("invalid-argument", "Invalid chat participant.");
+  }
+  if ((otherUserId === CANONICAL_FOUNDER_UID || otherUserId === CANONICAL_FOUNDER_ALIAS || isFounderWelcome) && create) {
+    const founderChatId = await ensureFounderWelcomeChatForUser(userId);
+    if (founderChatId) {
+      return {success: true, exists: true, chatId: founderChatId};
+    }
   }
   const candidateChatRef = await findDirectChatCandidate(userId, otherUserId);
   const pairRef = directPairRef(userId, otherUserId);

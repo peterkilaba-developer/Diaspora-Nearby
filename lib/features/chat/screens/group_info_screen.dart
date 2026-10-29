@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:universal_io/io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -64,7 +66,55 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
     _currentGroupImage = widget.groupImage;
     _nameController.text = widget.groupName;
     _isListingChat = widget.chatId.startsWith('listing_');
+    _seedCachedGroupData();
     _loadGroupData();
+  }
+
+  void _seedCachedGroupData() {
+    final chatRepo = ref.read(chatRepositoryProvider);
+    final profileRepo = ref.read(profileRepositoryProvider);
+    final cachedChat = chatRepo.getCachedChat(widget.chatId);
+    if (cachedChat != null) {
+      _currentGroupImage = cachedChat.photoUrl ?? _currentGroupImage;
+      _nameController.text = cachedChat.name;
+      _descriptionController.text = cachedChat.description ?? '';
+      _adminIds = cachedChat.admins ?? [];
+      _isFamilyGroup =
+          cachedChat.metadata?['isFamilyGroupImmediate'] == true ||
+          cachedChat.metadata?['isFamilyGroupExtended'] == true;
+      _isImmediateFamilyGroup =
+          cachedChat.metadata?['isFamilyGroupImmediate'] == true;
+      _isListingChat = cachedChat.isListingChat;
+      _isAdmin =
+          cachedChat.createdBy == widget.currentUserId ||
+          (cachedChat.admins?.contains(widget.currentUserId) ?? false) ||
+          (cachedChat.participants.isNotEmpty &&
+              cachedChat.participants.first == widget.currentUserId);
+      if (_isAdmin && widget.initialEdit) {
+        _isEditing = true;
+      }
+
+      final cachedMembers = <ProfileData>[];
+      for (final uid in cachedChat.participants) {
+        final p = profileRepo.getCachedProfile(uid);
+        if (p != null) {
+          cachedMembers.add(p);
+        }
+      }
+      if (cachedMembers.isNotEmpty) {
+        cachedMembers.sort((a, b) {
+          if (a.uid == cachedChat.createdBy) return -1;
+          if (b.uid == cachedChat.createdBy) return 1;
+          final aIsAdmin = cachedChat.admins?.contains(a.uid) ?? false;
+          final bIsAdmin = cachedChat.admins?.contains(b.uid) ?? false;
+          if (aIsAdmin && !bIsAdmin) return -1;
+          if (!aIsAdmin && bIsAdmin) return 1;
+          return 0;
+        });
+        _members = cachedMembers;
+        _isLoading = false;
+      }
+    }
   }
 
   @override
@@ -75,45 +125,52 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
   }
 
   Future<void> _loadGroupData() async {
-    setState(() => _isLoading = true);
+    if (_members.isEmpty) {
+      setState(() => _isLoading = true);
+    }
     try {
       final chatRepo = ref.read(chatRepositoryProvider);
       final profileRepo = ref.read(profileRepositoryProvider);
 
-      final chat = await chatRepo.getChat(widget.chatId);
-
-      // Check for invitation metadata in Firestore userChats
-      String? foundInviterId;
-      try {
-        final userChatDoc = await FirebaseFirestore.instance
+      // Run chat fetch, userChatDoc fetch, and contacts fetch in parallel
+      final results = await Future.wait([
+        chatRepo.getChat(widget.chatId),
+        FirebaseFirestore.instance
             .collection('users')
             .doc(widget.currentUserId)
             .collection('userChats')
             .doc(widget.chatId)
-            .get();
-        if (userChatDoc.exists) {
-          final data = userChatDoc.data();
-          final metadata = data?['lastMessage']?['metadata'];
-          if (metadata is Map) {
-            foundInviterId = metadata['inviterId'] as String?;
-          }
-          // Fetch Mute Status
-          if (data?['muted'] == true) {
-            _isMuted = true;
-          } else {
-            _isMuted = false;
-          }
-        }
-      } catch (e) {
-        debugPrint('Error fetching userChat data: $e');
-      }
+            .get()
+            .then<DocumentSnapshot<Map<String, dynamic>>?>((doc) => doc)
+            .catchError((e) {
+              debugPrint('Error fetching userChat data: $e');
+              return null;
+            }),
+        chatRepo.getChatContacts(),
+      ]);
 
-      // [FIX] Force fetch description removed - Schema updated
+      final chat = results[0] as dynamic;
+      final userChatDoc = results[1] as DocumentSnapshot<Map<String, dynamic>>?;
+      final allContacts = results[2] as List<ProfileData>;
+
+      // Check for invitation metadata in Firestore userChats
+      String? foundInviterId;
+      if (userChatDoc != null && userChatDoc.exists) {
+        final data = userChatDoc.data();
+        final metadata = data?['lastMessage']?['metadata'];
+        if (metadata is Map) {
+          foundInviterId = metadata['inviterId'] as String?;
+        }
+        if (data?['muted'] == true) {
+          _isMuted = true;
+        } else {
+          _isMuted = false;
+        }
+      }
 
       if (mounted) {
         if (chat != null) {
           // Fetch Member Profiles
-          // [MODIFIED] Always fetch members so invitees can see who is in the group
           var members = await profileRepo.getProfiles(chat.participants);
 
           // Sort Members: Creator -> Admins -> Others
@@ -130,16 +187,11 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
             return 0; // Keep original order (roughly join time) for others
           });
 
-          // Fetch Available Contacts (excluding current members)
-          final allContacts = await chatRepo.getChatContacts();
           final potentialMembers = allContacts
               .where((c) => !chat.participants.contains(c.uid))
               .toList();
 
-          // [NEW] Logic to check if user is ALREADY joined
           final isMember = chat.participants.contains(widget.currentUserId);
-
-          // If inviterID is found BUT user is already a member, clear inviterId (edge case fix)
           if (isMember) {
             foundInviterId = null;
           }
@@ -148,10 +200,12 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
             _members = members;
             _chatContacts = potentialMembers;
             _currentGroupImage = chat.photoUrl;
-            _nameController.text = chat.name;
-            _descriptionController.text = chat.description ?? '';
+            if (!_isEditing) {
+              _nameController.text = chat.name;
+              _descriptionController.text = chat.description ?? '';
+            }
             _adminIds = chat.admins ?? [];
-            _inviterId = foundInviterId; // [NEW]
+            _inviterId = foundInviterId;
             _isFamilyGroup =
                 chat.metadata?['isFamilyGroupImmediate'] == true ||
                 chat.metadata?['isFamilyGroupExtended'] == true;
@@ -165,7 +219,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                 (chat.participants.isNotEmpty &&
                     chat.participants.first == widget.currentUserId);
 
-            if (_isAdmin && widget.initialEdit) {
+            if (_isAdmin && widget.initialEdit && !_isEditing) {
               _isEditing = true;
             }
 
@@ -188,86 +242,64 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
   }
 
   Future<void> _acceptInvitation() async {
-    setState(() => _isLoading = true);
     final repo = ref.read(chatRepositoryProvider);
     final profileRepo = ref.read(profileRepositoryProvider);
+    final messaging = ref.read(chatMessagingServiceProvider);
 
-    await repo.addGroupMember(widget.chatId, widget.currentUserId);
+    // Optimistically update UI in 0ms
+    final myCachedProfile = profileRepo.getCachedProfile(widget.currentUserId);
+    setState(() {
+      _inviterId = null;
+      if (myCachedProfile != null &&
+          !_members.any((m) => m.uid == widget.currentUserId)) {
+        _members.add(myCachedProfile);
+      }
+      _isLoading = false;
+    });
 
-    // [FIX] Manually update local cache so ChatScreen sees updated participant list immediately
-    final currentChat = await repo.getChat(widget.chatId);
-    if (currentChat != null) {
-      final updatedParticipants = List<String>.from(currentChat.participants);
+    final cachedChat = repo.getCachedChat(widget.chatId);
+    if (cachedChat != null) {
+      final updatedParticipants = List<String>.from(cachedChat.participants);
       if (!updatedParticipants.contains(widget.currentUserId)) {
         updatedParticipants.add(widget.currentUserId);
-        final updatedChat = currentChat.copyWith(
+        final updatedChat = cachedChat.copyWith(
           participants: updatedParticipants,
         );
-        await repo.updateChatLocally(updatedChat);
+        repo.upsertChatInCache(updatedChat);
       }
     }
-
-    // Invalidate chat provider to unlock ChatScreen
     ref.invalidate(chatProvider(widget.chatId));
 
-    // Optimistically update UI
-    if (mounted) {
-      setState(() {
-        // 1. Hide inviter info
-        _inviterId = null;
-      });
-
-      // 3. Add to members list manually if not present
+    unawaited(() async {
       try {
-        final myProfile = await profileRepo.getUserProfile(
-          widget.currentUserId,
-        );
-        if (myProfile != null && mounted) {
-          setState(() {
-            if (!_members.any((m) => m.uid == widget.currentUserId)) {
-              _members.add(myProfile);
-              // Resort
-              _members.sort((a, b) {
-                // (Copy existing sort logic or simplfied)
-                // Creator -> Admin -> Others
-                // We don't have creatorId handy unless we store it.
-                // But effectively just appending is better than missing.
-                return 0;
-              });
-            }
-            _isLoading = false;
-          });
-          // Reload fully to ensure sort order
-          await _loadGroupData();
-
-          // [NEW] Send System Message
-          try {
-            final messaging = ref.read(chatMessagingServiceProvider);
-            await messaging.sendTextMessage(
-              widget.chatId,
-              '${myProfile.firstName} ${myProfile.lastName} joined the group.',
-              type: 'system',
-            );
-          } catch (e) {
-            debugPrint('Failed to send system message: $e');
+        await repo.addGroupMember(widget.chatId, widget.currentUserId);
+        final myProfile =
+            myCachedProfile ??
+            await profileRepo.getUserProfile(widget.currentUserId);
+        if (myProfile != null) {
+          if (mounted && !_members.any((m) => m.uid == widget.currentUserId)) {
+            setState(() => _members.add(myProfile));
           }
+          await messaging.sendTextMessage(
+            widget.chatId,
+            '${myProfile.firstName} ${myProfile.lastName} joined the group.',
+            type: 'system',
+          );
+        }
+        if (mounted) {
+          await _loadGroupData();
         }
       } catch (e) {
-        debugPrint('Error optimistic update: $e');
-        await _loadGroupData();
+        debugPrint('Error accepting invitation in background: $e');
       }
-    }
+    }());
   }
 
   Future<void> _rejectInvitation() async {
-    setState(() => _isLoading = true);
-    // Remove from userChats (hide invitation)
     final repo = ref.read(chatRepositoryProvider);
-    await repo.deleteChat(widget.chatId);
-
-    if (mounted) {
-      context.go('/chats');
-    }
+    // Navigate immediately in 0ms and delete chat in background
+    context.go('/chats');
+    unawaited(repo.deleteChat(widget.chatId));
   }
 
   // [NEW] Invitation Selection State
@@ -289,101 +321,100 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
   Future<void> _inviteSelectedMembers() async {
     if (_selectedContactIds.isEmpty) return;
 
-    setState(() => _isLoading = true);
-    try {
-      final messagingService = ref.read(chatMessagingServiceProvider);
-      await messagingService.sendGroupInvitation(
-        widget.chatId,
-        widget.groupName,
-        _selectedContactIds.toList(),
-      );
+    final targets = _selectedContactIds.toList();
+    final messagingService = ref.read(chatMessagingServiceProvider);
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Invitations sent to ${_selectedContactIds.length} users',
-            ),
-          ),
-        );
-        setState(() {
-          _selectedContactIds.clear();
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error inviting members: $e');
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to invite members: $e')));
-      }
-    }
+    // Clear selection and show feedback immediately in 0ms
+    setState(() {
+      _selectedContactIds.clear();
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Invitations sent to ${targets.length} users')),
+    );
+
+    unawaited(
+      messagingService
+          .sendGroupInvitation(widget.chatId, widget.groupName, targets)
+          .catchError((e) {
+            debugPrint('Error inviting members: $e');
+          }),
+    );
   }
 
   Future<void> _saveChanges() async {
-    setState(() => _isSaving = true);
-    try {
-      final repo = ref.read(chatRepositoryProvider);
+    final repo = ref.read(chatRepositoryProvider);
+    final newName = _nameController.text.trim();
+    final newDesc = _descriptionController.text.trim();
+    final toRemove = Set<String>.from(_membersToRemove);
+    final toAdd = Set<String>.from(_membersToAdd);
+    final imageFile = _newGroupImageFile;
 
-      // 1. Update Group Info if changed
-      String? finalImageUrl;
-      if (_newGroupImageFile != null) {
-        finalImageUrl = await repo.uploadGroupImage(
-          widget.chatId,
-          _newGroupImageFile!,
-        );
+    // Optimistically apply changes and exit edit mode in 0ms
+    setState(() {
+      _isEditing = false;
+      _isSaving = false;
+      _members.removeWhere((m) => toRemove.contains(m.uid));
+      for (final uid in toAdd) {
+        final addedProfile = _chatContacts
+            .where((c) => c.uid == uid)
+            .firstOrNull;
+        if (addedProfile != null && !_members.any((m) => m.uid == uid)) {
+          _members.add(addedProfile);
+          _chatContacts.removeWhere((c) => c.uid == uid);
+        }
       }
+      _membersToRemove.clear();
+      _membersToAdd.clear();
+    });
 
-      // Always update group info when saving changes in edit mode
-      // optimizing by strictly checking against previous values is good but
-      // the previous logic was flawed. Simplest is to just update.
-      await repo.updateGroupInfo(
-        widget.chatId,
-        name: _nameController.text.trim(),
-        description: _descriptionController.text.trim(),
-        image: finalImageUrl,
-      );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _isListingChat
+              ? 'Shop updated successfully'
+              : 'Group updated successfully',
+        ),
+      ),
+    );
 
-      // 2. Remove members
-      for (final userId in _membersToRemove) {
-        await repo.removeGroupMember(widget.chatId, userId);
-      }
+    unawaited(() async {
+      try {
+        String? finalImageUrl;
+        if (imageFile != null) {
+          finalImageUrl = await repo.uploadGroupImage(widget.chatId, imageFile);
+          if (mounted) {
+            setState(() {
+              _currentGroupImage = finalImageUrl ?? _currentGroupImage;
+              _newGroupImageFile = null;
+            });
+          }
+        }
 
-      // 3. Add members
-      for (final userId in _membersToAdd) {
-        await repo.addGroupMember(widget.chatId, userId);
-      }
-
-      if (mounted) {
-        setState(() {
-          _isEditing = false;
-          _membersToRemove.clear();
-          _membersToAdd.clear();
-          _newGroupImageFile = null;
-        });
-        _loadGroupData();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              _isListingChat
-                  ? 'Shop updated successfully'
-                  : 'Group updated successfully',
-            ),
+        await Future.wait([
+          repo.updateGroupInfo(
+            widget.chatId,
+            name: newName,
+            description: newDesc,
+            image: finalImageUrl,
           ),
-        );
+          ...toRemove.map(
+            (userId) => repo.removeGroupMember(widget.chatId, userId),
+          ),
+          ...toAdd.map((userId) => repo.addGroupMember(widget.chatId, userId)),
+        ]);
+
+        if (mounted) {
+          await _loadGroupData();
+        }
+      } catch (e) {
+        debugPrint('Error saving changes: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Error saving changes: $e')));
+        }
       }
-    } catch (e) {
-      debugPrint('Error saving changes: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error saving changes: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
-    }
+    }());
   }
 
   Future<void> _pickImage() async {
@@ -403,11 +434,20 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
 
   Future<void> _promoteToAdmin(String userId) async {
     final repo = ref.read(chatRepositoryProvider);
-    final success = await repo.promoteToAdmin(widget.chatId, userId);
-    if (success) _loadGroupData();
+    // Optimistically promote in 0ms
+    setState(() {
+      if (!_adminIds.contains(userId)) {
+        _adminIds = [..._adminIds, userId];
+      }
+    });
+    unawaited(
+      repo.promoteToAdmin(widget.chatId, userId).then((success) {
+        if (success && mounted) {
+          _loadGroupData();
+        }
+      }),
+    );
   }
-
-  // Method _addMember removed (unused)
 
   Future<void> _leaveGroup() async {
     if (!await _showConfirmation(
@@ -420,37 +460,39 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
     }
 
     final repo = ref.read(chatRepositoryProvider);
-    // Check if last admin/member logic (Simplified for now)
-
-    final success = await repo.removeGroupMember(
-      widget.chatId,
-      widget.currentUserId,
-    );
-    if (success && mounted) {
+    if (mounted) {
       context.pop(); // Close info
       context.pop(); // Close chat
     }
+    unawaited(repo.removeGroupMember(widget.chatId, widget.currentUserId));
   }
 
   Future<bool> _showConfirmation(String title, String content) async {
     return await showDialog<bool>(
           context: context,
-          builder: (context) => AlertDialog(
-            title: Text(title),
-            content: Text(content),
-            actions: [
-              TextButton(
-                onPressed: () => context.pop(false),
-                child: const Text('Cancel'),
+          builder: (context) => BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: AlertDialog(
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 24,
               ),
-              TextButton(
-                onPressed: () => context.pop(true),
-                child: const Text(
-                  'Confirm',
-                  style: TextStyle(color: Colors.red),
+              title: Text(title),
+              content: Text(content),
+              actions: [
+                TextButton(
+                  onPressed: () => context.pop(false),
+                  child: const Text('Cancel'),
                 ),
-              ),
-            ],
+                TextButton(
+                  onPressed: () => context.pop(true),
+                  child: const Text(
+                    'Confirm',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                ),
+              ],
+            ),
           ),
         ) ??
         false;
@@ -625,8 +667,27 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                                     hintText: _isListingChat
                                         ? 'Enter shop name'
                                         : 'Enter group name',
-                                    border: const UnderlineInputBorder(),
-                                    contentPadding: EdgeInsets.zero,
+                                    filled: true,
+                                    fillColor: theme
+                                        .colorScheme
+                                        .surfaceContainerHighest
+                                        .withValues(alpha: 0.3),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
                                   ),
                                   style: theme.textTheme.headlineSmall,
                                 ),
@@ -634,7 +695,9 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                             )
                           else
                             Text(
-                              widget.groupName,
+                              _nameController.text.isNotEmpty
+                                  ? _nameController.text
+                                  : widget.groupName,
                               style: theme.textTheme.headlineSmall,
                               textAlign: TextAlign.center,
                             ),
@@ -681,7 +744,23 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                                 hintText: _isListingChat
                                     ? 'Add shop description'
                                     : 'Add group description',
-                                border: const OutlineInputBorder(),
+                                filled: true,
+                                fillColor: theme
+                                    .colorScheme
+                                    .surfaceContainerHighest
+                                    .withValues(alpha: 0.3),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide.none,
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide.none,
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide.none,
+                                ),
                                 contentPadding: const EdgeInsets.all(12),
                                 labelText: 'Description',
                               ),

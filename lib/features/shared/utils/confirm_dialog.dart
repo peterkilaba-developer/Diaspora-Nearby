@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
@@ -37,41 +38,45 @@ class ConfirmDialog {
   }) async {
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            if (icon != null) ...[
-              Icon(
-                icon,
-                color: isDestructive ? AppTheme.error : AppTheme.accent,
-                size: 22,
-              ),
-              const SizedBox(width: 8),
+      builder: (context) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          title: Row(
+            children: [
+              if (icon != null) ...[
+                Icon(
+                  icon,
+                  color: isDestructive ? AppTheme.error : AppTheme.accent,
+                  size: 22,
+                ),
+                const SizedBox(width: 8),
+              ],
+              Expanded(child: Text(title)),
             ],
-            Expanded(child: Text(title)),
+          ),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(cancelText),
+            ),
+            if (isDestructive)
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.error,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(confirmText),
+              )
+            else
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(confirmText),
+              ),
           ],
         ),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(cancelText),
-          ),
-          if (isDestructive)
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.error,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () => Navigator.pop(context, true),
-              child: Text(confirmText),
-            )
-          else
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text(confirmText),
-            ),
-        ],
       ),
     );
     return result ?? false;

@@ -72,7 +72,10 @@ class ProfileSetupHostStep extends StatelessWidget {
                     },
                   )
                 : null,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
             filled: true,
           ),
           onChanged: onSearchChanged,
@@ -89,11 +92,11 @@ class ProfileSetupHostStep extends StatelessWidget {
             predictions.isEmpty &&
             searchController.text.isNotEmpty) ...[
           const SizedBox(height: 16),
-          OutlinedButton(
+          FilledButton.tonal(
             onPressed: onNext,
-            style: OutlinedButton.styleFrom(
+            style: FilledButton.styleFrom(
               foregroundColor: Colors.green,
-              side: BorderSide.none,
+              backgroundColor: Colors.green.withValues(alpha: 0.12),
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),

@@ -10,6 +10,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/router.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
+import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http; // [NEW]
@@ -139,6 +140,8 @@ class PushNotificationService {
   FirebaseMessaging get _fcm => _injectedFcm ?? FirebaseMessaging.instance;
   FirebaseFirestore get _firestore =>
       _injectedFirestore ?? FirebaseFirestore.instance;
+
+  static final Map<String, bool> _mutedChatCache = {};
 
   bool _isInitialized = false;
   StreamSubscription<QuerySnapshot>?
@@ -397,63 +400,36 @@ class PushNotificationService {
 
   /// Called when user logs in
   Future<void> registerForUser(String userId) async {
-    // 1. Always attempt to register token (Android doesn't strictly require permission for token)
-    try {
-      await registerFCMToken(userId);
-    } catch (e) {
-      debugPrint('Error registering FCM token: $e');
-    }
-
-    // 2. Request Permission and Subscribe
-    final granted = await requestPermission();
-    if (granted) {
-      await subscribeToTopics(userId);
-    }
-
-    // 4. Start listening for Relationship Requests
+    // Start Firestore listeners immediately on frame 0 without blocking on FCM/permission prompts
     _listenForRelationshipRequests(userId);
-
-    // 5. Start listening for accepted sent requests (to notify sender)
     _listenForAcceptedSentRequests(userId);
-
-    // 6. Start listening for proxy requests
     _listenForProxyRequests(userId);
-
-    // 7. Start listening for hosting interest notifications
     _listenForHostingInterest(userId);
-
-    // 8. Start listening for host selection notifications
     _listenForHostSelection(userId);
-
-    // 9. Start listening for session status changes
     _listenForSessionStatusChanges(userId);
-
-    // 10. Start listening for peer booking requests (travel)
     _listenForBookingRequests(userId);
-
-    // 11. Start listening for booking status changes (travel)
     _listenForBookingStatusChanges(userId);
-
-    // 12. Start listening for event changes (cancelled/updated)
     _listenForEventChanges(userId);
-
-    // 13. Start listening for new elections
     _listenForElections(userId);
-
-    // Note: Marketplace and real estate chat inquiries are handled automatically
-    // via standard Firebase Cloud Functions push notifications (chat_message type
-    // with chatId). Direct client queries on top-level /chats are forbidden by
-    // Firestore security rules (PERMISSION_DENIED).
-
-    // 14. Start listening for trust verifications
     _listenForTrustVerifications(userId);
-
-    // 15. Start listening for trust vouches
     _listenForTrustVouches(userId);
 
-    // Note: Full Trust / No Trust stake notifications (to the staked user and
-    // to all stakers on either side of the trust end) are dispatched by the
-    // backend `onVouchWrite` Cloud Function trigger via FCM + Firestore.
+    // Run FCM token registration and permission + topic subscription concurrently
+    await Future.wait([
+      registerFCMToken(userId).catchError((Object e) {
+        debugPrint('Error registering FCM token: $e');
+      }),
+      () async {
+        try {
+          final granted = await requestPermission();
+          if (granted) {
+            await subscribeToTopics(userId);
+          }
+        } catch (e) {
+          debugPrint('Error subscribing to topics: $e');
+        }
+      }(),
+    ]);
   }
 
   /// Request notification permission
@@ -511,15 +487,16 @@ class PushNotificationService {
 
   /// Disable notifications
   Future<void> disableNotifications(String userId) async {
+    _cancelAllSubscriptions();
     try {
-      await _fcm.deleteToken();
-      _cancelAllSubscriptions();
-
-      await _firestore.collection('user_private').doc(userId).set({
-        'fcmToken': null,
-        'notificationsEnabled': false,
-        'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      await Future.wait([
+        _fcm.deleteToken(),
+        _firestore.collection('user_private').doc(userId).set({
+          'fcmToken': null,
+          'notificationsEnabled': false,
+          'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true)),
+      ]);
     } catch (e) {
       // Error disabling notifications
     }
@@ -854,38 +831,54 @@ class PushNotificationService {
   /// Subscribe to relevant topics
   Future<void> subscribeToTopics(String userId) async {
     try {
-      final userDoc = await _firestore.collection('users').doc(userId).get();
-      if (!userDoc.exists) return;
+      String? homeCountryCode;
+      String? hostCity;
 
-      final data = userDoc.data()!;
+      final cachedProfile = _ref
+          ?.read(profileRepositoryProvider)
+          .getCachedProfile(userId);
+      if (cachedProfile != null) {
+        homeCountryCode = cachedProfile.homeCountryCode;
+        hostCity = cachedProfile.hostLocation.city;
+      } else {
+        final userDoc = await _firestore.collection('users').doc(userId).get();
+        if (!userDoc.exists) return;
+        final data = userDoc.data()!;
+        homeCountryCode = data['homeCountryCode']?.toString();
+        hostCity =
+            data['hostCity']?.toString() ??
+            (data['hostLocation'] is Map
+                ? (data['hostLocation'] as Map)['city']?.toString()
+                : null);
+      }
+
       final topics = <String>['all_users'];
 
       // Home Country Topic
-      if (data['homeCountryCode'] != null) {
-        final countryCode = data['homeCountryCode'].toString().toLowerCase();
+      if (homeCountryCode != null && homeCountryCode.isNotEmpty) {
+        final countryCode = homeCountryCode.toLowerCase();
         topics.add('country_$countryCode');
       }
 
       // Host City Topic
-      if (data['hostCity'] != null) {
-        final city = data['hostCity']
-            .toString()
+      if (hostCity != null && hostCity.isNotEmpty) {
+        final city = hostCity
             .toLowerCase()
             .replaceAll(RegExp(r'\s+'), '_')
             .replaceAll(RegExp(r'[^a-z0-9_]'), '');
-        topics.add('city_$city');
+        if (city.isNotEmpty) {
+          topics.add('city_$city');
+        }
       }
 
-      // Save topics to Firestore
-      await _firestore.collection('user_private').doc(userId).set({
-        'fcmTopics': topics,
-        'fcmTopicsUpdatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      // Also subscribe via FCM SDK for client-side messaging optimization
-      for (final topic in topics) {
-        await _fcm.subscribeToTopic(topic);
-      }
+      // Save topics to Firestore and subscribe via FCM SDK concurrently
+      await Future.wait([
+        _firestore.collection('user_private').doc(userId).set({
+          'fcmTopics': topics,
+          'fcmTopicsUpdatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true)),
+        if (!kIsWeb) ...topics.map((topic) => _fcm.subscribeToTopic(topic)),
+      ]);
     } catch (e) {
       // Error subscribing to topics
     }
@@ -1098,12 +1091,6 @@ class PushNotificationService {
                   debugPrint(
                     '🔔 [PushNotificationService] New relationship request detected: ${change.doc.id}',
                   );
-                  // Ensure it's a new request by checking timestamp if needed,
-                  // but 'added' to a 'pending' query usually means new or initial load.
-                  // To avoid notifying on initial load of old pending requests,
-                  // we can check if the timestamp is very recent (e.g. last 1 minute),
-                  // OR just rely on the fact that the user might want to know about pending requests they missed.
-                  // Let's notify.
 
                   final fromName = data['fromUserName'] ?? 'Someone';
                   final relType = data['relationshipType'] ?? 'relative';
@@ -1605,18 +1592,14 @@ class PushNotificationService {
 
       if (lines.length == 1 && imageUrl != null) {
         try {
-          final String largeIconPath = await _downloadAndSaveFile(
+          final String imagePath = await _downloadAndSaveFile(
             imageUrl,
-            'largeIcon',
-          );
-          final String bigPicturePath = await _downloadAndSaveFile(
-            imageUrl,
-            'bigPicture',
+            'notif_img_$id',
           );
 
           styleInformation = BigPictureStyleInformation(
-            FilePathAndroidBitmap(bigPicturePath),
-            largeIcon: FilePathAndroidBitmap(largeIconPath),
+            FilePathAndroidBitmap(imagePath),
+            largeIcon: FilePathAndroidBitmap(imagePath),
             contentTitle: title,
             htmlFormatContentTitle: true,
             summaryText: lines.first.text,
@@ -1688,18 +1671,14 @@ class PushNotificationService {
 
       if (imageUrl != null) {
         try {
-          final String largeIconPath = await _downloadAndSaveFile(
+          final String imagePath = await _downloadAndSaveFile(
             imageUrl,
-            'largeIcon',
-          );
-          final String bigPicturePath = await _downloadAndSaveFile(
-            imageUrl,
-            'bigPicture',
+            'notif_img_$id',
           );
 
           bigPictureStyleInformation = BigPictureStyleInformation(
-            FilePathAndroidBitmap(bigPicturePath),
-            largeIcon: FilePathAndroidBitmap(largeIconPath),
+            FilePathAndroidBitmap(imagePath),
+            largeIcon: FilePathAndroidBitmap(imagePath),
             contentTitle: title,
             htmlFormatContentTitle: true,
             summaryText: body,
@@ -1749,6 +1728,9 @@ class PushNotificationService {
 
   // [MIGRATED] Helper to check if a chat is muted (Firestore)
   Future<bool> _isChatMuted(String userId, String chatId) async {
+    final key = '${userId}_$chatId';
+    final cached = _mutedChatCache[key];
+    if (cached != null) return cached;
     try {
       final doc = await _firestore
           .collection('users')
@@ -1756,10 +1738,9 @@ class PushNotificationService {
           .collection('userChats')
           .doc(chatId)
           .get();
-      if (doc.exists && doc.data()?['muted'] == true) {
-        return true;
-      }
-      return false;
+      final muted = doc.exists && doc.data()?['muted'] == true;
+      _mutedChatCache[key] = muted;
+      return muted;
     } catch (e) {
       debugPrint('Error checking mute status: $e');
       return false;
@@ -1771,6 +1752,12 @@ class PushNotificationService {
     String userId, {
     String fallback = 'A peer',
   }) async {
+    final cachedProfile = _ref
+        ?.read(profileRepositoryProvider)
+        .getCachedProfile(userId);
+    if (cachedProfile != null && cachedProfile.fullName.trim().isNotEmpty) {
+      return cachedProfile.fullName.trim();
+    }
     try {
       final userDoc = await _firestore.collection('users').doc(userId).get();
       if (userDoc.exists) {
@@ -2227,8 +2214,6 @@ class PushNotificationService {
               if (isFirstLoad || change.type == DocumentChangeType.added) {
                 knownEventData[eventId] = data;
                 if (isFirstLoad) continue;
-                // For newly added events (not first load), this means the user
-                // was added to a new event
                 if (change.type == DocumentChangeType.added && !isFirstLoad) {
                   continue; // User joined themselves, no notification needed
                 }
@@ -2250,7 +2235,6 @@ class PushNotificationService {
                 notifType = NotificationType.eventCancelled;
               } else if (change.type == DocumentChangeType.modified &&
                   currentStatus == previousStatus) {
-                // Check for significant updates (time, location changes)
                 final prevTime = previousData?['startTime'];
                 final currTime = data['startTime'];
                 final prevLocation = previousData?['location'];

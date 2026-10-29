@@ -6,31 +6,40 @@ final adminRepositoryProvider = Provider((ref) => AdminRepository());
 class AdminRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // Aggregate Stats
+  static Map<String, int>? _cachedStats;
+  Map<String, int>? getCachedDashboardStats() => _cachedStats;
+
+  // Aggregate Stats (parallelized via Future.wait)
   Future<Map<String, int>> getDashboardStats() async {
     try {
-      final userCount = await _firestore.collection('users').count().get();
-      final communityCount = await _firestore
-          .collection('communities')
-          .count()
-          .get();
-      final eventCount = await _firestore.collection('events').count().get();
+      final results = await Future.wait<dynamic>([
+        _firestore.collection('users').count().get(),
+        _firestore.collection('communities').count().get(),
+        _firestore.collection('events').count().get(),
+        _firestore
+            .collection('reports')
+            .count()
+            .get()
+            .then<AggregateQuerySnapshot?>((r) => r)
+            .catchError((_) => null),
+      ]);
 
-      // If no reports collection, let's just return 0 for now.
-      int reportCount = 0;
-      try {
-        final reports = await _firestore.collection('reports').count().get();
-        reportCount = reports.count ?? 0;
-      } catch (_) {}
+      final userCount = results[0] as AggregateQuerySnapshot;
+      final communityCount = results[1] as AggregateQuerySnapshot;
+      final eventCount = results[2] as AggregateQuerySnapshot;
+      final reports = results[3] as AggregateQuerySnapshot?;
 
-      return {
+      final stats = {
         'users': userCount.count ?? 0,
         'communities': communityCount.count ?? 0,
         'events': eventCount.count ?? 0,
-        'reports': reportCount,
+        'reports': reports?.count ?? 0,
       };
+      _cachedStats = stats;
+      return stats;
     } catch (e) {
-      return {'users': 0, 'communities': 0, 'events': 0, 'reports': 0};
+      return _cachedStats ??
+          {'users': 0, 'communities': 0, 'events': 0, 'reports': 0};
     }
   }
 

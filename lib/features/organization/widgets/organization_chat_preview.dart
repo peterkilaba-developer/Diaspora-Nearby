@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -29,86 +30,118 @@ class OrganizationChatPreview extends ConsumerStatefulWidget {
 
 class _OrganizationChatPreviewState
     extends ConsumerState<OrganizationChatPreview> {
+  static final Map<String, bool> _canPostCache = {};
+
   final TextEditingController _messageController = TextEditingController();
+  Future<bool>? _canPostFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _canPostFuture = _canPost(ref);
+  }
+
+  @override
+  void didUpdateWidget(covariant OrganizationChatPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.chatId != widget.chatId ||
+        oldWidget.canViewMessages != widget.canViewMessages) {
+      _canPostFuture = _canPost(ref);
+    }
+  }
 
   void _showSendMessageDialog() {
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 8.0),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ), // Use rounded corners if we have margins
-        child: Container(
-          width: double.infinity,
-          padding: EdgeInsets.zero,
-          decoration: AppTheme.cardDecoration(context),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Header
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
+      builder: (context) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Container(
+            width: double.infinity,
+            padding: EdgeInsets.zero,
+            decoration: AppTheme.cardDecoration(context),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Send Message',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(LucideIcons.x, size: 20),
+                      ),
+                    ],
+                  ),
                 ),
-                color: Theme.of(context).colorScheme.primaryContainer,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Send Message',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+
+                // Content
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: TextField(
+                    controller: _messageController,
+                    decoration: InputDecoration(
+                      hintText: 'Type your message...',
+                      filled: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide.none,
                       ),
                     ),
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(LucideIcons.x, size: 20),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Content
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: TextField(
-                  controller: _messageController,
-                  decoration: const InputDecoration(
-                    hintText: 'Type your message...',
-                    border: OutlineInputBorder(),
-                    filled: true,
+                    maxLines: 4,
                   ),
-                  maxLines: 4,
                 ),
-              ),
 
-              // Footer Actions
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: FilledButton(
-                  onPressed: () {
-                    final text = _messageController.text.trim();
-                    if (text.isNotEmpty) {
-                      _sendMessage(text);
-                      Navigator.pop(context);
-                      _messageController.clear();
-                    }
-                  },
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 48),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                // Footer Actions
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: FilledButton(
+                    onPressed: () {
+                      final text = _messageController.text.trim();
+                      if (text.isNotEmpty) {
+                        _sendMessage(text);
+                        Navigator.pop(context);
+                        _messageController.clear();
+                      }
+                    },
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 48),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
+                    child: const Text('Send Message'),
                   ),
-                  child: const Text('Send Message'),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -131,6 +164,9 @@ class _OrganizationChatPreviewState
 
   @override
   Widget build(BuildContext context) {
+    final currentUserId = ref.read(chatRepositoryProvider).currentUserId;
+    final cacheKey = '${currentUserId ?? ''}_${widget.chatId}';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -143,7 +179,8 @@ class _OrganizationChatPreviewState
             ),
             if (widget.canViewMessages)
               FutureBuilder<bool>(
-                future: _canPost(ref),
+                initialData: _canPostCache[cacheKey],
+                future: _canPostFuture ?? _canPost(ref),
                 builder: (context, snapshot) {
                   if (snapshot.data == true) {
                     return IconButton(
@@ -214,48 +251,54 @@ class _OrganizationChatPreviewState
     );
   }
 
-  /// Returns true iff the current user is allowed to post into this chat.
-  ///
-  /// For chamber chats, posting is restricted to users whose userChats
-  /// entry has `accessLevel == 'member'` — followers and visitors must NOT
-  /// see the Write button (otherwise Firestore Security Rules will reject
-  /// the message at send time and the user sees a confusing error).
-  ///
-  /// For regular chats, the legacy participant check applies.
   Future<bool> _canPost(WidgetRef ref) async {
     final currentUserId = ref.read(chatRepositoryProvider).currentUserId;
     if (currentUserId == null) return false;
 
+    final cacheKey = '${currentUserId}_${widget.chatId}';
+
     try {
-      final chatDoc = await FirebaseFirestore.instance
-          .collection('chats')
-          .doc(widget.chatId)
-          .get();
-      if (!chatDoc.exists) return false;
+      final docs = await Future.wait([
+        FirebaseFirestore.instance.collection('chats').doc(widget.chatId).get(),
+        FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUserId)
+            .collection('userChats')
+            .doc(widget.chatId)
+            .get(),
+      ]);
+
+      final chatDoc = docs[0];
+      final userChatDoc = docs[1];
+
+      if (!chatDoc.exists) {
+        _canPostCache[cacheKey] = false;
+        return false;
+      }
       final data = chatDoc.data() ?? {};
-      final userChatDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserId)
-          .collection('userChats')
-          .doc(widget.chatId)
-          .get();
 
       final participants = List<String>.from(data['participants'] ?? []);
       final isParticipant =
           participants.contains(currentUserId) || userChatDoc.exists;
-      if (!isParticipant) return false;
+      if (!isParticipant) {
+        _canPostCache[cacheKey] = false;
+        return false;
+      }
 
-      // Chamber-of-commerce chats require member-level access to post.
-      // Other chat types: participant alone is enough.
       final isChamberChat = data['subtype'] == 'corridor_chamber';
-      if (!isChamberChat) return true;
+      if (!isChamberChat) {
+        _canPostCache[cacheKey] = true;
+        return true;
+      }
 
       final accessLevel = userChatDoc.data()?['accessLevel'] as String?;
-      return accessLevel == 'member';
+      final allowed = accessLevel == 'member';
+      _canPostCache[cacheKey] = allowed;
+      return allowed;
     } catch (e) {
       debugPrint('Error checking can-post status: $e');
     }
-    return false;
+    return _canPostCache[cacheKey] ?? false;
   }
 
   String _getCountryFlag(String? countryCode) {
@@ -318,50 +361,40 @@ class _OrganizationChatPreviewState
                         final profileAsync = ref.watch(
                           userProfileByIdProvider(msg.senderId),
                         );
-                        return profileAsync.maybeWhen(
-                          data: (profile) {
-                            final countryCode =
-                                profile?.currentLocation?.countryCode ??
-                                profile?.hostCountryCode ??
-                                profile?.hostLocation.countryCode;
-                            final flag = _getCountryFlag(countryCode);
+                        final profile =
+                            profileAsync.value ??
+                            ref
+                                .read(profileRepositoryProvider)
+                                .getCachedProfile(msg.senderId);
+                        final countryCode =
+                            profile?.currentLocation?.countryCode ??
+                            profile?.hostCountryCode ??
+                            profile?.hostLocation.countryCode;
+                        final flag = _getCountryFlag(countryCode);
 
-                            if (flag.isNotEmpty) {
-                              return Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    flag,
-                                    style: const TextStyle(fontSize: 14),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    msg.senderName,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
-                                      color: Colors.grey,
-                                    ),
-                                  ),
-                                ],
-                              );
-                            }
-                            return Text(
-                              msg.senderName,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                                color: Colors.grey,
+                        if (flag.isNotEmpty) {
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(flag, style: const TextStyle(fontSize: 14)),
+                              const SizedBox(width: 4),
+                              Text(
+                                msg.senderName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
                               ),
-                            );
-                          },
-                          orElse: () => Text(
-                            msg.senderName,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                              color: Colors.grey,
-                            ),
+                            ],
+                          );
+                        }
+                        return Text(
+                          msg.senderName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                            color: Colors.grey,
                           ),
                         );
                       },
@@ -408,7 +441,7 @@ class _OrganizationChatPreviewState
     final diff = now.difference(date);
 
     if (diff.inDays > 0) {
-      return DateFormat.yMMMd().format(date); // e.g., Oct 23, 2023
+      return DateFormat.yMMMd().format(date);
     } else if (diff.inHours > 0) {
       return '${diff.inHours}h ago';
     } else if (diff.inMinutes > 0) {

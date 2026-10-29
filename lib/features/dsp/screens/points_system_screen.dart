@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:rxdart/rxdart.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -22,15 +24,26 @@ import 'package:diaspora_nearby/features/dsp/services/epoch_service.dart';
 import 'package:diaspora_nearby/features/dsp/providers/dsp_valuation_provider.dart';
 
 final referralStatsProvider =
-    FutureProvider.family<Map<String, dynamic>?, String>((ref, userId) {
-      return ref.read(pointsRepositoryProvider).getReferralStats(userId);
+    FutureProvider.family<Map<String, dynamic>?, String>((ref, userId) async {
+      final repo = ref.read(pointsRepositoryProvider);
+      final cached = repo.getCachedReferralStats(userId);
+      if (cached != null) {
+        unawaited(repo.getReferralStats(userId));
+        return cached;
+      }
+      return repo.getReferralStats(userId);
     });
 
-// [FIX] StreamProvider to prevent flickering
-final userPointsStreamProvider = StreamProvider.family
-    .autoDispose<UserPoints?, String>((ref, userId) {
-      return ref.read(pointsRepositoryProvider).streamUserPoints(userId);
-    });
+// [FIX] StreamProvider seeded from synchronous cache without autoDispose
+final userPointsStreamProvider = StreamProvider.family<UserPoints?, String>((
+  ref,
+  userId,
+) {
+  final repo = ref.read(pointsRepositoryProvider);
+  final cached = repo.getCachedUserPoints(userId);
+  final stream = repo.streamUserPoints(userId);
+  return cached != null ? stream.startWith(cached) : stream;
+});
 
 // Verified fields provider for detailed trust dashboard
 final verifiedFieldsProvider = FutureProvider.family<Set<String>, String>((
@@ -41,17 +54,25 @@ final verifiedFieldsProvider = FutureProvider.family<Set<String>, String>((
 });
 
 // [NEW] Stream provider for profile data to track completion progress
-final userProfileStreamProvider = StreamProvider.family
-    .autoDispose<ProfileData?, String>((ref, userId) {
-      return ref.read(profileRepositoryProvider).watchProfile(userId);
-    });
+final userProfileStreamProvider = StreamProvider.family<ProfileData?, String>((
+  ref,
+  userId,
+) {
+  final repo = ref.read(profileRepositoryProvider);
+  final cached = repo.getCachedProfile(userId);
+  final stream = repo.watchProfile(userId);
+  return cached != null ? stream.startWith(cached) : stream;
+});
 
-// [FIX] Provider for transactions to prevent stream recreation/flickering on rebuilds
-final recentTransactionsProvider = StreamProvider.family
-    .autoDispose<List<PointsTransaction>, String>((ref, userId) {
-      return ref
-          .watch(pointsRepositoryProvider)
-          .streamTransactionHistory(userId, limit: 10);
+// [FIX] Provider for transactions seeded from synchronous cache without autoDispose
+final recentTransactionsProvider =
+    StreamProvider.family<List<PointsTransaction>, String>((ref, userId) {
+      final repo = ref.watch(pointsRepositoryProvider);
+      final cached = repo.getCachedUserTransactions(userId);
+      final stream = repo.streamTransactionHistory(userId, limit: 10);
+      return cached != null
+          ? stream.startWith(cached.take(10).toList())
+          : stream;
     });
 
 class PointsSystemScreen extends ConsumerStatefulWidget {
@@ -108,19 +129,26 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
     final userId = ref.read(authRepositoryProvider).currentUser?.uid;
     if (userId == null) return;
 
-    final stats = await ref
-        .read(pointsRepositoryProvider)
-        .getReferralStats(userId);
+    final pointsRepo = ref.read(pointsRepositoryProvider);
+    final profileRepo = ref.read(profileRepositoryProvider);
+
+    final cachedStats = pointsRepo.getCachedReferralStats(userId);
+    if (cachedStats != null) return;
+
+    final results = await Future.wait<Object?>([
+      pointsRepo.getReferralStats(userId),
+      Future.value(profileRepo.getCachedProfile(userId)),
+    ]);
+
+    final stats = results[0] as Map<String, dynamic>?;
     if (stats == null) {
-      final profile = await ref
-          .read(profileRepositoryProvider)
-          .getUserProfile(userId);
+      final profile =
+          (results[1] as ProfileData?) ??
+          await profileRepo.getUserProfile(userId);
       if (profile != null) {
         final firstName = profile.firstName;
         final countryCode = profile.homeLocation.countryCode ?? 'TZ';
-        await ref
-            .read(pointsRepositoryProvider)
-            .generateReferralCode(userId, firstName, countryCode);
+        await pointsRepo.generateReferralCode(userId, firstName, countryCode);
         if (mounted) {
           ref.invalidate(referralStatsProvider(userId));
         }
@@ -2845,21 +2873,31 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
           // Admin Task: Sync Balances
           Center(
             child: TextButton.icon(
-              onPressed: () async {
-                try {
-                  await ref.read(pointsServiceProvider).syncTreasuryBalances();
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Treasury balances synchronized!'),
-                    ),
-                  );
-                } catch (e) {
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text('Error syncing: $e')));
-                }
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Syncing treasury balances in background...'),
+                  ),
+                );
+                unawaited(
+                  ref
+                      .read(pointsServiceProvider)
+                      .syncTreasuryBalances()
+                      .then((_) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Treasury balances synchronized!'),
+                          ),
+                        );
+                      })
+                      .catchError((Object e) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error syncing: $e')),
+                        );
+                      }),
+                );
               },
               icon: const Icon(LucideIcons.refreshCw, size: 16),
               label: const Text('Sync Treasury Balances'),

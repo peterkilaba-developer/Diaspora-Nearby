@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/features/community/models/community_data.dart';
+import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:rxdart/rxdart.dart';
 
 final communityRepositoryProvider = Provider((ref) => CommunityRepository());
@@ -36,41 +38,72 @@ final homeContinentCommunityProvider =
 
 class CommunityRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final Map<String, Community> _communityCache = {};
+  static final Map<String, Community> _communityCache = {};
+  static final Map<String, List<Community>> _userCommunitiesCache = {};
+  static List<Community>? _allCommunitiesCache;
+  static final Map<String, List<ProfileData>> _communityMembersCache = {};
 
   Community? getCachedCommunity(String communityId) =>
       _communityCache[communityId];
+
+  void cacheCommunity(Community community) {
+    _communityCache[community.id] = community;
+  }
+
+  List<Community>? getCachedUserCommunities(String uid) =>
+      _userCommunitiesCache[uid];
+
+  List<Community>? getCachedAllCommunities() => _allCommunitiesCache;
+
+  List<ProfileData>? getCachedCommunityMembers(String communityId) =>
+      _communityMembersCache[communityId];
+
+  void cacheCommunityMembers(String communityId, List<ProfileData> members) {
+    _communityMembersCache[communityId] = members;
+  }
 
   // ===========================================================================
   // OFFLINE-FIRST METHODS (Firestore Offline Persistence)
   // ===========================================================================
 
   Stream<List<Community>> watchUserCommunities(String uid) {
-    // Direct Firestore watch (works on all platforms)
-    // Previously used local Isar cache on native, but that's been removed.
-    // Firestore's built-in offline persistence handles local caching.
-    syncUserCommunities(uid); // Background sync for any side-effects
-    return _firestore
-        .collection('communities')
-        .where('members', arrayContains: uid)
-        .limit(100)
-        .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map((doc) {
-                final data = doc.data();
-                try {
-                  return Community.fromJson({...data, 'id': doc.id});
-                } catch (e) {
-                  debugPrint('Error parsing community ${doc.id}: $e');
-                  return null;
-                }
-              })
-              .whereType<Community>()
-              .toList(),
-        )
-        .onErrorReturn(const <Community>[])
-        .startWith(const <Community>[]);
+    unawaited(syncUserCommunities(uid));
+    return Stream<List<Community>>.multi((controller) {
+      controller.addSync(_userCommunitiesCache[uid] ?? const <Community>[]);
+      final sub = _firestore
+          .collection('communities')
+          .where('members', arrayContains: uid)
+          .limit(100)
+          .snapshots()
+          .listen(
+            (snapshot) {
+              final list = snapshot.docs
+                  .map((doc) {
+                    final data = doc.data();
+                    try {
+                      final comm = Community.fromJson({...data, 'id': doc.id});
+                      _communityCache[doc.id] = comm;
+                      return comm;
+                    } catch (e) {
+                      debugPrint('Error parsing community ${doc.id}: $e');
+                      return null;
+                    }
+                  })
+                  .whereType<Community>()
+                  .toList();
+              _userCommunitiesCache[uid] = list;
+              if (!controller.isClosed) {
+                controller.add(list);
+              }
+            },
+            onError: (_) {
+              if (!controller.isClosed) {
+                controller.add(_userCommunitiesCache[uid] ?? const <Community>[]);
+              }
+            },
+          );
+      controller.onCancel = sub.cancel;
+    });
   }
 
   Stream<Community?> watchCommunity(String communityId) {
@@ -79,30 +112,55 @@ class CommunityRepository {
     final treasuryStream = communityDoc
         .collection('treasury')
         .doc('current')
-        .snapshots();
+        .snapshots()
+        .cast<DocumentSnapshot<Map<String, dynamic>>?>()
+        .startWith(null);
 
-    return Rx.combineLatest2<DocumentSnapshot, DocumentSnapshot, Community?>(
+    final combinedStream = Rx.combineLatest2<
+      DocumentSnapshot<Map<String, dynamic>>,
+      DocumentSnapshot<Map<String, dynamic>>?,
+      Community?
+    >(
       metadataStream,
       treasuryStream,
       (metaDoc, treasuryDoc) {
         if (!metaDoc.exists) return null;
         try {
-          final metaData = metaDoc.data() as Map<String, dynamic>;
-          final treasuryData = treasuryDoc.exists
-              ? treasuryDoc.data() as Map<String, dynamic>
+          final metaData = metaDoc.data() ?? <String, dynamic>{};
+          final treasuryData = (treasuryDoc != null && treasuryDoc.exists)
+              ? (treasuryDoc.data() ?? <String, dynamic>{})
               : <String, dynamic>{};
 
-          return Community.fromJson({
+          final comm = Community.fromJson({
             ...metaData,
             ...treasuryData,
             'id': metaDoc.id,
           });
+          _communityCache[communityId] = comm;
+          return comm;
         } catch (e) {
           debugPrint('Error parsing community $communityId: $e');
-          return null;
+          return _communityCache[communityId];
         }
       },
-    ).onErrorReturn(null).startWith(null).asBroadcastStream();
+    ).onErrorReturn(_communityCache[communityId]);
+
+    return Stream<Community?>.multi((controller) {
+      controller.addSync(_communityCache[communityId]);
+      final sub = combinedStream.listen(
+        (comm) {
+          if (!controller.isClosed) {
+            controller.add(comm);
+          }
+        },
+        onError: (_) {
+          if (!controller.isClosed) {
+            controller.add(_communityCache[communityId]);
+          }
+        },
+      );
+      controller.onCancel = sub.cancel;
+    }, isBroadcast: true);
   }
 
   Stream<Community?> watchHomeCountryCommunity(String countryCode) {
@@ -121,24 +179,28 @@ class CommunityRepository {
           final treasuryStream = communityDoc
               .collection('treasury')
               .doc('current')
-              .snapshots();
+              .snapshots()
+              .cast<DocumentSnapshot<Map<String, dynamic>>?>()
+              .startWith(null);
 
           return Rx.combineLatest2<
-            DocumentSnapshot,
-            DocumentSnapshot,
+            DocumentSnapshot<Map<String, dynamic>>,
+            DocumentSnapshot<Map<String, dynamic>>?,
             Community?
           >(metadataStream, treasuryStream, (metaDoc, treasuryDoc) {
             if (!metaDoc.exists) return null;
-            final metaData = metaDoc.data() as Map<String, dynamic>;
-            final treasuryData = treasuryDoc.exists
-                ? treasuryDoc.data() as Map<String, dynamic>
+            final metaData = metaDoc.data() ?? <String, dynamic>{};
+            final treasuryData = (treasuryDoc != null && treasuryDoc.exists)
+                ? (treasuryDoc.data() ?? <String, dynamic>{})
                 : <String, dynamic>{};
 
-            return Community.fromJson({
+            final comm = Community.fromJson({
               ...metaData,
               ...treasuryData,
               'id': metaDoc.id,
             });
+            _communityCache[metaDoc.id] = comm;
+            return comm;
           });
         });
   }
@@ -159,42 +221,55 @@ class CommunityRepository {
           final treasuryStream = communityDoc
               .collection('treasury')
               .doc('current')
-              .snapshots();
+              .snapshots()
+              .cast<DocumentSnapshot<Map<String, dynamic>>?>()
+              .startWith(null);
 
           return Rx.combineLatest2<
-            DocumentSnapshot,
-            DocumentSnapshot,
+            DocumentSnapshot<Map<String, dynamic>>,
+            DocumentSnapshot<Map<String, dynamic>>?,
             Community?
           >(metadataStream, treasuryStream, (metaDoc, treasuryDoc) {
             if (!metaDoc.exists) return null;
-            final metaData = metaDoc.data() as Map<String, dynamic>;
-            final treasuryData = treasuryDoc.exists
-                ? treasuryDoc.data() as Map<String, dynamic>
+            final metaData = metaDoc.data() ?? <String, dynamic>{};
+            final treasuryData = (treasuryDoc != null && treasuryDoc.exists)
+                ? (treasuryDoc.data() ?? <String, dynamic>{})
                 : <String, dynamic>{};
 
-            return Community.fromJson({
+            final comm = Community.fromJson({
               ...metaData,
               ...treasuryData,
               'id': metaDoc.id,
             });
+            _communityCache[metaDoc.id] = comm;
+            return comm;
           });
         });
   }
 
   /// Get communities (direct Firestore query)
   Future<List<Community>> getLocalUserCommunities(String uid) async {
+    final cached = _userCommunitiesCache[uid];
+    if (cached != null && cached.isNotEmpty) {
+      unawaited(syncUserCommunities(uid));
+      return cached;
+    }
     try {
       final snapshot = await _firestore
           .collection('communities')
           .where('members', arrayContains: uid)
           .limit(100)
           .get();
-      return snapshot.docs
-          .map((doc) => Community.fromJson({...doc.data(), 'id': doc.id}))
-          .toList();
+      final list = snapshot.docs.map((doc) {
+        final comm = Community.fromJson({...doc.data(), 'id': doc.id});
+        _communityCache[doc.id] = comm;
+        return comm;
+      }).toList();
+      _userCommunitiesCache[uid] = list;
+      return list;
     } catch (e) {
       debugPrint('Error getting user communities: $e');
-      return [];
+      return _userCommunitiesCache[uid] ?? [];
     }
   }
 
@@ -210,10 +285,12 @@ class CommunityRepository {
 
       final communities = membersQuery.docs.map((doc) {
         final data = doc.data();
-        return Community.fromJson({...data, 'id': doc.id});
+        final comm = Community.fromJson({...data, 'id': doc.id});
+        _communityCache[doc.id] = comm;
+        return comm;
       }).toList();
 
-      // No-op: Firestore offline persistence handles local caching automatically
+      _userCommunitiesCache[uid] = communities;
 
       debugPrint('✅ Synced ${communities.length} communities to local DB');
     } catch (e) {
@@ -229,7 +306,7 @@ class CommunityRepository {
   Future<Community?> getCommunity(String communityId) async {
     final cached = _communityCache[communityId];
     if (cached != null) {
-      _fetchAndSaveCommunity(communityId);
+      unawaited(_fetchAndSaveCommunity(communityId));
       return cached;
     }
     return await _fetchAndSaveCommunity(communityId);
@@ -279,38 +356,43 @@ class CommunityRepository {
   }
 
   // ===========================================================================
-  // WRITE METHODS (Ideally invalidates cache or optimistic updates)
-  // ===========================================================================
-
-  // [REMOVED] joinOrCreateCommunity - Use CommunityService for hierarchy-based creation
-
-  // ===========================================================================
   // HELPERS
   // ===========================================================================
 
   // Backwards compatibility for existing FutureProvider calls
   Future<List<Community>> getUserCommunities(String uid) async {
-    // Trigger sync
-    syncUserCommunities(uid);
-    // Return local immediately (stale but fast)
+    final cached = _userCommunitiesCache[uid];
+    if (cached != null && cached.isNotEmpty) {
+      unawaited(syncUserCommunities(uid));
+      return cached;
+    }
+    unawaited(syncUserCommunities(uid));
     return getLocalUserCommunities(uid);
   }
 
   Future<List<Community>> getAllCommunities() async {
-    // This might be heavy, but let's just fetch from firestore for now as it's rarely used
-    // Or implement syncAllCommunities()
+    if (_allCommunitiesCache != null && _allCommunitiesCache!.isNotEmpty) {
+      unawaited(_refreshAllCommunitiesInBackground());
+      return _allCommunitiesCache!;
+    }
+    return _refreshAllCommunitiesInBackground();
+  }
+
+  Future<List<Community>> _refreshAllCommunitiesInBackground() async {
     try {
       final snapshot = await _firestore
           .collection('communities')
           .limit(500)
           .get();
-      final list = snapshot.docs
-          .map((doc) => Community.fromJson({...doc.data(), 'id': doc.id}))
-          .toList();
-      // No-op: Firestore offline persistence handles caching
+      final list = snapshot.docs.map((doc) {
+        final comm = Community.fromJson({...doc.data(), 'id': doc.id});
+        _communityCache[doc.id] = comm;
+        return comm;
+      }).toList();
+      _allCommunitiesCache = list;
       return list;
     } catch (e) {
-      return [];
+      return _allCommunitiesCache ?? [];
     }
   }
 
@@ -319,17 +401,12 @@ class CommunityRepository {
     Query query = _firestore.collection('communities');
 
     if (parent.id == 'global_community') {
-      // Children of Global are Continents
       query = query.where('type', isEqualTo: 'continent');
     } else if (parent.type == 'continent') {
-      // Children of Continent are Countries
-      // Note: We'd need to filter by continent in Firestore which requires a field
-      // For now, fetch all countries and filter in Dart if continent mapping is available
       final snapshot = await query
           .where('type', isEqualTo: 'country')
           .limit(200)
           .get();
-      // Filter by continent (Logic would use LocationUtils mapping)
       return snapshot.docs
           .map(
             (doc) => Community.fromJson({
@@ -339,8 +416,6 @@ class CommunityRepository {
           )
           .toList();
     } else if (parent.type == 'country') {
-      // Children of Country are States or Cities
-      // If 3-tier: States. If 2-tier: Cities.
       final snapshot = await query
           .where('homeCountryCode', isEqualTo: parent.homeCountryCode)
           .where('type', whereIn: ['state', 'city'])
@@ -356,14 +431,11 @@ class CommunityRepository {
           )
           .toList();
 
-      // If any states exist, they are the direct children.
       final states = results.where((c) => c.type == 'state').toList();
       if (states.isNotEmpty) return states;
 
-      // Otherwise cities are direct children
       return results.where((c) => c.type == 'city').toList();
     } else if (parent.type == 'state') {
-      // Children of State are Cities
       final snapshot = await query
           .where('homeCountryCode', isEqualTo: parent.homeCountryCode)
           .where('type', isEqualTo: 'city')
@@ -379,7 +451,6 @@ class CommunityRepository {
           )
           .toList();
 
-      // Filter by state field in location map
       final parentState = (parent.location?['state'] as String?)?.toLowerCase();
       return results.where((c) {
         final cityState = (c.location?['state'] as String?)?.toLowerCase();
@@ -393,9 +464,15 @@ class CommunityRepository {
   /// [NEW] Search for communities by name or description
   Future<List<Community>> searchCommunities(String query) async {
     final queryLower = query.toLowerCase();
+    final cached = _allCommunitiesCache ?? _communityCache.values.toList();
+    if (cached.isNotEmpty) {
+      unawaited(_refreshAllCommunitiesInBackground());
+      return cached.where((community) {
+        if (query.isEmpty) return true;
+        return community.name.toLowerCase().contains(queryLower);
+      }).toList();
+    }
     try {
-      // Basic search: Fetch recent/active ones.
-      // Ideally we'd have a 'searchable' index, but for now fetch all or a subset.
       final snapshot = await _firestore
           .collection('communities')
           .limit(50)
@@ -404,7 +481,9 @@ class CommunityRepository {
       return snapshot.docs
           .map((doc) {
             final data = doc.data();
-            return Community.fromJson({...data, 'id': doc.id});
+            final comm = Community.fromJson({...data, 'id': doc.id});
+            _communityCache[doc.id] = comm;
+            return comm;
           })
           .where((community) {
             if (query.isEmpty) return true;

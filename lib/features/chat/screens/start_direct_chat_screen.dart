@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 import 'package:diaspora_nearby/features/chat/screens/chat_screen.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
+import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 
 /// Screen that handles starting a direct chat with a user.
 ///
@@ -26,11 +27,49 @@ class StartDirectChatScreen extends ConsumerStatefulWidget {
 
 class _StartDirectChatScreenState extends ConsumerState<StartDirectChatScreen> {
   String? _error;
+  String? _resolvedChatId;
+  String? _resolvedPendingName;
+  String? _resolvedPendingImage;
+  bool _resolvedAsPending = false;
 
   @override
   void initState() {
     super.initState();
-    _loadChatOrUser();
+    _trySynchronousResolution();
+    if (_resolvedChatId == null && !_resolvedAsPending) {
+      _loadChatOrUser();
+    }
+  }
+
+  void _trySynchronousResolution() {
+    final currentUser = ref.read(authRepositoryProvider).currentUser;
+    if (currentUser != null && currentUser.uid == widget.otherUserId) {
+      return;
+    }
+
+    final chatRepo = ref.read(chatRepositoryProvider);
+    final cachedDirectChat = chatRepo.getCachedDirectChatWith(
+      widget.otherUserId,
+    );
+    if (cachedDirectChat != null) {
+      _resolvedChatId = cachedDirectChat.id;
+      return;
+    }
+
+    // If user's chats are already cached in memory and no DM exists with this user,
+    // and we have the target user's profile cached, open pending DM in 0ms!
+    if (chatRepo.cachedChats.isNotEmpty) {
+      final cachedProfile = ref
+          .read(profileRepositoryProvider)
+          .getCachedProfile(widget.otherUserId);
+      if (cachedProfile != null) {
+        final fullName =
+            '${cachedProfile.firstName} ${cachedProfile.lastName}'.trim();
+        _resolvedPendingName = fullName.isNotEmpty ? fullName : 'Unknown';
+        _resolvedPendingImage = cachedProfile.profileImage;
+        _resolvedAsPending = true;
+      }
+    }
   }
 
   Future<void> _loadChatOrUser() async {
@@ -56,12 +95,28 @@ class _StartDirectChatScreenState extends ConsumerState<StartDirectChatScreen> {
       if (!mounted) return;
 
       if (existingChat != null) {
-        // Chat exists - navigate directly to it
-        context.go('/chats/$existingChat');
+        // Chat exists - render or navigate directly to it
+        setState(() {
+          _resolvedChatId = existingChat;
+        });
         return;
       }
 
-      // 2. Fetch user info for the pending DM screen
+      // 2. Fetch user info for the pending DM screen (check cache first)
+      final cachedProfile = ref
+          .read(profileRepositoryProvider)
+          .getCachedProfile(widget.otherUserId);
+      if (cachedProfile != null) {
+        final fullName =
+            '${cachedProfile.firstName} ${cachedProfile.lastName}'.trim();
+        setState(() {
+          _resolvedPendingName = fullName.isNotEmpty ? fullName : 'Unknown';
+          _resolvedPendingImage = cachedProfile.profileImage;
+          _resolvedAsPending = true;
+        });
+        return;
+      }
+
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(widget.otherUserId)
@@ -82,19 +137,13 @@ class _StartDirectChatScreenState extends ConsumerState<StartDirectChatScreen> {
       final userName = '$firstName $lastName'.trim();
       final profileImage = userData['profileImage'] as String?;
 
-      // 3. No existing DM → Navigate directly to pending DM chat
-      // Chat will be created when the first message is sent.
-      // User can add relationship from the DM chat's "show more" menu.
+      // 3. No existing DM → Render pending DM chat directly
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (context) => ChatScreen.pendingDM(
-            pendingUserId: widget.otherUserId,
-            pendingUserName: userName,
-            pendingUserImage: profileImage,
-          ),
-        ),
-      );
+      setState(() {
+        _resolvedPendingName = userName;
+        _resolvedPendingImage = profileImage;
+        _resolvedAsPending = true;
+      });
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -107,6 +156,18 @@ class _StartDirectChatScreenState extends ConsumerState<StartDirectChatScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    if (_resolvedChatId != null) {
+      return ChatScreen(chatId: _resolvedChatId!);
+    }
+
+    if (_resolvedAsPending) {
+      return ChatScreen.pendingDM(
+        pendingUserId: widget.otherUserId,
+        pendingUserName: _resolvedPendingName ?? 'Unknown',
+        pendingUserImage: _resolvedPendingImage,
+      );
+    }
 
     if (_error != null) {
       return Scaffold(

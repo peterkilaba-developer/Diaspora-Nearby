@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -32,15 +33,15 @@ class ExchangeRateService {
     return _rates?[currencyCode.toUpperCase()];
   }
 
-  /// Initialize: load from cache, refresh from network if stale.
+  /// Initialize: load from cache, refresh from network in background if stale.
   /// Call this once at app startup (e.g. in main.dart or a provider).
   Future<void> initialize() async {
-    // 1. Try loading from cache
+    // 1. Try loading from cache synchronously/quickly
     await _loadFromCache();
 
-    // 2. Check if we need a fresh fetch
+    // 2. Check if we need a fresh fetch — fire in background without blocking
     if (_shouldRefresh()) {
-      await _fetchFromNetwork();
+      unawaited(_fetchFromNetwork());
     }
   }
 

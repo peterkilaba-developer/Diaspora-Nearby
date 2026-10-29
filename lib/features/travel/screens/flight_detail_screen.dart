@@ -15,7 +15,14 @@ class FlightDetailScreen extends StatefulWidget {
 }
 
 class _FlightDetailScreenState extends State<FlightDetailScreen> {
+  static final Set<String> _savedFlightIds = {};
   bool _isSaved = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _isSaved = _savedFlightIds.contains(widget.offer.id);
+  }
 
   static const _radius = 15.0;
 
@@ -169,7 +176,14 @@ class _FlightDetailScreenState extends State<FlightDetailScreen> {
             ),
             tooltip: _isSaved ? 'Remove from saved' : 'Save flight',
             onPressed: () {
-              setState(() => _isSaved = !_isSaved);
+              setState(() {
+                _isSaved = !_isSaved;
+                if (_isSaved) {
+                  _savedFlightIds.add(widget.offer.id);
+                } else {
+                  _savedFlightIds.remove(widget.offer.id);
+                }
+              });
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(

@@ -238,6 +238,11 @@ async function main() {
     }
   });
 
+  const exactSupply = Math.round(totalUserPoints * 2.0);
+  const exactFivePct = Math.round(exactSupply * 0.05);
+  totalSystemSlotAwarded = exactFivePct;
+  communityAwardedMap["global_community"] = exactFivePct;
+
   // 2. Map governance docs and fetch their on-chain $DIASPORA balances
   const govDocsMap = {};
   const onChainBalances = {};
@@ -256,8 +261,8 @@ async function main() {
   }
 
   // System slots: Founders, Liquidity, Burn
-  // Note: `0x...dEaD` holds both 10% system burn AND TDE inefficiency penalty burns,
-  // so for the 10% system `burn` slot we use the same converted baseline as `founders`/`liquidity`.
+  // Note: `0x...dEaD` holds both 5% system burn AND TDE inefficiency penalty burns,
+  // so for the 5% system `burn` slot we use the same converted baseline as `founders`/`liquidity`.
   const foundersConverted = onChainBalances["founders"] || 0;
   const liquidityConverted = onChainBalances["liquidity"] || 0;
   const burnSlotConverted = Math.max(foundersConverted, liquidityConverted);
@@ -266,10 +271,11 @@ async function main() {
   const reconciledLiquidityDsp = Math.max(0, totalSystemSlotAwarded - liquidityConverted);
   const reconciledBurnDsp = Math.max(0, totalSystemSlotAwarded - burnSlotConverted);
 
+  console.log(`Total User Points (50% Supply): ${totalUserPoints} DSP | Exact Total Supply: ${exactSupply} DSP | Exact 5% Slot: ${exactFivePct} DSP\n`);
   console.log("System Treasuries:");
-  console.log(`  founders  | awarded=${totalSystemSlotAwarded} | onChain=${foundersConverted} | activeDsp: ${govDocsMap.founders?.treasuryBalance} -> ${reconciledFoundersDsp}`);
-  console.log(`  liquidity | awarded=${totalSystemSlotAwarded} | onChain=${liquidityConverted} | activeDsp: ${govDocsMap.liquidity?.treasuryBalance} -> ${reconciledLiquidityDsp}`);
-  console.log(`  burn      | awarded=${totalSystemSlotAwarded} | converted=${burnSlotConverted} | activeDsp: ${govDocsMap.burn?.treasuryBalance} -> ${reconciledBurnDsp}\n`);
+  console.log(`  founders  | cumulative5Pct=${totalSystemSlotAwarded} | onChain=${foundersConverted} | unconvertedGovDsp: ${govDocsMap.founders?.treasuryBalance} -> ${reconciledFoundersDsp}`);
+  console.log(`  liquidity | cumulative5Pct=${totalSystemSlotAwarded} | onChain=${liquidityConverted} | unconvertedGovDsp: ${govDocsMap.liquidity?.treasuryBalance} -> ${reconciledLiquidityDsp}`);
+  console.log(`  burn      | cumulative5Pct=${totalSystemSlotAwarded} | converted=${burnSlotConverted} | unconvertedGovDsp: ${govDocsMap.burn?.treasuryBalance} -> ${reconciledBurnDsp}\n`);
 
   // Collect all community IDs from both `communities` collection and `communityAwardedMap`
   const allCommIds = new Set([
@@ -284,13 +290,20 @@ async function main() {
 
   const operations = [];
 
-  // System stats + system governance docs
+  // Global supply + System stats (cumulative 5% epoch balances) + system governance docs (unconverted DSP)
+  operations.push({
+    ref: db.collection("system_stats").doc("dsp_supply"),
+    data: {
+      totalMinted: exactSupply,
+      lastUpdated: FieldValue.serverTimestamp(),
+    },
+  });
   operations.push({
     ref: db.collection("system_stats").doc("treasury"),
     data: {
-      foundersPoints: reconciledFoundersDsp,
-      liquidityPoints: reconciledLiquidityDsp,
-      burnedPoints: reconciledBurnDsp,
+      foundersPoints: totalSystemSlotAwarded,
+      liquidityPoints: totalSystemSlotAwarded,
+      burnedPoints: totalSystemSlotAwarded,
       lastUpdated: FieldValue.serverTimestamp(),
     },
   });
@@ -355,11 +368,11 @@ async function main() {
     );
 
     console.log(
-      `  ${commId.padEnd(46)} | awarded=${String(awarded).padEnd(7)} | onChain=${String(onChain).padEnd(7)} | dsp: ${String(existingComm.points ?? 0).padEnd(7)} -> ${String(reconciledDsp).padEnd(7)} | comm="${canonicalCommName}" | treasury="${canonicalTreasuryTitle}"`
+      `  ${commId.padEnd(46)} | awarded=${String(awarded).padEnd(7)} | onChain=${String(onChain).padEnd(7)} | commPoints: ${String(existingComm.points ?? 0).padEnd(7)} -> ${String(awarded).padEnd(7)} | govUnconverted: ${String(existingGov.treasuryBalance ?? 0).padEnd(7)} -> ${String(reconciledDsp).padEnd(7)}`
     );
 
     const commPatch = {
-      points: reconciledDsp,
+      points: awarded,
       awardedBalance: awarded,
       averagePct: 100,
       averagePoCT: 100,
@@ -383,7 +396,7 @@ async function main() {
     operations.push({
       ref: db.collection("communities").doc(commId).collection("treasury").doc("current"),
       data: {
-        points: reconciledDsp,
+        points: awarded,
         awardedBalance: awarded,
         ...(communityBasisMap[commId] !== undefined ? {cumulativeEarnings: communityBasisMap[commId]} : {}),
         ...(communityMemberPointsMap[commId] !== undefined ? {memberPoints: communityMemberPointsMap[commId]} : {}),

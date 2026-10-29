@@ -67,6 +67,13 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
   @override
   void initState() {
     super.initState();
+    final cached = ref
+        .read(peerListingRepositoryProvider)
+        .getCachedListings(type: 'car');
+    if (cached.isNotEmpty) {
+      _allListings = cached;
+      _isLoading = false;
+    }
     _loadListings();
   }
 
@@ -80,7 +87,7 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
 
   Future<void> _loadListings() async {
     setState(() {
-      _isLoading = true;
+      if (_allListings.isEmpty) _isLoading = true;
       _error = null;
     });
     try {
@@ -95,7 +102,7 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = '$e';
+          if (_allListings.isEmpty) _error = '$e';
           _isLoading = false;
         });
       }

@@ -9,6 +9,7 @@ final sessionServiceProvider = Provider<SessionService>((ref) {
 
 class SessionService {
   final SharedPreferences _prefs;
+  static final Set<String> _memoryCachedUsers = <String>{};
 
   SessionService(this._prefs);
 
@@ -29,15 +30,18 @@ class SessionService {
     String? lastScreen,
     bool isReturningUser = true,
   }) async {
-    await _prefs.setString(_keyUserId, userId);
-    await _prefs.setString(_keyLastLogin, DateTime.now().toIso8601String());
-    await _prefs.setBool(_keyHasCompletedOnboarding, hasCompletedOnboarding);
-    await _prefs.setBool(_keyProfileComplete, profileComplete);
-    if (lastScreen != null) {
-      await _prefs.setString(_keyLastScreen, lastScreen);
+    if (profileComplete) {
+      _memoryCachedUsers.add(userId);
     }
-    // Set returning user status
-    await _prefs.setBool(_keyIsReturningUser, isReturningUser);
+    await Future.wait([
+      _prefs.setString(_keyUserId, userId),
+      _prefs.setString(_keyLastLogin, DateTime.now().toIso8601String()),
+      _prefs.setBool(_keyHasCompletedOnboarding, hasCompletedOnboarding),
+      _prefs.setBool(_keyProfileComplete, profileComplete),
+      if (lastScreen != null) _prefs.setString(_keyLastScreen, lastScreen),
+      _prefs.setBool(_keyIsReturningUser, isReturningUser),
+      if (profileComplete) _prefs.setString('cached_user_$userId', '1'),
+    ]);
   }
 
   /// Update returning user status
@@ -103,26 +107,30 @@ class SessionService {
 
   /// Clear session on logout
   Future<void> clearSession() async {
-    await _prefs.remove(_keyUserId);
-    await _prefs.remove(_keyLastLogin);
-    await _prefs.remove(_keyHasCompletedOnboarding);
-    await _prefs.remove(_keyLastScreen);
-    await _prefs.remove(_keyProfileComplete);
-    // Keep _keyIsReturningUser to maintain returning user status across logins
+    _memoryCachedUsers.clear();
+    await Future.wait([
+      _prefs.remove(_keyUserId),
+      _prefs.remove(_keyLastLogin),
+      _prefs.remove(_keyHasCompletedOnboarding),
+      _prefs.remove(_keyLastScreen),
+      _prefs.remove(_keyProfileComplete),
+    ]);
   }
 
-  /// Clear all session data including returning user flag (for testing/reset)
   /// Mark user as cached
   Future<void> setUserCached(String uid) async {
+    _memoryCachedUsers.add(uid);
     await _prefs.setString('cached_user_$uid', '1');
   }
 
   /// Check if user is cached
   bool isUserCached(String uid) {
-    return _prefs.containsKey('cached_user_$uid');
+    return _memoryCachedUsers.contains(uid) ||
+        _prefs.containsKey('cached_user_$uid');
   }
 
   Future<void> clearAll() async {
+    _memoryCachedUsers.clear();
     await _prefs.clear();
   }
 }

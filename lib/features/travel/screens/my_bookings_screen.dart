@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -43,6 +44,18 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    final user = ref.read(authRepositoryProvider).currentUser;
+    if (user != null) {
+      final cached = ref
+          .read(peerListingRepositoryProvider)
+          .getCachedGuestBookings(user.uid)
+          .where((b) => b.listingType == _listingType)
+          .toList();
+      if (cached.isNotEmpty) {
+        _allBookings = cached;
+        _loading = false;
+      }
+    }
     _loadBookings();
   }
 
@@ -57,6 +70,10 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
     if (user == null) {
       setState(() => _loading = false);
       return;
+    }
+
+    if (_allBookings.isEmpty) {
+      setState(() => _loading = true);
     }
 
     try {
@@ -136,8 +153,16 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
 
     if (confirm == true) {
       final repo = ref.read(peerListingRepositoryProvider);
-      await repo.updateBookingStatus(booking.id, 'cancelled');
-      _loadBookings();
+      final prevStatus = booking.status;
+
+      setState(() {
+        _allBookings = [
+          for (final b in _allBookings)
+            if (b.id == booking.id) b.copyWith(status: 'cancelled') else b,
+        ];
+      });
+      repo.updateCachedBookingStatus(booking.id, 'cancelled');
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -149,6 +174,23 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
           ),
         );
       }
+
+      unawaited(
+        repo.updateBookingStatus(booking.id, 'cancelled').catchError((_) {
+          repo.updateCachedBookingStatus(booking.id, prevStatus);
+          if (mounted) {
+            setState(() {
+              _allBookings = [
+                for (final b in _allBookings)
+                  if (b.id == booking.id)
+                    b.copyWith(status: prevStatus)
+                  else
+                    b,
+              ];
+            });
+          }
+        }),
+      );
     }
   }
 

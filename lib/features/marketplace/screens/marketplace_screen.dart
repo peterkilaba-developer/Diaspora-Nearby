@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -667,16 +668,21 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
     dynamic profile,
   ) {
     final repo = ref.watch(marketplaceRepositoryProvider);
+    final cachedListings = repo.getCachedListings(
+      communityIds: communityIds,
+      category: _selectedCategory,
+      listingType: _selectedType == 'all' ? null : _selectedType,
+    );
 
     return StreamBuilder<List<MarketplaceListing>>(
+      initialData: cachedListings.isNotEmpty ? cachedListings : null,
       stream: repo.getListings(
         communityIds: communityIds,
         category: _selectedCategory,
-
         listingType: _selectedType == 'all' ? null : _selectedType,
       ),
       builder: (context, snapshot) {
-        if (snapshot.hasError) {
+        if (snapshot.hasError && !snapshot.hasData) {
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(24),
@@ -702,13 +708,14 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
           );
         }
 
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
           return const Center(
             child: CircularProgressIndicator(color: AppTheme.accent),
           );
         }
 
-        var listings = snapshot.data ?? [];
+        var listings = snapshot.data ?? cachedListings;
 
         // Apply country filter client-side
         if (_selectedCountryFilter != 'all' && profile != null) {
@@ -805,7 +812,10 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
       return _buildVehicleCard(listing, theme, isDark);
     }
     return GestureDetector(
-      onTap: () => context.push('/marketplace/listing/${listing.id}'),
+      onTap: () {
+        ref.read(marketplaceRepositoryProvider).cacheListing(listing);
+        context.push('/marketplace/listing/${listing.id}');
+      },
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
         padding: const EdgeInsets.all(10),
@@ -874,7 +884,10 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
     const radius = 15.0;
 
     return GestureDetector(
-      onTap: () => context.push('/marketplace/listing/${listing.id}'),
+      onTap: () {
+        ref.read(marketplaceRepositoryProvider).cacheListing(listing);
+        context.push('/marketplace/listing/${listing.id}');
+      },
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
         decoration: BoxDecoration(
@@ -1480,13 +1493,15 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
               );
             }
 
-            return SafeArea(
-              child: DraggableScrollableSheet(
-                initialChildSize: 0.85,
-                maxChildSize: 0.92,
-                minChildSize: 0.4,
-                expand: false,
-                builder: (_, scrollController) => Padding(
+            return BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: SafeArea(
+                child: DraggableScrollableSheet(
+                  initialChildSize: 0.85,
+                  maxChildSize: 0.92,
+                  minChildSize: 0.4,
+                  expand: false,
+                  builder: (_, scrollController) => Padding(
                   padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
                   child: ListView(
                     controller: scrollController,
@@ -2288,12 +2303,13 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                   ),
                 ),
               ),
-            );
-          },
-        );
-      },
-    );
-  }
+            ),
+          );
+        },
+      );
+    },
+  );
+}
 
   Widget _sheetChip(
     String label,

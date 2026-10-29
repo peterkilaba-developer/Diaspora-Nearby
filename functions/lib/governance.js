@@ -69,29 +69,31 @@ async function postGovernanceSystemMessage(communityId, content, metadata, sende
     if (!chatSnap.exists) return;
     const now = admin.firestore.FieldValue.serverTimestamp();
     const msgRef = chatRef.collection("messages").doc();
-    await msgRef.set({
-      id: msgRef.id,
-      chatId,
-      senderId: "system",
-      senderName,
-      content,
-      type: "system",
-      timestamp: now,
-      readBy: ["system"],
-      reactions: {},
-      metadata: metadata || {},
-    });
-    await chatRef.set({
-      lastMessage: {
+    await Promise.all([
+      msgRef.set({
         id: msgRef.id,
+        chatId,
         senderId: "system",
         senderName,
         content,
         type: "system",
         timestamp: now,
-      },
-      updatedAt: now,
-    }, {merge: true});
+        readBy: ["system"],
+        reactions: {},
+        metadata: metadata || {},
+      }),
+      chatRef.set({
+        lastMessage: {
+          id: msgRef.id,
+          senderId: "system",
+          senderName,
+          content,
+          type: "system",
+          timestamp: now,
+        },
+        updatedAt: now,
+      }, {merge: true}),
+    ]);
   } catch (err) {
     console.warn(`[governance] System announcement warning for ${communityId}: ${err.message}`);
   }
@@ -277,7 +279,10 @@ exports.evaluateGovernanceVote = functions.https.onCall(
       validateRole(role);
 
       const unitRef = db.collection("governance").doc(unitId);
-      const unitSnap = await unitRef.get();
+      const [unitSnap, tally] = await Promise.all([
+        unitRef.get(),
+        getVoteTally(unitId, candidateId, role),
+      ]);
       if (!unitSnap.exists) {
         throw new functions.https.HttpsError(
             "not-found",
@@ -303,28 +308,34 @@ exports.evaluateGovernanceVote = functions.https.onCall(
       const communityId = unit.communityId;
       const communityRef = communityId ?
         db.collection("communities").doc(communityId) : null;
-      const communitySnap = communityRef ? await communityRef.get() : null;
+      const councilWithRoles = currentCouncil.filter(
+        (memberId) => Boolean((unit.councilRoles || {})[memberId])
+      );
+      const trustRefs = councilWithRoles.map((memberId) =>
+        db.collection("trust_data").doc(memberId)
+      );
+      const [communitySnap, trustSnaps] = await Promise.all([
+        communityRef ? communityRef.get() : Promise.resolve(null),
+        trustRefs.length > 0 ? db.getAll(...trustRefs) : Promise.resolve([]),
+      ]);
       const totalMembers = communitySnap && communitySnap.exists ?
         Number(communitySnap.data().memberCount || 0) : 0;
       if (totalMembers < 4) {
         return {promoted: false, removedMembers: []};
       }
 
-      const tally = await getVoteTally(unitId, candidateId, role);
       const quorumTarget = Math.ceil(totalMembers * 0.5);
       const wins = tally.total >= quorumTarget &&
         tally.decisive > 0 &&
         (tally.yay / tally.decisive) > 0.5;
 
       const removals = [];
-      for (const memberId of currentCouncil) {
+      for (let i = 0; i < councilWithRoles.length; i++) {
+        const memberId = councilWithRoles[i];
         const memberRole = (unit.councilRoles || {})[memberId];
-        if (!memberRole) continue;
-        // Continuous position in leadership is tracked by PCT (trust slider score),
-        // not actual votes (which are only used to elect candidates into office).
-        const trustSnap = await db.collection("trust_data").doc(memberId).get();
+        const trustSnap = trustSnaps[i];
         const isEligibleByTrustSlider =
-          trustSnap.exists && trustSnap.data().isCouncilEligible === true;
+          trustSnap && trustSnap.exists && trustSnap.data().isCouncilEligible === true;
         if (!isEligibleByTrustSlider) {
           removals.push({userId: memberId, role: memberRole});
         }
@@ -332,7 +343,10 @@ exports.evaluateGovernanceVote = functions.https.onCall(
 
       let promoted = false;
       await db.runTransaction(async (transaction) => {
-        const latestSnap = await transaction.get(unitRef);
+        const [latestSnap, latestCommunitySnap] = await Promise.all([
+          transaction.get(unitRef),
+          communityRef ? transaction.get(communityRef) : Promise.resolve(null),
+        ]);
         if (!latestSnap.exists) {
           throw new functions.https.HttpsError(
               "not-found",
@@ -343,8 +357,6 @@ exports.evaluateGovernanceVote = functions.https.onCall(
         const members = Array.isArray(latest.councilMembers) ?
           [...latest.councilMembers] : [];
         const roles = {...(latest.councilRoles || {})};
-        const latestCommunitySnap = communityRef ?
-          await transaction.get(communityRef) : null;
         const admins = latestCommunitySnap && latestCommunitySnap.exists &&
           Array.isArray(latestCommunitySnap.data().admins) ?
           [...latestCommunitySnap.data().admins] : [];
@@ -377,20 +389,22 @@ exports.evaluateGovernanceVote = functions.https.onCall(
       });
 
       if (communityId && removals.length > 0) {
-        for (const rem of removals) {
-          const roleName = ROLE_DISPLAY_NAMES[rem.role] || rem.role;
-          await postGovernanceSystemMessage(
-            communityId,
-            `A ${roleName} has been removed from council by community vote. The role is now open for candidates.`,
-            {
-              systemType: "election_vote_out",
-              removedUserId: rem.userId,
-              role: rem.role,
-              unitId,
-            },
-            "Voice of Diaspora"
-          );
-        }
+        await Promise.all(
+          removals.map((rem) => {
+            const roleName = ROLE_DISPLAY_NAMES[rem.role] || rem.role;
+            return postGovernanceSystemMessage(
+              communityId,
+              `A ${roleName} has been removed from council by community vote. The role is now open for candidates.`,
+              {
+                systemType: "election_vote_out",
+                removedUserId: rem.userId,
+                role: rem.role,
+                unitId,
+              },
+              "Voice of Diaspora"
+            );
+          })
+        );
       }
 
       return {promoted, removedMembers: removals, tally};

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -61,10 +62,45 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
   String? _searchCountry;
   String? _searchCountryCode;
 
+  Future<FetchPlaceResponse?>? _placeDetailsFuture;
+
+  // Static caches for 0ms repeat opens
+  static List<HotelOfferResult> _cachedHotelOffers = [];
+  static List<PeerListing> _cachedPeerHotels = [];
+  static double? _cachedLat;
+  static double? _cachedLng;
+  static String _cachedPlaceDescription = '';
+  static String? _cachedHomeCountry;
+  static String? _cachedSearchCity;
+  static String? _cachedSearchCountry;
+  static String? _cachedSearchCountryCode;
+
   @override
   void initState() {
     super.initState();
     _setDefaultDates();
+    final cachedPeer = ref
+        .read(peerListingRepositoryProvider)
+        .getCachedListings(type: 'hotel');
+    if (_cachedHotelOffers.isNotEmpty ||
+        _cachedPeerHotels.isNotEmpty ||
+        cachedPeer.isNotEmpty) {
+      _hotelOffers = List.of(_cachedHotelOffers);
+      _peerHotels = cachedPeer.isNotEmpty
+          ? cachedPeer
+          : List.of(_cachedPeerHotels);
+      _selectedLat = _cachedLat;
+      _selectedLng = _cachedLng;
+      _selectedPlaceDescription = _cachedPlaceDescription;
+      if (_cachedPlaceDescription.isNotEmpty) {
+        _destController.text = _cachedPlaceDescription;
+      }
+      _homeCountry = _cachedHomeCountry;
+      _searchCity = _cachedSearchCity;
+      _searchCountry = _cachedSearchCountry;
+      _searchCountryCode = _cachedSearchCountryCode;
+      _initialLoading = false;
+    }
     _autoLoadNearbyHotels();
   }
 
@@ -101,9 +137,9 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
       return;
     }
 
-    final profileData = await ref
-        .read(profileRepositoryProvider)
-        .getUserProfile(userId);
+    final profileData =
+        ref.read(userProfileProvider).value ??
+        await ref.read(profileRepositoryProvider).getUserProfile(userId);
     if (profileData == null || !mounted) {
       if (mounted) setState(() => _initialLoading = false);
       return;
@@ -111,6 +147,7 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
 
     // Set home country for empty state
     if (profileData.homeCountry != null && mounted) {
+      _cachedHomeCountry = profileData.homeCountry;
       setState(() => _homeCountry = profileData.homeCountry);
     }
 
@@ -128,6 +165,9 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
       _searchCountry = homeCountry;
       _searchCountryCode =
           profileData.homeCountryCode ?? profileData.homeLocation.countryCode;
+      _cachedSearchCity = _searchCity;
+      _cachedSearchCountry = _searchCountry;
+      _cachedSearchCountryCode = _searchCountryCode;
     }
 
     if (homeLat == null || homeLng == null || !mounted) {
@@ -135,46 +175,69 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
       return;
     }
 
+    final hasInitialData = _hotelOffers.isNotEmpty || _peerHotels.isNotEmpty;
+
     // Set the destination field and coordinates
     setState(() {
       _selectedLat = homeLat;
       _selectedLng = homeLng;
       _selectedPlaceDescription = locationLabel;
       _destController.text = locationLabel;
-      _isSearching = true;
+      _cachedLat = homeLat;
+      _cachedLng = homeLng;
+      _cachedPlaceDescription = locationLabel;
+      _isSearching = !hasInitialData;
     });
 
     try {
-      // Fetch both API hotels and peer-listed hotels in parallel
       final amadeus = ref.read(amadeusServiceProvider);
       final peerRepo = ref.read(peerListingRepositoryProvider);
       final guests = _guests;
 
-      final results = await Future.wait([
-        amadeus.searchHotelsByLocation(
-          latitude: homeLat,
-          longitude: homeLng,
-          checkInDate: _checkInDateApi,
-          checkOutDate: _checkOutDateApi,
-          adults: guests,
-          radius: 50, // wider radius for browse mode
-          maxResults: 30,
-          query: locationLabel,
-        ),
-        peerRepo.searchListings(
-          type: 'hotel',
-          countryCode: profileData.homeCountryCode,
-        ),
-      ]);
+      // Decouple Community Hotels from Amadeus so Community Hotels render immediately
+      final peerFuture = peerRepo
+          .searchListings(
+            type: 'hotel',
+            countryCode: profileData.homeCountryCode,
+          )
+          .then((peerHotels) {
+            if (!mounted) return;
+            _cachedPeerHotels = List.of(peerHotels);
+            setState(() {
+              _peerHotels = peerHotels;
+              if (peerHotels.isNotEmpty) {
+                _initialLoading = false;
+              }
+            });
+          })
+          .catchError((_) {});
+
+      final amadeusFuture = amadeus
+          .searchHotelsByLocation(
+            latitude: homeLat,
+            longitude: homeLng,
+            checkInDate: _checkInDateApi,
+            checkOutDate: _checkOutDateApi,
+            adults: guests,
+            radius: 50, // wider radius for browse mode
+            maxResults: 30,
+            query: locationLabel,
+          )
+          .then((offers) {
+            if (!mounted) return;
+            _cachedHotelOffers = List.of(offers);
+            setState(() {
+              _hotelOffers = offers;
+              _isSearching = false;
+              _initialLoading = false;
+              _showSearchForm = false;
+            });
+          });
+
+      await Future.wait([peerFuture, amadeusFuture]);
 
       if (!mounted) return;
-
-      final offers = results[0] as List<HotelOfferResult>;
-      final peerHotels = results[1] as List<PeerListing>;
-
       setState(() {
-        _hotelOffers = offers;
-        _peerHotels = peerHotels;
         _isSearching = false;
         _initialLoading = false;
         _showSearchForm = false;
@@ -248,7 +311,9 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
     // Fetch place details to get lat/lng and ISO countryCode
     try {
       final service = ref.read(googlePlacesServiceProvider);
-      final response = await service.getPlaceDetails(prediction.placeId);
+      final detailsFuture = service.getPlaceDetails(prediction.placeId);
+      _placeDetailsFuture = detailsFuture;
+      final response = await detailsFuture;
 
       if (response?.place != null && mounted) {
         String? detectedCountryCode;
@@ -286,7 +351,15 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
   }
 
   void _handleSearch() async {
+    if ((_selectedLat == null || _selectedLng == null) &&
+        _placeDetailsFuture != null) {
+      try {
+        await _placeDetailsFuture;
+      } catch (_) {}
+    }
+
     if (_selectedLat == null || _selectedLng == null) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please select a destination from the suggestions'),
@@ -296,6 +369,7 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
     }
 
     if (_checkInDateApi.isEmpty || _checkOutDateApi.isEmpty) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please select check-in and check-out dates'),
@@ -313,32 +387,51 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
       final amadeus = ref.read(amadeusServiceProvider);
       final peerRepo = ref.read(peerListingRepositoryProvider);
       final guests = _guests;
+      final lat = _selectedLat!;
+      final lng = _selectedLng!;
+      final placeDesc = _selectedPlaceDescription;
 
-      // Fetch both API hotels and peer-listed hotels in parallel
-      final results = await Future.wait([
-        amadeus.searchHotelsByLocation(
-          latitude: _selectedLat!,
-          longitude: _selectedLng!,
-          checkInDate: _checkInDateApi,
-          checkOutDate: _checkOutDateApi,
-          adults: guests,
-          radius: 35,
-          maxResults: 20,
-          query: _selectedPlaceDescription,
-        ),
-        peerRepo.searchListings(type: 'hotel', city: _selectedPlaceDescription),
-      ]);
+      final peerFuture = peerRepo
+          .searchListings(type: 'hotel', city: placeDesc)
+          .then((peerHotels) {
+            if (!mounted) return;
+            _cachedPeerHotels = List.of(peerHotels);
+            setState(() {
+              _peerHotels = peerHotels;
+              if (peerHotels.isNotEmpty) {
+                _showSearchForm = false;
+              }
+            });
+          });
+
+      final amadeusFuture = amadeus
+          .searchHotelsByLocation(
+            latitude: lat,
+            longitude: lng,
+            checkInDate: _checkInDateApi,
+            checkOutDate: _checkOutDateApi,
+            adults: guests,
+            radius: 35,
+            maxResults: 20,
+            query: placeDesc,
+          )
+          .then((offers) {
+            if (!mounted) return;
+            _cachedHotelOffers = List.of(offers);
+            setState(() {
+              _hotelOffers = offers;
+              _isSearching = false;
+              _showSearchForm = false;
+            });
+          });
+
+      await Future.wait([peerFuture, amadeusFuture]);
 
       if (!mounted) return;
-
-      final offers = results[0] as List<HotelOfferResult>;
-      final peerHotels = results[1] as List<PeerListing>;
 
       setState(() {
         _isSearching = false;
         _showSearchForm = false;
-        _hotelOffers = offers;
-        _peerHotels = peerHotels;
       });
 
       if (_hotelOffers.isEmpty && _peerHotels.isEmpty) {

@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:universal_io/io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +9,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
 import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
+import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/shared/widgets/user_card.dart';
 import 'package:diaspora_nearby/features/chat/services/chat_messaging_service.dart';
 
@@ -61,7 +64,37 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     if (widget.communityId != null) {
       _isPublic = true;
     }
+    _seedCachedContacts();
     _loadContacts();
+  }
+
+  void _seedCachedContacts() {
+    final repo = ref.read(chatRepositoryProvider);
+    final profileRepo = ref.read(profileRepositoryProvider);
+    final currentUserId = repo.currentUserId;
+    if (currentUserId == null) return;
+
+    final cachedChats = repo.cachedChats;
+    if (cachedChats.isEmpty) return;
+
+    final seenIds = <String>{};
+    final seeded = <ProfileData>[];
+    for (final chat in cachedChats) {
+      if (chat.type == 'direct') {
+        for (final pid in chat.participants) {
+          if (pid != currentUserId && seenIds.add(pid)) {
+            final p = profileRepo.getCachedProfile(pid);
+            if (p != null) {
+              seeded.add(p);
+            }
+          }
+        }
+      }
+    }
+    if (seeded.isNotEmpty) {
+      _contacts = seeded;
+      _isLoadingContacts = false;
+    }
   }
 
   @override
@@ -72,7 +105,9 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   }
 
   Future<void> _loadContacts() async {
-    setState(() => _isLoadingContacts = true);
+    if (_contacts.isEmpty) {
+      setState(() => _isLoadingContacts = true);
+    }
     final repo = ref.read(chatRepositoryProvider);
     final contacts = await repo.getContactsWithDMs();
 
@@ -104,57 +139,64 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
       context: context,
       builder: (ctx) {
         final theme = Theme.of(ctx);
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: Row(
-            children: [
-              Icon(
-                LucideIcons.shield,
-                color: theme.colorScheme.primary,
-                size: 22,
-              ),
-              const SizedBox(width: 8),
-              const Expanded(child: Text('Community Exclusive Group')),
-            ],
-          ),
-          content: RichText(
-            text: TextSpan(
-              style: theme.textTheme.bodyMedium,
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: AlertDialog(
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 24,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: Row(
               children: [
-                const TextSpan(
-                  text: 'This group will be exclusively for members of ',
+                Icon(
+                  LucideIcons.shield,
+                  color: theme.colorScheme.primary,
+                  size: 22,
                 ),
-                TextSpan(
-                  text: communityName,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const TextSpan(
-                  text:
-                      '. Only current and future members of this community will be able to discover and join this group.',
-                ),
+                const SizedBox(width: 8),
+                const Expanded(child: Text('Community Exclusive Group')),
               ],
             ),
+            content: RichText(
+              text: TextSpan(
+                style: theme.textTheme.bodyMedium,
+                children: [
+                  const TextSpan(
+                    text: 'This group will be exclusively for members of ',
+                  ),
+                  TextSpan(
+                    text: communityName,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const TextSpan(
+                    text:
+                        '. Only current and future members of this community will be able to discover and join this group.',
+                  ),
+                ],
+              ),
+            ),
+            actionsAlignment: MainAxisAlignment.center,
+            actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+            actions: [
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.of(ctx).pop(true),
+                  child: const Text('Create Group'),
+                ),
+              ),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(false),
+                  child: const Text('Cancel'),
+                ),
+              ),
+            ],
           ),
-          actionsAlignment: MainAxisAlignment.center,
-          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-          actions: [
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text('Create Group'),
-              ),
-            ),
-            SizedBox(
-              width: double.infinity,
-              child: TextButton(
-                onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('Cancel'),
-              ),
-            ),
-          ],
         );
       },
     );
@@ -192,6 +234,10 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
 
     setState(() => _isLoading = true);
     final repo = ref.read(chatRepositoryProvider);
+    final communityRepo = ref.read(communityRepositoryProvider);
+    final messagingService = ref.read(chatMessagingServiceProvider);
+    final selectedTargets = _selectedIds.toList();
+    final communityId = widget.communityId;
 
     // Create logic
     try {
@@ -202,51 +248,48 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
         [], // Empty list - members are invited, not added directly
         groupImage: _groupImage,
         description: _descriptionController.text.trim(),
-        communityId: widget.communityId,
-        isPublic: widget.communityId != null ? true : _isPublic,
+        communityId: communityId,
+        isPublic: communityId != null ? true : _isPublic,
         category: _selectedCategory,
       );
       debugPrint('Group created: ${chat?.id}');
 
       if (chat != null) {
-        // [NEW] Invitation logic: Auto-invite community members or use manual selection
-        List<String> invitationTargets;
-        if (widget.communityId != null) {
-          debugPrint('Fetching community members for auto-invitation...');
-          final communityRepo = ref.read(communityRepositoryProvider);
-          final community = await communityRepo.getCommunity(
-            widget.communityId!,
-          );
-          final currentUserId = repo.currentUserId;
+        // Dispatch invitations in the background so navigation happens in 0ms
+        unawaited(() async {
+          try {
+            List<String> invitationTargets;
+            if (communityId != null) {
+              final community =
+                  communityRepo.getCachedCommunity(communityId) ??
+                  await communityRepo.getCommunity(communityId);
+              final currentUserId = repo.currentUserId;
+              invitationTargets =
+                  community?.members
+                      .where((id) => id != currentUserId)
+                      .toList() ??
+                  [];
+            } else {
+              invitationTargets = selectedTargets;
+            }
 
-          invitationTargets =
-              community?.members.where((id) => id != currentUserId).toList() ??
-              [];
-          debugPrint(
-            'Found ${invitationTargets.length} community members to invite',
-          );
-        } else {
-          invitationTargets = _selectedIds.toList();
-        }
-
-        if (invitationTargets.isNotEmpty) {
-          debugPrint(
-            'Sending invitations to ${invitationTargets.length} users...',
-          );
-          final messagingService = ref.read(chatMessagingServiceProvider);
-          await messagingService.sendGroupInvitation(
-            chat.id,
-            name,
-            invitationTargets,
-          );
-          debugPrint('Invitations sent');
-        }
+            if (invitationTargets.isNotEmpty) {
+              await messagingService.sendGroupInvitation(
+                chat.id,
+                name,
+                invitationTargets,
+              );
+            }
+          } catch (e) {
+            debugPrint('Background invitation dispatch error: $e');
+          }
+        }());
       }
 
       if (mounted) {
         setState(() => _isLoading = false);
         if (chat != null) {
-          // Pop this screen and replace with chat screen
+          // Pop this screen and replace with chat screen immediately
           if (context.canPop()) context.pop();
           context.pushReplacement('/chats/${chat.id}');
         } else {
@@ -369,10 +412,24 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                         child: TextField(
                           controller: _nameController,
                           textCapitalization: TextCapitalization.sentences,
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             labelText: 'Group Name',
-                            border: OutlineInputBorder(),
-                            contentPadding: EdgeInsets.symmetric(
+                            filled: true,
+                            fillColor: theme.colorScheme.surfaceContainerHighest
+                                .withValues(alpha: 0.3),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
                               horizontal: 12,
                               vertical: 8,
                             ),
@@ -390,10 +447,24 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                     maxLines: 4,
                     minLines: 3,
                     maxLength: 200,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Group Description (Optional)',
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(
+                      filled: true,
+                      fillColor: theme.colorScheme.surfaceContainerHighest
+                          .withValues(alpha: 0.3),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 12,
                       ),
@@ -406,10 +477,24 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                     const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
                       initialValue: _selectedCategory,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Group Category',
-                        border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(
+                        filled: true,
+                        fillColor: theme.colorScheme.surfaceContainerHighest
+                            .withValues(alpha: 0.3),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
                           horizontal: 12,
                           vertical: 12,
                         ),
@@ -580,6 +665,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                   Expanded(
                     child: OutlinedButton(
                       onPressed: _isLoading ? null : () => context.pop(),
+                      style: OutlinedButton.styleFrom(side: BorderSide.none),
                       child: const Text('Cancel'),
                     ),
                   ),

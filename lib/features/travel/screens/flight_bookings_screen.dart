@@ -17,6 +17,7 @@ class FlightBookingsScreen extends StatefulWidget {
 
 class _FlightBookingsScreenState extends State<FlightBookingsScreen>
     with SingleTickerProviderStateMixin {
+  static QuerySnapshot? _cachedSnapshot;
   late TabController _tabController;
 
   @override
@@ -71,8 +72,13 @@ class _FlightBookingsScreenState extends State<FlightBookingsScreen>
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: _bookingsStream,
+        initialData: _cachedSnapshot,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.hasData) {
+            _cachedSnapshot = snapshot.data;
+          }
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
 

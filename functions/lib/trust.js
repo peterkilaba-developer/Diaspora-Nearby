@@ -79,9 +79,11 @@ exports.completeQrHandshake = functions.https.onCall(async (data, context) => {
       .doc(stableHash(`${orderedUsers[0]}:${orderedUsers[1]}`));
     const scannerRef = db.collection("users").doc(scannerUid);
     const peerRef = db.collection("users").doc(peerUid);
-    const exchange = await transaction.get(exchangeRef);
-    const scanner = await transaction.get(scannerRef);
-    const peer = await transaction.get(peerRef);
+    const [exchange, scanner, peer] = await Promise.all([
+      transaction.get(exchangeRef),
+      transaction.get(scannerRef),
+      transaction.get(peerRef),
+    ]);
     if (exchange.exists) {
       throw new functions.https.HttpsError("already-exists", "You are already connected.");
     }
@@ -139,49 +141,50 @@ exports.completeQrHandshake = functions.https.onCall(async (data, context) => {
   try {
     const rewardBatch = db.batch();
     const now = admin.firestore.FieldValue.serverTimestamp();
-    for (const [uid, otherUid] of [[scannerUid, peerUid], [peerUid, scannerUid]]) {
-      rewardBatch.set(
-        db.collection("user_points").doc(uid),
-        {
-          userId: uid,
-          totalPoints: admin.firestore.FieldValue.increment(QR_EXCHANGE_REWARD),
-          availablePoints: admin.firestore.FieldValue.increment(QR_EXCHANGE_REWARD),
-          lastUpdated: now,
-          lifetimeEarnings: {
-            identity_qr_exchange: admin.firestore.FieldValue.increment(QR_EXCHANGE_REWARD),
+    await Promise.all(
+      [[scannerUid, peerUid], [peerUid, scannerUid]].map(async ([uid, otherUid]) => {
+        rewardBatch.set(
+          db.collection("user_points").doc(uid),
+          {
+            userId: uid,
+            totalPoints: admin.firestore.FieldValue.increment(QR_EXCHANGE_REWARD),
+            availablePoints: admin.firestore.FieldValue.increment(QR_EXCHANGE_REWARD),
+            lastUpdated: now,
+            lifetimeEarnings: {
+              identity_qr_exchange: admin.firestore.FieldValue.increment(QR_EXCHANGE_REWARD),
+            },
           },
-        },
-        { merge: true }
-      );
-      rewardBatch.set(db.collection("points_transactions").doc(), {
-        userId: uid,
-        type: "earn",
-        action: "identity_qr_exchange",
-        points: QR_EXCHANGE_REWARD,
-        amount: QR_EXCHANGE_REWARD,
-        timestamp: now,
-        metadata: { peerUid: otherUid, locationAddress },
-      });
-      await distributeUbuntuMatchingSupply(
-        rewardBatch,
-        uid,
-        QR_EXCHANGE_REWARD,
-        now,
-        "identity_qr_exchange_match"
-      );
-    }
-    await rewardBatch.commit();
+          { merge: true }
+        );
+        rewardBatch.set(db.collection("points_transactions").doc(), {
+          userId: uid,
+          type: "earn",
+          action: "identity_qr_exchange",
+          points: QR_EXCHANGE_REWARD,
+          amount: QR_EXCHANGE_REWARD,
+          timestamp: now,
+          metadata: { peerUid: otherUid, locationAddress },
+        });
+        await distributeUbuntuMatchingSupply(
+          rewardBatch,
+          uid,
+          QR_EXCHANGE_REWARD,
+          now,
+          "identity_qr_exchange_match"
+        );
+      })
+    );
+    await Promise.all([
+      rewardBatch.commit(),
+      syncProfileMilestoneAndTrust(scannerUid).catch((syncErr) => {
+        console.warn(`[completeQrHandshake] syncProfileMilestoneAndTrust warning: ${syncErr.message}`);
+      }),
+      syncProfileMilestoneAndTrust(peerUid).catch((syncErr) => {
+        console.warn(`[completeQrHandshake] syncProfileMilestoneAndTrust warning: ${syncErr.message}`);
+      }),
+    ]);
   } catch (rewardErr) {
     console.warn(`[completeQrHandshake] Reward distribution warning: ${rewardErr.message}`);
-  }
-
-  try {
-    await Promise.all([
-      syncProfileMilestoneAndTrust(scannerUid),
-      syncProfileMilestoneAndTrust(peerUid),
-    ]);
-  } catch (syncErr) {
-    console.warn(`[completeQrHandshake] syncProfileMilestoneAndTrust warning: ${syncErr.message}`);
   }
 
   return { success: true, peerUid, earnedPoints: QR_EXCHANGE_REWARD };

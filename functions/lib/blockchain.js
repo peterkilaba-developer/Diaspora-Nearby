@@ -158,34 +158,43 @@ async function fetchFromRpc(walletAddress, tokenContractAddress) {
     const startTime = Date.now();
 
     const allLogs = [];
+    const BATCH_CHUNKS = 4;
 
-    for (let from = startBlock; from <= currentBlock; from += CHUNK_SIZE) {
+    for (let batchStart = startBlock; batchStart <= currentBlock; batchStart += CHUNK_SIZE * BATCH_CHUNKS) {
         if (Date.now() - startTime > MAX_RUNTIME_MS) {
             console.log('[getTokenTransfers] RPC time limit reached');
             break;
         }
 
-        const to = Math.min(from + CHUNK_SIZE - 1, currentBlock);
-        try {
-            const [inLogs, outLogs] = await Promise.all([
-                provider.getLogs({
-                    address: tokenContractAddress,
-                    topics: [TRANSFER_TOPIC, null, paddedAddress],
-                    fromBlock: from,
-                    toBlock: to,
-                }),
-                provider.getLogs({
-                    address: tokenContractAddress,
-                    topics: [TRANSFER_TOPIC, paddedAddress, null],
-                    fromBlock: from,
-                    toBlock: to,
-                }),
-            ]);
-            for (const l of inLogs) allLogs.push({ ...l, dir: 'in' });
-            for (const l of outLogs) allLogs.push({ ...l, dir: 'out' });
-        } catch (err) {
-            console.warn(`[getTokenTransfers] RPC chunk ${from}-${to} error: ${err.message}`);
+        const ranges = [];
+        for (let c = 0; c < BATCH_CHUNKS; c++) {
+            const from = batchStart + c * CHUNK_SIZE;
+            if (from > currentBlock) break;
+            ranges.push({ from, to: Math.min(from + CHUNK_SIZE - 1, currentBlock) });
         }
+
+        await Promise.all(ranges.map(async ({ from, to }) => {
+            try {
+                const [inLogs, outLogs] = await Promise.all([
+                    provider.getLogs({
+                        address: tokenContractAddress,
+                        topics: [TRANSFER_TOPIC, null, paddedAddress],
+                        fromBlock: from,
+                        toBlock: to,
+                    }),
+                    provider.getLogs({
+                        address: tokenContractAddress,
+                        topics: [TRANSFER_TOPIC, paddedAddress, null],
+                        fromBlock: from,
+                        toBlock: to,
+                    }),
+                ]);
+                for (const l of inLogs) allLogs.push({ ...l, dir: 'in' });
+                for (const l of outLogs) allLogs.push({ ...l, dir: 'out' });
+            } catch (err) {
+                console.warn(`[getTokenTransfers] RPC chunk ${from}-${to} error: ${err.message}`);
+            }
+        }));
     }
 
     if (allLogs.length === 0) return [];

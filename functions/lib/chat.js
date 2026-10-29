@@ -361,15 +361,18 @@ exports.createChat = functions.https.onCall(async (data, context) => {
         !["immediate", "extended"].includes(familyTier)) {
       throw new functions.https.HttpsError("invalid-argument", "Invalid family chat request.");
     }
-    const relationship = await db.collection("users").doc(uid)
-        .collection("relationships").doc(otherUserId).get();
+    const [relationship, isBlocked] = await Promise.all([
+      db.collection("users").doc(uid)
+          .collection("relationships").doc(otherUserId).get(),
+      blockedEitherDirection(uid, otherUserId),
+    ]);
     if (!relationship.exists || relationship.data().status !== "active") {
       throw new functions.https.HttpsError(
           "failed-precondition",
           "An accepted relationship is required.",
       );
     }
-    if (await blockedEitherDirection(uid, otherUserId)) {
+    if (isBlocked) {
       throw new functions.https.HttpsError("permission-denied", "This chat is unavailable.");
     }
     chatId = `family_${stableHash(`${uid}:${familyTier}`).slice(0, 40)}`;
@@ -509,16 +512,18 @@ exports.createChat = functions.https.onCall(async (data, context) => {
     if (!validUid(deceasedUserId) || deceasedUserId === uid) {
       throw new functions.https.HttpsError("invalid-argument", "Invalid bereavement request.");
     }
-    const relationship = await db.collection("users").doc(uid)
-        .collection("relationships").doc(deceasedUserId).get();
+    const [relationship, activeRelationships] = await Promise.all([
+      db.collection("users").doc(uid)
+          .collection("relationships").doc(deceasedUserId).get(),
+      db.collection("users").doc(uid)
+          .collection("relationships").where("status", "==", "active").limit(99).get(),
+    ]);
     if (!relationship.exists || relationship.data().status !== "deceased") {
       throw new functions.https.HttpsError(
           "failed-precondition",
           "A recorded deceased relationship is required.",
       );
     }
-    const activeRelationships = await db.collection("users").doc(uid)
-        .collection("relationships").where("status", "==", "active").limit(99).get();
     const participants = [uid, ...activeRelationships.docs.map((document) => document.id)];
     chatId = `bereavement_${stableHash(`${uid}:${deceasedUserId}`).slice(0, 40)}`;
     chatData = baseChat({
@@ -694,8 +699,10 @@ exports.manageOrganizationAdmin = functions.https.onCall(async (data, context) =
 
   const organizationRef = db.collection("organizations").doc(organizationId);
   await db.runTransaction(async (transaction) => {
-    const organization = await transaction.get(organizationRef);
-    const targetUser = await transaction.get(db.collection("users").doc(targetUid));
+    const [organization, targetUser] = await Promise.all([
+      transaction.get(organizationRef),
+      transaction.get(db.collection("users").doc(targetUid)),
+    ]);
     if (!organization.exists || !targetUser.exists) {
       throw new functions.https.HttpsError("not-found", "Organization or user not found.");
     }
@@ -779,8 +786,10 @@ exports.setBusinessChamberLink = functions.https.onCall(async (data, context) =>
   const chamberRef = db.collection("organizations").doc(chamberId);
   const businessRef = db.collection("organizations").doc(businessId);
   await db.runTransaction(async (transaction) => {
-    const chamber = await transaction.get(chamberRef);
-    const business = await transaction.get(businessRef);
+    const [chamber, business] = await Promise.all([
+      transaction.get(chamberRef),
+      transaction.get(businessRef),
+    ]);
     if (!chamber.exists || !business.exists || chamber.data().kind !== "corridor_chamber" ||
         business.data().kind === "corridor_chamber") {
       throw new functions.https.HttpsError("failed-precondition", "Invalid chamber or business.");
@@ -831,12 +840,14 @@ exports.joinChat = functions.https.onCall(async (data, context) => {
   const invitationRef = db.collection("users").doc(uid)
       .collection("userChats").doc(chatId);
   await db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(ref);
+    const [snapshot, invitation] = await Promise.all([
+      transaction.get(ref),
+      transaction.get(invitationRef),
+    ]);
     if (!snapshot.exists) {
       throw new functions.https.HttpsError("not-found", "Chat not found.");
     }
     const chat = snapshot.data();
-    const invitation = await transaction.get(invitationRef);
     const isInvited = invitation.exists && invitation.data().invitationOnly === true;
     let canJoin = chat.isPublic === true;
     if (!canJoin && chat.type === "community" && chat.communityId) {
@@ -885,8 +896,10 @@ exports.joinCommunity = functions.https.onCall(async (data, context) => {
   const communityRef = db.collection("communities").doc(communityId);
   const userRef = db.collection("users").doc(uid);
   await db.runTransaction(async (transaction) => {
-    const community = await transaction.get(communityRef);
-    const user = await transaction.get(userRef);
+    const [community, user] = await Promise.all([
+      transaction.get(communityRef),
+      transaction.get(userRef),
+    ]);
     if (!community.exists || !user.exists) {
       throw new functions.https.HttpsError("not-found", "Community or profile not found.");
     }
@@ -1000,10 +1013,12 @@ exports.setEventAttendance = functions.https.onCall(async (data, context) => {
     }
     const chatId = eventData.chatId;
     const chatRef = chatId ? db.collection("chats").doc(chatId) : null;
-    const chatSnapshot = chatRef ? await transaction.get(chatRef) : null;
     const historyRef = db.collection("event_attendance_history")
         .doc(stableHash(`${eventId}:${uid}`));
-    const historySnapshot = await transaction.get(historyRef);
+    const [chatSnapshot, historySnapshot] = await Promise.all([
+      chatRef ? transaction.get(chatRef) : Promise.resolve(null),
+      transaction.get(historyRef),
+    ]);
     const attendees = Array.isArray(eventData.attendees) ?
       [...new Set(eventData.attendees.filter(validUid))] : [];
     const wasAttending = attendees.includes(uid);
@@ -1125,8 +1140,10 @@ exports.completeEventCheckIn = functions.https.onCall(async (data, context) => {
   const eventRef = db.collection("events").doc(eventId);
   let hostUid = null;
   await db.runTransaction(async (transaction) => {
-    const challenge = await transaction.get(challengeRef);
-    const event = await transaction.get(eventRef);
+    const [challenge, event] = await Promise.all([
+      transaction.get(challengeRef),
+      transaction.get(eventRef),
+    ]);
     if (!challenge.exists || !event.exists) {
       throw new functions.https.HttpsError("not-found", "Check-in challenge not found.");
     }
@@ -1179,40 +1196,41 @@ exports.completeEventCheckIn = functions.https.onCall(async (data, context) => {
     if (hostUid && validUid(hostUid) && hostUid !== uid) {
       targets.push([hostUid, "event_hosting_per_attendee"]);
     }
-    for (const [targetUid, action] of targets) {
-      rewardBatch.set(
-        db.collection("user_points").doc(targetUid),
-        {
-          userId: targetUid,
-          totalPoints: admin.firestore.FieldValue.increment(REWARD),
-          availablePoints: admin.firestore.FieldValue.increment(REWARD),
-          lastUpdated: now,
-          lifetimeEarnings: {
-            [action]: admin.firestore.FieldValue.increment(REWARD),
+    await Promise.all(
+      targets.map(async ([targetUid, action]) => {
+        rewardBatch.set(
+          db.collection("user_points").doc(targetUid),
+          {
+            userId: targetUid,
+            totalPoints: admin.firestore.FieldValue.increment(REWARD),
+            availablePoints: admin.firestore.FieldValue.increment(REWARD),
+            lastUpdated: now,
+            lifetimeEarnings: {
+              [action]: admin.firestore.FieldValue.increment(REWARD),
+            },
           },
-        },
-        { merge: true }
-      );
-      rewardBatch.set(db.collection("points_transactions").doc(), {
-        userId: targetUid,
-        type: "earn",
-        action,
-        points: REWARD,
-        amount: REWARD,
-        timestamp: now,
-        metadata: { eventId, attendeeUid: uid, hostUid },
-      });
-      await distributeUbuntuMatchingSupply(rewardBatch, targetUid, REWARD, now, `${action}_match`);
-    }
-    await rewardBatch.commit();
+          { merge: true }
+        );
+        rewardBatch.set(db.collection("points_transactions").doc(), {
+          userId: targetUid,
+          type: "earn",
+          action,
+          points: REWARD,
+          amount: REWARD,
+          timestamp: now,
+          metadata: { eventId, attendeeUid: uid, hostUid },
+        });
+        await distributeUbuntuMatchingSupply(rewardBatch, targetUid, REWARD, now, `${action}_match`);
+      })
+    );
+    await Promise.all([
+      rewardBatch.commit(),
+      syncProfileMilestoneAndTrust(uid).catch((syncErr) => {
+        console.warn(`[completeEventCheckIn] syncProfileMilestoneAndTrust warning: ${syncErr.message}`);
+      }),
+    ]);
   } catch (rewardErr) {
     console.warn(`[completeEventCheckIn] Reward warning: ${rewardErr.message}`);
-  }
-
-  try {
-    await syncProfileMilestoneAndTrust(uid);
-  } catch (syncErr) {
-    console.warn(`[completeEventCheckIn] syncProfileMilestoneAndTrust warning: ${syncErr.message}`);
   }
 
   return { success: true };
@@ -1285,13 +1303,15 @@ exports.manageChatMembers = functions.https.onCall(async (data, context) => {
       throw new functions.https.HttpsError("failed-precondition", "An admin must be a participant.");
     }
     if (inviteUserId) {
-      const targetUser = await transaction.get(db.collection("users").doc(targetUid));
-      const blockedByCaller = await transaction.get(
-          db.collection("user_blocks").doc(callerUid).collection("blocked").doc(targetUid),
-      );
-      const blockedByTarget = await transaction.get(
-          db.collection("user_blocks").doc(targetUid).collection("blocked").doc(callerUid),
-      );
+      const [targetUser, blockedByCaller, blockedByTarget] = await Promise.all([
+        transaction.get(db.collection("users").doc(targetUid)),
+        transaction.get(
+            db.collection("user_blocks").doc(callerUid).collection("blocked").doc(targetUid),
+        ),
+        transaction.get(
+            db.collection("user_blocks").doc(targetUid).collection("blocked").doc(callerUid),
+        ),
+      ]);
       if (!targetUser.exists) {
         throw new functions.https.HttpsError("not-found", "Invitation recipient not found.");
       }
@@ -1391,8 +1411,10 @@ exports.reactToMessage = functions.https.onCall(async (data, context) => {
   const messageRef = chatRef.collection("messages").doc(messageId);
   let messageSenderId;
   await db.runTransaction(async (transaction) => {
-    const chatSnapshot = await transaction.get(chatRef);
-    const messageSnapshot = await transaction.get(messageRef);
+    const [chatSnapshot, messageSnapshot] = await Promise.all([
+      transaction.get(chatRef),
+      transaction.get(messageRef),
+    ]);
     if (!chatSnapshot.exists || !messageSnapshot.exists) {
       throw new functions.https.HttpsError("not-found", "Chat message not found.");
     }

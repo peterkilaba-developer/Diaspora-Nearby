@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -5,6 +6,7 @@ import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/chat/repository/report_repository.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
+import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 class BlockedUsersScreen extends ConsumerStatefulWidget {
@@ -15,9 +17,83 @@ class BlockedUsersScreen extends ConsumerStatefulWidget {
 }
 
 class _BlockedUsersScreenState extends ConsumerState<BlockedUsersScreen> {
+  final Set<String> _optimisticallyUnblockedIds = {};
+
+  @override
+  void initState() {
+    super.initState();
+    final uid = ref.read(authRepositoryProvider).currentUser?.uid;
+    if (uid != null) {
+      final profile =
+          ref.read(userProfileProvider).value ??
+          ref.read(profileRepositoryProvider).getCachedProfile(uid);
+      final blocked = profile?.blockedUsers ?? const [];
+      if (blocked.isNotEmpty) {
+        unawaited(ref.read(profileRepositoryProvider).getProfiles(blocked));
+      }
+    }
+  }
+
+  void _handleUnblock(ProfileData? currentProfile, String targetUserId) {
+    final currentUserId = ref.read(authRepositoryProvider).currentUser?.uid;
+    if (currentUserId == null) return;
+
+    setState(() {
+      _optimisticallyUnblockedIds.add(targetUserId);
+    });
+
+    if (currentProfile != null) {
+      final updatedBlocked = List<String>.from(
+        currentProfile.blockedUsers ?? const [],
+      )..remove(targetUserId);
+      final updatedProfile = currentProfile.copyWith(
+        blockedUsers: updatedBlocked,
+      );
+      ref.read(userProfileProvider.notifier).updateProfile(updatedProfile);
+      ref
+          .read(profileRepositoryProvider)
+          .cacheProfile(currentUserId, updatedProfile);
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('User unblocked')));
+    }
+
+    unawaited(
+      ref
+          .read(reportRepositoryProvider)
+          .unblockUser(currentUserId, targetUserId)
+          .catchError((Object e) {
+            if (mounted) {
+              setState(() {
+                _optimisticallyUnblockedIds.remove(targetUserId);
+              });
+              if (currentProfile != null) {
+                ref
+                    .read(userProfileProvider.notifier)
+                    .updateProfile(currentProfile);
+                ref
+                    .read(profileRepositoryProvider)
+                    .cacheProfile(currentUserId, currentProfile);
+              }
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Error unblocking user: $e')),
+              );
+            }
+          }),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final currentUserId = ref.watch(authRepositoryProvider).currentUser?.uid;
+    final cachedProfile = currentUserId != null
+        ? ref.read(profileRepositoryProvider).getCachedProfile(currentUserId)
+        : null;
     final userProfileAsync = ref.watch(userProfileProvider);
+    final profile = userProfileAsync.value ?? cachedProfile;
 
     return Scaffold(
       appBar: AppBar(
@@ -27,72 +103,96 @@ class _BlockedUsersScreenState extends ConsumerState<BlockedUsersScreen> {
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
-      body: userProfileAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('Error: $err')),
-        data: (profile) {
-          final blockedIds = profile?.blockedUsers ?? [];
+      body: profile == null && userProfileAsync.isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Builder(
+              builder: (context) {
+                final blockedIds = (profile?.blockedUsers ?? const <String>[])
+                    .where((id) => !_optimisticallyUnblockedIds.contains(id))
+                    .toList();
 
-          if (blockedIds.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    LucideIcons.shieldCheck,
-                    size: 64,
-                    color: Colors.grey.shade400,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No blocked accounts',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Colors.grey.shade600,
+                if (blockedIds.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          LucideIcons.shieldCheck,
+                          size: 64,
+                          color: Colors.grey.shade400,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No blocked accounts',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(color: Colors.grey.shade600),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
-            );
-          }
+                  );
+                }
 
-          return ListView.builder(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).padding.bottom + 16,
+                return ListView.builder(
+                  padding: EdgeInsets.only(
+                    bottom: MediaQuery.of(context).padding.bottom + 16,
+                  ),
+                  itemCount: blockedIds.length,
+                  itemBuilder: (context, index) {
+                    final userId = blockedIds[index];
+                    return _BlockedUserTile(
+                      userId: userId,
+                      onUnblock: () => _handleUnblock(profile, userId),
+                    );
+                  },
+                );
+              },
             ),
-            itemCount: blockedIds.length,
-            itemBuilder: (context, index) {
-              final userId = blockedIds[index];
-              return _BlockedUserTile(userId: userId);
-            },
-          );
-        },
-      ),
     );
   }
 }
 
-class _BlockedUserTile extends ConsumerWidget {
+class _BlockedUserTile extends ConsumerStatefulWidget {
   final String userId;
-  const _BlockedUserTile({required this.userId});
+  final VoidCallback onUnblock;
+  const _BlockedUserTile({required this.userId, required this.onUnblock});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // We fetch the blocked user's profile individually
-    // In a real app with many blocked users, we might want a bulk fetch or cache
-    final profileFutureBefore = ref
-        .read(profileRepositoryProvider)
-        .getUserProfile(userId);
+  ConsumerState<_BlockedUserTile> createState() => _BlockedUserTileState();
+}
 
-    // Use FutureBuilder since we don't have a specific provider family for "any user profile" set up easily without boilerplate,
-    // although `profileRepositoryProvider` has `getUserProfile`.
-    // Better to use FutureBuilder here for simplicity.
+class _BlockedUserTileState extends ConsumerState<_BlockedUserTile> {
+  late Future<ProfileData?> _profileFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _profileFuture = ref
+        .read(profileRepositoryProvider)
+        .getUserProfile(widget.userId);
+  }
+
+  @override
+  void didUpdateWidget(covariant _BlockedUserTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.userId != widget.userId) {
+      _profileFuture = ref
+          .read(profileRepositoryProvider)
+          .getUserProfile(widget.userId);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cachedUser = ref
+        .read(profileRepositoryProvider)
+        .getCachedProfile(widget.userId);
 
     return FutureBuilder<ProfileData?>(
-      future: profileFutureBefore,
+      initialData: cachedUser,
+      future: _profileFuture,
       builder: (context, snapshot) {
-        if (!snapshot.hasData &&
-            snapshot.connectionState != ConnectionState.done) {
-          // Loading state (skeleton or spinner)
+        final user = snapshot.data ?? cachedUser;
+        if (user == null && snapshot.connectionState != ConnectionState.done) {
           return const ListTile(
             leading: CircleAvatar(backgroundColor: Colors.black12),
             title: SizedBox(
@@ -105,7 +205,6 @@ class _BlockedUserTile extends ConsumerWidget {
           );
         }
 
-        final user = snapshot.data;
         final name = user != null
             ? '${user.firstName} ${user.lastName}'
             : 'Unknown User';
@@ -122,26 +221,17 @@ class _BlockedUserTile extends ConsumerWidget {
           ),
           title: Text(name),
           subtitle: Text(
-            userId,
+            widget.userId,
             style: const TextStyle(fontSize: 10, color: Colors.grey),
-          ), // Debug/Info
-          trailing: OutlinedButton(
-            onPressed: () async {
-              final currentUserId = ref
-                  .read(authRepositoryProvider)
-                  .currentUser
-                  ?.uid;
-              if (currentUserId != null) {
-                await ref
-                    .read(reportRepositoryProvider)
-                    .unblockUser(currentUserId, userId);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('User unblocked')),
-                  );
-                }
-              }
-            },
+          ),
+          trailing: TextButton(
+            style: TextButton.styleFrom(
+              backgroundColor: AppTheme.elevationColor(context, 2),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            onPressed: widget.onUnblock,
             child: const Text('Unblock'),
           ),
         );

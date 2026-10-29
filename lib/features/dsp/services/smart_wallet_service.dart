@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:cloud_functions/cloud_functions.dart';
@@ -6,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rxdart/rxdart.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 
 /// Provider for the SmartWalletService
@@ -13,35 +15,64 @@ final smartWalletServiceProvider = Provider<SmartWalletService>((ref) {
   return SmartWalletService();
 });
 
+class _WalletBalanceCache {
+  static String? tokenBalance;
+  static BatchTokenBalances? batchBalances;
+  static List<OnChainTransfer>? transfers;
+  static final Map<String, String> treasuryBalances = {};
+}
+
 /// Provider that fetches the user's on-chain $DIASPORA token balance
 final tokenBalanceProvider = FutureProvider<String>((ref) async {
   final user = FirebaseAuth.instance.currentUser;
   if (user == null) return '0';
 
-  try {
-    final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable(
-          'getTokenBalance',
-          options: HttpsCallableOptions(timeout: const Duration(seconds: 8)),
-        );
-    final result = await callable.call<Map<String, dynamic>>({});
-    final data = result.data;
-    final formatted = data['formatted'] as String? ?? '0';
-    // Remove trailing zeros for clean display (e.g. '50.0' -> '50')
-    final num parsed = num.tryParse(formatted) ?? 0;
-    if (parsed == parsed.toInt()) {
-      return parsed.toInt().toString();
-    }
-    return parsed.toStringAsFixed(2);
-  } catch (e) {
-    debugPrint('[TokenBalance] Error fetching balance: $e');
-    return '0';
+  if (_WalletBalanceCache.tokenBalance == null) {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString('dn_cached_token_balance_${user.uid}');
+      if (saved != null && saved.isNotEmpty) {
+        _WalletBalanceCache.tokenBalance = saved;
+      }
+    } catch (_) {}
   }
+
+  Future<String> fetchLive() async {
+    try {
+      final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable(
+            'getTokenBalance',
+            options: HttpsCallableOptions(timeout: const Duration(seconds: 8)),
+          );
+      final result = await callable.call<Map<String, dynamic>>({});
+      final data = result.data;
+      final formatted = data['formatted'] as String? ?? '0';
+      final num parsed = num.tryParse(formatted) ?? 0;
+      final clean = parsed == parsed.toInt()
+          ? parsed.toInt().toString()
+          : parsed.toStringAsFixed(2);
+      _WalletBalanceCache.tokenBalance = clean;
+      unawaited(
+        SharedPreferences.getInstance().then(
+          (p) => p.setString('dn_cached_token_balance_${user.uid}', clean),
+        ),
+      );
+      return clean;
+    } catch (e) {
+      debugPrint('[TokenBalance] Error fetching balance: $e');
+      return _WalletBalanceCache.tokenBalance ?? '0';
+    }
+  }
+
+  if (_WalletBalanceCache.tokenBalance != null) {
+    unawaited(fetchLive());
+    return _WalletBalanceCache.tokenBalance!;
+  }
+
+  return fetchLive();
 });
 
 /// Provider that fetches on-chain $DIASPORA balance for a treasury wallet address.
-/// Reads directly from the ERC-20 contract on Ethereum Base Blockchain via getTokenBalance Cloud Function.
-/// NOTE: For the treasury grid, use batchTokenBalancesProvider instead to avoid rate-limiting.
 final treasuryTokenBalanceProvider = FutureProvider.family<String, String>((
   ref,
   walletAddress,
@@ -50,26 +81,38 @@ final treasuryTokenBalanceProvider = FutureProvider.family<String, String>((
   if (user == null) return '0';
   if (walletAddress.isEmpty) return '0';
 
-  try {
-    final callable = FirebaseFunctions.instanceFor(
-      region: 'us-central1',
-    ).httpsCallable('getTokenBalance');
-    final result = await callable.call<Map<String, dynamic>>({
-      'walletAddress': walletAddress,
-    });
-    final data = result.data;
-    final formatted = data['formatted'] as String? ?? '0';
-    final num parsed = num.tryParse(formatted) ?? 0;
-    if (parsed == parsed.toInt()) {
-      return parsed.toInt().toString();
+  final cached = _WalletBalanceCache.treasuryBalances[walletAddress];
+
+  Future<String> fetchLive() async {
+    try {
+      final callable = FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('getTokenBalance');
+      final result = await callable.call<Map<String, dynamic>>({
+        'walletAddress': walletAddress,
+      });
+      final data = result.data;
+      final formatted = data['formatted'] as String? ?? '0';
+      final num parsed = num.tryParse(formatted) ?? 0;
+      final clean = parsed == parsed.toInt()
+          ? parsed.toInt().toString()
+          : parsed.toStringAsFixed(2);
+      _WalletBalanceCache.treasuryBalances[walletAddress] = clean;
+      return clean;
+    } catch (e) {
+      debugPrint(
+        '[TreasuryBalance] Error fetching balance for $walletAddress: $e',
+      );
+      return cached ?? '0';
     }
-    return parsed.toStringAsFixed(2);
-  } catch (e) {
-    debugPrint(
-      '[TreasuryBalance] Error fetching balance for $walletAddress: $e',
-    );
-    return '0';
   }
+
+  if (cached != null) {
+    unawaited(fetchLive());
+    return cached;
+  }
+
+  return fetchLive();
 });
 
 /// Model for batch token balances response.
@@ -98,56 +141,66 @@ final batchTokenBalancesProvider = FutureProvider<BatchTokenBalances>((
   final user = FirebaseAuth.instance.currentUser;
   if (user == null) return const BatchTokenBalances();
 
-  try {
-    final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable(
-          'getBatchTokenBalances',
-          options: HttpsCallableOptions(timeout: const Duration(seconds: 10)),
-        );
-    final result = await callable.call<Map<String, dynamic>>({});
-    final data = result.data;
+  Future<BatchTokenBalances> fetchLive() async {
+    try {
+      final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable(
+            'getBatchTokenBalances',
+            options: HttpsCallableOptions(timeout: const Duration(seconds: 10)),
+          );
+      final result = await callable.call<Map<String, dynamic>>({});
+      final data = result.data;
 
-    // Firebase returns nested maps as Map<Object?, Object?> — use Map.from() for safe conversion
-    final rawBalancesObj = data['balances'];
-    final Map<String, dynamic> rawBalances = rawBalancesObj is Map
-        ? Map<String, dynamic>.from(rawBalancesObj)
-        : {};
-
-    final balances = <String, String>{};
-    for (final entry in rawBalances.entries) {
-      final val = entry.value;
-      // Also handle nested maps that might be Map<Object?, Object?>
-      final Map<String, dynamic> valMap = val is Map
-          ? Map<String, dynamic>.from(val)
+      final rawBalancesObj = data['balances'];
+      final Map<String, dynamic> rawBalances = rawBalancesObj is Map
+          ? Map<String, dynamic>.from(rawBalancesObj)
           : {};
-      final formatted = valMap['formatted']?.toString() ?? '0';
-      final num parsed = num.tryParse(formatted) ?? 0;
-      balances[entry.key] = parsed == parsed.toInt()
-          ? parsed.toInt().toString()
-          : parsed.toStringAsFixed(2);
+
+      final balances = <String, String>{};
+      for (final entry in rawBalances.entries) {
+        final val = entry.value;
+        final Map<String, dynamic> valMap = val is Map
+            ? Map<String, dynamic>.from(val)
+            : {};
+        final formatted = valMap['formatted']?.toString() ?? '0';
+        final num parsed = num.tryParse(formatted) ?? 0;
+        balances[entry.key] = parsed == parsed.toInt()
+            ? parsed.toInt().toString()
+            : parsed.toStringAsFixed(2);
+      }
+
+      final totalRaw = data['totalDistributed']?.toString() ?? '0';
+      final num totalParsed = num.tryParse(totalRaw) ?? 0;
+      final totalFormatted = totalParsed == totalParsed.toInt()
+          ? totalParsed.toInt().toString()
+          : totalParsed.toStringAsFixed(2);
+
+      final userBalRaw = data['userBalance']?.toString() ?? '0';
+      final num userParsed = num.tryParse(userBalRaw) ?? 0;
+      final userFormatted = userParsed == userParsed.toInt()
+          ? userParsed.toInt().toString()
+          : userParsed.toStringAsFixed(2);
+
+      final batch = BatchTokenBalances(
+        balances: balances,
+        totalDistributed: totalFormatted,
+        userBalance: userFormatted,
+      );
+      _WalletBalanceCache.batchBalances = batch;
+      _WalletBalanceCache.tokenBalance = userFormatted;
+      return batch;
+    } catch (e) {
+      debugPrint('[BatchTokenBalances] Treasury service unavailable: $e');
+      return _WalletBalanceCache.batchBalances ?? const BatchTokenBalances();
     }
-
-    final totalRaw = data['totalDistributed']?.toString() ?? '0';
-    final num totalParsed = num.tryParse(totalRaw) ?? 0;
-    final totalFormatted = totalParsed == totalParsed.toInt()
-        ? totalParsed.toInt().toString()
-        : totalParsed.toStringAsFixed(2);
-
-    final userBalRaw = data['userBalance']?.toString() ?? '0';
-    final num userParsed = num.tryParse(userBalRaw) ?? 0;
-    final userFormatted = userParsed == userParsed.toInt()
-        ? userParsed.toInt().toString()
-        : userParsed.toStringAsFixed(2);
-
-    return BatchTokenBalances(
-      balances: balances,
-      totalDistributed: totalFormatted,
-      userBalance: userFormatted,
-    );
-  } catch (e) {
-    debugPrint('[BatchTokenBalances] Treasury service unavailable: $e');
-    return const BatchTokenBalances();
   }
+
+  if (_WalletBalanceCache.batchBalances != null) {
+    unawaited(fetchLive());
+    return _WalletBalanceCache.batchBalances!;
+  }
+
+  return fetchLive();
 });
 
 /// Model for an on-chain token transfer event
@@ -189,118 +242,131 @@ final onChainTransfersProvider = FutureProvider<List<OnChainTransfer>>((
   final user = FirebaseAuth.instance.currentUser;
   if (user == null) return [];
 
-  // 1. Try Cloud Functions first
-  try {
-    final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable(
-          'getTokenTransfers',
-          options: HttpsCallableOptions(timeout: const Duration(seconds: 10)),
-        );
-    final result = await callable.call<Map<String, dynamic>>({});
-    final data = result.data;
+  Future<List<OnChainTransfer>> fetchLive() async {
+    // 1. Try Cloud Functions first
+    try {
+      final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable(
+            'getTokenTransfers',
+            options: HttpsCallableOptions(timeout: const Duration(seconds: 10)),
+          );
+      final result = await callable.call<Map<String, dynamic>>({});
+      final data = result.data;
 
-    final rawTransfers = data['transfers'];
-    if (rawTransfers is List && rawTransfers.isNotEmpty) {
-      final transfers = <OnChainTransfer>[];
-      for (final raw in rawTransfers) {
-        final Map<String, dynamic> tx = raw is Map
-            ? Map<String, dynamic>.from(raw)
-            : {};
-        if (tx.isEmpty) continue;
+      final rawTransfers = data['transfers'];
+      if (rawTransfers is List && rawTransfers.isNotEmpty) {
+        final transfers = <OnChainTransfer>[];
+        for (final raw in rawTransfers) {
+          final Map<String, dynamic> tx = raw is Map
+              ? Map<String, dynamic>.from(raw)
+              : {};
+          if (tx.isEmpty) continue;
 
-        final amount = double.tryParse(tx['amount']?.toString() ?? '0') ?? 0;
-        final timestampMs =
-            tx['timestamp'] as int? ?? DateTime.now().millisecondsSinceEpoch;
+          final amount = double.tryParse(tx['amount']?.toString() ?? '0') ?? 0;
+          final timestampMs =
+              tx['timestamp'] as int? ?? DateTime.now().millisecondsSinceEpoch;
 
-        transfers.add(
-          OnChainTransfer(
-            txHash: tx['txHash']?.toString() ?? '',
-            blockNumber: tx['blockNumber'] as int? ?? 0,
-            timestamp: DateTime.fromMillisecondsSinceEpoch(timestampMs),
-            from: tx['from']?.toString() ?? '',
-            to: tx['to']?.toString() ?? '',
-            amount: amount,
-            direction: tx['direction']?.toString() ?? 'in',
-          ),
-        );
-      }
-      if (transfers.isNotEmpty) return transfers;
-    }
-  } catch (e) {
-    debugPrint('[OnChainTransfers] Cloud Function error/timeout: $e');
-  }
-
-  // 2. Direct Base Explorer fallback (Blockscout API)
-  try {
-    String? walletAddress = ref.read(userProfileProvider).value?.walletAddress;
-    if (walletAddress == null || walletAddress.isEmpty) {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-      walletAddress = doc.data()?['walletAddress'] as String?;
-    }
-
-    if (walletAddress != null && walletAddress.isNotEmpty) {
-      const tokenAddress = '0x55d7e7d006938A15082752225ED44Fd130B87735';
-      final url = Uri.parse(
-        'https://base.blockscout.com/api?module=account&action=tokentx&contractaddress=$tokenAddress&address=$walletAddress&startblock=0&endblock=99999999&sort=desc',
-      );
-      final response = await http
-          .get(url, headers: {'User-Agent': 'DiasporaNearby/1.0'})
-          .timeout(const Duration(seconds: 10));
-
-      if (response.statusCode == 200) {
-        final json = jsonDecode(response.body);
-        final rawList = json['result'];
-        if (rawList is List) {
-          final transfers = <OnChainTransfer>[];
-          for (final raw in rawList) {
-            if (raw is! Map) continue;
-            final tx = Map<String, dynamic>.from(raw);
-            final rawValue = tx['value']?.toString() ?? '0';
-            final decimals =
-                int.tryParse(tx['tokenDecimal']?.toString() ?? '18') ?? 18;
-            final rawNum = BigInt.tryParse(rawValue) ?? BigInt.zero;
-            final divisor = BigInt.from(10).pow(decimals);
-            final whole = rawNum ~/ divisor;
-            final fraction = rawNum % divisor;
-            final fractionStr = fraction.toString().padLeft(decimals, '0');
-            final amount = double.tryParse('$whole.$fractionStr') ?? 0.0;
-
-            final timeStampSec =
-                int.tryParse(tx['timeStamp']?.toString() ?? '0') ?? 0;
-            final timestamp = timeStampSec > 0
-                ? DateTime.fromMillisecondsSinceEpoch(timeStampSec * 1000)
-                : DateTime.now();
-
-            final fromAddr = tx['from']?.toString() ?? '';
-            final toAddr = tx['to']?.toString() ?? '';
-            final isIncoming =
-                toAddr.toLowerCase() == walletAddress.toLowerCase();
-
-            transfers.add(
-              OnChainTransfer(
-                txHash: tx['hash']?.toString() ?? '',
-                blockNumber:
-                    int.tryParse(tx['blockNumber']?.toString() ?? '0') ?? 0,
-                timestamp: timestamp,
-                from: fromAddr,
-                to: toAddr,
-                amount: amount,
-                direction: isIncoming ? 'in' : 'out',
-              ),
-            );
-          }
+          transfers.add(
+            OnChainTransfer(
+              txHash: tx['txHash']?.toString() ?? '',
+              blockNumber: tx['blockNumber'] as int? ?? 0,
+              timestamp: DateTime.fromMillisecondsSinceEpoch(timestampMs),
+              from: tx['from']?.toString() ?? '',
+              to: tx['to']?.toString() ?? '',
+              amount: amount,
+              direction: tx['direction']?.toString() ?? 'in',
+            ),
+          );
+        }
+        if (transfers.isNotEmpty) {
+          _WalletBalanceCache.transfers = transfers;
           return transfers;
         }
       }
+    } catch (e) {
+      debugPrint('[OnChainTransfers] Cloud Function error/timeout: $e');
     }
-  } catch (e) {
-    debugPrint('[OnChainTransfers] Direct Blockscout fallback error: $e');
+
+    // 2. Direct Base Explorer fallback (Blockscout API)
+    try {
+      String? walletAddress = ref.read(userProfileProvider).value?.walletAddress;
+      if (walletAddress == null || walletAddress.isEmpty) {
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+        walletAddress = doc.data()?['walletAddress'] as String?;
+      }
+
+      if (walletAddress != null && walletAddress.isNotEmpty) {
+        const tokenAddress = '0x55d7e7d006938A15082752225ED44Fd130B87735';
+        final url = Uri.parse(
+          'https://base.blockscout.com/api?module=account&action=tokentx&contractaddress=$tokenAddress&address=$walletAddress&startblock=0&endblock=99999999&sort=desc',
+        );
+        final response = await http
+            .get(url, headers: {'User-Agent': 'DiasporaNearby/1.0'})
+            .timeout(const Duration(seconds: 10));
+
+        if (response.statusCode == 200) {
+          final json = jsonDecode(response.body);
+          final rawList = json['result'];
+          if (rawList is List) {
+            final transfers = <OnChainTransfer>[];
+            for (final raw in rawList) {
+              if (raw is! Map) continue;
+              final tx = Map<String, dynamic>.from(raw);
+              final rawValue = tx['value']?.toString() ?? '0';
+              final decimals =
+                  int.tryParse(tx['tokenDecimal']?.toString() ?? '18') ?? 18;
+              final rawNum = BigInt.tryParse(rawValue) ?? BigInt.zero;
+              final divisor = BigInt.from(10).pow(decimals);
+              final whole = rawNum ~/ divisor;
+              final fraction = rawNum % divisor;
+              final fractionStr = fraction.toString().padLeft(decimals, '0');
+              final amount = double.tryParse('$whole.$fractionStr') ?? 0.0;
+
+              final timeStampSec =
+                  int.tryParse(tx['timeStamp']?.toString() ?? '0') ?? 0;
+              final timestamp = timeStampSec > 0
+                  ? DateTime.fromMillisecondsSinceEpoch(timeStampSec * 1000)
+                  : DateTime.now();
+
+              final fromAddr = tx['from']?.toString() ?? '';
+              final toAddr = tx['to']?.toString() ?? '';
+              final isIncoming =
+                  toAddr.toLowerCase() == walletAddress.toLowerCase();
+
+              transfers.add(
+                OnChainTransfer(
+                  txHash: tx['hash']?.toString() ?? '',
+                  blockNumber:
+                      int.tryParse(tx['blockNumber']?.toString() ?? '0') ?? 0,
+                  timestamp: timestamp,
+                  from: fromAddr,
+                  to: toAddr,
+                  amount: amount,
+                  direction: isIncoming ? 'in' : 'out',
+                ),
+              );
+            }
+            _WalletBalanceCache.transfers = transfers;
+            return transfers;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[OnChainTransfers] Direct Blockscout fallback error: $e');
+    }
+
+    return _WalletBalanceCache.transfers ?? [];
   }
 
-  return [];
+  if (_WalletBalanceCache.transfers != null) {
+    unawaited(fetchLive());
+    return _WalletBalanceCache.transfers!;
+  }
+
+  return fetchLive();
 });
 
 /// Provider that streams the current user's smart wallet data
@@ -319,7 +385,6 @@ final userWalletProvider = StreamProvider<SmartWalletData?>((ref) {
       .map((doc) {
         if (!doc.exists) return null;
         final data = doc.data()!;
-        // Always force 'smart' type — legacy 'eoa' values in Firestore must not leak to UI
         return SmartWalletData(
           address: data['walletAddress'] as String?,
           walletType: 'smart',
@@ -358,23 +423,12 @@ class SmartWalletData {
 }
 
 /// Service for managing Smart Wallet operations.
-///
-/// This service calls Cloud Functions to create and manage
-/// smart wallets using account abstraction (CREATE2).
-/// No private keys are stored on the client — the backend signer
-/// controls all smart wallets.
 class SmartWalletService {
   final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(
     region: 'us-central1',
   );
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// Get or create a smart wallet for the current authenticated user.
-  ///
-  /// This is called after phone authentication to ensure the user
-  /// has a deterministic smart wallet tied to their phone number.
-  ///
-  /// Returns [SmartWalletData] with the wallet address and type.
   Future<SmartWalletData> getOrCreateWallet() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -435,66 +489,24 @@ class SmartWalletService {
   }
 
   /// Get the wallet address for the crypto screen display.
-  /// Returns the saved address or null.
   Future<String?> getWalletAddress() async {
     final wallet = await getCurrentWallet();
     return wallet?.address;
   }
 
   /// Ensure wallet exists (called during sign-in flow).
-  /// All wallets are now smart wallets — this creates one if missing.
-  /// This is a fire-and-forget operation — the wallet creation
-  /// happens asynchronously on the backend.
   Future<void> ensureWalletOnSignIn() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
     try {
-      final doc = await _firestore.collection('users').doc(user.uid).get();
-      if (!doc.exists) {
-        // No user doc yet — trigger wallet creation
-        debugPrint(
-          '[SmartWallet] No user doc, triggering wallet creation for ${user.uid}',
-        );
-        await getOrCreateWallet();
-        return;
-      }
-
-      final data = doc.data()!;
-      final currentType = data['walletType'] as String?;
-      final hasAddress =
-          data['walletAddress'] != null &&
-          (data['walletAddress'] as String).isNotEmpty;
-
-      if (currentType == 'smart') {
-        debugPrint('[SmartWallet] User already has smart wallet, skipping');
-        return;
-      }
-
-      // Migrate legacy 'eoa' type to 'smart' in Firestore
-      if (currentType != null && currentType != 'smart' && hasAddress) {
-        debugPrint(
-          '[SmartWallet] Migrating legacy walletType "$currentType" to "smart" for ${user.uid}',
-        );
-        await _firestore.collection('users').doc(user.uid).update({
-          'walletType': 'smart',
-        });
-        return;
-      }
-
-      // Trigger wallet creation/migration via Cloud Function
-      debugPrint(
-        '[SmartWallet] Triggering wallet creation/migration for ${user.uid}',
-      );
       await getOrCreateWallet();
     } catch (e) {
-      // Don't block the sign-in flow if wallet creation fails
       debugPrint('[SmartWallet] Wallet creation failed (non-blocking): $e');
     }
   }
 
-  /// Ensure the user has a smart wallet. Called from the crypto screen
-  /// to create a wallet if the user doesn't have one yet.
+  /// Ensure the user has a smart wallet.
   Future<SmartWalletData?> ensureSmartWallet() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return null;

@@ -12,6 +12,7 @@ import 'package:diaspora_nearby/core/providers/view_mode_provider.dart';
 import 'package:diaspora_nearby/core/services/location_update_service.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
+import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
 import 'package:flutter/foundation.dart'; // [NEW] kIsWeb
 import 'package:flutter_background_service/flutter_background_service.dart'; // [NEW]
 import 'package:diaspora_nearby/core/services/background_location_service.dart'; // [NEW]
@@ -52,16 +53,23 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _triggerDailyCheckIn();
       _ensureBackgroundService();
+      _prewarmCaches();
       if (mounted) {
         unawaited(AppUpdateService.instance.checkForUpdate(context));
       }
     });
   }
 
+  void _prewarmCaches() {
+    final user = ref.read(authRepositoryProvider).currentUser;
+    if (user == null) return;
+    final pointsRepo = ref.read(pointsRepositoryProvider);
+    unawaited(pointsRepo.getReferralCode(user.uid));
+  }
+
   Future<void> _ensureBackgroundService() async {
     if (kIsWeb) return;
     try {
-      await Future.delayed(const Duration(seconds: 1));
       if (!mounted) return;
 
       final service = FlutterBackgroundService();

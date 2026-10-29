@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
@@ -42,11 +44,6 @@ class UserProfileScreen extends ConsumerStatefulWidget {
 
 class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     with WidgetsBindingObserver {
-  // Data Fetching State
-
-  // REMOVED: late Future<ProfileData?> _profileFuture;
-
-  // New State
   ProfileData? _profile;
   bool _isLoadingProfile = true;
   String? _errorMessage;
@@ -62,7 +59,25 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    // [NEW] Parse query parameters early
+    final currentUserId = ref.read(authRepositoryProvider).currentUser?.uid;
+
+    // [PERF] Seed profile synchronously from memory cache so the screen renders
+    // on frame 0 without a full-screen loading spinner.
+    final cachedProfile =
+        (currentUserId == widget.userId
+            ? ref.read(userProfileProvider).value
+            : null) ??
+        ref.read(profileRepositoryProvider).getCachedProfile(widget.userId);
+    if (cachedProfile != null) {
+      _profile = cachedProfile;
+      _isLoadingProfile = false;
+    }
+
+    // [PERF] Pre-warm own referral code in the background so Share buttons open in 0ms
+    if (currentUserId != null && currentUserId == widget.userId) {
+      unawaited(ref.read(pointsRepositoryProvider).getReferralCode(currentUserId));
+    }
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final state = GoRouterState.of(context);
@@ -85,30 +100,16 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
           }
         });
       }
-    });
 
-    // [PERF] Seed profile synchronously from memory cache so the screen renders
-    // on frame 0 without a full-screen loading spinner.
-    final currentUserId = ref.read(authRepositoryProvider).currentUser?.uid;
-    final cachedProfile =
-        (currentUserId == widget.userId
-            ? ref.read(userProfileProvider).value
-            : null) ??
-        ref.read(profileRepositoryProvider).getCachedProfile(widget.userId);
-    if (cachedProfile != null) {
-      _profile = cachedProfile;
-      _isLoadingProfile = false;
-    }
+      _handleIncomingAction();
+    });
 
     _refreshProfile(showLoading: _profile == null);
     _checkLocationPermission();
-    _handleIncomingAction();
     _refreshTrustData();
   }
 
   Future<void> _handleIncomingAction() async {
-    // Give a small delay for profile to load and state to settle
-    await Future.delayed(const Duration(milliseconds: 800));
     if (!mounted) return;
 
     final state = GoRouterState.of(context);
@@ -120,7 +121,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         handshakeToken != null &&
         user != null &&
         widget.userId != user.uid) {
-      final currentProfile = ref.read(userProfileProvider).value;
+      final currentProfile =
+          ref.read(userProfileProvider).value ??
+          ref.read(profileRepositoryProvider).getCachedProfile(user.uid);
       if (currentProfile == null) return;
 
       // Check if already connected to avoid duplicate logic
@@ -147,7 +150,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     try {
       String? locationAddress;
       try {
-        final currentProfile = ref.read(userProfileProvider).value;
+        final currentProfile =
+            ref.read(userProfileProvider).value ??
+            ref.read(profileRepositoryProvider).getCachedProfile(fromUid);
         if (currentProfile != null) {
           final host = currentProfile.hostLocation;
           final city = host.city?.trim();
@@ -179,7 +184,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
             backgroundColor: Colors.green,
           ),
         );
-        _refreshProfile(); // Refresh to show the connection section
+        _refreshProfile(showLoading: false);
       }
     } on IncompleteProfileException catch (e) {
       if (!mounted) return;
@@ -190,7 +195,6 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         );
         final success = await _showCompleteProfileModal(e.missingFields);
         if (success == true) {
-          // Re-trigger connection after profile update
           _triggerQRConnection(fromUid, toUid, handshakeToken);
         }
       } else {
@@ -212,10 +216,12 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     final user = ref.read(authRepositoryProvider).currentUser;
     if (user == null) return false;
 
-    // Fetch latest profile data to ensure modal has current state
-    final latestProfile = await ref
-        .read(profileRepositoryProvider)
-        .getUserProfile(user.uid);
+    // [PERF] Read cached profile synchronously so modal opens in 0ms
+    final latestProfile =
+        ref.read(userProfileProvider).value ??
+        ref.read(profileRepositoryProvider).getCachedProfile(user.uid) ??
+        _profile;
+    if (latestProfile == null) return false;
 
     if (!mounted) return false;
 
@@ -224,10 +230,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => CompleteProfileModal(
-        profile: latestProfile ?? _profile!, // Ensure we have a profile
+        profile: latestProfile,
         missingFields: missingFields,
         onNavigateToFullEdit: () {
-          // Alternative to modal: Navigate to full page with highlights
           Navigator.pop(context, false);
           setState(() {
             _isEditing = true;
@@ -238,12 +243,6 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     );
   }
 
-  /// Refresh profile data from Firestore.
-  ///
-  /// [showLoading] – when `false` the existing profile data stays visible
-  /// while we fetch in the background (used after save to avoid flashing a
-  /// loading spinner and to prevent timeout errors from overwriting the
-  /// already-known good profile).
   Future<void> _refreshProfile({
     bool showLoading = true,
     bool forceServer = false,
@@ -256,19 +255,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     }
 
     try {
-      debugPrint(
-        '🔍 [ProfileScreen] _refreshProfile called for userId="${widget.userId}" (showLoading=$showLoading, forceServer=$forceServer)',
-      );
       final profile = await ref
           .read(profileRepositoryProvider)
           .getUserProfile(widget.userId, forceServer: forceServer);
-      debugPrint(
-        '🔍 [ProfileScreen] _refreshProfile result → '
-        'firstName="${profile?.firstName}", lastName="${profile?.lastName}", '
-        'profileImage="${profile?.profileImage.isNotEmpty == true ? "SET" : "EMPTY"}", '
-        'homeCity="${profile?.homeLocation.city}", '
-        'hostCity="${profile?.hostLocation.city}"',
-      );
       if (mounted) {
         setState(() {
           _profile = profile;
@@ -278,13 +267,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     } catch (e) {
       debugPrint('Error loading profile: $e');
       if (mounted) {
-        // [FIX] If we already have profile data (e.g. after a save), don't
-        // overwrite it with an error — the profile was just saved successfully
-        // and only the background refresh failed (timeout / network).
         if (_profile != null && !showLoading) {
-          debugPrint(
-            '📋 [ProfileScreen] Background refresh failed but using existing profile data',
-          );
           setState(() => _isLoadingProfile = false);
         } else {
           setState(() {
@@ -296,18 +279,12 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     }
   }
 
-  /// Background trust recalculation to ensure milestone genesis IDs are current
   Future<void> _refreshTrustData() async {
     final user = ref.read(authRepositoryProvider).currentUser;
-    // Only recalculate for own profile view
     if (user == null || user.uid != widget.userId) return;
 
     try {
-      debugPrint(
-        '🔄 [Profile] Triggering background trust recalculation for ${user.uid}',
-      );
       await ref.read(trustServiceProvider).updateTrustForUser(user.uid);
-      debugPrint('✅ [Profile] Trust recalculation complete');
     } catch (e) {
       debugPrint('⚠️ [Profile] Trust recalculation failed: $e');
     }
@@ -317,7 +294,14 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
   void didUpdateWidget(UserProfileScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.userId != widget.userId) {
-      _refreshProfile();
+      final cached = ref
+          .read(profileRepositoryProvider)
+          .getCachedProfile(widget.userId);
+      if (cached != null) {
+        _profile = cached;
+        _isLoadingProfile = false;
+      }
+      _refreshProfile(showLoading: _profile == null);
     }
   }
 
@@ -362,178 +346,180 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
   }
 
   Future<void> _saveProfile(ProfileData updatedProfile, XFile? newImage) async {
-    // FocusScope.of(context).unfocus(); // Handled by Editor
-    // setState(() => _isSaving = true); // Handled by Editor
-    try {
-      final user = ref.read(authRepositoryProvider).currentUser;
-      if (user == null) throw Exception("User not logged in");
+    final user = ref.read(authRepositoryProvider).currentUser;
+    if (user == null) throw Exception("User not logged in");
 
-      final currentProfile = _profile; // Use local state
-      if (currentProfile == null) throw Exception("Profile not loaded");
+    final currentProfile = _profile;
+    if (currentProfile == null) throw Exception("Profile not loaded");
 
-      // Track newly created communities where user is the first member
-      final Set<String> newCommunityNames = {};
-      void onFirstMember(String name) => newCommunityNames.add(name);
+    final originalPastCount = currentProfile.pastLocations?.length ?? 0;
+    final formPastCount = updatedProfile.pastLocations?.length ?? 0;
+    final hasManualPastLocationAddition = formPastCount > originalPastCount;
 
-      ProfileData profileToSave = updatedProfile;
+    final bool hostChanged =
+        updatedProfile.hostLocation.placeId !=
+            currentProfile.hostLocation.placeId ||
+        updatedProfile.hostLocation.formattedAddress !=
+            currentProfile.hostLocation.formattedAddress;
 
-      // Snapshot counts before any mutations for DSP reward detection.
-      // formPastCount = what the user submitted (original + manually added).
-      // originalPastCount = what was in Firestore before this save.
-      // The diff isolates explicit user additions from the auto-archive step below.
-      final originalPastCount = currentProfile.pastLocations?.length ?? 0;
-      final formPastCount = updatedProfile.pastLocations?.length ?? 0;
-      final hasManualPastLocationAddition = formPastCount > originalPastCount;
+    final existingPastPlaceIds =
+        currentProfile.pastLocations
+            ?.map((pl) => pl.location.placeId.trim())
+            .where((id) => id.isNotEmpty)
+            .toSet() ??
+        <String>{};
+    final existingPastAddresses =
+        currentProfile.pastLocations
+            ?.map((pl) => pl.location.formattedAddress.trim().toLowerCase())
+            .where((addr) => addr.isNotEmpty)
+            .toSet() ??
+        <String>{};
+    final oldHostPlaceId = currentProfile.hostLocation.placeId.trim();
+    final oldHostAddress = currentProfile.hostLocation.formattedAddress
+        .trim()
+        .toLowerCase();
 
-      // 1. Upload Image if changed
-      if (newImage != null) {
-        final url = await ref
-            .read(profileRepositoryProvider)
-            .uploadProfileImage(user.uid, newImage);
-        profileToSave = updatedProfile.copyWith(profileImage: url);
+    ProfileData provisionalProfile = updatedProfile.copyWith(
+      profileImage: newImage != null
+          ? newImage.path
+          : updatedProfile.profileImage,
+    );
+
+    if (hostChanged) {
+      final oldLoc = currentProfile.hostLocation;
+      final pastLoc = PastLocation(
+        location: oldLoc,
+        until: DateTime.now().toIso8601String(),
+      );
+
+      final List<PastLocation> updatedPastList = List.from(
+        provisionalProfile.pastLocations ?? [],
+      );
+      final alreadyInPast = updatedPastList.any(
+        (pl) =>
+            (oldHostPlaceId.isNotEmpty &&
+                pl.location.placeId.trim() == oldHostPlaceId) ||
+            (oldHostAddress.isNotEmpty &&
+                pl.location.formattedAddress.trim().toLowerCase() ==
+                    oldHostAddress),
+      );
+      if (!alreadyInPast) {
+        updatedPastList.add(pastLoc);
       }
 
-      final bool hostChanged =
-          profileToSave.hostLocation.placeId !=
-              currentProfile.hostLocation.placeId ||
-          profileToSave.hostLocation.formattedAddress !=
-              currentProfile.hostLocation.formattedAddress;
+      provisionalProfile = provisionalProfile.copyWith(
+        pastLocations: updatedPastList,
+      );
+    }
 
-      // Snapshot existing past placeIds and formatted addresses BEFORE archiving old host
-      final existingPastPlaceIds =
-          currentProfile.pastLocations
-              ?.map((pl) => pl.location.placeId.trim())
-              .where((id) => id.isNotEmpty)
-              .toSet() ??
-          <String>{};
-      final existingPastAddresses =
-          currentProfile.pastLocations
-              ?.map((pl) => pl.location.formattedAddress.trim().toLowerCase())
-              .where((addr) => addr.isNotEmpty)
-              .toSet() ??
-          <String>{};
-      final oldHostPlaceId = currentProfile.hostLocation.placeId.trim();
-      final oldHostAddress = currentProfile.hostLocation.formattedAddress
-          .trim()
-          .toLowerCase();
+    final profileRepo = ref.read(profileRepositoryProvider);
+    final profileNotifier = ref.read(userProfileProvider.notifier);
+    final commService = ref.read(communityServiceProvider);
+    final chatRepo = ref.read(chatRepositoryProvider);
+    final trustService = ref.read(trustServiceProvider);
+    final pointsService = ref.read(pointsServiceProvider);
+    final pointsRepo = ref.read(pointsRepositoryProvider);
 
-      // If Host Location Changed, archive Old Location to Past Locations first
-      if (hostChanged) {
-        final oldLoc = currentProfile.hostLocation;
-        final pastLoc = PastLocation(
-          location: oldLoc,
-          until: DateTime.now().toIso8601String(),
-        );
+    // [PERF] Optimistically update UI & caches and exit edit mode on frame 0 (0ms)!
+    if (mounted) {
+      setState(() {
+        _profile = provisionalProfile;
+        _isEditing = false;
+      });
+      profileRepo.cacheProfile(user.uid, provisionalProfile);
+      profileNotifier.updateProfile(provisionalProfile);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile updated successfully!')),
+      );
+    }
 
-        final List<PastLocation> updatedPastList = List.from(
-          profileToSave.pastLocations ?? [],
-        );
-        final alreadyInPast = updatedPastList.any(
-          (pl) =>
-              (oldHostPlaceId.isNotEmpty &&
-                  pl.location.placeId.trim() == oldHostPlaceId) ||
-              (oldHostAddress.isNotEmpty &&
-                  pl.location.formattedAddress.trim().toLowerCase() ==
-                      oldHostAddress),
-        );
-        if (!alreadyInPast) {
-          updatedPastList.add(pastLoc);
+    // Complete upload, Firestore save, community sync, trust & DSP updates in the background
+    unawaited(() async {
+      try {
+        final Set<String> newCommunityNames = {};
+        void onFirstMember(String name) => newCommunityNames.add(name);
+
+        ProfileData profileToSave = provisionalProfile;
+        if (newImage != null) {
+          final url = await profileRepo.uploadProfileImage(user.uid, newImage);
+          profileToSave = provisionalProfile.copyWith(profileImage: url);
         }
 
-        profileToSave = profileToSave.copyWith(pastLocations: updatedPastList);
-      }
+        await profileRepo.saveUserProfile(user.uid, profileToSave);
 
-      // 2. Save profile to Firestore FIRST so Cloud Functions (provisionSignupCommunities,
-      // ensureCommunity, ensureSignupChamber) read the updated name, hostLocation,
-      // and hostCountryCode from users/{uid}.
-      debugPrint('UserProfileScreen: Saving profile...');
-      await ref
-          .read(profileRepositoryProvider)
-          .saveUserProfile(user.uid, profileToSave);
+        final Set<String> joinedCommunityIds = {
+          ...?currentProfile.communityMemberships,
+          ...?profileToSave.communityMemberships,
+        };
+        bool communitiesUpdated = false;
 
-      final Set<String> joinedCommunityIds = {
-        ...?currentProfile.communityMemberships,
-        ...?profileToSave.communityMemberships,
-      };
-      bool communitiesUpdated = false;
-
-      // 3. Sync communities for New Host Location if Host Location Changed
-      if (hostChanged) {
-        try {
-          // Do NOT remove user from old Host communities.
-          // Per requirements: "User should never be removed from community... maintain membership."
-          final hostCommIds = await ref
-              .read(communityServiceProvider)
-              .createCommunitiesAndChats(
-                profileToSave,
-                onFirstMember: onFirstMember,
-              );
-          if (hostCommIds.isNotEmpty) {
-            joinedCommunityIds.addAll(hostCommIds);
-            communitiesUpdated = true;
+        if (hostChanged) {
+          try {
+            final hostCommIds = await commService.createCommunitiesAndChats(
+              profileToSave,
+              onFirstMember: onFirstMember,
+            );
+            if (hostCommIds.isNotEmpty) {
+              joinedCommunityIds.addAll(hostCommIds);
+              communitiesUpdated = true;
+            }
+          } catch (e) {
+            debugPrint('Error syncing host communities: $e');
           }
-        } catch (e) {
-          debugPrint('Error syncing host communities: $e');
         }
-      }
 
-      // 4. Sync communities for newly added "Also lived in" (past) locations
-      if (profileToSave.pastLocations != null) {
-        try {
-          final commService = ref.read(communityServiceProvider);
-          final homeCode =
-              (profileToSave.homeCountryCode ??
-                      currentProfile.homeCountryCode ??
-                      profileToSave.homeLocation.countryCode ??
-                      'XX')
-                  .trim()
-                  .toUpperCase();
+        if (profileToSave.pastLocations != null) {
+          try {
+            final homeCode =
+                (profileToSave.homeCountryCode ??
+                        currentProfile.homeCountryCode ??
+                        profileToSave.homeLocation.countryCode ??
+                        'XX')
+                    .trim()
+                    .toUpperCase();
 
-          for (final pl in profileToSave.pastLocations!) {
-            if (pl.location.city == null || pl.location.city!.trim().isEmpty) {
-              continue; // Skip incomplete locations
-            }
+            final pastFutures = <Future<List<String>>>[];
+            for (final pl in profileToSave.pastLocations!) {
+              if (pl.location.city == null ||
+                  pl.location.city!.trim().isEmpty) {
+                continue;
+              }
 
-            final pid = pl.location.placeId.trim();
-            final addr = pl.location.formattedAddress.trim().toLowerCase();
+              final pid = pl.location.placeId.trim();
+              final addr = pl.location.formattedAddress.trim().toLowerCase();
 
-            final locationParsed = LocationParsed(
-              city: pl.location.city,
-              state: pl.location.state,
-              country: pl.location.country ?? '',
-              countryCode: (pl.location.countryCode ?? 'XX')
-                  .trim()
-                  .toUpperCase(),
-              placeId: pl.location.placeId,
-            );
+              final locationParsed = LocationParsed(
+                city: pl.location.city,
+                state: pl.location.state,
+                country: pl.location.country ?? '',
+                countryCode: (pl.location.countryCode ?? 'XX')
+                    .trim()
+                    .toUpperCase(),
+                placeId: pl.location.placeId,
+              );
 
-            // Compute expected city community ID to check if user is already a member
-            final expectedCityCommId = generateCommunityId(
-              locationType: 'host',
-              type: 'city',
-              location: locationParsed,
-              homeCountryCode: homeCode,
-            );
+              final expectedCityCommId = generateCommunityId(
+                locationType: 'host',
+                type: 'city',
+                location: locationParsed,
+                homeCountryCode: homeCode,
+              );
 
-            final wasAlreadyInPast =
-                (pid.isNotEmpty && existingPastPlaceIds.contains(pid)) ||
-                (addr.isNotEmpty && existingPastAddresses.contains(addr));
-            final isJustArchivedOldHost =
-                hostChanged &&
-                ((pid.isNotEmpty && pid == oldHostPlaceId) ||
-                    (addr.isNotEmpty && addr == oldHostAddress));
+              final wasAlreadyInPast =
+                  (pid.isNotEmpty && existingPastPlaceIds.contains(pid)) ||
+                  (addr.isNotEmpty && existingPastAddresses.contains(addr));
+              final isJustArchivedOldHost =
+                  hostChanged &&
+                  ((pid.isNotEmpty && pid == oldHostPlaceId) ||
+                      (addr.isNotEmpty && addr == oldHostAddress));
 
-            // Only skip if it was already in pastLocations (or is the just-archived old host)
-            // AND the user is already a member of its city community.
-            if ((wasAlreadyInPast || isJustArchivedOldHost) &&
-                joinedCommunityIds.contains(expectedCityCommId)) {
-              continue;
-            }
+              if ((wasAlreadyInPast || isJustArchivedOldHost) &&
+                  joinedCommunityIds.contains(expectedCityCommId)) {
+                continue;
+              }
 
-            // Treat past locations as Host locations (same community ID)
-            // so users join the standard Host community & chat for that location.
-            final pastCommIds = await commService
-                .ensureCommunitiesForLocationHierarchy(
+              pastFutures.add(
+                commService.ensureCommunitiesForLocationHierarchy(
                   location: locationParsed,
                   locationType: 'host',
                   userId: user.uid,
@@ -542,191 +528,162 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                   syncToUserProfile: true,
                   onFirstMember: onFirstMember,
                   userName: profileToSave.fullName,
-                );
-            if (pastCommIds.isNotEmpty) {
-              joinedCommunityIds.addAll(pastCommIds);
-              communitiesUpdated = true;
-            }
-          }
-        } catch (e) {
-          debugPrint('Error syncing past location communities: $e');
-        }
-      }
-
-      if (communitiesUpdated) {
-        profileToSave = profileToSave.copyWith(
-          communityMemberships: joinedCommunityIds.toList(),
-        );
-        ref.read(profileRepositoryProvider).invalidateProfileCache(user.uid);
-        ref.invalidate(communityHierarchyProvider);
-        await ref.read(chatRepositoryProvider).refreshChatsFromServer();
-      }
-
-      // [NEW] Update Trust Score (Fire and forget or await)
-      // Await is better here so user sees immediate feedback if we show trust score on profile
-      await ref.read(trustServiceProvider).updateTrustForUser(user.uid);
-
-      // DSP distribution for location-change events (once per user per event type).
-      // Run both checks in parallel so they don't compound save latency.
-      try {
-        final pointsService = ref.read(pointsServiceProvider);
-
-        final dspFutures = <Future<void>>[];
-        if (hostChanged) {
-          dspFutures.add(pointsService.trackHostLocationMove(user.uid));
-        }
-        if (hasManualPastLocationAddition) {
-          dspFutures.add(pointsService.trackAlsoLivedInAdded(user.uid));
-        }
-        if (dspFutures.isNotEmpty) await Future.wait(dspFutures);
-      } catch (e) {
-        debugPrint('Location DSP reward failed: $e');
-      }
-
-      debugPrint('UserProfileScreen: Profile saved to repository.'); // [DEBUG]
-
-      if (mounted) {
-        setState(() {
-          _profile = profileToSave;
-          _isEditing = false; // Return to view mode after save
-        });
-
-        // Update global provider safely
-        ref.read(userProfileProvider.notifier).updateProfile(profileToSave);
-        _refreshProfile(
-          showLoading: false,
-          forceServer: true,
-        ); // [FIX] Don't show loading spinner or error on post-save refresh
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile updated successfully!')),
-        );
-
-        if (newCommunityNames.isNotEmpty) {
-          Future.delayed(const Duration(milliseconds: 500), () {
-            if (mounted) {
-              showDialog(
-                context: context,
-                builder: (ctx) => Dialog(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 32,
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(
-                            AppTheme.pageHorizontalPadding,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .primaryContainer
-                                .withValues(alpha: 0.3),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            LucideIcons.partyPopper,
-                            size: 40,
-                            color: Colors.amber,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        const Text(
-                          'Congratulations!',
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'You are the first member of ${newCommunityNames.join(", ")}!\n\nKnow someone who lives here? Invite them to join!',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey,
-                            height: 1.4,
-                          ),
-                        ),
-                        const SizedBox(height: 32),
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton.icon(
-                            onPressed: () async {
-                              Navigator.pop(ctx);
-
-                              final user = ref
-                                  .read(authRepositoryProvider)
-                                  .currentUser;
-                              String shareUrl =
-                                  'https://diasporanearby.com/invite';
-
-                              if (user != null) {
-                                try {
-                                  String? code = await ref
-                                      .read(pointsRepositoryProvider)
-                                      .getReferralCode(user.uid);
-                                  if (code == null) {
-                                    // profileToSave is the latest profile we just saved
-                                    final countryCode =
-                                        profileToSave.homeCountryCode ?? 'US';
-                                    code = await ref
-                                        .read(pointsRepositoryProvider)
-                                        .generateReferralCode(
-                                          user.uid,
-                                          profileToSave.firstName,
-                                          countryCode,
-                                        );
-                                  }
-                                  shareUrl = '$shareUrl?code=$code';
-                                } catch (e) {
-                                  debugPrint('Error getting referral code: $e');
-                                }
-                              }
-
-                              SharePlus.instance.share(
-                                ShareParams(
-                                  text:
-                                      'Join me in ${newCommunityNames.first} on Diaspora Nearby! \n\n$shareUrl',
-                                  subject: 'Diaspora Nearby',
-                                ),
-                              );
-                            },
-                            icon: const Icon(LucideIcons.share2),
-                            label: const Text('Invite Friends'),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx),
-                          child: const Text('Maybe Later'),
-                        ),
-                      ],
-                    ),
-                  ),
                 ),
               );
             }
-          });
+
+            if (pastFutures.isNotEmpty) {
+              final pastResults = await Future.wait(pastFutures);
+              for (final pastCommIds in pastResults) {
+                if (pastCommIds.isNotEmpty) {
+                  joinedCommunityIds.addAll(pastCommIds);
+                  communitiesUpdated = true;
+                }
+              }
+            }
+          } catch (e) {
+            debugPrint('Error syncing past location communities: $e');
+          }
         }
+
+        if (communitiesUpdated) {
+          profileToSave = profileToSave.copyWith(
+            communityMemberships: joinedCommunityIds.toList(),
+          );
+          profileRepo.invalidateProfileCache(user.uid);
+          if (mounted) {
+            ref.invalidate(communityHierarchyProvider);
+          }
+          await chatRepo.refreshChatsFromServer();
+        }
+
+        profileRepo.cacheProfile(user.uid, profileToSave);
+        profileNotifier.updateProfile(profileToSave);
+        if (mounted) {
+          setState(() => _profile = profileToSave);
+        }
+
+        // Run trust score update and DSP location rewards in parallel
+        await Future.wait([
+          trustService.updateTrustForUser(user.uid).catchError((Object e) {
+            debugPrint('Trust update error: $e');
+          }),
+          if (hostChanged)
+            pointsService.trackHostLocationMove(user.uid).catchError((
+              Object e,
+            ) {
+              debugPrint('Location DSP reward failed: $e');
+            }),
+          if (hasManualPastLocationAddition)
+            pointsService.trackAlsoLivedInAdded(user.uid).catchError((
+              Object e,
+            ) {
+              debugPrint('Location DSP reward failed: $e');
+            }),
+        ]);
+
+        if (newCommunityNames.isNotEmpty && mounted) {
+          showDialog(
+            context: context,
+            builder: (ctx) => BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Dialog(
+                insetPadding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 24,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 32,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(
+                          AppTheme.pageHorizontalPadding,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primaryContainer
+                              .withValues(alpha: 0.3),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          LucideIcons.partyPopper,
+                          size: 40,
+                          color: Colors.amber,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      const Text(
+                        'Congratulations!',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'You are the first member of ${newCommunityNames.join(", ")}!\n\nKnow someone who lives here? Invite them to join!',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey,
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+
+                            String shareUrl =
+                                'https://diasporanearby.com/invite';
+                            final cachedCode = pointsRepo.getCachedReferralCode(
+                              user.uid,
+                            );
+                            if (cachedCode != null && cachedCode.isNotEmpty) {
+                              shareUrl = '$shareUrl?code=$cachedCode';
+                            } else {
+                              unawaited(
+                                pointsRepo.getReferralCode(user.uid),
+                              );
+                            }
+
+                            SharePlus.instance.share(
+                              ShareParams(
+                                text:
+                                    'Join me in ${newCommunityNames.first} on Diaspora Nearby! \n\n$shareUrl',
+                                subject: 'Diaspora Nearby',
+                              ),
+                            );
+                          },
+                          icon: const Icon(LucideIcons.share2),
+                          label: const Text('Invite Friends'),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Maybe Later'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+      } catch (e, stack) {
+        debugPrint('UserProfileScreen: Error saving profile: $e\n$stack');
       }
-    } catch (e, stack) {
-      debugPrint(
-        'UserProfileScreen: Error saving profile: $e\n$stack',
-      ); // [DEBUG]
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error saving profile: $e')));
-      }
-      rethrow; // Editor needs to know it failed
-    }
+    }());
   }
 
   Future<void> _trackExploration(String actionId) async {

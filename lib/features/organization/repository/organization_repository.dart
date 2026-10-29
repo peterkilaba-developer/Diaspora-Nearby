@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
@@ -36,11 +37,34 @@ class OrganizationRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   final OrganizationLocalService _localService;
-  final Map<String, Map<String, dynamic>> _orgCache = {};
+  static final Map<String, Map<String, dynamic>> _orgCache = {};
+  static final Map<String, List<Map<String, dynamic>>> _userOrgsCache = {};
+  static List<Map<String, dynamic>>? _allOrgsCache;
+  static final Map<String, List<ChamberLeadershipRequest>>
+      _myLeadershipRequestsCache = {};
+  static final Map<String, List<ChamberLeadershipRequest>>
+      _pendingLeadershipRequestsCache = {};
 
   OrganizationRepository(Ref ref) : _localService = OrganizationLocalService();
 
   Map<String, dynamic>? getCachedOrganization(String orgId) => _orgCache[orgId];
+
+  void cacheOrganization(String orgId, Map<String, dynamic> data) {
+    _orgCache[orgId] = {...data, 'id': orgId};
+  }
+
+  List<Map<String, dynamic>>? getCachedUserOrganizations(String userId) =>
+      _userOrgsCache[userId];
+
+  List<Map<String, dynamic>>? getCachedAllOrganizations() => _allOrgsCache;
+
+  List<ChamberLeadershipRequest>? getCachedMyLeadershipRequests(
+    String userId,
+  ) => _myLeadershipRequestsCache[userId];
+
+  List<ChamberLeadershipRequest>? getCachedPendingLeadershipRequests(
+    String orgId,
+  ) => _pendingLeadershipRequestsCache[orgId];
 
   /// Watch organizations where the user is an admin, superAdmin, or pendingAdmin
   Stream<List<Map<String, dynamic>>> watchUserOrganizations(String userId) {
@@ -63,10 +87,14 @@ class OrganizationRepository {
     return Rx.combineLatest3(admins, pending, owned, (a, p, o) {
       final unique = <String, Map<String, dynamic>>{};
       for (final doc in [...a.docs, ...p.docs, ...o.docs]) {
-        unique[doc.id] = {...doc.data(), 'id': doc.id};
+        final item = {...doc.data(), 'id': doc.id};
+        unique[doc.id] = item;
+        _orgCache[doc.id] = item;
       }
-      return unique.values.toList();
-    }).startWith(const <Map<String, dynamic>>[]);
+      final list = unique.values.toList();
+      _userOrgsCache[userId] = list;
+      return list;
+    }).startWith(_userOrgsCache[userId] ?? const <Map<String, dynamic>>[]);
   }
 
   /// Fetch organizations where the user is an admin or superAdmin
@@ -74,52 +102,60 @@ class OrganizationRepository {
     try {
       final orgs = <String, Map<String, dynamic>>{};
 
-      final adminsQuery = await _firestore
-          .collection('organizations')
-          .where('admins', arrayContains: userId)
-          .limit(100)
-          .get();
-      for (var doc in adminsQuery.docs) {
-        final data = doc.data();
-        data['id'] = doc.id;
-        orgs[doc.id] = data;
-      }
+      final results = await Future.wait([
+        _firestore
+            .collection('organizations')
+            .where('admins', arrayContains: userId)
+            .limit(100)
+            .get(),
+        _firestore
+            .collection('organizations')
+            .where('superAdminId', isEqualTo: userId)
+            .limit(100)
+            .get(),
+        _firestore
+            .collection('organizations')
+            .where('pendingAdmins', arrayContains: userId)
+            .limit(100)
+            .get(),
+        _localService.getUserOrganizations(userId),
+      ]);
 
-      final superAdminsQuery = await _firestore
-          .collection('organizations')
-          .where('superAdminId', isEqualTo: userId)
-          .limit(100)
-          .get();
-      for (var doc in superAdminsQuery.docs) {
-        final data = doc.data();
-        data['id'] = doc.id;
-        orgs[doc.id] = data;
-      }
+      final adminsQuery = results[0] as QuerySnapshot<Map<String, dynamic>>;
+      final superAdminsQuery =
+          results[1] as QuerySnapshot<Map<String, dynamic>>;
+      final pendingAdminsQuery =
+          results[2] as QuerySnapshot<Map<String, dynamic>>;
+      final cachedOrgs = results[3] as List<Map<String, dynamic>>;
 
-      final pendingAdminsQuery = await _firestore
-          .collection('organizations')
-          .where('pendingAdmins', arrayContains: userId)
-          .limit(100)
-          .get();
-      for (var doc in pendingAdminsQuery.docs) {
-        final data = doc.data();
-        data['id'] = doc.id;
-        orgs[doc.id] = data;
-      }
-
-      // Merge with local cache
-      final cachedOrgs = await _localService.getUserOrganizations(userId);
-      for (final org in cachedOrgs) {
-        final id = org['id'];
-        if (id != null && !orgs.containsKey(id)) {
-          orgs[id] = org;
+      for (final query in [
+        adminsQuery,
+        superAdminsQuery,
+        pendingAdminsQuery,
+      ]) {
+        for (var doc in query.docs) {
+          final data = doc.data();
+          data['id'] = doc.id;
+          orgs[doc.id] = data;
+          _orgCache[doc.id] = data;
         }
       }
 
-      return orgs.values.toList();
+      // Merge with local cache
+      for (final org in cachedOrgs) {
+        final id = org['id'] as String?;
+        if (id != null && !orgs.containsKey(id)) {
+          orgs[id] = org;
+          _orgCache[id] = org;
+        }
+      }
+
+      final list = orgs.values.toList();
+      _userOrgsCache[userId] = list;
+      return list;
     } catch (e) {
       debugPrint('Error in getUserOrganizations: $e');
-      return [];
+      return _userOrgsCache[userId] ?? [];
     }
   }
 
@@ -132,14 +168,17 @@ class OrganizationRepository {
           .limit(200)
           .get();
 
-      return snapshot.docs.map((doc) {
+      final list = snapshot.docs.map((doc) {
         final data = doc.data();
         data['id'] = doc.id;
+        _orgCache[doc.id] = data;
         return data;
       }).toList();
+      _allOrgsCache = list;
+      return list;
     } catch (e) {
       debugPrint('Error fetching organizations: $e');
-      return [];
+      return _allOrgsCache ?? [];
     }
   }
 
@@ -815,17 +854,30 @@ class OrganizationRepository {
   Stream<List<ChamberLeadershipRequest>> watchPendingLeadershipRequests(
     String orgId,
   ) {
-    return _firestore
-        .collection('leadershipRequests')
-        .where('chamberId', isEqualTo: orgId)
-        .where('status', isEqualTo: ChamberLeadershipRequest.statusPending)
-        .limit(100)
-        .snapshots()
-        .map(
-          (snap) => snap.docs
-              .map((d) => ChamberLeadershipRequest.fromJson(d.id, d.data()))
-              .toList(),
-        );
+    return Stream.multi((controller) {
+      final cached = _pendingLeadershipRequestsCache[orgId];
+      if (cached != null) {
+        controller.add(cached);
+      }
+      final sub = _firestore
+          .collection('leadershipRequests')
+          .where('chamberId', isEqualTo: orgId)
+          .where('status', isEqualTo: ChamberLeadershipRequest.statusPending)
+          .limit(100)
+          .snapshots()
+          .listen(
+            (snap) {
+              final list = snap.docs
+                  .map((d) => ChamberLeadershipRequest.fromJson(d.id, d.data()))
+                  .toList();
+              _pendingLeadershipRequestsCache[orgId] = list;
+              controller.add(list);
+            },
+            onError: controller.addError,
+            onDone: controller.close,
+          );
+      controller.onCancel = sub.cancel;
+    });
   }
 
   /// Stream requests submitted BY a specific user (any status). Lets a user
@@ -833,16 +885,29 @@ class OrganizationRepository {
   Stream<List<ChamberLeadershipRequest>> watchMyLeadershipRequests(
     String userId,
   ) {
-    return _firestore
-        .collection('leadershipRequests')
-        .where('userId', isEqualTo: userId)
-        .limit(100)
-        .snapshots()
-        .map(
-          (snap) => snap.docs
-              .map((d) => ChamberLeadershipRequest.fromJson(d.id, d.data()))
-              .toList(),
-        );
+    return Stream.multi((controller) {
+      final cached = _myLeadershipRequestsCache[userId];
+      if (cached != null) {
+        controller.add(cached);
+      }
+      final sub = _firestore
+          .collection('leadershipRequests')
+          .where('userId', isEqualTo: userId)
+          .limit(100)
+          .snapshots()
+          .listen(
+            (snap) {
+              final list = snap.docs
+                  .map((d) => ChamberLeadershipRequest.fromJson(d.id, d.data()))
+                  .toList();
+              _myLeadershipRequestsCache[userId] = list;
+              controller.add(list);
+            },
+            onError: controller.addError,
+            onDone: controller.close,
+          );
+      controller.onCancel = sub.cancel;
+    });
   }
 
   /// Remove a user from a chamber leadership seat. Strips their council
@@ -909,18 +974,27 @@ class OrganizationRepository {
 
   /// Follow an organization
   Future<void> followOrganization(String orgId, String userId) async {
+    final cached = _orgCache[orgId];
+    if (cached != null) {
+      final followers = List<String>.from(cached['followers'] as List? ?? []);
+      if (!followers.contains(userId)) followers.add(userId);
+      _orgCache[orgId] = {...cached, 'followers': followers};
+    }
     await FirebaseFunctions.instance
         .httpsCallable('setOrganizationFollow')
         .call<void>({'organizationId': orgId, 'following': true});
-    await getOrganization(orgId, force: true);
+    unawaited(getOrganization(orgId, force: true));
   }
 
   /// Add a user to organization chat participants (Admin only)
   Future<void> addChatMember(String orgId, String userId) async {
-    final doc = await _firestore.collection('organizations').doc(orgId).get();
-    if (!doc.exists) return;
-
-    final chatId = doc.data()?['chatId'] as String?;
+    final cached = _orgCache[orgId];
+    String? chatId = cached?['chatId'] as String?;
+    if (chatId == null) {
+      final doc = await _firestore.collection('organizations').doc(orgId).get();
+      if (!doc.exists) return;
+      chatId = doc.data()?['chatId'] as String?;
+    }
     if (chatId == null) return;
 
     await FirebaseFunctions.instance.httpsCallable('manageChatMembers').call({
@@ -931,10 +1005,13 @@ class OrganizationRepository {
 
   /// Remove a user from organization chat participants (Admin only)
   Future<void> removeChatMember(String orgId, String userId) async {
-    final doc = await _firestore.collection('organizations').doc(orgId).get();
-    if (!doc.exists) return;
-
-    final chatId = doc.data()?['chatId'] as String?;
+    final cached = _orgCache[orgId];
+    String? chatId = cached?['chatId'] as String?;
+    if (chatId == null) {
+      final doc = await _firestore.collection('organizations').doc(orgId).get();
+      if (!doc.exists) return;
+      chatId = doc.data()?['chatId'] as String?;
+    }
     if (chatId == null) return;
 
     await FirebaseFunctions.instance.httpsCallable('manageChatMembers').call({
@@ -945,22 +1022,36 @@ class OrganizationRepository {
 
   /// Unfollow an organization
   Future<void> unfollowOrganization(String orgId, String userId) async {
+    final cached = _orgCache[orgId];
+    if (cached != null) {
+      final followers = List<String>.from(cached['followers'] as List? ?? [])
+        ..remove(userId);
+      _orgCache[orgId] = {...cached, 'followers': followers};
+    }
     await FirebaseFunctions.instance
         .httpsCallable('setOrganizationFollow')
         .call<void>({'organizationId': orgId, 'following': false});
-    await getOrganization(orgId, force: true);
+    unawaited(getOrganization(orgId, force: true));
   }
 
   /// Enable specialized Product/Service listing for a business
   Future<void> enableProductListing(String orgId, String userId) async {
+    final cached = _orgCache[orgId];
+    if (cached != null) {
+      _orgCache[orgId] = {
+        ...cached,
+        'isListingEnabled': true,
+        'listingPaidBy': userId,
+      };
+    }
     await _firestore.collection('organizations').doc(orgId).update({
       'isListingEnabled': true,
       'listingPaidAt': FieldValue.serverTimestamp(),
       'listingPaidBy': userId,
     });
 
-    // Refresh local cache
-    await getOrganization(orgId, force: true);
+    // Refresh local cache in background
+    unawaited(getOrganization(orgId, force: true));
   }
 
   /// [NEW] Add a product or service item (100 DSP)

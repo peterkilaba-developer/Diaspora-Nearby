@@ -237,11 +237,7 @@ String generateCommunityName({
   if (normalizedType == 'global') return 'Global Community';
 
   if (normalizedType == 'continent' && continent != null) {
-    // Manual mapping for standard names to ensure "African Community" style
-    // [FIX] Differentiate between Home (Adjective) and Host (Noun)
-    // Host: "Africa Community" | Home: "African Community"
-    final isHome =
-        locationType == 'home'; // Null implies host usually for this helper
+    final isHome = locationType == 'home';
 
     if (continent == 'Africa') {
       return isHome ? 'African Community' : 'Africa Community';
@@ -350,62 +346,86 @@ double? calculateProfileDistanceKm(
   return fallbackDistanceKm ?? target?.distance;
 }
 
+Position? _lastKnownPositionCache;
+
+/// Returns the most recently cached GPS position synchronously (if available).
+Position? get cachedLastKnownPosition => _lastKnownPositionCache;
+
+/// Updates the synchronous in-memory GPS position cache.
+void cacheLastKnownPosition(Position position) {
+  _lastKnownPositionCache = position;
+}
+
 /// Real-time stream of the device's GPS position when permission is granted.
+/// Emits [cachedLastKnownPosition] synchronously on frame 0 if available.
 final liveUserPositionProvider = StreamProvider<Position?>((ref) {
-  final controller = StreamController<Position?>();
-  StreamSubscription<Position>? sub;
-
-  Future<void> init() async {
-    try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        if (!controller.isClosed) controller.add(null);
-        return;
-      }
-
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        if (!controller.isClosed) controller.add(null);
-        return;
-      }
-
-      final lastKnown = await Geolocator.getLastKnownPosition();
-      if (lastKnown != null && !controller.isClosed) {
-        controller.add(lastKnown);
-      }
-
-      try {
-        final current = await Geolocator.getCurrentPosition().timeout(
-          const Duration(seconds: 5),
-        );
-        if (!controller.isClosed) {
-          controller.add(current);
-        }
-      } catch (_) {}
-
-      sub =
-          Geolocator.getPositionStream(
-            locationSettings: const LocationSettings(
-              accuracy: LocationAccuracy.medium,
-              distanceFilter: 100,
-            ),
-          ).listen((pos) {
-            if (!controller.isClosed) controller.add(pos);
-          }, onError: (_) {});
-    } catch (_) {
-      if (!controller.isClosed) controller.add(null);
+  return Stream<Position?>.multi((controller) {
+    if (_lastKnownPositionCache != null) {
+      controller.addSync(_lastKnownPositionCache);
     }
-  }
 
-  init();
+    StreamSubscription<Position>? sub;
 
-  ref.onDispose(() {
-    sub?.cancel();
-    controller.close();
+    Future<void> init() async {
+      try {
+        final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        if (!serviceEnabled) {
+          if (_lastKnownPositionCache == null && !controller.isClosed) {
+            controller.add(null);
+          }
+          return;
+        }
+
+        final permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied ||
+            permission == LocationPermission.deniedForever) {
+          if (_lastKnownPositionCache == null && !controller.isClosed) {
+            controller.add(null);
+          }
+          return;
+        }
+
+        final lastKnown = await Geolocator.getLastKnownPosition();
+        if (lastKnown != null) {
+          _lastKnownPositionCache = lastKnown;
+          if (!controller.isClosed) {
+            controller.add(lastKnown);
+          }
+        }
+
+        try {
+          final current = await Geolocator.getCurrentPosition().timeout(
+            const Duration(seconds: 5),
+          );
+          _lastKnownPositionCache = current;
+          if (!controller.isClosed) {
+            controller.add(current);
+          }
+        } catch (_) {}
+
+        sub =
+            Geolocator.getPositionStream(
+              locationSettings: const LocationSettings(
+                accuracy: LocationAccuracy.medium,
+                distanceFilter: 100,
+              ),
+            ).listen((pos) {
+              _lastKnownPositionCache = pos;
+              if (!controller.isClosed) controller.add(pos);
+            }, onError: (_) {});
+      } catch (_) {
+        if (_lastKnownPositionCache == null && !controller.isClosed) {
+          controller.add(null);
+        }
+      }
+    }
+
+    init();
+
+    controller.onCancel = () {
+      sub?.cancel();
+    };
   });
-
-  return controller.stream;
 });
 
 /// Extract the best available non-zero coordinates from an Event:
@@ -450,12 +470,13 @@ double? calculateEventDistanceKm(
   Position? livePosition,
   double? fallbackDistanceKm,
 }) {
+  final effectivePos = livePosition ?? _lastKnownPositionCache;
   (double, double)? myCoords;
-  if (livePosition != null &&
-      livePosition.latitude.isFinite &&
-      livePosition.longitude.isFinite &&
-      (livePosition.latitude != 0 || livePosition.longitude != 0)) {
-    myCoords = (livePosition.latitude, livePosition.longitude);
+  if (effectivePos != null &&
+      effectivePos.latitude.isFinite &&
+      effectivePos.longitude.isFinite &&
+      (effectivePos.latitude != 0 || effectivePos.longitude != 0)) {
+    myCoords = (effectivePos.latitude, effectivePos.longitude);
   } else {
     myCoords = extractProfileCoords(viewer);
   }
@@ -542,18 +563,15 @@ const Map<String, String> usStateNames = {
 /// Helper to ensure full names are used for locations (e.g. TX -> Texas, US -> United States)
 String formatLocationName(String? name) {
   if (name == null || name.isEmpty) return '';
-  // Remove any numbers from the name (e.g. "78701" or "123")
   String cleaned = name.replaceAll(RegExp(r'\d+'), '').trim();
   if (cleaned.isEmpty) return '';
 
   final upper = cleaned.toUpperCase();
 
-  // 1. Check if it's a US State abbreviation
   if (upper.length == 2 && usStateNames.containsKey(upper)) {
     return usStateNames[upper]!;
   }
 
-  // 2. Check if it's a known country code
   if (upper.length == 2) {
     final country = country_data.getCountryByCode(upper);
     if (country != null) {
@@ -561,29 +579,15 @@ String formatLocationName(String? name) {
     }
   }
 
-  // 3. Handle common abbreviations requested
   if (upper == 'U.S.' || upper == 'USA') return 'United States';
   if (upper == 'UK') return 'United Kingdom';
   if (upper == 'UAE') return 'United Arab Emirates';
 
-  // 4. Remove common administrative suffixes unless intrinsic to the name
-  // Standardize cleaning: remove Region, State, Province, District, County from end of string
-  // Exception: 'City' is usually kept if intrinsic (e.g. New York City, Salt Lake City), but 'New York State' -> 'New York'
-
-  // Cleaned is roughly the name now. Let's process suffixes.
-  // Case-insensitive regex for suffixes
   final suffixRegex = RegExp(
     r'\s+(Region|State|Province|District|County|Township)\b',
     caseSensitive: false,
   );
 
-  // Specific exclusions where "City" or "State" might be part of the name
-  // Note: "New York City" is handled by parseLocationComponents usually, but if it comes here as "New York State", we want "New York".
-  // If "Iowa State", we want "Iowa".
-  // If "Kilimanjaro Region", we want "Kilimanjaro".
-
-  // We apply the regex to remove them.
-  // Exception: If the result becomes empty (e.g. place named "Region"), we revert.
   String processed = cleaned.replaceAll(suffixRegex, '').trim();
 
   if (processed.isNotEmpty) {
@@ -596,7 +600,6 @@ String formatLocationName(String? name) {
 /// Helper to format a full address string by expanding abbreviations and removing numeric parts
 String formatFullAddress(String address) {
   if (address.isEmpty) return '';
-  // Split by comma, clean each part, and filter out anything that becomes empty (like purely numeric zip codes or house numbers)
   final parts = address.split(',').map((p) => p.trim()).toList();
   final formattedParts = parts
       .map((part) => formatLocationName(part))

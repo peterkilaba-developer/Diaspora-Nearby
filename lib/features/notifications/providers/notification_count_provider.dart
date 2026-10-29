@@ -8,6 +8,7 @@ import 'package:diaspora_nearby/features/notifications/repository/notifications_
 final unreadNotificationCountProvider = StreamProvider.autoDispose<int>((ref) {
   final user = ref.watch(authRepositoryProvider).currentUser;
   if (user == null) return Stream.value(0);
+  ref.keepAlive();
 
   return ref.watch(notificationsRepositoryProvider).watchUnreadCount(user.uid);
 });
@@ -18,6 +19,7 @@ final unreadNotificationCountProvider = StreamProvider.autoDispose<int>((ref) {
 final pendingActionCountProvider = StreamProvider.autoDispose<int>((ref) {
   final user = ref.watch(authRepositoryProvider).currentUser;
   if (user == null) return Stream.value(0);
+  ref.keepAlive();
 
   return ref
       .watch(notificationsRepositoryProvider)
@@ -29,6 +31,7 @@ final notificationsStreamProvider =
     StreamProvider.autoDispose<List<NotificationItem>>((ref) {
       final user = ref.watch(authRepositoryProvider).currentUser;
       if (user == null) return Stream.value([]);
+      ref.keepAlive();
 
       return ref
           .watch(notificationsRepositoryProvider)
@@ -40,6 +43,7 @@ final actionRequiredNotificationsProvider =
     StreamProvider.autoDispose<List<NotificationItem>>((ref) {
       final user = ref.watch(authRepositoryProvider).currentUser;
       if (user == null) return Stream.value([]);
+      ref.keepAlive();
 
       return ref
           .watch(notificationsRepositoryProvider)
@@ -51,6 +55,7 @@ final completedActionsProvider =
     StreamProvider.autoDispose<List<NotificationItem>>((ref) {
       final user = ref.watch(authRepositoryProvider).currentUser;
       if (user == null) return Stream.value([]);
+      ref.keepAlive();
 
       return ref
           .watch(notificationsRepositoryProvider)

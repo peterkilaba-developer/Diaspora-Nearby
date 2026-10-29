@@ -29,15 +29,19 @@ class AppBootstrap {
     debugPrint('▶ AppBootstrap: [2/4] Firebase initialized ✓');
 
     // Optional subsystems must not delay first paint. They initialize in
-    // dependency order in the background and retain their existing fallbacks.
+    // parallel in the background and retain their existing fallbacks.
     unawaited(_initDeferred());
     debugPrint('▶ AppBootstrap: ✅ CRITICAL INIT COMPLETE');
   }
 
   static Future<void> _initDeferred() async {
     try {
-      await Future.wait([_initAudio(), _initStorage(), _warmCredentials()]);
-      await _initServices();
+      await Future.wait([
+        _initAudio(),
+        _initStorage(),
+        _warmCredentials(),
+        _initServices(),
+      ]);
       debugPrint('▶ AppBootstrap: Deferred services ready');
     } catch (error, stack) {
       debugPrint('AppBootstrap: Deferred initialization failed: $error');
@@ -116,21 +120,24 @@ class AppBootstrap {
 
   static Future<void> _warmCredentials() async {
     if (kIsWeb) return;
-    try {
-      await FirebaseAppCheck.instance
+    final user = FirebaseAuth.instance.currentUser;
+    await Future.wait([
+      FirebaseAppCheck.instance
           .getToken(false)
-          .timeout(const Duration(seconds: 15));
-    } catch (e) {
-      debugPrint('AppBootstrap: App Check token warm-up failed: $e');
-    }
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        await user.getIdToken(false).timeout(const Duration(seconds: 15));
-      }
-    } catch (e) {
-      debugPrint('AppBootstrap: Auth token warm-up failed: $e');
-    }
+          .timeout(const Duration(seconds: 15))
+          .catchError((Object e) {
+            debugPrint('AppBootstrap: App Check token warm-up failed: $e');
+            return null;
+          }),
+      if (user != null)
+        user
+            .getIdToken(false)
+            .timeout(const Duration(seconds: 15))
+            .catchError((Object e) {
+              debugPrint('AppBootstrap: Auth token warm-up failed: $e');
+              return null;
+            }),
+    ]);
   }
 
   static Future<void> _initAudio() async {
@@ -154,9 +161,6 @@ class AppBootstrap {
   }
 
   static Future<void> _initStorage() async {
-    // Shared preferences is used by SessionService via provider
-    // final sharedPreferences = await SharedPreferences.getInstance();
-    // LocalCacheService.init(sharedPreferences);
     debugPrint('  → DatabaseService.init starting...');
     await DatabaseService().init();
     debugPrint('  → DatabaseService.init done');
@@ -169,8 +173,10 @@ class AppBootstrap {
     debugPrint('  → MentionMonitorService.initialize done');
 
     // Live exchange rates (non-blocking, falls back to hardcoded)
-    ExchangeRateService.instance.initialize().catchError((e) {
-      debugPrint('AppBootstrap: Exchange Rate Init Warning: $e');
-    });
+    unawaited(
+      ExchangeRateService.instance.initialize().catchError((Object e) {
+        debugPrint('AppBootstrap: Exchange Rate Init Warning: $e');
+      }),
+    );
   }
 }

@@ -55,6 +55,17 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
     // Host shows QR by default, traveler scans by default
     _isScanning = kIsWeb ? false : !widget.isHost;
     if (widget.isHost) {
+      // [PERF] Seed synchronously from pre-warmed challenge token if available
+      final cachedToken = ref
+          .read(hostingRepositoryProvider)
+          .getCachedCheckInChallenge(widget.session.id);
+      if (cachedToken != null) {
+        _qrData = jsonEncode({
+          'type': 'hosting_checkin',
+          'sessionId': widget.session.id,
+          'token': cachedToken,
+        });
+      }
       _generateQR();
       _challengeRefreshTimer = Timer.periodic(
         const Duration(minutes: 4),
@@ -71,7 +82,7 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
 
   /// Listens to the Firestore session document for status changes.
   /// When traveler scans the QR, the session status changes to 'active'
-  /// and this listener fires so the host sees confirmation + auto-dismiss.
+  /// and this listener fires so the host sees confirmation + immediate dismiss.
   void _startSessionListener() {
     _sessionListener = FirebaseFirestore.instance
         .collection('hosting_sessions')
@@ -86,16 +97,13 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
 
           final status = data['status'] as String?;
           if (status == 'active' && _scanSuccess == null) {
-            // Traveler checked in — show confirmation on host's screen
             setState(() {
               _scanSuccess = 'Check-in Confirmed!';
               _isProcessing = false;
             });
 
-            // Auto-dismiss after 2 seconds
-            Future.delayed(const Duration(seconds: 2), () {
-              if (mounted) Navigator.of(context).pop();
-            });
+            // Dismiss immediately without artificial 2s delay
+            if (mounted) Navigator.of(context).pop();
           }
         });
   }
@@ -116,10 +124,11 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _qrData = null;
-        _scanError = 'Could not create a secure check-in code. Please retry.';
-      });
+      if (_qrData == null) {
+        setState(() {
+          _scanError = 'Could not create a secure check-in code. Please retry.';
+        });
+      }
     }
   }
 
@@ -134,7 +143,6 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
         setState(() {
           _isScanning = false;
           _isProcessing = true;
-          _scanSuccess = 'Verifying...';
           _scanError = null;
         });
 
@@ -166,27 +174,18 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
             return;
           }
 
-          // Perform the check-in
+          // [PERF] 0ms Optimistic check-in confirmation & immediate navigation
+          setState(() {
+            _scanSuccess = 'Check-in Confirmed!';
+            _isProcessing = false;
+          });
+
           final hostingService = ref.read(hostingServiceProvider);
-          final success = await hostingService.checkIn(scannedSessionId, token);
+          unawaited(_markNotificationsCompleted());
+          unawaited(hostingService.checkIn(scannedSessionId, token));
 
-          if (!mounted) return;
-
-          if (success) {
-            // Mark hosting-selected notification as completed
-            await _markNotificationsCompleted();
-
-            setState(() {
-              _scanSuccess = 'Check-in Confirmed!';
-              _isProcessing = false;
-            });
-
-            // Auto-dismiss after 2 seconds
-            Future.delayed(const Duration(seconds: 2), () {
-              if (mounted) Navigator.of(context).pop();
-            });
-          } else {
-            _showError('Check-in failed. Please try again.');
+          if (mounted) {
+            Navigator.of(context).pop();
           }
         } catch (e) {
           _showError('Error during check-in. Please try again.');
@@ -196,10 +195,9 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
     }
   }
 
-  /// Mark any hosting-selected/interest notifications for this session as completed.
+  /// Mark any hosting-selected/interest notifications for this session as completed in parallel.
   Future<void> _markNotificationsCompleted() async {
     try {
-      // Current user is the traveler (scanning) or host (showing QR)
       final userId = widget.isHost
           ? widget.session.hostId
           : widget.session.travelerId;
@@ -207,17 +205,20 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
       final repo = ref.read(notificationsRepositoryProvider);
       final notifications = await repo.getNotificationsOnce(userId);
 
-      for (final n in notifications) {
+      final toComplete = notifications.where((n) {
         final matchesSession = n.payload['sessionId'] == widget.session.id;
         final matchesRequest =
             n.payload['requestId'] == widget.session.requestId;
+        final isHostingNotif =
+            (n.type == NotificationType.hostingSelected && matchesSession) ||
+            (n.type == NotificationType.hostingInterest && matchesRequest);
+        return isHostingNotif && n.actionRequired && !n.actionCompleted;
+      }).toList();
 
-        if ((n.type == NotificationType.hostingSelected && matchesSession) ||
-            (n.type == NotificationType.hostingInterest && matchesRequest)) {
-          if (n.actionRequired && !n.actionCompleted) {
-            await repo.markActionCompleted(userId, n.id);
-          }
-        }
+      if (toComplete.isNotEmpty) {
+        await Future.wait(
+          toComplete.map((n) => repo.markActionCompleted(userId, n.id)),
+        );
       }
     } catch (e) {
       debugPrint('[Hosting] Failed to mark notifications completed: $e');

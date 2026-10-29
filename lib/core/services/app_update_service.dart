@@ -113,18 +113,22 @@ class AppUpdateService {
   Future<void> _checkRemoteVersionDoc(BuildContext context) async {
     if (_dialogShowing) return;
     try {
-      final packageInfo = await PackageInfo.fromPlatform();
+      final results = await Future.wait([
+        PackageInfo.fromPlatform(),
+        SharedPreferences.getInstance(),
+        FirebaseFirestore.instance
+            .collection('system_stats')
+            .doc('app_version')
+            .get(const GetOptions(source: Source.server))
+            .timeout(const Duration(seconds: 6)),
+      ]);
+      final packageInfo = results[0] as PackageInfo;
+      final prefs = results[1] as SharedPreferences;
+      final doc = results[2] as DocumentSnapshot<Map<String, dynamic>>;
+
       final currentBuild = int.tryParse(packageInfo.buildNumber) ?? 0;
       final currentVersion = packageInfo.version;
-
-      final prefs = await SharedPreferences.getInstance();
       _dismissedBuildNumber ??= prefs.getInt(_dismissedBuildPrefKey);
-
-      final doc = await FirebaseFirestore.instance
-          .collection('system_stats')
-          .doc('app_version')
-          .get(const GetOptions(source: Source.server))
-          .timeout(const Duration(seconds: 6));
 
       if (!doc.exists || doc.data() == null) return;
       final data = doc.data()!;

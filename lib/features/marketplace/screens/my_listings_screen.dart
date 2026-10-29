@@ -23,6 +23,7 @@ class MyListingsScreen extends ConsumerWidget {
     }
 
     final repo = ref.watch(marketplaceRepositoryProvider);
+    final cachedListings = repo.getCachedUserListings(userId);
 
     return Scaffold(
       appBar: AppBar(
@@ -40,9 +41,11 @@ class MyListingsScreen extends ConsumerWidget {
         ],
       ),
       body: StreamBuilder<List<MarketplaceListing>>(
+        initialData: cachedListings.isNotEmpty ? cachedListings : null,
         stream: repo.getMyListings(userId),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
             return const Center(
               child: CircularProgressIndicator(color: AppTheme.accent),
             );
@@ -128,7 +131,10 @@ class MyListingsScreen extends ConsumerWidget {
     WidgetRef ref,
   ) {
     return GestureDetector(
-      onTap: () => context.push('/marketplace/listing/${listing.id}'),
+      onTap: () {
+        ref.read(marketplaceRepositoryProvider).cacheListing(listing);
+        context.push('/marketplace/listing/${listing.id}');
+      },
       child: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(

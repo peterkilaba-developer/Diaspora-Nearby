@@ -42,9 +42,8 @@ function saveState(state) {
   fs.writeFileSync(STATE_PATH, JSON.stringify(state, null, 2), "utf8");
 }
 
-function buildCode(prefix, id) {
-  const hash = crypto.createHash("sha256").update(String(id)).digest("hex").slice(0, 6).toUpperCase();
-  return `${prefix}${hash}`;
+function buildCode() {
+  return "PETER-TZ-CC57";
 }
 
 function fillTemplate(template, vars) {

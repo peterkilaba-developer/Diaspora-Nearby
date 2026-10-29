@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Result from global user search
@@ -53,23 +54,38 @@ class GlobalUserSearchService {
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  static List<QueryDocumentSnapshot<Map<String, dynamic>>>? _cachedUserDocs;
+  static DateTime? _cachedAt;
+  static bool _isRefreshing = false;
+  static const _cacheTtl = Duration(minutes: 5);
+
+  Future<void> _refreshCacheInBackground() async {
+    if (_isRefreshing) return;
+    _isRefreshing = true;
+    try {
+      final snapshot = await _firestore.collection('users').limit(100).get();
+      _cachedUserDocs = snapshot.docs;
+      _cachedAt = DateTime.now();
+    } catch (_) {
+    } finally {
+      _isRefreshing = false;
+    }
+  }
+
   /// Calculate match score for prefix matching
   /// Returns 0 for no match, higher scores for better matches
   int _calculateMatchScore(String text, String query) {
     final lowerText = text.toLowerCase();
     final lowerQuery = query.toLowerCase();
 
-    // Exact match = 100
     if (lowerText == lowerQuery) {
       return 100;
     }
 
-    // Starts with query = 90
     if (lowerText.startsWith(lowerQuery)) {
       return 90;
     }
 
-    // Check if any word starts with query = 80
     final words = lowerText.split(RegExp(r'\s+'));
     for (final word in words) {
       if (word.startsWith(lowerQuery)) {
@@ -77,7 +93,6 @@ class GlobalUserSearchService {
       }
     }
 
-    // No match
     return 0;
   }
 
@@ -97,9 +112,19 @@ class GlobalUserSearchService {
     }
 
     try {
-      // Fetch recent candidate users from Firestore (capped at 100 for speed)
-      final snapshot = await _firestore.collection('users').limit(100).get();
-      final allUsers = snapshot.docs;
+      List<QueryDocumentSnapshot<Map<String, dynamic>>> allUsers;
+      if (_cachedUserDocs != null) {
+        allUsers = _cachedUserDocs!;
+        if (_cachedAt == null ||
+            DateTime.now().difference(_cachedAt!) >= _cacheTtl) {
+          unawaited(_refreshCacheInBackground());
+        }
+      } else {
+        final snapshot = await _firestore.collection('users').limit(100).get();
+        allUsers = snapshot.docs;
+        _cachedUserDocs = allUsers;
+        _cachedAt = DateTime.now();
+      }
 
       final results = <UserSearchResult>[];
 
@@ -107,12 +132,10 @@ class GlobalUserSearchService {
         final data = doc.data();
         final userId = doc.id;
 
-        // Skip excluded user (typically the current user)
         if (excludeUserId != null && userId == excludeUserId) {
           continue;
         }
 
-        // Skip users without required fields
         final firstName = data['firstName'] as String?;
         final lastName = data['lastName'] as String?;
         if (firstName == null ||
@@ -127,7 +150,6 @@ class GlobalUserSearchService {
         String matchType = 'name';
         String matchedText = '';
 
-        // Search in user names
         if (searchNames) {
           final fullName = '$firstName $lastName';
           final firstNameScore = _calculateMatchScore(firstName, trimmedQuery);
@@ -142,15 +164,13 @@ class GlobalUserSearchService {
 
           if (nameScore > 0) {
             matched = true;
-            matchScore = nameScore + 10; // Boost name matches
+            matchScore = nameScore + 10;
             matchType = 'name';
             matchedText = fullName;
           }
         }
 
-        // Search in locations (if name didn't match)
         if (searchLocations && !matched) {
-          // Check home location
           final homeLocation = data['homeLocation'] as Map<String, dynamic>?;
           final homeAddress = homeLocation?['formatted_address'] as String?;
           if (homeAddress != null) {
@@ -163,7 +183,6 @@ class GlobalUserSearchService {
             }
           }
 
-          // Check host location
           if (!matched) {
             final hostLocation = data['hostLocation'] as Map<String, dynamic>?;
             final hostAddress = hostLocation?['formatted_address'] as String?;
@@ -179,20 +198,17 @@ class GlobalUserSearchService {
           }
         }
 
-        // Add to results if matched
         if (matched) {
           final homeLocation = data['homeLocation'] as Map<String, dynamic>?;
           final hostLocation = data['hostLocation'] as Map<String, dynamic>?;
           final currentLocation =
               data['currentLocation'] as Map<String, dynamic>?;
 
-          // Extract city/state from currentLocation first, then hostLocation
           String? city = currentLocation?['city'] as String?;
           String? state = currentLocation?['state'] as String?;
           String? currentLocationCountryCode =
               currentLocation?['countryCode'] as String?;
 
-          // Fallback to hostLocation if currentLocation doesn't have city/state
           if (city == null || city.isEmpty) {
             city = hostLocation?['city'] as String?;
           }
@@ -209,7 +225,6 @@ class GlobalUserSearchService {
               id: userId,
               firstName: firstName,
               lastName: lastName,
-              // Try 'profilePhoto' first (standard), then 'profileImage' (legacy/fallback)
               profileImage:
                   (data['profilePhoto'] ?? data['profileImage']) as String?,
               homeLocationAddress:
@@ -233,10 +248,7 @@ class GlobalUserSearchService {
         }
       }
 
-      // Sort by match score (highest first)
       results.sort((a, b) => b.matchScore.compareTo(a.matchScore));
-
-      // Limit results
       return results.take(maxResults).toList();
     } catch (e) {
       rethrow;

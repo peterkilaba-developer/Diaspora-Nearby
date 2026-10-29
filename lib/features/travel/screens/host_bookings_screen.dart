@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -25,6 +26,16 @@ class _HostBookingsScreenState extends ConsumerState<HostBookingsScreen>
   void initState() {
     super.initState();
     _tabC = TabController(length: 3, vsync: this);
+    final uid = ref.read(authRepositoryProvider).currentUser?.uid;
+    if (uid != null) {
+      final cached = ref
+          .read(peerListingRepositoryProvider)
+          .getCachedHostBookings(uid);
+      if (cached.isNotEmpty) {
+        _bookings = cached;
+        _isLoading = false;
+      }
+    }
     _load();
   }
 
@@ -35,9 +46,14 @@ class _HostBookingsScreenState extends ConsumerState<HostBookingsScreen>
   }
 
   Future<void> _load() async {
-    setState(() => _isLoading = true);
+    if (_bookings == null || _bookings!.isEmpty) {
+      setState(() => _isLoading = true);
+    }
     final uid = ref.read(authRepositoryProvider).currentUser?.uid;
-    if (uid == null) return;
+    if (uid == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
 
     final repo = ref.read(peerListingRepositoryProvider);
     _bookings = await repo.getHostBookings(uid);
@@ -52,18 +68,44 @@ class _HostBookingsScreenState extends ConsumerState<HostBookingsScreen>
 
   Future<void> _updateStatus(PeerBooking booking, String status) async {
     final repo = ref.read(peerListingRepositoryProvider);
-    await repo.updateBookingStatus(booking.id, status);
+    final prevStatus = booking.status;
 
-    if (status == 'completed' && booking.listingType == 'stay') {
-      final pointsService = ref.read(pointsServiceProvider);
-      await pointsService.trackHostATraveler(
-        booking.hostId,
-        booking.guestId,
-        nights: booking.nights,
-      );
-    }
+    setState(() {
+      if (_bookings != null) {
+        _bookings = [
+          for (final b in _bookings!)
+            if (b.id == booking.id) b.copyWith(status: status) else b,
+        ];
+      }
+    });
+    repo.updateCachedBookingStatus(booking.id, status);
 
-    _load();
+    unawaited(() async {
+      try {
+        await repo.updateBookingStatus(booking.id, status);
+
+        if (status == 'completed' && booking.listingType == 'stay') {
+          final pointsService = ref.read(pointsServiceProvider);
+          await pointsService.trackHostATraveler(
+            booking.hostId,
+            booking.guestId,
+            nights: booking.nights,
+          );
+        }
+      } catch (e) {
+        repo.updateCachedBookingStatus(booking.id, prevStatus);
+        if (mounted) {
+          setState(() {
+            if (_bookings != null) {
+              _bookings = [
+                for (final b in _bookings!)
+                  if (b.id == booking.id) b.copyWith(status: prevStatus) else b,
+              ];
+            }
+          });
+        }
+      }
+    }());
   }
 
   @override

@@ -1,14 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart' as cf;
-
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // [NEW]
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/core/utils/location_utils.dart'
     as location_utils;
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
-
 import 'package:diaspora_nearby/features/community/models/community_data.dart';
 
 final communityServiceProvider = Provider<CommunityService>((ref) {
@@ -27,22 +25,16 @@ class CommunityService {
     try {
       final snapshot = await _firestore
           .collection('communities')
-          .where(
-            'location.country',
-            isEqualTo: query,
-          ) // More precise than name if possible
+          .where('location.country', isEqualTo: query)
           .limit(50)
           .get();
 
-      // Fallback to name search if country search yields nothing?
-      // User passes 'Nigeria', assume it's country name.
       if (snapshot.docs.isNotEmpty) {
         return snapshot.docs
             .map((doc) => Community.fromJson(doc.data()..['id'] = doc.id))
             .toList();
       }
 
-      // Try name search
       final nameSnapshot = await _firestore
           .collection('communities')
           .where('name', isGreaterThanOrEqualTo: query)
@@ -65,7 +57,6 @@ class CommunityService {
     ProfileData profile, {
     Function(String)? onFirstMember,
   }) async {
-    // Validate required data
     if (profile.uid == null || profile.uid!.isEmpty) {
       return [];
     }
@@ -79,10 +70,8 @@ class CommunityService {
     final hostCountryCode = (profile.hostCountryCode ?? 'XX')
         .trim()
         .toUpperCase();
-    // [NEW] Extract User Name for Notifications
     final userName = profile.fullName;
 
-    // Parse locations
     final homeParsed = location_utils.LocationParsed(
       city: profile.homeLocation.city,
       state: profile.homeLocation.state,
@@ -99,35 +88,52 @@ class CommunityService {
       placeId: profile.hostLocation.placeId,
     );
 
-    // Collect all community IDs and chat IDs for batch operations
     final List<String> communityIds = [];
     final List<String> chatIds = [];
 
     // =========================================================================
-    // FAST PATH: Single Server-Side Batch Provisioning (1 HTTP call, <400ms)
+    // FAST PATH: Parallel Server-Side Batch Provisioning + Corridor Chamber
     // =========================================================================
     try {
-      final callable = FirebaseFunctions.instanceFor(
-        region: 'us-central1',
-      ).httpsCallable('provisionSignupCommunities');
-      final result = await callable.call<Map<String, dynamic>>({
-        'homeLocation': {
-          'city': homeParsed.city,
-          'state': homeParsed.state,
-          'country': homeParsed.country,
-          'countryCode': homeCountryCode,
-          'placeId': homeParsed.placeId,
-        },
-        'hostLocation': {
-          'city': hostParsed.city,
-          'state': hostParsed.state,
-          'country': hostParsed.country,
-          'countryCode': hostCountryCode,
-          'placeId': hostParsed.placeId,
-        },
-        'homeCountryCode': homeCountryCode,
-        'hostCountryCode': hostCountryCode,
-      });
+      final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+      final provisionFuture = functions
+          .httpsCallable('provisionSignupCommunities')
+          .call<Map<String, dynamic>>({
+            'homeLocation': {
+              'city': homeParsed.city,
+              'state': homeParsed.state,
+              'country': homeParsed.country,
+              'countryCode': homeCountryCode,
+              'placeId': homeParsed.placeId,
+            },
+            'hostLocation': {
+              'city': hostParsed.city,
+              'state': hostParsed.state,
+              'country': hostParsed.country,
+              'countryCode': hostCountryCode,
+              'placeId': hostParsed.placeId,
+            },
+            'homeCountryCode': homeCountryCode,
+            'hostCountryCode': hostCountryCode,
+          });
+
+      final Future<HttpsCallableResult<Map<String, dynamic>>?> chamberFuture =
+          (_ref != null &&
+              hostCountryCode != 'XX' &&
+              homeCountryCode != hostCountryCode)
+          ? functions
+                .httpsCallable('ensureSignupChamber')
+                .call<Map<String, dynamic>>()
+                .then<HttpsCallableResult<Map<String, dynamic>>?>((r) => r)
+                .catchError((e) {
+                  debugPrint('⚠️ ensureCorridorChamber failed: $e');
+                  return null;
+                })
+          : Future<HttpsCallableResult<Map<String, dynamic>>?>.value(null);
+
+      final results = await Future.wait([provisionFuture, chamberFuture]);
+      final result = results[0]!;
+      final chamberResult = results[1];
 
       final commIds = List<String>.from(result.data['communityIds'] ?? []);
       final cIds = List<String>.from(result.data['chatIds'] ?? []);
@@ -135,21 +141,9 @@ class CommunityService {
         communityIds.addAll(commIds);
         chatIds.addAll(cIds);
 
-        // Corridor Chamber (only if different countries)
-        if (_ref != null &&
-            hostCountryCode != 'XX' &&
-            homeCountryCode != hostCountryCode) {
-          try {
-            final chamberResult = await FirebaseFunctions.instanceFor(
-              region: 'us-central1',
-            ).httpsCallable('ensureSignupChamber').call<Map<String, dynamic>>();
-            final chamberChatId = chamberResult.data['chatId'] as String?;
-            if (chamberChatId != null) {
-              chatIds.add(chamberChatId);
-            }
-          } catch (e) {
-            debugPrint('⚠️ ensureCorridorChamber failed: $e');
-          }
+        final chamberChatId = chamberResult?.data['chatId'] as String?;
+        if (chamberChatId != null) {
+          chatIds.add(chamberChatId);
         }
 
         await _batchUpdateUserChatsIndex(userId, chatIds);
@@ -157,38 +151,33 @@ class CommunityService {
       }
     } catch (e) {
       debugPrint(
-        '⚠️ Fast batch provisioning failed, falling back to tier-by-tier: $e',
+        '⚠️ Fast batch provisioning failed, falling back to parallel tier provisioning: $e',
       );
     }
 
     // =========================================================================
-    // RESILIENT FALLBACK: Individual Tier-by-Tier Provisioning
+    // RESILIENT FALLBACK: Parallel Tier Provisioning
     // =========================================================================
-    // 1. GLOBAL COMMUNITY
-    // ========================================
-    try {
-      final globalId = await _ensureCommunity(
-        type: 'global',
-        locationType: 'global',
-        location: homeParsed,
-        userId: userId,
-        homeCountryCode: homeCountryCode,
-        hostCountryCode: null,
-        onFirstMember: onFirstMember,
-        userName: userName,
-      );
-      communityIds.add(globalId);
-      chatIds.add('chat_$globalId');
-    } catch (e) {
-      debugPrint('⚠️ ensure global community failed: $e');
-      communityIds.add('global_community');
-      chatIds.add('chat_global_community');
-    }
+    final globalFuture = () async {
+      try {
+        final globalId = await _ensureCommunity(
+          type: 'global',
+          locationType: 'global',
+          location: homeParsed,
+          userId: userId,
+          homeCountryCode: homeCountryCode,
+          hostCountryCode: null,
+          onFirstMember: onFirstMember,
+          userName: userName,
+        );
+        return <String>[globalId];
+      } catch (e) {
+        debugPrint('⚠️ ensure global community failed: $e');
+        return <String>['global_community'];
+      }
+    }();
 
-    // ========================================
-    // 2. HOME COMMUNITIES
-    // ========================================
-    final homeCommunityIds = await ensureCommunitiesForLocationHierarchy(
+    final homeFuture = ensureCommunitiesForLocationHierarchy(
       location: homeParsed,
       locationType: 'home',
       userId: userId,
@@ -197,13 +186,8 @@ class CommunityService {
       onFirstMember: onFirstMember,
       userName: userName,
     );
-    communityIds.addAll(homeCommunityIds);
-    chatIds.addAll(homeCommunityIds.map((id) => 'chat_$id'));
 
-    // ========================================
-    // 3. HOST COMMUNITIES (with homeCountryCode suffix)
-    // ========================================
-    final hostCommunityIds = await ensureCommunitiesForLocationHierarchy(
+    final hostFuture = ensureCommunitiesForLocationHierarchy(
       location: hostParsed,
       locationType: 'host',
       userId: userId,
@@ -212,53 +196,48 @@ class CommunityService {
       onFirstMember: onFirstMember,
       userName: userName,
     );
-    communityIds.addAll(hostCommunityIds);
-    chatIds.addAll(hostCommunityIds.map((id) => 'chat_$id'));
 
-    // ========================================
-    // 3.25 BILATERAL COUNTRY COMMUNITY (both directions share one room)
-    // ========================================
-    if (hostCountryCode != 'XX' && homeCountryCode != hostCountryCode) {
-      try {
-        final bilateralId = await _ensureCommunity(
-          type: 'country',
-          locationType: 'bilateral',
-          location: hostParsed,
-          userId: userId,
-          homeCountryCode: homeCountryCode,
-          hostCountryCode: hostCountryCode,
-          onFirstMember: onFirstMember,
-          userName: userName,
-        );
-        communityIds.add(bilateralId);
-        chatIds.add('chat_$bilateralId');
-      } catch (e) {
-        debugPrint('?? ensureCommunity bilateral failed: $e');
-      }
-    }
-
-    // ========================================
-    // 3.5 CORRIDOR CHAMBER OF COMMERCE (Organization)
-    // ========================================
-    if (_ref != null &&
-        hostCountryCode != 'XX' &&
-        homeCountryCode != hostCountryCode) {
-      try {
-        final result = await FirebaseFunctions.instanceFor(
-          region: 'us-central1',
-        ).httpsCallable('ensureSignupChamber').call<Map<String, dynamic>>();
-        final chamberChatId = result.data['chatId'] as String?;
-        if (chamberChatId != null) {
-          chatIds.add(chamberChatId);
+    final chamberFallbackFuture = () async {
+      if (_ref != null &&
+          hostCountryCode != 'XX' &&
+          homeCountryCode != hostCountryCode) {
+        try {
+          final result = await FirebaseFunctions.instanceFor(
+            region: 'us-central1',
+          ).httpsCallable('ensureSignupChamber').call<Map<String, dynamic>>();
+          return result.data['chatId'] as String?;
+        } catch (e) {
+          debugPrint('⚠️ ensureCorridorChamber failed: $e');
         }
-      } catch (e) {
-        debugPrint('⚠️ ensureCorridorChamber failed: $e');
+      }
+      return null;
+    }();
+
+    final fallbackResults = await Future.wait([
+      globalFuture,
+      homeFuture,
+      hostFuture,
+      chamberFallbackFuture,
+    ]);
+
+    for (final list in [
+      fallbackResults[0] as List<String>,
+      fallbackResults[1] as List<String>,
+      fallbackResults[2] as List<String>,
+    ]) {
+      for (final id in list) {
+        if (!communityIds.contains(id)) {
+          communityIds.add(id);
+          chatIds.add('chat_$id');
+        }
       }
     }
 
-    // ========================================
-    // 4. BATCH UPDATE userChats INDEX + PROFILE
-    // ========================================
+    final chamberChatId = fallbackResults[3] as String?;
+    if (chamberChatId != null && !chatIds.contains(chamberChatId)) {
+      chatIds.add(chamberChatId);
+    }
+
     try {
       await _batchUpdateUserChatsIndex(userId, chatIds);
     } catch (e) {
@@ -268,31 +247,29 @@ class CommunityService {
     return communityIds;
   }
 
-  /// Ensures communities exist for a full location hierarchy (Continent -> Country -> State -> City).
-  /// Returns a list of created/joined community IDs.
-  /// This extracts the logic from profile creation so it can be reused for updates (e.g. Past Locations).
+  /// Ensures communities exist for a full location hierarchy (Continent -> Country -> State -> City) in parallel.
   Future<List<String>> ensureCommunitiesForLocationHierarchy({
     required location_utils.LocationParsed location,
     required String locationType,
     required String userId,
     required String homeCountryCode,
     String? hostCountryCode,
-    bool syncToUserProfile = false, // [NEW] Option to auto-sync to profile
+    bool syncToUserProfile = false,
     Function(String)? onFirstMember,
-    String? userName, // [NEW] For notification
+    String? userName,
   }) async {
-    final List<String> ids = [];
     final countryCode = locationType == 'home'
         ? homeCountryCode
         : (hostCountryCode ?? location.countryCode);
 
-    // Get continent
     final continent = location_utils.getContinentByCountryCode(countryCode);
     final continentName = location_utils.getContinentName(continent);
 
+    final List<Future<String?>> tierFutures = [];
+
     // 1. Continent
-    try {
-      final continentId = await _ensureCommunity(
+    tierFutures.add(
+      _ensureCommunity(
         type: 'continent',
         locationType: locationType,
         location: location,
@@ -302,15 +279,15 @@ class CommunityService {
         hostCountryCode: hostCountryCode,
         onFirstMember: onFirstMember,
         userName: userName,
-      );
-      ids.add(continentId);
-    } catch (e) {
-      debugPrint('⚠️ ensureCommunity continent failed: $e');
-    }
+      ).then<String?>((v) => v).catchError((e) {
+        debugPrint('⚠️ ensureCommunity continent failed: $e');
+        return null;
+      }),
+    );
 
     // 2. Country
-    try {
-      final countryId = await _ensureCommunity(
+    tierFutures.add(
+      _ensureCommunity(
         type: 'country',
         locationType: locationType,
         location: location,
@@ -319,14 +296,13 @@ class CommunityService {
         hostCountryCode: hostCountryCode,
         onFirstMember: onFirstMember,
         userName: userName,
-      );
-      ids.add(countryId);
-    } catch (e) {
-      debugPrint('⚠️ ensureCommunity country failed: $e');
-    }
+      ).then<String?>((v) => v).catchError((e) {
+        debugPrint('⚠️ ensureCommunity country failed: $e');
+        return null;
+      }),
+    );
 
     // 3. State (only for 3-level countries)
-    // [FIX] China Direct-Controlled Municipalities Logic: Skip State level to avoid "Shanghai, Shanghai, China"
     bool skipState = false;
     if (countryCode == 'CN') {
       const directControlled = ['Beijing', 'Shanghai', 'Tianjin', 'Chongqing'];
@@ -340,8 +316,8 @@ class CommunityService {
         location.state != null &&
         location.state!.isNotEmpty &&
         country_data.hasStateLevelHierarchyFromData(countryCode)) {
-      try {
-        final stateId = await _ensureCommunity(
+      tierFutures.add(
+        _ensureCommunity(
           type: 'state',
           locationType: locationType,
           location: location,
@@ -350,17 +326,17 @@ class CommunityService {
           hostCountryCode: hostCountryCode,
           onFirstMember: onFirstMember,
           userName: userName,
-        );
-        ids.add(stateId);
-      } catch (e) {
-        debugPrint('⚠️ ensureCommunity state failed: $e');
-      }
+        ).then<String?>((v) => v).catchError((e) {
+          debugPrint('⚠️ ensureCommunity state failed: $e');
+          return null;
+        }),
+      );
     }
 
     // 4. City
     if (location.city != null && location.city!.isNotEmpty) {
-      try {
-        final cityId = await _ensureCommunity(
+      tierFutures.add(
+        _ensureCommunity(
           type: 'city',
           locationType: locationType,
           location: location,
@@ -369,22 +345,22 @@ class CommunityService {
           hostCountryCode: hostCountryCode,
           onFirstMember: onFirstMember,
           userName: userName,
-        );
-        ids.add(cityId);
-      } catch (e) {
-        debugPrint('⚠️ ensureCommunity city failed: $e');
-      }
+        ).then<String?>((v) => v).catchError((e) {
+          debugPrint('⚠️ ensureCommunity city failed: $e');
+          return null;
+        }),
+      );
     }
 
-    // 5. Bilateral Country Community (if host/past location is in a different country from home)
+    // 5. Bilateral Country Community
     if (locationType != 'home' &&
         countryCode.isNotEmpty &&
         countryCode != 'XX' &&
         homeCountryCode.isNotEmpty &&
         homeCountryCode != 'XX' &&
         countryCode.toUpperCase() != homeCountryCode.toUpperCase()) {
-      try {
-        final bilateralId = await _ensureCommunity(
+      tierFutures.add(
+        _ensureCommunity(
           type: 'country',
           locationType: 'bilateral',
           location: location,
@@ -393,22 +369,27 @@ class CommunityService {
           hostCountryCode: countryCode,
           onFirstMember: onFirstMember,
           userName: userName,
-        );
-        ids.add(bilateralId);
-      } catch (e) {
-        debugPrint('⚠️ ensureCommunity bilateral failed: $e');
-      }
+        ).then<String?>((v) => v).catchError((e) {
+          debugPrint('⚠️ ensureCommunity bilateral failed: $e');
+          return null;
+        }),
+      );
     }
+
+    final resolved = await Future.wait(tierFutures);
+    final ids = resolved.whereType<String>().toList();
 
     if (syncToUserProfile && ids.isNotEmpty) {
       try {
-        await _firestore.collection('users').doc(userId).set({
-          'communityMemberships': cf.FieldValue.arrayUnion(ids),
-        }, cf.SetOptions(merge: true));
-        await _batchUpdateUserChatsIndex(
-          userId,
-          ids.map((id) => 'chat_$id').toList(),
-        );
+        await Future.wait([
+          _firestore.collection('users').doc(userId).set({
+            'communityMemberships': cf.FieldValue.arrayUnion(ids),
+          }, cf.SetOptions(merge: true)),
+          _batchUpdateUserChatsIndex(
+            userId,
+            ids.map((id) => 'chat_$id').toList(),
+          ),
+        ]);
       } catch (e) {
         debugPrint('⚠️ Error syncing community memberships to profile: $e');
       }
@@ -427,7 +408,7 @@ class CommunityService {
     required String homeCountryCode,
     String? hostCountryCode,
     Function(String)? onFirstMember,
-    String? userName, // [NEW] For notification
+    String? userName,
   }) async {
     final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
         .httpsCallable('ensureCommunity')
@@ -451,16 +432,15 @@ class CommunityService {
     return communityId;
   }
 
-  /// internal cleanup: Removes communities with 0 members.
-  /// This ensures "community and community chats are only created from locations of the user".
+  /// internal cleanup: Removes communities with 0 members using a WriteBatch.
   Future<void> pruneEmptyCommunities() async {
-    // 1. Query for communities with 0 members
-    // Note: This relies on memberCount being accurately 0 for empty ones.
-    // We also check memberIds to be safe.
     final snapshot = await _firestore
         .collection('communities')
         .limit(500)
         .get();
+
+    final batch = _firestore.batch();
+    var opCount = 0;
 
     for (final doc in snapshot.docs) {
       final data = doc.data();
@@ -468,33 +448,30 @@ class CommunityService {
       final memberIds = List.from(data['members'] ?? data['memberIds'] ?? []);
 
       if (memberCount == 0 || memberIds.isEmpty) {
-        // Delete Community
-        await doc.reference.delete();
+        batch.delete(doc.reference);
+        opCount++;
 
-        // Delete Chat
         final chatId = data['chatId'] as String?;
         if (chatId != null) {
-          await _firestore.collection('chats').doc(chatId).delete();
+          batch.delete(_firestore.collection('chats').doc(chatId));
+          opCount++;
         }
 
         debugPrint('Pruned empty community: ${doc.id}');
       }
     }
 
-    // 2. Remove Deprecated "United Kingdom" (GB) specifically
     final gbRef = _firestore.collection('communities').doc('home_country_GB');
-    final gbDoc = await gbRef.get();
-    if (gbDoc.exists) {
-      await gbRef.delete();
-      // And its chat
-      await _firestore.collection('chats').doc('chat_home_country_GB').delete();
+    batch.delete(gbRef);
+    batch.delete(_firestore.collection('chats').doc('chat_home_country_GB'));
+    opCount += 2;
+
+    if (opCount > 0) {
+      await batch.commit();
     }
   }
 
   /// HARD RESET DATABASE
-  /// Deletes selected collections and services.
-  /// [resetTargets] list of keys: 'users', 'communities', 'events', 'organizations', 'radio', 'chats', 'storage'
-  /// Returns a report of { 'success': [], 'failed': [] } keys.
   Future<Map<String, List<String>>> hardResetDatabase({
     List<String> resetTargets = const [
       'users',
@@ -512,7 +489,6 @@ class CommunityService {
     final List<String> succeeded = [];
     final List<String> failed = [];
 
-    // [NEW] Call Cloud Function for Firestore collections
     try {
       final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
       final callable = functions.httpsCallable('hardResetDatabase');
@@ -536,7 +512,6 @@ class CommunityService {
       failed.add('Cloud Function Error: ${e.toString()}');
     }
 
-    // Helper to track status for local operations
     Future<void> tryTarget(
       String target,
       Future<void> Function() action,
@@ -551,12 +526,6 @@ class CommunityService {
       }
     }
 
-    // [REMOVED] Client-side Firestore deletion - now handled by Cloud Function
-    // [REMOVED] Client-side RTDB deletion - now handled by Cloud Function
-    // [REMOVED] Client-side Storage deletion - now handled by Cloud Function
-
-    // 4. Clear Local Preferences
-    // Only verify preferences if explicitly requested or part of user cleanup
     if (resetTargets.any(
       (t) => ['proximity', 'onboarding', 'users', 'radio'].contains(t),
     )) {
@@ -571,7 +540,6 @@ class CommunityService {
           await prefs.clear();
         }
 
-        // Original behavior: Full clear safeguard
         if (resetTargets.contains('users') || resetTargets.contains('radio')) {
           await prefs.clear();
         }
@@ -581,14 +549,7 @@ class CommunityService {
     return {'success': succeeded, 'failed': failed};
   }
 
-  // Obsolete helper _tryDeleteCollection removed in favor of tryTarget pattern above
-  // Obsolete helper _deleteCollection removed - now handled by Cloud Function
-
-  // Storage folder deletion now handled by Cloud Function
-
   /// Batch updates userChats index for all community chats (Firestore).
-  /// Only ensures `chatId` and `isDeleted: false` without clobbering `addedAt`
-  /// or `lastRead` written by `provisionSignupCommunities` / `ensureCommunity`.
   Future<void> _batchUpdateUserChatsIndex(
     String userId,
     List<String> chatIds,
@@ -611,10 +572,8 @@ class CommunityService {
 
     await batch.commit();
   }
-  // ... existing methods ...
 
-  /// Broadcasts a bereavement announcement to relevant community chats.
-  /// Targets: Home Country Community and Host City Community.
+  /// Broadcasts a bereavement announcement to relevant community chats using a single WriteBatch.
   Future<void> broadcastBereavementAnnouncement({
     required String? userId,
     required String userName,
@@ -628,21 +587,11 @@ class CommunityService {
 
     final List<String> targetChatIds = [];
 
-    // 1. Identify Home Country Community Chat
-    // ID format from generateCommunityId: home_{code}_country
     final homeCommunityId = 'home_${homeCountryCode}_country';
     targetChatIds.add('chat_$homeCommunityId');
 
-    // 2. Identify Host City Community Chat (if applicable)
     if (hostCountryCode != null && hostCity != null && hostCity.isNotEmpty) {
-      // We need to resolve the Host City Community ID.
-      // Since generateCommunityId uses normalized strings, we try to reconstruct it.
-      // Or better, we query strictly for the "Host City" community this user is a member of.
-      // For simplicity and speed, we'll try to construct the ID if we follow the naming convention strictness,
-      // but querying is safer.
-
       try {
-        // Find 'host' 'city' community for this user in this country/city
         final query = await _firestore
             .collection('communities')
             .where('locationType', isEqualTo: 'host')
@@ -664,13 +613,13 @@ class CommunityService {
 
     if (targetChatIds.isEmpty) return;
 
-    // 3. Send Message to each target
     final now = DateTime.now().millisecondsSinceEpoch;
     final content =
-        'Ã°Å¸â€¢Â¯Ã¯Â¸Â Bereavement Announcement\n\nIt is with a heavy heart that I announce the passing of my $relationship, $deceasedName.\n\nWe appreciate the community\'s support during this difficult time.';
+        '🕯️ Bereavement Announcement\n\nIt is with a heavy heart that I announce the passing of my $relationship, $deceasedName.\n\nWe appreciate the community\'s support during this difficult time.';
 
-    for (final chatId in targetChatIds) {
-      try {
+    try {
+      final batch = _firestore.batch();
+      for (final chatId in targetChatIds) {
         final messageRef = _firestore
             .collection('chats')
             .doc(chatId)
@@ -693,9 +642,8 @@ class CommunityService {
           },
         };
 
-        await messageRef.set(messageData);
+        batch.set(messageRef, messageData);
 
-        // Update Last Message
         final lastMsg = {
           'content': 'Bereavement Announcement: $deceasedName',
           'timestamp': now,
@@ -705,19 +653,14 @@ class CommunityService {
           'status': 'sent',
         };
 
-        await _firestore.collection('chats').doc(chatId).update({
+        batch.update(_firestore.collection('chats').doc(chatId), {
           'lastMessage': lastMsg,
           'updatedAt': now,
         });
-
-        // We rely on Cloud Functions or client-side fan-out if needed for unread counts.
-        // For Community chats, usually the listener handles it.
-        // But strict fan-out helper _batchUpdateUserChatsIndex is good if we want to force "unread".
-        // We won't do full fan-out here as it's expensive for whole communities.
-        // Community chats rely on 'updatedAt' sorting usually.
-      } catch (e) {
-        debugPrint('Error broadcasting to $chatId: $e');
       }
+      await batch.commit();
+    } catch (e) {
+      debugPrint('Error broadcasting bereavement announcement: $e');
     }
   }
 }

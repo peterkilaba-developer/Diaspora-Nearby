@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -95,6 +96,36 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
     super.initState();
     // Sticky form: auto-populate Traveler 1 from user profile
     _autoFillFromProfile();
+    _prewarmPriceConfirmation();
+  }
+
+  void _prewarmPriceConfirmation() {
+    final amadeus = ref.read(amadeusServiceProvider);
+    final cached = amadeus.getCachedConfirmedPrice(widget.offer.id);
+    if (cached != null) {
+      _confirmedOfferJson = cached;
+      try {
+        _confirmedOffer = FlightOffer.fromJson(cached);
+      } catch (_) {
+        _confirmedOffer = widget.offer;
+      }
+      return;
+    }
+
+    final rawJson = widget.offer.rawJson;
+    if (rawJson == null) return;
+    unawaited(() async {
+      try {
+        final confirmedJson = await amadeus.confirmFlightPrice(rawJson);
+        final confirmedOffer = FlightOffer.fromJson(confirmedJson);
+        if (mounted) {
+          setState(() {
+            _confirmedOfferJson = confirmedJson;
+            _confirmedOffer = confirmedOffer;
+          });
+        }
+      } catch (_) {}
+    }());
   }
 
   void _autoFillFromProfile() {
@@ -249,68 +280,32 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
       return;
     }
 
+    // Advance immediately on tap using prewarmed or initial offer
     setState(() {
-      _isProcessing = true;
+      _confirmedOfferJson ??= widget.offer.rawJson;
+      _confirmedOffer ??= widget.offer;
+      _isProcessing = false;
       _errorMessage = null;
+      _currentStep = 2;
     });
 
-    try {
-      if (widget.offer.rawJson != null) {
-        final amadeus = ref.read(amadeusServiceProvider);
-        final confirmedJson = await amadeus.confirmFlightPrice(
-          widget.offer.rawJson!,
-        );
-        final confirmedOffer = FlightOffer.fromJson(confirmedJson);
-
-        if (mounted) {
-          setState(() {
-            _confirmedOfferJson = confirmedJson;
-            _confirmedOffer = confirmedOffer;
-            _isProcessing = false;
-            _currentStep = 2;
-          });
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            _confirmedOffer = widget.offer;
-            _isProcessing = false;
-            _currentStep = 2;
-          });
-        }
-      }
-    } on AmadeusException catch (e) {
-      if (!_bookingEnabled && mounted) {
-        setState(() {
-          _confirmedOfferJson = widget.offer.rawJson;
-          _confirmedOffer = widget.offer;
-          _isProcessing = false;
-          _currentStep = 2;
-        });
-        return;
-      }
-      if (mounted) {
-        setState(() {
-          _isProcessing = false;
-          _errorMessage = 'Price confirmation failed: ${e.message}';
-        });
-      }
-    } catch (e, s) {
-      debugPrint('✈️ [FlightBooking] confirmPrice error: $e\n$s');
-      if (!_bookingEnabled && mounted) {
-        setState(() {
-          _confirmedOfferJson = widget.offer.rawJson;
-          _confirmedOffer = widget.offer;
-          _isProcessing = false;
-          _currentStep = 2;
-        });
-        return;
-      }
-      if (mounted) {
-        setState(() {
-          _isProcessing = false;
-          _errorMessage = 'Price error: $e';
-        });
+    if (widget.offer.rawJson != null) {
+      final amadeus = ref.read(amadeusServiceProvider);
+      if (amadeus.getCachedConfirmedPrice(widget.offer.id) == null) {
+        unawaited(() async {
+          try {
+            final confirmedJson = await amadeus.confirmFlightPrice(
+              widget.offer.rawJson!,
+            );
+            final confirmedOffer = FlightOffer.fromJson(confirmedJson);
+            if (mounted) {
+              setState(() {
+                _confirmedOfferJson = confirmedJson;
+                _confirmedOffer = confirmedOffer;
+              });
+            }
+          } catch (_) {}
+        }());
       }
     }
   }

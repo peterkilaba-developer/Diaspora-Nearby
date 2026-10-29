@@ -177,12 +177,13 @@ const KISWAHILI_DIASPORA_PACK = {
     "Karibu sana ndugu yetu! 🇹🇿 Tumekutumia link yako ya kujiunga na kodi ya zawadi kwenye inbox yako (DM) sasa hivi 📩",
 };
 
+const FOUNDER_INVITE_CODE = "PETER-TZ-CC57";
+
 /**
- * Generates a deterministic 8-character referral/tracking code from phone or user ID
+ * Returns the single invitation code created at signup for Founder Peter Swai
  */
-function buildOutreachCode(prefix, identifier) {
-  const hash = stableHash(`outreach:${identifier}`).slice(0, 6).toUpperCase();
-  return `${prefix}${hash}`;
+function buildOutreachCode() {
+  return FOUNDER_INVITE_CODE;
 }
 
 /**
@@ -365,6 +366,156 @@ function extractCityLabel(text = "", corridor = "tz_abroad") {
 }
 
 /**
+ * Extracts both Home City/Country and Host City/Country from a Facebook comment
+ * e.g. "Arusha -> Houston", "From Dar living in London", "Kutoka Mwanza nipo Dubai",
+ * "Home: Moshi, Host: Washington DC", or "Dar es Salaam / Dallas".
+ */
+function parseHomeAndHostFromComment(rawText = "") {
+  const clean = String(rawText || "").replace(/\s+/g, " ").trim();
+  if (!clean) return { homeCity: null, hostCity: null };
+
+  // 1. Explicit labeled pattern: "Home: X, Host: Y" or "Kutoka X nipo/naishi Y" or "From X in/living in Y"
+  const labeledMatch =
+    clean.match(/(?:home|kutoka|from|born in|nyumbani)\s*[:=-]?\s*([^,;|\->/]+?)\s*(?:[,;|/]|->|to|living in|live in|currently in|in|nipo|naishi|niko|host)\s*[:=-]?\s*([^.!?\n]+)/i) ||
+    clean.match(/([^,;|\->/]+?)\s*(?:->|→|=>| to | \/ | \| | - )\s*([^.!?\n]+)/i);
+
+  if (labeledMatch) {
+    const rawHome = labeledMatch[1].replace(/^(?:i am|i'm|mimi ni|naitwa)\s+/i, "").trim();
+    const rawHost = labeledMatch[2].replace(/^(?:host|now in|living in|nipo|naishi)\s*[:=-]?\s*/i, "").trim();
+    if (rawHome.length >= 2 && rawHost.length >= 2 && rawHome.length <= 45 && rawHost.length <= 45) {
+      return { homeCity: rawHome, hostCity: rawHost };
+    }
+  }
+
+  // 2. Check if two known cities appear in the comment
+  const tzHomeCities = [
+    ["dar es salaam", "Dar es Salaam"],
+    ["arusha", "Arusha"],
+    ["zanzibar", "Zanzibar"],
+    ["mwanza", "Mwanza"],
+    ["dodoma", "Dodoma"],
+    ["moshi", "Moshi"],
+    ["kilimanjaro", "Kilimanjaro"],
+    ["mbeya", "Mbeya"],
+    ["tanga", "Tanga"],
+    ["morogoro", "Morogoro"],
+    ["bukoba", "Bukoba"],
+    ["iringa", "Iringa"],
+  ];
+  const globalCities = [
+    ["houston", "Houston, USA"],
+    ["dallas", "Dallas, USA"],
+    ["washington", "Washington D.C."],
+    ["dmv", "DMV, USA"],
+    ["atlanta", "Atlanta, USA"],
+    ["new york", "New York, USA"],
+    ["seattle", "Seattle, USA"],
+    ["chicago", "Chicago, USA"],
+    ["columbus", "Columbus, USA"],
+    ["phoenix", "Phoenix, USA"],
+    ["london", "London, UK"],
+    ["birmingham", "Birmingham, UK"],
+    ["reading", "Reading, UK"],
+    ["manchester", "Manchester, UK"],
+    ["dubai", "Dubai, UAE"],
+    ["abu dhabi", "Abu Dhabi, UAE"],
+    ["muscat", "Muscat, Oman"],
+    ["johannesburg", "Johannesburg, SA"],
+    ["cape town", "Cape Town, SA"],
+    ["nairobi", "Nairobi, Kenya"],
+    ["mombasa", "Mombasa, Kenya"],
+    ["toronto", "Toronto, Canada"],
+    ["ottawa", "Ottawa, Canada"],
+    ["berlin", "Berlin, Germany"],
+    ["guangzhou", "Guangzhou, China"],
+    ["beijing", "Beijing, China"],
+  ];
+
+  const lower = clean.toLowerCase();
+  const matchedTz = tzHomeCities.find(([needle]) => lower.includes(needle));
+  const matchedGlobal = globalCities.find(([needle]) => lower.includes(needle));
+
+  if (matchedTz && matchedGlobal) {
+    const tzIdx = lower.indexOf(matchedTz[0]);
+    const glIdx = lower.indexOf(matchedGlobal[0]);
+    if (tzIdx <= glIdx) {
+      return { homeCity: matchedTz[1], hostCity: matchedGlobal[1] };
+    }
+    return { homeCity: matchedGlobal[1], hostCity: matchedTz[1] };
+  }
+
+  if (matchedGlobal) {
+    return { homeCity: "Tanzania", hostCity: matchedGlobal[1] };
+  }
+  if (matchedTz) {
+    return { homeCity: matchedTz[1], hostCity: null };
+  }
+
+  return { homeCity: null, hostCity: null };
+}
+
+/**
+ * Builds the personalized public comment reply and Private Reply DM for a Facebook commenter
+ */
+function buildFacebookCommentOnboarding({
+  commentText = "",
+  commenterName = "",
+  commenterId = "",
+}) {
+  const intent = classifyOutreachIntent(commentText, "");
+  const { homeCity, hostCity } = parseHomeAndHostFromComment(commentText);
+  const isExpat = intent.corridor === "expat_in_tz";
+  const code = buildOutreachCode(isExpat ? "EX" : "TZ", commenterId || commenterName || commentText);
+  const firstName = String(commenterName || "").trim().split(/\s+/)[0] || "";
+  const inviteUrl = `https://diasporanearby.com/invite?code=${code}`;
+
+  const effectiveHome = homeCity || (isExpat ? "your home country" : "Tanzania");
+  const effectiveHost = hostCity || intent.city || (isExpat ? "Tanzania" : "mji wako wa ughaibuni");
+
+  let publicReplyText;
+  if (!isExpat) {
+    const nameGreet = firstName ? ` ${firstName}` : "";
+    const corridorPhrase = homeCity && hostCity
+      ? `kutoka *${effectiveHome}* ukiwa *${effectiveHost}*`
+      : hostCity
+        ? `ukiwa *${effectiveHost}*`
+        : `kutoka *${effectiveHome}*`;
+    publicReplyText =
+      `Karibu sana${nameGreet}! 🇹🇿🌍 Ungana na Watanzania wenzako ${corridorPhrase} ndani ya *Diaspora Nearby* ` +
+      `(utapata zawadi ya Mwanzilishi ya Epoch 1 *$DIASPORA* na ujumbe wa moja kwa moja ndani ya app kutoka kwa Mwanzilishi Peter Swai).\n` +
+      `📲 Tafuta "Diaspora Nearby" kwenye Google Play / App Store (Kodi ya Mwaliko: ${code}) au tuma ujumbe WhatsApp: +1 641-302-0012 (diasporanearby [dot] com)`;
+  } else {
+    const nameGreet = firstName ? `, ${firstName}` : "";
+    const corridorPhrase = homeCity && hostCity
+      ? `from *${effectiveHome}* living in *${effectiveHost}*`
+      : `in *${effectiveHost}*`;
+    publicReplyText =
+      `Welcome${nameGreet}! 🌍 Connect with fellow compatriots ${corridorPhrase} on *Diaspora Nearby* ` +
+      `(claim your Epoch 1 *$DIASPORA* Welcome Bonus & chat 1-on-1 in-app with Founder Peter Swai).\n` +
+      `📲 Search "Diaspora Nearby" on Google Play / App Store (Invite Code: ${code}) or WhatsApp: +1 641-302-0012 (diasporanearby [dot] com)`;
+  }
+
+  const pack = isExpat
+    ? EXPAT_NATIVE_PACKS[intent.lang] || EXPAT_NATIVE_PACKS.en
+    : KISWAHILI_DIASPORA_PACK;
+  const dmCityLabel = homeCity && hostCity ? `${effectiveHome} → ${effectiveHost}` : effectiveHost;
+  const dmText = isExpat
+    ? pack.welcome(code, dmCityLabel)
+    : KISWAHILI_DIASPORA_PACK.welcome(code, dmCityLabel);
+
+  return {
+    code,
+    inviteUrl,
+    corridor: isExpat ? "expat_in_tz" : "tz_abroad",
+    lang: intent.lang || "sw",
+    homeCity: homeCity || null,
+    hostCity: hostCity || intent.city || null,
+    publicReplyText,
+    dmText,
+  };
+}
+
+/**
  * Sends a WhatsApp message (text or interactive buttons) via Meta WhatsApp Cloud API
  */
 async function sendWhatsAppCloudMessage({
@@ -512,9 +663,77 @@ async function handleIncomingWhatsAppMessages(webhookValue) {
 
     if (!incomingText) continue;
 
+    const lowerIncoming = incomingText.toLowerCase();
+    const isFounder1on1 =
+      lowerIncoming.includes("peter") ||
+      lowerIncoming.includes("1-on-1") ||
+      lowerIncoming.includes("1-kwa-1") ||
+      lowerIncoming.includes("1-à-1") ||
+      lowerIncoming.includes("1-zu-1") ||
+      incomingText.includes("一对一") ||
+      incomingText.includes("1-ऑन-1") ||
+      incomingText.includes("1-إلى-1");
+
     const intent = classifyOutreachIntent(incomingText, normalizedPhone);
     const leadId = stableHash(`lead:${normalizedPhone}`);
     const leadRef = db.collection("outreach_leads").doc(leadId);
+
+    if (isFounder1on1) {
+      const isSwahili =
+        intent.corridor === "tz_abroad" ||
+        lowerIncoming.includes("habari") ||
+        lowerIncoming.includes("1-kwa-1") ||
+        lowerIncoming.includes("nimejiunga");
+      const isCallRequest =
+        lowerIncoming.includes("call") ||
+        lowerIncoming.includes("simu") ||
+        lowerIncoming.includes("appel") ||
+        lowerIncoming.includes("anruf") ||
+        incomingText.includes("通话") ||
+        incomingText.includes("कॉल") ||
+        incomingText.includes("مكالمة");
+
+      await Promise.all([
+        leadRef.set(
+          {
+            phoneNumber: normalizedPhone,
+            profileName,
+            status: "founder_1on1_requested",
+            founderHelpRequested: true,
+            founderHelpType: isCallRequest ? "call" : "text",
+            lastMessage: incomingText.slice(0, 500),
+            lastInboundAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        ),
+        db.collection("founder_concierge_requests").add({
+          phoneNumber: normalizedPhone,
+          profileName,
+          requestType: isCallRequest ? "call" : "text",
+          lang: isSwahili ? "sw" : intent.lang || "en",
+          message: incomingText.slice(0, 500),
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        }),
+      ]);
+
+      const founderReply = isSwahili
+        ? "🇹🇿 *Ahsante sana kwa kuwasiliana nami!* Mimi ni *Peter Swai*, Mwanzilishi wa Diaspora Nearby.\n\n" +
+          "Nimepokea ujumbe wako wa msaada wa 1-kwa-1. Unaweza kunipigia simu ya WhatsApp moja kwa moja hapa sasa hivi (bonyeza kitufe cha Simu / Call juu kulia), au nitakupigia na kukujibu punde tu!\n\n" +
+          "Karibu sana nyumbani kwenye Diaspora Nearby 🙏"
+        : "🌍 *Thank you for reaching out!* This is *Peter Swai*, Founder of Diaspora Nearby.\n\n" +
+          "I just received your 1-on-1 request. Feel free to tap the WhatsApp Call icon at the top right to call me right now, or I will call/message you right back shortly!\n\n" +
+          "Welcome to Diaspora Nearby 🙏";
+
+      await sendWhatsAppCloudMessage({
+        phoneNumberId,
+        accessToken,
+        to: normalizedPhone,
+        type: "text",
+        textBody: founderReply,
+      });
+      continue;
+    }
 
     if (intent.corridor === "unknown") {
       await leadRef.set(
@@ -620,20 +839,23 @@ exports.outreachFollowUpCron = functions
     const now = Date.now();
     const minAgeMs = 18 * 60 * 60 * 1000; // 18 hours ago
     const maxAgeMs = 23.5 * 60 * 60 * 1000; // 23.5 hours ago (inside 24h free window)
-    const minTimestamp = admin.firestore.Timestamp.fromMillis(now - maxAgeMs);
-    const maxTimestamp = admin.firestore.Timestamp.fromMillis(now - minAgeMs);
+    const minMs = now - maxAgeMs;
+    const maxMs = now - minAgeMs;
 
     const snapshot = await db
       .collection("outreach_leads")
       .where("status", "==", "link_sent")
-      .where("followUpSent", "==", false)
-      .where("lastInboundAt", ">=", minTimestamp)
-      .where("lastInboundAt", "<=", maxTimestamp)
-      .limit(50)
+      .limit(100)
       .get();
 
     for (const doc of snapshot.docs) {
       const lead = doc.data() || {};
+      if (lead.followUpSent === true) continue;
+      const inboundMillis = lead.lastInboundAt && typeof lead.lastInboundAt.toMillis === "function"
+        ? lead.lastInboundAt.toMillis()
+        : 0;
+      if (inboundMillis < minMs || inboundMillis > maxMs) continue;
+
       const phoneNumber = lead.phoneNumber;
       if (!phoneNumber) continue;
 
@@ -681,15 +903,161 @@ exports.outreachFollowUpCron = functions
       );
     }
 
+    // Also poll Facebook Page posts for any new Home/Host city comments
+    try {
+      await pollFacebookPageComments();
+    } catch (fbErr) {
+      console.warn("[outreachFollowUpCron] Facebook comment poll warning:", fbErr.message);
+    }
+
     return null;
   });
+
+/**
+ * Processes a single Facebook comment: parses Home & Host cities, sends Private Reply DM
+ * and Public Comment Reply with direct onboarding link, and logs in Firestore.
+ */
+async function processFacebookComment({
+  commentId,
+  messageText = "",
+  commenterId = "",
+  commenterName = "",
+  postId = "",
+  pageAccessToken = "",
+}) {
+  if (!commentId || !messageText.trim()) return { skipped: true, reason: "empty" };
+
+  const logRef = db.collection("_socialMetaCommentReplies").doc(stableHash(commentId));
+  const existing = await logRef.get();
+  if (existing.exists) {
+    return { skipped: true, reason: "already_replied", data: existing.data() };
+  }
+
+  const onboarding = buildFacebookCommentOnboarding({
+    commentText: messageText,
+    commenterName,
+    commenterId: commenterId || commentId,
+  });
+
+  let dmOk = false;
+  let commentReplyOk = false;
+
+  if (pageAccessToken) {
+    // 1. Send Private Reply DM to the commenter
+    try {
+      const dmRes = await fetch(`${GRAPH_API_BASE}/${commentId}/private_replies`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: onboarding.dmText,
+          access_token: pageAccessToken,
+        }),
+      });
+      dmOk = dmRes.ok;
+    } catch (dmErr) {
+      console.warn("[MetaOutreach] Private reply warning:", dmErr.message);
+    }
+
+    // 2. Reply publicly to the comment with personalized Home -> Host onboarding link
+    try {
+      const replyRes = await fetch(`${GRAPH_API_BASE}/${commentId}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: onboarding.publicReplyText,
+          access_token: pageAccessToken,
+        }),
+      });
+      commentReplyOk = replyRes.ok;
+    } catch (repErr) {
+      console.warn("[MetaOutreach] Public comment reply warning:", repErr.message);
+    }
+  }
+
+  const record = {
+    commentId,
+    postId: postId || null,
+    commenterId: commenterId || commentId,
+    commenterName: commenterName || null,
+    messageText: messageText.slice(0, 280),
+    homeCity: onboarding.homeCity,
+    hostCity: onboarding.hostCity,
+    corridor: onboarding.corridor,
+    lang: onboarding.lang,
+    referralCode: onboarding.code,
+    inviteUrl: onboarding.inviteUrl,
+    publicReplyText: onboarding.publicReplyText,
+    dmOk,
+    commentReplyOk,
+    repliedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+
+  await logRef.set(record);
+  return { skipped: false, ...record };
+}
+
+/**
+ * Polls recent posts on the Diaspora Nearby Facebook Page for unreplied comments
+ * and replies with their personalized Home -> Host city onboarding link.
+ */
+async function pollFacebookPageComments({ limitPosts = 15 } = {}) {
+  const socialMedia = require("./social_media");
+  await socialMedia.ensureSocialConfigEnv();
+
+  const pageAccessToken =
+    process.env.META_PAGE_ACCESS_TOKEN || process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
+  const pageId = process.env.META_PAGE_ID || "455143491012634";
+  if (!pageAccessToken) {
+    return { ok: false, error: "Missing META_PAGE_ACCESS_TOKEN" };
+  }
+
+  const feedUrl =
+    `${GRAPH_API_BASE}/${pageId}/feed?fields=id,message,created_time,comments.limit(50){id,from,message,created_time}` +
+    `&limit=${limitPosts}&access_token=${encodeURIComponent(pageAccessToken)}`;
+
+  const res = await fetch(feedUrl);
+  if (!res.ok) {
+    const errText = await res.text();
+    return { ok: false, status: res.status, error: errText };
+  }
+
+  const data = await res.json();
+  const posts = Array.isArray(data.data) ? data.data : [];
+  const processed = [];
+
+  for (const post of posts) {
+    const comments = Array.isArray(post.comments?.data) ? post.comments.data : [];
+    for (const c of comments) {
+      const fromId = String(c.from?.id || "");
+      if (fromId === String(pageId)) continue;
+      const fromName = String(c.from?.name || "");
+      const text = String(c.message || "").trim();
+      if (!text) continue;
+
+      const out = await processFacebookComment({
+        commentId: c.id,
+        messageText: text,
+        commenterId: fromId || c.id,
+        commenterName: fromName,
+        postId: post.id,
+        pageAccessToken,
+      });
+      if (!out.skipped) {
+        processed.push(out);
+      }
+    }
+  }
+
+  return { ok: true, postsScanned: posts.length, commentsProcessed: processed.length, processed };
+}
 
 /**
  * Facebook Page & Instagram Comment-to-DM Webhook
  * - GET: Responds to Meta hub.challenge verification
  * - POST: Listens for comments on Diaspora Nearby Facebook Page posts and automatically:
- *   1) Replies publicly to the comment (Kiswahili for TZ Diaspora / English or native lang for Expats in TZ)
- *   2) Sends a Private Reply DM with their direct corridor onboarding link & WhatsApp link
+ *   1) Extracts Home & Host cities from the comment
+ *   2) Replies publicly with a personalized Home -> Host onboarding link
+ *   3) Sends a Private Reply DM with their direct corridor onboarding link
  */
 exports.metaOutreachWebhook = functions.https.onRequest(async (req, res) => {
   if (req.method === "GET") {
@@ -733,72 +1101,13 @@ exports.metaOutreachWebhook = functions.https.onRequest(async (req, res) => {
             val.comment_id &&
             String(val.from?.id || "") !== String(pageId)
           ) {
-            const commentId = val.comment_id;
-            const messageText = String(val.message || "").trim();
-            const commenterId = String(val.from?.id || commentId);
-
-            // Prevent duplicate auto-replies to the same comment
-            const logRef = db.collection("_socialMetaCommentReplies").doc(stableHash(commentId));
-            const existing = await logRef.get();
-            if (existing.exists) continue;
-
-            const intent = classifyOutreachIntent(messageText, "");
-            const isExpat = intent.corridor === "expat_in_tz";
-            const code = buildOutreachCode(isExpat ? "EX" : "TZ", commenterId);
-            const pack = isExpat
-              ? EXPAT_NATIVE_PACKS[intent.lang] || EXPAT_NATIVE_PACKS.en
-              : KISWAHILI_DIASPORA_PACK;
-
-            const dmText = isExpat
-              ? pack.welcome(code, intent.city || "Dar · Arusha · Zanzibar")
-              : KISWAHILI_DIASPORA_PACK.welcome(code, intent.city || "Diaspora Global");
-
-            const publicReplyText = isExpat
-              ? pack.commentReply
-              : KISWAHILI_DIASPORA_PACK.commentReply;
-
-            // 1. Send Private Reply DM to the commenter
-            let dmOk = false;
-            try {
-              const dmRes = await fetch(`${GRAPH_API_BASE}/${commentId}/private_replies`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  message: dmText,
-                  access_token: pageAccessToken,
-                }),
-              });
-              dmOk = dmRes.ok;
-            } catch (dmErr) {
-              console.warn("[MetaOutreach] Private reply warning:", dmErr.message);
-            }
-
-            // 2. Reply publicly to the comment to boost organic post ranking
-            let commentReplyOk = false;
-            try {
-              const replyRes = await fetch(`${GRAPH_API_BASE}/${commentId}/comments`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  message: publicReplyText,
-                  access_token: pageAccessToken,
-                }),
-              });
-              commentReplyOk = replyRes.ok;
-            } catch (repErr) {
-              console.warn("[MetaOutreach] Public comment reply warning:", repErr.message);
-            }
-
-            await logRef.set({
-              commentId,
-              commenterId,
-              messageText: messageText.slice(0, 280),
-              corridor: isExpat ? "expat_in_tz" : "tz_abroad",
-              lang: intent.lang || "sw",
-              referralCode: code,
-              dmOk,
-              commentReplyOk,
-              repliedAt: admin.firestore.FieldValue.serverTimestamp(),
+            await processFacebookComment({
+              commentId: val.comment_id,
+              messageText: String(val.message || "").trim(),
+              commenterId: String(val.from?.id || val.comment_id),
+              commenterName: String(val.from?.name || ""),
+              postId: String(val.post_id || ""),
+              pageAccessToken,
             });
           }
         }
@@ -926,6 +1235,10 @@ module.exports = {
   KISWAHILI_DIASPORA_PACK,
   classifyOutreachIntent,
   detectExpatLanguage,
+  parseHomeAndHostFromComment,
+  buildFacebookCommentOnboarding,
+  processFacebookComment,
+  pollFacebookPageComments,
   handleIncomingWhatsAppMessages,
   outreachFollowUpCron: exports.outreachFollowUpCron,
   metaOutreachWebhook: exports.metaOutreachWebhook,

@@ -10,7 +10,10 @@
  */
 const { functions, admin, db } = require("./shared");
 const { ethers } = require("ethers");
-const { getSmartWalletInfra, SMART_WALLET_ABI } = require("./wallet");
+const {
+  getSmartWalletInfra,
+  transferTokenFromSmartWallet,
+} = require("./wallet");
 const { syncProfileMilestoneAndTrust } = require("./dsp");
 
 const FUND_SALT_LABEL = "treasury:emergency_fund";
@@ -29,8 +32,8 @@ const ERC20_ABI = [
 ];
 
 function getTokenAddress() {
-  const addr = process.env.DIASPORA_TOKEN_ADDRESS;
-  if (!addr) throw new functions.https.HttpsError("failed-precondition", "DIASPORA_TOKEN_ADDRESS env not set");
+  const addr = process.env.DIASPORA_TOKEN_ADDRESS || process.env.TOKEN_ADDRESS;
+  if (!addr) throw new functions.https.HttpsError("failed-precondition", "TOKEN_ADDRESS env not set");
   return addr;
 }
 
@@ -68,9 +71,13 @@ async function getFundTreasuryAddress(infra) {
 async function getDiasporaPriceUsd() {
   const basePrice = 0.001;
   try {
-    const treasury = (await db.collection("system_stats").doc("treasury").get()).data() || {};
-    const supplyDoc = (await db.collection("system_stats").doc("dsp_supply").get()).data() || {};
-    const usersAgg = await db.collection("users").count().get();
+    const [treasurySnap, supplySnap, usersAgg] = await Promise.all([
+      db.collection("system_stats").doc("treasury").get(),
+      db.collection("system_stats").doc("dsp_supply").get(),
+      db.collection("users").count().get(),
+    ]);
+    const treasury = treasurySnap.data() || {};
+    const supplyDoc = supplySnap.data() || {};
     const totalUsers = usersAgg.data().count || 0;
     const totalMinted = Number(supplyDoc.totalMinted || treasury.totalMinted) || 0;
     const totalBurned =
@@ -123,31 +130,40 @@ exports.payEmergencyFundInDiaspora = functions
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in required");
     const userId = context.auth.uid;
 
-    // 1. Resolve user wallet
-    const userDoc = await db.collection("users").doc(userId).get();
+    // 1. Resolve user wallet and quote price in parallel
+    const [userDoc, price] = await Promise.all([
+      db.collection("users").doc(userId).get(),
+      getDiasporaPriceUsd(),
+    ]);
     const userWallet = userDoc.exists ? userDoc.data().walletAddress : null;
     if (!userWallet) throw new functions.https.HttpsError("failed-precondition", "No wallet — verify your phone first.");
 
-    // 2. Quote price + treasury wallet
-    const price = await getDiasporaPriceUsd();
+    // 2. Quote price + treasury wallet + on-chain decimals/balance in parallel
     const amountDiaspora = Math.ceil(CONTRIBUTION_USD / price);
     const infra = getSmartWalletInfra();
-    const treasury = await getFundTreasuryAddress(infra);
     const token = new ethers.Contract(getTokenAddress(), ERC20_ABI, infra.signer);
-    const decimals = await token.decimals();
+    const [treasury, decimals, balance] = await Promise.all([
+      getFundTreasuryAddress(infra),
+      token.decimals(),
+      token.balanceOf(userWallet),
+    ]);
     const amountWei = ethers.parseUnits(String(amountDiaspora), decimals);
 
     // 5. Check on-chain balance
-    const balance = await token.balanceOf(userWallet);
     if (balance < amountWei) {
       throw new functions.https.HttpsError("failed-precondition",
         `Insufficient $DIASPORA: have ${ethers.formatUnits(balance, decimals)}, need ${amountDiaspora}`);
     }
 
-    // 6. Execute transfer via user's smart wallet (backend signer is the owner)
-    const userSmartWallet = new ethers.Contract(userWallet, SMART_WALLET_ABI, infra.signer);
-    const tx = await userSmartWallet.transferToken(getTokenAddress(), treasury, amountWei);
-    const receipt = await tx.wait();
+    // 6. Execute transfer via user's smart wallet (supports both rotated and pre-rotation wallets)
+    const receipt = await transferTokenFromSmartWallet({
+      provider: infra.provider,
+      signer: infra.signer,
+      walletAddress: userWallet,
+      tokenAddress: getTokenAddress(),
+      toAddress: treasury,
+      amountWei,
+    });
     const txHash = receipt.hash;
     console.log(`[EmergencyFund] User ${userId} paid ${amountDiaspora} $DIASPORA → ${treasury} (${txHash})`);
 
@@ -194,13 +210,12 @@ exports.payEmergencyFundInDiaspora = functions
       }, { merge: true });
     }
 
-    await batch.commit();
-
-    try {
-      await syncProfileMilestoneAndTrust(userId);
-    } catch (syncErr) {
-      console.warn(`[EmergencyFund] syncProfileMilestoneAndTrust warning: ${syncErr.message}`);
-    }
+    await Promise.all([
+      batch.commit(),
+      syncProfileMilestoneAndTrust(userId).catch((syncErr) => {
+        console.warn(`[EmergencyFund] syncProfileMilestoneAndTrust warning: ${syncErr.message}`);
+      }),
+    ]);
 
     return { success: true, txHash, amountDiaspora, treasury };
   });
@@ -215,26 +230,28 @@ exports.getEmergencyFundStats = functions
   .https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in required");
 
-    const stakerAgg = await db.collection("emergency_fund_stakers").count().get();
-    const stakerCount = stakerAgg.data().count || 0;
-    const membersAgg = await db.collection("emergency_fund_memberships")
-      .where("status", "==", "active").count().get();
-    const activeMembers = membersAgg.data().count || 0;
-
     let treasuryAddress = null;
     let treasuryBalance = "0";
-    try {
-      const infra = getSmartWalletInfra();
-      treasuryAddress = await getFundTreasuryAddress(infra);
-      const token = new ethers.Contract(getTokenAddress(), ERC20_ABI, infra.provider);
-      const [bal, decimals] = await Promise.all([
-        token.balanceOf(treasuryAddress),
-        token.decimals(),
-      ]);
-      treasuryBalance = ethers.formatUnits(bal, decimals);
-    } catch (e) {
-      console.warn(`[EmergencyFund] Stats: balance fetch failed: ${e.message}`);
-    }
+    const [stakerAgg, membersAgg] = await Promise.all([
+      db.collection("emergency_fund_stakers").count().get(),
+      db.collection("emergency_fund_memberships").where("status", "==", "active").count().get(),
+      (async () => {
+        try {
+          const infra = getSmartWalletInfra();
+          treasuryAddress = await getFundTreasuryAddress(infra);
+          const token = new ethers.Contract(getTokenAddress(), ERC20_ABI, infra.provider);
+          const [bal, decimals] = await Promise.all([
+            token.balanceOf(treasuryAddress),
+            token.decimals(),
+          ]);
+          treasuryBalance = ethers.formatUnits(bal, decimals);
+        } catch (e) {
+          console.warn(`[EmergencyFund] Stats: balance fetch failed: ${e.message}`);
+        }
+      })(),
+    ]);
+    const stakerCount = stakerAgg.data().count || 0;
+    const activeMembers = membersAgg.data().count || 0;
 
     return {
       treasuryAddress,
@@ -332,9 +349,14 @@ exports.onEmergencyClaimWrite = functions
       const decimals = await token.decimals();
       const amountWei = ethers.parseUnits(String(amountDiaspora), decimals);
 
-      const treasuryWallet = new ethers.Contract(treasury, SMART_WALLET_ABI, infra.signer);
-      const tx = await treasuryWallet.transferToken(getTokenAddress(), recipientWallet, amountWei);
-      const receipt = await tx.wait();
+      const receipt = await transferTokenFromSmartWallet({
+        provider: infra.provider,
+        signer: infra.signer,
+        walletAddress: treasury,
+        tokenAddress: getTokenAddress(),
+        toAddress: recipientWallet,
+        amountWei,
+      });
       const txHash = receipt.hash;
       console.log(`[EmergencyFund] Claim ${claimId} disbursed ${amountDiaspora} $DIASPORA → ${recipientWallet} (${txHash})`);
 

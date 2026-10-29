@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
@@ -8,7 +9,18 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
 });
 
 final authStateProvider = StreamProvider<User?>((ref) {
-  return ref.watch(authRepositoryProvider).authStateChanges;
+  final repo = ref.watch(authRepositoryProvider);
+  return Stream<User?>.multi((controller) {
+    try {
+      controller.addSync(repo.currentUser);
+    } catch (_) {}
+    final sub = repo.authStateChanges.listen(
+      controller.add,
+      onError: controller.addError,
+      onDone: controller.close,
+    );
+    controller.onCancel = sub.cancel;
+  });
 });
 
 class AuthRepository {
@@ -54,7 +66,7 @@ class AuthRepository {
     await FirebaseFunctions.instance.httpsCallable('deleteMyAccount').call({
       'confirm': true,
     });
-    await _firebaseAuth.signOut();
+    unawaited(_firebaseAuth.signOut());
   }
 
   /// Custom WhatsApp Auth Flow

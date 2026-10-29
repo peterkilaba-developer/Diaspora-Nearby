@@ -82,9 +82,6 @@ class _LandSurveyScreenState extends State<LandSurveyScreen>
   double? _liveBestAccuracy;
   StreamSubscription<Position>? _gpsSubscription;
 
-  /// Duration to collect GPS samples (seconds)
-  static const _gpsSampleDuration = 5;
-
   /// Max acceptable accuracy for a sample (meters)
   static const _maxAcceptableAccuracy = 20.0;
 
@@ -152,6 +149,12 @@ class _LandSurveyScreenState extends State<LandSurveyScreen>
     try {
       final completer = Completer<void>();
 
+      // Check if we already have an immediate accurate position
+      final lastKnown = await Geolocator.getLastKnownPosition();
+      if (lastKnown != null && lastKnown.accuracy <= _maxAcceptableAccuracy) {
+        samples.add(lastKnown);
+      }
+
       _gpsSubscription =
           Geolocator.getPositionStream(
             locationSettings: const LocationSettings(
@@ -163,21 +166,31 @@ class _LandSurveyScreenState extends State<LandSurveyScreen>
               if (pos.accuracy <= _maxAcceptableAccuracy) {
                 samples.add(pos);
               }
-              setState(() {
-                _sampleCount = samples.length;
-                if (_liveBestAccuracy == null ||
-                    pos.accuracy < _liveBestAccuracy!) {
-                  _liveBestAccuracy = pos.accuracy;
-                }
-              });
+              if (mounted) {
+                setState(() {
+                  _sampleCount = samples.length;
+                  if (_liveBestAccuracy == null ||
+                      pos.accuracy < _liveBestAccuracy!) {
+                    _liveBestAccuracy = pos.accuracy;
+                  }
+                });
+              }
+              if (samples.isNotEmpty && !completer.isCompleted) {
+                completer.complete();
+              }
             },
             onError: (e) {
               if (!completer.isCompleted) completer.completeError(e);
             },
           );
 
-      // Collect for the sampling duration
-      await Future.delayed(const Duration(seconds: _gpsSampleDuration));
+      // Complete as soon as we have an accurate sample, or timeout quickly
+      if (samples.isEmpty) {
+        await completer.future.timeout(
+          const Duration(milliseconds: 800),
+          onTimeout: () {},
+        );
+      }
       await _gpsSubscription?.cancel();
       _gpsSubscription = null;
 
@@ -331,7 +344,6 @@ class _LandSurveyScreenState extends State<LandSurveyScreen>
 
   void _confirmSurvey() {
     if (_boundaryPoints.length < 4 || _centerPoint == null) return;
-    if (_isGeocodingCenter) return; // Wait for geocoding to finish
 
     Navigator.pop(
       context,
@@ -385,10 +397,7 @@ class _LandSurveyScreenState extends State<LandSurveyScreen>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final isReady =
-        _boundaryPoints.length >= 4 &&
-        _centerPoint != null &&
-        !_isGeocodingCenter;
+    final isReady = _boundaryPoints.length >= 4 && _centerPoint != null;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,

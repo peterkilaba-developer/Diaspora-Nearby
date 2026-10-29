@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -25,9 +27,13 @@ class DdiLoansScreen extends ConsumerStatefulWidget {
 }
 
 class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
+  static final Map<String, List<Map<String, dynamic>>> _cachedAppsByCommunity =
+      {};
   bool _showApplicationForm = false;
-  bool _isSubmitting = false;
   final Set<String> _pendingApplicationActions = {};
+  final Map<String, String> _optimisticVoteVerdicts = {};
+  final Map<String, String> _optimisticStatusOverrides = {};
+  final List<Map<String, dynamic>> _optimisticApplications = [];
 
   // Form controllers
   final _formKey = GlobalKey<FormState>();
@@ -44,16 +50,13 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
   @override
   void initState() {
     super.initState();
-    // Pre-fill name from user profile
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final profile = ref.read(userProfileProvider).value;
-      if (profile != null) {
-        final name = '${profile.firstName} ${profile.lastName}'.trim();
-        if (name.isNotEmpty) {
-          _fullNameController.text = name;
-        }
+    final profile = ref.read(userProfileProvider).value;
+    if (profile != null) {
+      final name = '${profile.firstName} ${profile.lastName}'.trim();
+      if (name.isNotEmpty) {
+        _fullNameController.text = name;
       }
-    });
+    }
   }
 
   @override
@@ -150,12 +153,12 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
       title = isHome ? 'Home Town DDI Loans' : 'Host Town DDI Loans';
     }
 
-    // Retrieve user trust score
     final uid = ref.watch(authRepositoryProvider).currentUser?.uid ?? '';
-    final userPoints = ref.watch(userPointsProvider(uid)).value;
+    final userPoints =
+        ref.watch(userPointsProvider(uid)).value ??
+        ref.read(pointsRepositoryProvider).getCachedUserPoints(uid);
     final trustScore = userPoints?.trustScore ?? 0;
 
-    // Watch on-chain $DIASPORA token balance (collateral is strictly 10% in $DIASPORA tokens)
     final tokenBalanceAsync = ref.watch(tokenBalanceProvider);
     final userTokenBalance =
         double.tryParse(tokenBalanceAsync.value ?? '0') ?? 0.0;
@@ -210,7 +213,6 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
     );
   }
 
-  // ── Hero Header ──────────────────────────────────────────────────────────
   Widget _buildHeroHeader(
     ThemeData theme,
     bool isDark,
@@ -283,7 +285,6 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
     );
   }
 
-  // ── Key Terms Summary ────────────────────────────────────────────────────
   Widget _buildKeyTermsSummary(ThemeData theme, bool isCountry) {
     return Container(
       width: double.infinity,
@@ -364,7 +365,6 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
     );
   }
 
-  // ── Apply Button ─────────────────────────────────────────────────────────
   Widget _buildApplyButton(ThemeData theme, bool isDark) {
     return Column(
       children: [
@@ -402,7 +402,6 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
     );
   }
 
-  // ── Application Form ─────────────────────────────────────────────────────
   Widget _buildApplicationForm(
     ThemeData theme,
     bool isDark,
@@ -493,7 +492,6 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Full Name
             _buildLabel(theme, 'Full Legal Name'),
             const SizedBox(height: 6),
             TextFormField(
@@ -504,7 +502,6 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Loan Type
             _buildLabel(theme, 'Loan Type'),
             const SizedBox(height: 6),
             DropdownButtonFormField<String>(
@@ -548,7 +545,6 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Requested Amount
             _buildLabel(theme, 'Requested Amount (\$DIASPORA)'),
             const SizedBox(height: 6),
             TextFormField(
@@ -577,7 +573,6 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
             ),
             const SizedBox(height: 8),
 
-            // Live 10% Collateral Badge
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
@@ -615,7 +610,6 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Purpose
             _buildLabel(theme, 'Investment Purpose'),
             const SizedBox(height: 6),
             TextFormField(
@@ -631,7 +625,6 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Business Name
             _buildLabel(theme, 'Business Name'),
             const SizedBox(height: 6),
             TextFormField(
@@ -643,7 +636,6 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Business Description
             _buildLabel(theme, 'Business Description'),
             const SizedBox(height: 6),
             TextFormField(
@@ -659,7 +651,6 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Repayment Period
             _buildLabel(theme, 'Preferred Repayment Period'),
             const SizedBox(height: 6),
             DropdownButtonFormField<String>(
@@ -677,7 +668,6 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Repayment Plan
             _buildLabel(theme, 'Repayment Plan (Option A — DEX Buyback)'),
             const SizedBox(height: 6),
             TextFormField(
@@ -695,11 +685,8 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
 
             CheckboxListTile(
               value: _confirmsLocalInvestment,
-              onChanged: _isSubmitting
-                  ? null
-                  : (value) => setState(
-                      () => _confirmsLocalInvestment = value ?? false,
-                    ),
+              onChanged: (value) =>
+                  setState(() => _confirmsLocalInvestment = value ?? false),
               contentPadding: EdgeInsets.zero,
               activeColor: AppTheme.accent,
               title: Text(
@@ -723,28 +710,14 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
             ),
             const SizedBox(height: 12),
 
-            // Submit Button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: (!isQualified || _isSubmitting)
-                    ? null
-                    : _submitApplication,
-                icon: _isSubmitting
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(LucideIcons.send, size: 16),
+                onPressed: !isQualified ? null : _submitApplication,
+                icon: const Icon(LucideIcons.send, size: 16),
                 label: Text(
                   !isQualified
                       ? 'Not Qualified (Requires 91+ PCT, 7 Genesis Milestones & 100+ Days Active)'
-                      : _isSubmitting
-                      ? 'Saving Application...'
                       : 'Submit Application',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
@@ -855,16 +828,36 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
                 ),
               );
             }
-            if (!snapshot.hasData) {
-              return const Center(child: CircularProgressIndicator());
+
+            List<Map<String, dynamic>> liveEntries;
+            if (snapshot.hasData) {
+              final docs = [...snapshot.data!.docs]
+                ..sort((a, b) {
+                  final aTime = (a.data()['createdAt'] as num?)?.toInt() ?? 0;
+                  final bTime = (b.data()['createdAt'] as num?)?.toInt() ?? 0;
+                  return bTime.compareTo(aTime);
+                });
+              liveEntries = docs
+                  .map((d) => {'id': d.id, ...d.data()})
+                  .toList();
+              _cachedAppsByCommunity[communityId] = liveEntries;
+            } else {
+              liveEntries = _cachedAppsByCommunity[communityId] ?? [];
             }
-            final docs = [...snapshot.data!.docs]
-              ..sort((a, b) {
-                final aTime = (a.data()['createdAt'] as num?)?.toInt() ?? 0;
-                final bTime = (b.data()['createdAt'] as num?)?.toInt() ?? 0;
-                return bTime.compareTo(aTime);
-              });
-            if (docs.isEmpty) {
+
+            final liveBizNames = liveEntries
+                .map((e) => e['businessName'])
+                .toSet();
+            final pendingOptimistic = _optimisticApplications
+                .where((e) => !liveBizNames.contains(e['businessName']))
+                .toList();
+            final allApps = [...pendingOptimistic, ...liveEntries];
+
+            if (allApps.isEmpty && !snapshot.hasData) {
+              return const SizedBox.shrink();
+            }
+
+            if (allApps.isEmpty) {
               return Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
@@ -876,8 +869,8 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
               );
             }
             return Column(
-              children: docs
-                  .map((doc) => _buildApplicationCard(theme, doc))
+              children: allApps
+                  .map((app) => _buildApplicationCard(theme, app))
                   .toList(),
             );
           },
@@ -888,26 +881,38 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
 
   Widget _buildApplicationCard(
     ThemeData theme,
-    QueryDocumentSnapshot<Map<String, dynamic>> document,
+    Map<String, dynamic> data,
   ) {
-    final data = document.data();
+    final docId = data['id'] as String? ?? '';
     final voting = Map<String, dynamic>.from(
       data['voting'] as Map? ?? const {},
     );
-    final status = data['status'] as String? ?? 'voting_open';
-    final votingOpen = voting['status'] == 'open';
+    final optimisticVerdict = _optimisticVoteVerdicts[docId];
+    final status =
+        _optimisticStatusOverrides[docId] ??
+        (data['status'] as String? ?? 'voting_open');
+    final votingOpen =
+        _optimisticStatusOverrides[docId] == null && voting['status'] == 'open';
     final closesAt = (voting['closesAt'] as num?)?.toInt() ?? 0;
     final expired =
         votingOpen &&
         closesAt > 0 &&
         DateTime.now().millisecondsSinceEpoch > closesAt;
-    final yay = (voting['yayCount'] as num?)?.toInt() ?? 0;
-    final nay = (voting['nayCount'] as num?)?.toInt() ?? 0;
-    final abstain = (voting['abstainCount'] as num?)?.toInt() ?? 0;
-    final total = (voting['totalVotes'] as num?)?.toInt() ?? 0;
+    final yay =
+        ((voting['yayCount'] as num?)?.toInt() ?? 0) +
+        (optimisticVerdict == 'yay' ? 1 : 0);
+    final nay =
+        ((voting['nayCount'] as num?)?.toInt() ?? 0) +
+        (optimisticVerdict == 'nay' ? 1 : 0);
+    final abstain =
+        ((voting['abstainCount'] as num?)?.toInt() ?? 0) +
+        (optimisticVerdict == 'abstain' ? 1 : 0);
+    final total =
+        ((voting['totalVotes'] as num?)?.toInt() ?? 0) +
+        (optimisticVerdict != null ? 1 : 0);
     final quorum = (voting['minimumQuorum'] as num?)?.toInt() ?? 10;
     final amount = (data['requestedAmount'] as num?)?.toInt() ?? 0;
-    final busy = _pendingApplicationActions.contains(document.id);
+    final busy = _pendingApplicationActions.contains(docId);
     final discussionChatId = data['discussionChatId'] as String?;
     final closesDate = closesAt == 0
         ? ''
@@ -992,7 +997,7 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
               children: [
                 Expanded(
                   child: _buildVoteButton(
-                    document.id,
+                    docId,
                     'yay',
                     'Yay',
                     AppTheme.accent,
@@ -1002,7 +1007,7 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
                 const SizedBox(width: 6),
                 Expanded(
                   child: _buildVoteButton(
-                    document.id,
+                    docId,
                     'nay',
                     'Nay',
                     theme.colorScheme.error,
@@ -1012,7 +1017,7 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
                 const SizedBox(width: 6),
                 Expanded(
                   child: _buildVoteButton(
-                    document.id,
+                    docId,
                     'abstain',
                     'Abstain',
                     theme.colorScheme.onSurfaceVariant,
@@ -1027,7 +1032,9 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
             SizedBox(
               width: double.infinity,
               child: FilledButton(
-                onPressed: busy ? null : () => _resolveVote(document.id),
+                onPressed: busy
+                    ? null
+                    : () => _resolveVote(docId, yay, nay, total, quorum),
                 child: const Text('Finalize Vote Result'),
               ),
             ),
@@ -1088,47 +1095,75 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
   }
 
   Future<void> _castVote(String applicationId, String verdict) async {
-    setState(() => _pendingApplicationActions.add(applicationId));
+    final prevVerdict = _optimisticVoteVerdicts[applicationId];
+    setState(() {
+      _optimisticVoteVerdicts[applicationId] = verdict;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Your ${verdict.toUpperCase()} vote was recorded.'),
+      ),
+    );
+
     try {
       await FirebaseFunctions.instance.httpsCallable('castDdiLoanVote').call({
         'applicationId': applicationId,
         'verdict': verdict,
       });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Your ${verdict.toUpperCase()} vote was recorded.'),
-          ),
-        );
-      }
     } on FirebaseFunctionsException catch (e) {
       if (mounted) {
+        setState(() {
+          if (prevVerdict == null) {
+            _optimisticVoteVerdicts.remove(applicationId);
+          } else {
+            _optimisticVoteVerdicts[applicationId] = prevVerdict;
+          }
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(e.message ?? 'Could not record your vote.')),
         );
       }
-    } finally {
+    } catch (_) {
       if (mounted) {
-        setState(() => _pendingApplicationActions.remove(applicationId));
+        setState(() {
+          if (prevVerdict == null) {
+            _optimisticVoteVerdicts.remove(applicationId);
+          } else {
+            _optimisticVoteVerdicts[applicationId] = prevVerdict;
+          }
+        });
       }
     }
   }
 
-  Future<void> _resolveVote(String applicationId) async {
-    setState(() => _pendingApplicationActions.add(applicationId));
+  Future<void> _resolveVote(
+    String applicationId,
+    int yay,
+    int nay,
+    int total,
+    int quorum,
+  ) async {
+    final decided = yay + nay;
+    final approved =
+        total >= quorum && decided > 0 && (yay / decided) >= 0.67;
+    setState(() {
+      _optimisticStatusOverrides[applicationId] = approved
+          ? 'approved_pending_tge_collateral'
+          : 'rejected_by_community_vote';
+    });
+
     try {
       await FirebaseFunctions.instance
           .httpsCallable('resolveDdiLoanVoting')
           .call({'applicationId': applicationId});
     } on FirebaseFunctionsException catch (e) {
       if (mounted) {
+        setState(() {
+          _optimisticStatusOverrides.remove(applicationId);
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(e.message ?? 'Could not finalize this vote.')),
         );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _pendingApplicationActions.remove(applicationId));
       }
     }
   }
@@ -1141,7 +1176,6 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
           content: Text('Please confirm that the loan will be used locally.'),
         ),
       );
-      setState(() => _isSubmitting = false);
       return;
     }
 
@@ -1155,103 +1189,125 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
       return;
     }
 
-    setState(() => _isSubmitting = true);
-    String? discussionChatId;
-    try {
-      final result = await FirebaseFunctions.instance
-          .httpsCallable('submitDdiLoanApplication')
-          .call({
-            'communityId': widget.communityId ?? widget.community?.id,
-            'fullLegalName': _fullNameController.text.trim(),
-            'loanType': _loanType,
-            'requestedAmount': int.parse(_amountController.text.trim()),
-            'purpose': _purposeController.text.trim(),
-            'businessName': _businessNameController.text.trim(),
-            'businessDescription': _businessDescriptionController.text.trim(),
-            'repaymentPeriod': _repaymentPeriod,
-            'repaymentPlan': _repaymentPlanController.text.trim(),
-            'confirmsLocalInvestment': _confirmsLocalInvestment,
-          });
-      final resultData = Map<String, dynamic>.from(result.data as Map);
-      discussionChatId = resultData['discussionChatId'] as String?;
-    } on FirebaseFunctionsException catch (e) {
-      if (!mounted) return;
-      setState(() => _isSubmitting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.message ?? 'Could not submit this application.'),
-        ),
-      );
-      return;
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isSubmitting = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Could not save application: $e')));
-      return;
-    }
+    final communityId = widget.communityId ?? widget.community?.id;
+    final fullLegalName = _fullNameController.text.trim();
+    final loanType = _loanType;
+    final requestedAmount = int.parse(_amountController.text.trim());
+    final purpose = _purposeController.text.trim();
+    final businessName = _businessNameController.text.trim();
+    final businessDescription = _businessDescriptionController.text.trim();
+    final repaymentPeriod = _repaymentPeriod;
+    final repaymentPlan = _repaymentPlanController.text.trim();
+    final confirmsLocalInvestment = _confirmsLocalInvestment;
 
-    if (!mounted) return;
-    setState(() => _isSubmitting = false);
+    final optimisticEntry = <String, dynamic>{
+      'id': 'optimistic_${DateTime.now().millisecondsSinceEpoch}',
+      'communityId': communityId,
+      'fullLegalName': fullLegalName,
+      'loanType': loanType,
+      'requestedAmount': requestedAmount,
+      'purpose': purpose,
+      'businessName': businessName,
+      'businessDescription': businessDescription,
+      'repaymentPeriod': repaymentPeriod,
+      'repaymentPlan': repaymentPlan,
+      'status': 'voting_open',
+      'createdAt': DateTime.now().millisecondsSinceEpoch,
+      'voting': {
+        'status': 'open',
+        'closesAt': DateTime.now()
+            .add(const Duration(days: 10))
+            .millisecondsSinceEpoch,
+        'yayCount': 0,
+        'nayCount': 0,
+        'abstainCount': 0,
+        'totalVotes': 0,
+        'minimumQuorum': 10,
+      },
+    };
 
-    // Funding remains pending TGE, but discussion and community voting begin.
+    // 0-Latency optimistic insert, form collapse, and immediate confirmation modal
+    setState(() {
+      _optimisticApplications.insert(0, optimisticEntry);
+      _showApplicationForm = false;
+      _amountController.clear();
+      _purposeController.clear();
+      _businessNameController.clear();
+      _businessDescriptionController.clear();
+      _repaymentPlanController.clear();
+      _confirmsLocalInvestment = false;
+    });
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(LucideIcons.checkCircle, color: AppTheme.accent, size: 22),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Application Received',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+      builder: (context) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Row(
+            children: [
+              Icon(LucideIcons.checkCircle, color: AppTheme.accent, size: 22),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Application Received',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: const Text(
+            'Your PCT and host-community eligibility gates passed. Your loan '
+            'application has been saved, its public discussion group is live, '
+            'and the 10-day community vote is open.\n\n'
+            'Any community approval remains pending the Token Generation Event '
+            '(TGE) and \$DIASPORA collateral capacity verification.',
+            style: TextStyle(fontSize: 13, height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Done',
+                style: TextStyle(
+                  color: AppTheme.accent,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ],
         ),
-        content: const Text(
-          'Your PCT and host-community eligibility gates passed. Your loan '
-          'application has been saved, its public discussion group is live, '
-          'and the 10-day community vote is open.\n\n'
-          'Any community approval remains pending the Token Generation Event '
-          '(TGE) and \$DIASPORA collateral capacity verification.',
-          style: TextStyle(fontSize: 13, height: 1.5),
-        ),
-        actions: [
-          if (discussionChatId != null)
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                context.push('/chats/$discussionChatId');
-              },
-              child: const Text('Open Discussion'),
-            ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              setState(() => _showApplicationForm = false);
-              // Clear form
-              _fullNameController.clear();
-              _amountController.clear();
-              _purposeController.clear();
-              _businessNameController.clear();
-              _businessDescriptionController.clear();
-              _repaymentPlanController.clear();
-              _confirmsLocalInvestment = false;
-            },
-            child: const Text(
-              'Done',
-              style: TextStyle(
-                color: AppTheme.accent,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
       ),
+    );
+
+    unawaited(
+      FirebaseFunctions.instance
+          .httpsCallable('submitDdiLoanApplication')
+          .call({
+            'communityId': communityId,
+            'fullLegalName': fullLegalName,
+            'loanType': loanType,
+            'requestedAmount': requestedAmount,
+            'purpose': purpose,
+            'businessName': businessName,
+            'businessDescription': businessDescription,
+            'repaymentPeriod': repaymentPeriod,
+            'repaymentPlan': repaymentPlan,
+            'confirmsLocalInvestment': confirmsLocalInvestment,
+          })
+          .then<void>((_) {})
+          .catchError((Object e) {
+            if (!mounted) return;
+            setState(() {
+              _optimisticApplications.remove(optimisticEntry);
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Could not save application: $e')),
+            );
+          }),
     );
   }
 }

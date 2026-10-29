@@ -191,8 +191,11 @@ exports.ensureCommunity = functions.https.onCall(async (data, context) => {
   const chatId = `chat_${identity.id}`;
   const chatRef = db.collection("chats").doc(chatId);
 
-  // Check if community already exists to avoid transaction contention
-  const communitySnap = await communityRef.get();
+  // Check if community already exists in parallel with chat doc to avoid sequential round-trips
+  const [communitySnap, chatSnap] = await Promise.all([
+    communityRef.get(),
+    chatRef.get(),
+  ]);
   if (communitySnap.exists) {
     const existing = communitySnap.data() || {};
     const effectiveLocationType = locationType === "past" ? "host" : locationType;
@@ -208,7 +211,6 @@ exports.ensureCommunity = functions.https.onCall(async (data, context) => {
     }
     const userMemberships = Array.isArray(profile.communityMemberships) ? profile.communityMemberships : [];
     const rawMembers = Array.isArray(existing.members) ? existing.members : [];
-    const chatSnap = await chatRef.get();
     const existingChat = chatSnap.exists ? (chatSnap.data() || {}) : {};
     const rawChatParticipants = Array.isArray(existingChat.participants) ? existingChat.participants : [];
 
@@ -300,8 +302,10 @@ exports.ensureCommunity = functions.https.onCall(async (data, context) => {
   // Community does not exist yet: create atomically via transaction
   let created = false;
   await db.runTransaction(async (transaction) => {
-    const community = await transaction.get(communityRef);
-    const chat = await transaction.get(chatRef);
+    const [community, chat] = await Promise.all([
+      transaction.get(communityRef),
+      transaction.get(chatRef),
+    ]);
     const existing = community.exists ? community.data() : {};
     const effectiveLocationType = locationType === "past" ? "host" : locationType;
     const expectedHomeCode = effectiveLocationType === "bilateral" ?
@@ -718,6 +722,16 @@ exports.provisionSignupCommunities = functions.https.onCall(async (data, context
   }, {merge: true});
 
   await batch.commit();
+
+  try {
+    const {ensureFounderWelcomeChatForUser} = require("./relationships");
+    const founderChatId = await ensureFounderWelcomeChatForUser(uid, profile);
+    if (founderChatId && !chatIds.includes(founderChatId)) {
+      chatIds.unshift(founderChatId);
+    }
+  } catch (founderErr) {
+    console.warn(`[provisionSignupCommunities] Founder welcome DM warning: ${founderErr.message}`);
+  }
 
   return {communityIds, chatIds, success: true};
 });

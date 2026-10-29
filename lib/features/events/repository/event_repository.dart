@@ -36,6 +36,8 @@ final eventDetailsProvider = FutureProvider.family<Event?, String>((
   ref,
   eventId,
 ) async {
+  final cached = ref.read(eventRepositoryProvider).getCachedEvent(eventId);
+  if (cached != null) return cached;
   return ref.watch(eventDetailsStreamProvider(eventId).future);
 });
 
@@ -67,16 +69,41 @@ class EventRepository {
   final EventLocalService _localService;
 
   // Cache for geocoding results
-  final Map<String, Map<String, double>> _geocodingCache = {};
+  static final Map<String, Map<String, double>> _geocodingCache = {};
 
   // [PERF] In-memory cache of events by ID for instant detail views & optimistic updates
-  final Map<String, Event> _eventsByIdCache = {};
+  static final Map<String, Event> _eventsByIdCache = {};
+
+  // [PERF] Pre-warmed attendance QR codes by eventId
+  static final Map<String, String> _attendanceCodeCache = {};
 
   /// [PERF] Synchronously read a cached event by ID
   Event? getCachedEvent(String eventId) => _eventsByIdCache[eventId];
 
   /// [PERF] Synchronously read all cached raw events
   List<Event> get cachedRawEvents => _eventsByIdCache.values.toList();
+
+  /// [PERF] Synchronously write or update an event in memory cache
+  void cacheEvent(Event event) {
+    _eventsByIdCache[event.id] = event;
+  }
+
+  /// [PERF] Synchronously remove an event from memory cache
+  void removeCachedEvent(String eventId) {
+    _eventsByIdCache.remove(eventId);
+  }
+
+  /// [PERF] Synchronously read pre-warmed attendance code
+  String? getCachedAttendanceCode(String eventId) =>
+      _attendanceCodeCache[eventId];
+
+  /// [PERF] Pre-warm attendance code in background
+  Future<void> prewarmAttendanceCode(String eventId) async {
+    if (_attendanceCodeCache.containsKey(eventId)) return;
+    try {
+      await generateAttendanceCode(eventId);
+    } catch (_) {}
+  }
 
   EventRepository(this._firestore, this._storage, this._ref)
     : _localService = EventLocalService();
@@ -356,46 +383,46 @@ class EventRepository {
     return result;
   }
 
-  // Add distances to events
+  // Add distances to events (parallelized geocoding)
   Future<List<Event>> _addDistancesToEvents(
     List<Event> events,
     Position userLocation,
   ) async {
-    for (var event in events) {
-      double? lat, lng;
+    await Future.wait(
+      events.map((event) async {
+        double? lat, lng;
 
-      // 1. Prefer stored coordinates (Fast & Scalable)
-      if (event.latitude != null && event.longitude != null) {
-        lat = event.latitude;
-        lng = event.longitude;
-      }
-      // 2. Legacy Fallback (Slow - Read-time Geocoding)
-      else if (event.location.isNotEmpty) {
-        try {
-          final coordinates = await _geocodeAddress(event.location);
-          if (coordinates != null) {
-            lat = coordinates['lat'];
-            lng = coordinates['lng'];
-          }
-        } catch (e) {
-          // Failed to geocode for distance calculation
+        // 1. Prefer stored coordinates (Fast & Scalable)
+        if (event.latitude != null && event.longitude != null) {
+          lat = event.latitude;
+          lng = event.longitude;
         }
-      }
+        // 2. Legacy Fallback (Parallel Read-time Geocoding)
+        else if (event.location.isNotEmpty) {
+          try {
+            final coordinates = await _geocodeAddress(event.location);
+            if (coordinates != null) {
+              lat = coordinates['lat'];
+              lng = coordinates['lng'];
+            }
+          } catch (_) {}
+        }
 
-      // Calculate Distance if we have coordinates
-      if (lat != null && lng != null) {
-        event.distance = GeoUtils.haversine(
-          userLocation.latitude,
-          userLocation.longitude,
-          lat,
-          lng,
-        );
-      }
-    }
+        // Calculate Distance if we have coordinates
+        if (lat != null && lng != null) {
+          event.distance = GeoUtils.haversine(
+            userLocation.latitude,
+            userLocation.longitude,
+            lat,
+            lng,
+          );
+        }
+      }),
+    );
 
     // Sort by distance (closest first), then by Start Date (soonest first)
     events.sort((a, b) {
-      // 1. Distance Comaparison
+      // 1. Distance Comparison
       if (a.distance != null && b.distance != null) {
         final distanceDiff = a.distance!.compareTo(b.distance!);
         if (distanceDiff != 0) return distanceDiff;
@@ -473,7 +500,7 @@ class EventRepository {
                     ? enriched.first
                     : immediate;
                 _eventsByIdCache[eventId] = finalEvent;
-                await _localService.saveEvent(finalEvent);
+                unawaited(_localService.saveEvent(finalEvent));
                 if (!controller.isClosed) {
                   controller.add(finalEvent);
                 }
@@ -492,7 +519,7 @@ class EventRepository {
   Future<Event?> getEvent(String eventId, {bool force = false}) async {
     // 1. Try Memory Cache
     if (!force && _eventsByIdCache.containsKey(eventId)) {
-      _fetchAndSaveEvent(eventId);
+      unawaited(_fetchAndSaveEvent(eventId));
       return _eventsByIdCache[eventId];
     }
     // 2. Try Local
@@ -501,7 +528,7 @@ class EventRepository {
       if (localEvent != null) {
         _eventsByIdCache[eventId] = localEvent;
         // Background refresh
-        _fetchAndSaveEvent(eventId);
+        unawaited(_fetchAndSaveEvent(eventId));
         return localEvent;
       }
     }
@@ -518,31 +545,30 @@ class EventRepository {
       data['id'] = doc.id;
 
       final event = Event.fromJson(data);
+      final syncEnriched = _applySyncEnrichment([event]).first;
 
       // Enrich with Creator Info
-      final enrichedEvents = await _enrichEvents([event]);
+      final enrichedEvents = await _enrichEvents([syncEnriched]);
       final finalEvent = enrichedEvents.first;
+      _eventsByIdCache[eventId] = finalEvent;
+      unawaited(_localService.saveEvent(finalEvent));
 
-      // Calculate Distance (Optional for details, but good for cache)
-      try {
-        final position =
-            await Geolocator.getLastKnownPosition() ??
-            await Geolocator.getCurrentPosition().timeout(
-              const Duration(seconds: 2),
-            );
-        final withDistance = await _addDistancesToEvents([
-          finalEvent,
-        ], position);
-        final enrichedWithDist = withDistance.first;
+      // Update distance in background without delaying return
+      unawaited(() async {
+        try {
+          final position = await Geolocator.getLastKnownPosition();
+          if (position != null) {
+            final withDistance = await _addDistancesToEvents([
+              finalEvent,
+            ], position);
+            final enrichedWithDist = withDistance.first;
+            _eventsByIdCache[eventId] = enrichedWithDist;
+            await _localService.saveEvent(enrichedWithDist);
+          }
+        } catch (_) {}
+      }());
 
-        // Save to Isar
-        await _localService.saveEvent(enrichedWithDist);
-        return enrichedWithDist;
-      } catch (e) {
-        // Save without distance
-        await _localService.saveEvent(finalEvent);
-        return finalEvent;
-      }
+      return finalEvent;
     } catch (e) {
       debugPrint('Error fetching/saving event: $e');
       return null;
@@ -556,25 +582,32 @@ class EventRepository {
           'Paid events are disabled until verified ticket checkout is configured.',
         );
       }
-      final eventData = event.toJson();
-
-      // Geo-enrichment (already in original code)
-      try {
-        final coordinates = await _geocodeAddress(event.location);
-        if (coordinates != null) {
-          eventData['latitude'] = coordinates['lat'];
-          eventData['longitude'] = coordinates['lng'];
-        }
-      } catch (e) {
-        // Geo-enrichment failed during create
-      }
 
       // Creator joins automatically
+      event.attendees = [event.creatorId];
+      event.attendeeCount = 1;
+      event.chatId = 'event_${event.id}';
+
+      // Optimistically store in memory cache on frame 0
+      _applySyncEnrichment([event]);
+
+      final eventData = event.toJson();
       eventData['attendees'] = [event.creatorId];
       eventData['attendeeCount'] = 1;
       eventData['createdAt'] = DateTime.now().toIso8601String();
       eventData['chatId'] = 'event_${event.id}';
-      event.chatId = 'event_${event.id}';
+
+      // Geo-enrichment
+      if ((event.latitude == null || event.longitude == null) &&
+          event.location.isNotEmpty) {
+        try {
+          final coordinates = await _geocodeAddress(event.location);
+          if (coordinates != null) {
+            eventData['latitude'] = coordinates['lat'];
+            eventData['longitude'] = coordinates['lng'];
+          }
+        } catch (_) {}
+      }
 
       // Create the canonical event first. Storage rules verify ownership by
       // reading this document, so uploading before this write is denied.
@@ -597,17 +630,23 @@ class EventRepository {
           imageUrl = await storageRef.getDownloadURL();
           eventData['imageUrl'] = imageUrl;
           event.imageUrl = imageUrl;
+          _eventsByIdCache[event.id] = event;
           await _firestore.collection('events').doc(event.id).update({
             'imageUrl': imageUrl,
           });
         }
       } catch (_) {
+        _eventsByIdCache.remove(event.id);
         await _firestore.collection('events').doc(event.id).delete();
         rethrow;
       }
 
-      await _localService.saveEvent(Event.fromJson(eventData));
-      await _createEventChat(event.id, event.invitedUserIds);
+      final finalEvent = Event.fromJson({...eventData, 'id': event.id})
+        ..creatorName = event.creatorName
+        ..creatorPhoto = event.creatorPhoto;
+      _eventsByIdCache[event.id] = finalEvent;
+      unawaited(_localService.saveEvent(finalEvent));
+      unawaited(_createEventChat(event.id, event.invitedUserIds));
 
       return event.id;
     } catch (e) {
@@ -621,18 +660,28 @@ class EventRepository {
     String eventId,
     List<String>? invitedUserIds,
   ) async {
-    final result = await FirebaseFunctions.instance
-        .httpsCallable('createChat')
-        .call<Map<String, dynamic>>({'mode': 'event', 'eventId': eventId});
-    final chatId = result.data['chatId'] as String?;
-    if (chatId == null) throw StateError('Event chat creation failed');
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('createChat')
+          .call<Map<String, dynamic>>({'mode': 'event', 'eventId': eventId});
+      final chatId = result.data['chatId'] as String?;
+      if (chatId == null) return;
 
-    for (final userId in (invitedUserIds ?? const <String>[]).toSet().take(
-      99,
-    )) {
-      await FirebaseFunctions.instance
-          .httpsCallable('manageChatMembers')
-          .call<void>({'chatId': chatId, 'inviteUserId': userId});
+      final members = (invitedUserIds ?? const <String>[])
+          .toSet()
+          .take(99)
+          .toList();
+      if (members.isNotEmpty) {
+        await Future.wait(
+          members.map(
+            (userId) => FirebaseFunctions.instance
+                .httpsCallable('manageChatMembers')
+                .call<void>({'chatId': chatId, 'inviteUserId': userId}),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error creating event chat: $e');
     }
   }
 
@@ -646,42 +695,47 @@ class EventRepository {
       cached.attendeeCount = updatedAttendees.length;
     }
 
-    // 0. Fetch event to check if it's paid (prefer memory cache)
-    Event? event = cached;
-    if (event == null) {
-      final eventDoc = await _firestore.collection('events').doc(eventId).get();
-      if (!eventDoc.exists) throw Exception('Event not found');
-      event = Event.fromJson({...eventDoc.data()!, 'id': eventId});
-    }
-
     await FirebaseFunctions.instance.httpsCallable('setEventAttendance').call({
       'eventId': eventId,
       'attending': true,
     });
 
-    // 1.2 Record fiat GDP for paid events
-    if (event.isPaid == true &&
-        event.ticketPrice != null &&
-        event.ticketPrice! > 0) {
+    // Record fiat GDP and refresh cache in the background without blocking caller
+    unawaited(() async {
       try {
-        await _ref
-            .read(pointsServiceProvider)
-            .recordFiatGdp(
-              amount: event.ticketPrice!,
-              countryCode: event.hostCountryCode,
-              activityType: 'event_ticket_purchase',
-              metadata: {
-                'eventId': eventId,
-                'attendeeId': userId,
-                'creatorId': event.creatorId,
-              },
-            );
+        Event? event = cached ?? _eventsByIdCache[eventId];
+        if (event == null) {
+          final eventDoc = await _firestore
+              .collection('events')
+              .doc(eventId)
+              .get();
+          if (eventDoc.exists && eventDoc.data() != null) {
+            event = Event.fromJson({...eventDoc.data()!, 'id': eventId});
+          }
+        }
+        if (event != null &&
+            event.isPaid == true &&
+            event.ticketPrice != null &&
+            event.ticketPrice! > 0) {
+          await _ref
+              .read(pointsServiceProvider)
+              .recordFiatGdp(
+                amount: event.ticketPrice!,
+                countryCode: event.hostCountryCode,
+                activityType: 'event_ticket_purchase',
+                metadata: {
+                  'eventId': eventId,
+                  'attendeeId': userId,
+                  'creatorId': event.creatorId,
+                },
+              );
+        }
       } catch (e) {
         debugPrint('⚠️ [GDP] Record event ticket GDP error: $e');
       }
-    }
+    }());
 
-    // 3. Refresh Local Cache
+    // Refresh Local Cache
     unawaited(getEvent(eventId, force: true));
   }
 
@@ -725,11 +779,29 @@ class EventRepository {
 
   // Generate Attendance Code
   Future<String> generateAttendanceCode(String eventId) async {
+    final cached = _attendanceCodeCache[eventId];
+    if (cached != null) {
+      // Refresh in background for next time
+      unawaited(() async {
+        try {
+          final response = await FirebaseFunctions.instance
+              .httpsCallable('createEventCheckInChallenge')
+              .call({'eventId': eventId});
+          final data = Map<String, dynamic>.from(response.data as Map);
+          _attendanceCodeCache[eventId] =
+              'attendance:$eventId:${data['token']}';
+        } catch (_) {}
+      }());
+      return cached;
+    }
+
     final response = await FirebaseFunctions.instance
         .httpsCallable('createEventCheckInChallenge')
         .call({'eventId': eventId});
     final data = Map<String, dynamic>.from(response.data as Map);
-    return 'attendance:$eventId:${data['token']}';
+    final code = 'attendance:$eventId:${data['token']}';
+    _attendanceCodeCache[eventId] = code;
+    return code;
   }
 
   // Verify and Mark Attendance
@@ -745,6 +817,16 @@ class EventRepository {
           '❌ Attendance Verification Failed: Invalid Code Format or Event ID Mismatch',
         );
         return VerificationResult.invalidCode;
+      }
+
+      // Optimistically mark checked-in in local cache
+      final cached = _eventsByIdCache[eventId];
+      if (cached != null) {
+        final updatedCheckedIn = <String>{
+          ...?cached.confirmedAttendees,
+          userId,
+        }.toList();
+        cached.confirmedAttendees = updatedCheckedIn;
       }
 
       final token = code.substring('attendance:$eventId:'.length);
@@ -775,50 +857,100 @@ class EventRepository {
 
   // Fetch events created by a specific user
   Stream<List<Event>> getUserEvents(String userId) {
-    return _firestore
-        .collection('events')
-        .where('creatorId', isEqualTo: userId)
-        .limit(200)
-        .snapshots()
-        .asyncMap((snapshot) async {
-          final events = snapshot.docs
-              .map((doc) {
-                try {
-                  final data = doc.data();
-                  return Event.fromJson({...data, 'id': doc.id});
-                } catch (_) {
-                  return null;
-                }
-              })
-              .whereType<Event>()
-              .toList();
+    return Stream.multi((controller) {
+      final cached = _eventsByIdCache.values
+          .where((e) => e.creatorId == userId)
+          .toList();
+      if (cached.isNotEmpty) {
+        controller.add(_applySyncEnrichment(cached));
+      }
 
-          return await _enrichEvents(events);
-        });
+      final sub = _firestore
+          .collection('events')
+          .where('creatorId', isEqualTo: userId)
+          .limit(200)
+          .snapshots()
+          .listen(
+            (snapshot) async {
+              final events = snapshot.docs
+                  .map((doc) {
+                    try {
+                      final data = doc.data();
+                      return Event.fromJson({...data, 'id': doc.id});
+                    } catch (_) {
+                      return null;
+                    }
+                  })
+                  .whereType<Event>()
+                  .toList();
+
+              final immediate = _applySyncEnrichment(events);
+              if (!controller.isClosed) {
+                controller.add(immediate);
+              }
+
+              final enriched = await _enrichEvents(immediate);
+              for (final e in enriched) {
+                _eventsByIdCache[e.id] = e;
+              }
+              if (!controller.isClosed) {
+                controller.add(enriched);
+              }
+            },
+            onError: controller.addError,
+            onDone: controller.close,
+          );
+      controller.onCancel = sub.cancel;
+    });
   }
 
   // Fetch events where the user is an attendee (Joined Events)
   Stream<List<Event>> getJoinedEvents(String userId) {
-    return _firestore
-        .collection('events')
-        .where('attendees', arrayContains: userId)
-        .limit(200)
-        .snapshots()
-        .asyncMap((snapshot) async {
-          final events = snapshot.docs
-              .map((doc) {
-                try {
-                  final data = doc.data();
-                  return Event.fromJson({...data, 'id': doc.id});
-                } catch (_) {
-                  return null;
-                }
-              })
-              .whereType<Event>()
-              .toList();
+    return Stream.multi((controller) {
+      final cached = _eventsByIdCache.values
+          .where((e) => e.attendees?.contains(userId) ?? false)
+          .toList();
+      if (cached.isNotEmpty) {
+        controller.add(_applySyncEnrichment(cached));
+      }
 
-          return await _enrichEvents(events);
-        });
+      final sub = _firestore
+          .collection('events')
+          .where('attendees', arrayContains: userId)
+          .limit(200)
+          .snapshots()
+          .listen(
+            (snapshot) async {
+              final events = snapshot.docs
+                  .map((doc) {
+                    try {
+                      final data = doc.data();
+                      return Event.fromJson({...data, 'id': doc.id});
+                    } catch (_) {
+                      return null;
+                    }
+                  })
+                  .whereType<Event>()
+                  .toList();
+
+              final immediate = _applySyncEnrichment(events);
+              if (!controller.isClosed) {
+                controller.add(immediate);
+              }
+
+              final enriched = await _enrichEvents(immediate);
+              for (final e in enriched) {
+                _eventsByIdCache[e.id] = e;
+              }
+              if (!controller.isClosed) {
+                controller.add(enriched);
+              }
+            },
+            onError: controller.addError,
+            onDone: controller.close,
+          );
+      controller.onCancel = sub.cancel;
+    });
   }
 
   // Update Event
@@ -829,37 +961,47 @@ class EventRepository {
       );
     }
     try {
+      // Optimistically update in-memory cache immediately
+      _eventsByIdCache[event.id] = event;
+
       final data = event.toJson();
 
-      // If new image provided, upload it
-      if (newImage != null) {
-        final ref = _storage.ref().child('event_images/${event.id}');
-        final metadata = SettableMetadata(
-          cacheControl: 'public, max-age=31536000',
-          contentType: 'image/jpeg',
-        );
+      // Parallelize image upload and geocoding
+      String? uploadedImageUrl;
+      Map<String, double>? coordinates;
 
-        if (kIsWeb) {
-          final bytes = await newImage.readAsBytes();
-          await ref.putData(bytes, metadata);
-        } else {
-          await ref.putFile(File(newImage.path), metadata);
-        }
-        final imageUrl = await ref.getDownloadURL();
-        data['imageUrl'] = imageUrl;
+      await Future.wait([
+        if (newImage != null)
+          () async {
+            final ref = _storage.ref().child('event_images/${event.id}');
+            final metadata = SettableMetadata(
+              cacheControl: 'public, max-age=31536000',
+              contentType: 'image/jpeg',
+            );
+            if (kIsWeb) {
+              final bytes = await newImage.readAsBytes();
+              await ref.putData(bytes, metadata);
+            } else {
+              await ref.putFile(File(newImage.path), metadata);
+            }
+            uploadedImageUrl = await ref.getDownloadURL();
+          }(),
+        if (event.location.isNotEmpty &&
+            (event.latitude == null || event.longitude == null))
+          () async {
+            try {
+              coordinates = await _geocodeAddress(event.location);
+            } catch (_) {}
+          }(),
+      ]);
+
+      if (uploadedImageUrl != null) {
+        data['imageUrl'] = uploadedImageUrl;
+        event.imageUrl = uploadedImageUrl!;
       }
-
-      // Geo-enrich if location changed
-      if (event.location.isNotEmpty) {
-        try {
-          final coordinates = await _geocodeAddress(event.location);
-          if (coordinates != null) {
-            data['latitude'] = coordinates['lat'];
-            data['longitude'] = coordinates['lng'];
-          }
-        } catch (e) {
-          // Geo-update failed
-        }
+      if (coordinates != null) {
+        data['latitude'] = coordinates!['lat'];
+        data['longitude'] = coordinates!['lng'];
       }
 
       // Ensure paid fields are explicitly set (not reliant on toJson nullability)
@@ -870,17 +1012,22 @@ class EventRepository {
         data['ticketPrice'] = cf.FieldValue.delete();
       }
 
+      _eventsByIdCache[event.id] = event;
       await _firestore.collection('events').doc(event.id).update(data);
 
-      // Update Chat Name in Firestore if title changed
+      // Update Chat Name in Firestore if title changed (non-blocking)
       if (event.chatId != null) {
-        await FirebaseFunctions.instance
-            .httpsCallable('updateChatMetadata')
-            .call<void>({
-              'chatId': event.chatId,
-              'name': event.title,
-              if (data['imageUrl'] is String) 'photoUrl': data['imageUrl'],
-            });
+        unawaited(
+          FirebaseFunctions.instance
+              .httpsCallable('updateChatMetadata')
+              .call<void>({
+                'chatId': event.chatId,
+                'name': event.title,
+                if (data['imageUrl'] is String) 'photoUrl': data['imageUrl'],
+              })
+              .then<void>((_) {})
+              .catchError((_) {}),
+        );
       }
     } catch (e) {
       rethrow;
@@ -889,17 +1036,35 @@ class EventRepository {
 
   // Delete Event
   Future<void> deleteEvent(String eventId) async {
+    final previous = _eventsByIdCache.remove(eventId);
     try {
-      // 1. Get Event Data to find related resources
-      final doc = await _firestore.collection('events').doc(eventId).get();
-      if (!doc.exists) return;
-
       // Related chat indexes and event media are removed by the backend
       // delete trigger after this canonical document is deleted.
       await _firestore.collection('events').doc(eventId).delete();
     } catch (e) {
+      if (previous != null) {
+        _eventsByIdCache[eventId] = previous;
+      }
       rethrow;
     }
+  }
+
+  /// Synchronously filter cached events for 0ms instant search results
+  List<Event> searchCachedEvents(String query) {
+    final queryLower = query.toLowerCase();
+    final today = DateTime.now();
+    final results =
+        _eventsByIdCache.values.where((event) {
+          if (isEventExpired(event, today)) return false;
+          if (event.status != 'published') return false;
+          if (query.isEmpty) return true;
+          return event.title.toLowerCase().contains(queryLower);
+        }).toList()..sort((a, b) {
+          final dateCmp = a.startDate.compareTo(b.startDate);
+          if (dateCmp != 0) return dateCmp;
+          return a.startTime.compareTo(b.startTime);
+        });
+    return results;
   }
 
   // Search Events by Title
@@ -942,9 +1107,13 @@ class EventRepository {
               return a.startTime.compareTo(b.startTime);
             });
 
-      return await _enrichEvents(events);
+      final enriched = await _enrichEvents(events);
+      for (final e in enriched) {
+        _eventsByIdCache[e.id] = e;
+      }
+      return enriched;
     } catch (e) {
-      return [];
+      return searchCachedEvents(query);
     }
   }
 }

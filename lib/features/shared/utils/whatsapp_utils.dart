@@ -2,6 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class WhatsAppUtils {
+  /// Official Diaspora Nearby platform & Founder (Peter Swai) WhatsApp number.
+  static const String platformWhatsAppNumber = '+16413020012';
+  static const String platformWhatsAppDisplay = '+1 (641) 302-0012';
+
   /// Launches WhatsApp with the given phone number and optional message.
   /// Tries the app first, then falls back to the web interface.
   static Future<bool> launchWhatsApp(String phone, {String? message}) async {
@@ -19,26 +23,18 @@ class WhatsAppUtils {
     );
 
     try {
-      bool launched = false;
-
-      // Try launching the app directly
-      if (await canLaunchUrl(appUrl)) {
-        launched = await launchUrl(
+      try {
+        final launched = await launchUrl(
           appUrl,
           mode: LaunchMode.externalApplication,
         );
-      }
+        if (launched) return true;
+      } catch (_) {}
 
-      // Fallback to web interface (wa.me) if app fails or isn't installed
-      if (!launched) {
-        if (await canLaunchUrl(webUrl)) {
-          launched = await launchUrl(
-            webUrl,
-            mode: LaunchMode.externalApplication,
-          );
-        }
-      }
-      return launched;
+      return await launchUrl(
+        webUrl,
+        mode: LaunchMode.externalApplication,
+      );
     } catch (e) {
       debugPrint('WhatsApp Launch Error: $e');
       return false;
@@ -55,12 +51,14 @@ class WhatsAppUtils {
     );
 
     try {
-      if (await canLaunchUrl(appUrl)) {
-        return await launchUrl(appUrl, mode: LaunchMode.externalApplication);
-      } else if (await canLaunchUrl(webUrl)) {
-        return await launchUrl(webUrl, mode: LaunchMode.externalApplication);
-      }
-      return false;
+      try {
+        final launched = await launchUrl(
+          appUrl,
+          mode: LaunchMode.externalApplication,
+        );
+        if (launched) return true;
+      } catch (_) {}
+      return await launchUrl(webUrl, mode: LaunchMode.externalApplication);
     } catch (e) {
       debugPrint('WhatsApp Share Error: $e');
       return false;

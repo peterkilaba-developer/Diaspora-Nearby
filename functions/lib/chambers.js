@@ -90,12 +90,15 @@ async function ensureMembership({
   const now = Date.now();
 
   return db.runTransaction(async (transaction) => {
-    const chatSnap = await transaction.get(chatRef);
-    const userChatSnap = await transaction.get(userChatRef);
-    const organizationSnap = await transaction.get(organizationRef);
+    const [chatSnap, userChatSnap, organizationSnap, communitySnap] =
+      await Promise.all([
+        transaction.get(chatRef),
+        transaction.get(userChatRef),
+        transaction.get(organizationRef),
+        requireCommunity ? transaction.get(communityRef) : Promise.resolve(null),
+      ]);
     if (requireCommunity) {
-      const communitySnap = await transaction.get(communityRef);
-      if (!communitySnap.exists) {
+      if (!communitySnap || !communitySnap.exists) {
         throw new functions.https.HttpsError(
             "failed-precondition",
             "The home-country community must exist before its chamber.",
@@ -319,8 +322,10 @@ exports.setChamberFollow = functions.https.onCall(async (data, context) => {
   const userChatRef = db.collection("users").doc(userId)
       .collection("userChats").doc(chatId);
   await db.runTransaction(async (transaction) => {
-    const chatSnapshot = await transaction.get(chatRef);
-    const organizationSnapshot = await transaction.get(organizationRef);
+    const [chatSnapshot, organizationSnapshot] = await Promise.all([
+      transaction.get(chatRef),
+      transaction.get(organizationRef),
+    ]);
     if (!chatSnapshot.exists || chatSnapshot.data().metadata?.isChamber !== true) {
       throw new functions.https.HttpsError("not-found", "Chamber not found.");
     }
@@ -396,13 +401,18 @@ exports.leaveChamber = functions.https.onCall(async (data, context) => {
   const userRef = db.collection("users").doc(userId);
 
   await db.runTransaction(async (transaction) => {
-    let chat = await transaction.get(chatRef);
-    if (!chat.exists) chat = await transaction.get(altChatRef);
-
-    let organization = await transaction.get(organizationRef);
+    const [primaryChat, fallbackChat, primaryOrg, fallbackOrg] =
+      await Promise.all([
+        transaction.get(chatRef),
+        transaction.get(altChatRef),
+        transaction.get(organizationRef),
+        transaction.get(altOrgRef),
+      ]);
+    const chat = primaryChat.exists ? primaryChat : fallbackChat;
+    let organization = primaryOrg;
     let targetOrgRef = organizationRef;
     if (!organization.exists) {
-      organization = await transaction.get(altOrgRef);
+      organization = fallbackOrg;
       targetOrgRef = altOrgRef;
     }
 
@@ -470,8 +480,10 @@ exports.manageChamber = functions.https.onCall(async (data, context) => {
   const organizationRef = db.collection("organizations").doc(chatId);
 
   await db.runTransaction(async (transaction) => {
-    const chatSnap = await transaction.get(chatRef);
-    await transaction.get(organizationRef);
+    const [chatSnap] = await Promise.all([
+      transaction.get(chatRef),
+      transaction.get(organizationRef),
+    ]);
     const chat = chatSnap.exists ? chatSnap.data() : null;
     if (!chat || chat.metadata?.isChamber !== true) {
       throw new functions.https.HttpsError("not-found", "Chamber not found.");

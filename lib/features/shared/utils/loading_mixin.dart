@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 /// Mixin to simplify repeating loading-state boilerplate in StatefulWidgets.
@@ -55,6 +56,28 @@ mixin LoadingMixin<T extends StatefulWidget> on State<T> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+
+  /// Apply [optimisticApply] immediately in 0ms on frame 0, run [action] in
+  /// the background, and invoke [rollback] if [action] throws.
+  Future<R?> withOptimisticUpdate<R>({
+    required VoidCallback optimisticApply,
+    required Future<R> Function() action,
+    required VoidCallback rollback,
+    void Function(Object error, StackTrace stack)? onError,
+  }) async {
+    if (mounted) setState(optimisticApply);
+    try {
+      return await action();
+    } catch (e, stack) {
+      if (mounted) setState(rollback);
+      if (onError != null) {
+        onError(e, stack);
+      } else {
+        rethrow;
+      }
+      return null;
+    }
+  }
 }
 
 /// Same mixin for ConsumerStatefulWidget (Riverpod).
@@ -88,6 +111,28 @@ mixin ConsumerLoadingMixin<T extends StatefulWidget> on State<T> {
       return null;
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  /// Apply [optimisticApply] immediately in 0ms on frame 0, run [action] in
+  /// the background, and invoke [rollback] if [action] throws.
+  Future<R?> withOptimisticUpdate<R>({
+    required VoidCallback optimisticApply,
+    required Future<R> Function() action,
+    required VoidCallback rollback,
+    void Function(Object error, StackTrace stack)? onError,
+  }) async {
+    if (mounted) setState(optimisticApply);
+    try {
+      return await action();
+    } catch (e, stack) {
+      if (mounted) setState(rollback);
+      if (onError != null) {
+        onError(e, stack);
+      } else {
+        rethrow;
+      }
+      return null;
     }
   }
 }

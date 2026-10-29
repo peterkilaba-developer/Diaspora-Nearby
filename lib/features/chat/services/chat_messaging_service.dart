@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:universal_io/io.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -11,7 +12,6 @@ import '../models/message.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 
-// Provider definition
 final chatMessagingServiceProvider = Provider<ChatMessagingService>((ref) {
   return ChatMessagingService(
     pointsService: ref.read(pointsServiceProvider),
@@ -23,13 +23,10 @@ class ChatMessagingService {
   final FirebaseStorage _storage;
   final FirebaseFirestore _firestore;
   final FirebaseAuth _auth;
-  // Kept in the constructor for API compatibility while legacy client-side
-  // economic rewards remain disabled.
   // ignore: unused_field
   final PointsService _pointsService;
   final Ref? _ref;
 
-  // [FIX] Cache sender profile to avoid fetching on every message
   Map<String, dynamic>? _cachedSenderData;
   String? _cachedSenderUid;
   int _cachedSenderTimestamp = 0;
@@ -48,21 +45,18 @@ class ChatMessagingService {
 
   String? get currentUserId => _auth.currentUser?.uid;
 
-  /// Get sender data with caching (5-minute TTL)
-  Future<Map<String, dynamic>?> _getSenderData() async {
+  /// Synchronous lookup of sender profile data for 0ms optimistic message creation.
+  Map<String, dynamic>? getSenderDataSync() {
     final uid = currentUserId;
     if (uid == null) return null;
 
     final now = DateTime.now().millisecondsSinceEpoch;
-    // Use cache if same user and less than 5 minutes old
     if (_cachedSenderData != null &&
         _cachedSenderUid == uid &&
         (now - _cachedSenderTimestamp) < 300000) {
       return _cachedSenderData;
     }
 
-    // [PERF] Try reading from in-memory userProfileProvider or ProfileRepository
-    // cache before hitting Firestore network.
     try {
       final profile =
           _ref?.read(userProfileProvider).value ??
@@ -81,14 +75,24 @@ class ChatMessagingService {
       }
     } catch (_) {}
 
-    final userDoc = await _firestore.collection('users').doc(uid).get();
-    _cachedSenderData = userDoc.data();
-    _cachedSenderUid = uid;
-    _cachedSenderTimestamp = now;
     return _cachedSenderData;
   }
 
-  /// Firestore collection helpers
+  /// Get sender data with caching (5-minute TTL)
+  Future<Map<String, dynamic>?> _getSenderData() async {
+    final syncData = getSenderDataSync();
+    if (syncData != null) return syncData;
+
+    final uid = currentUserId;
+    if (uid == null) return null;
+
+    final userDoc = await _firestore.collection('users').doc(uid).get();
+    _cachedSenderData = userDoc.data();
+    _cachedSenderUid = uid;
+    _cachedSenderTimestamp = DateTime.now().millisecondsSinceEpoch;
+    return _cachedSenderData;
+  }
+
   CollectionReference<Map<String, dynamic>> get _chatsCol =>
       _firestore.collection('chats');
   CollectionReference<Map<String, dynamic>> _messagesCol(String chatId) =>
@@ -107,19 +111,16 @@ class ChatMessagingService {
     String? senderIdOverride,
     String? senderNameOverride,
     String? senderImageOverride,
-
     List<String>? participants,
     List<String>? mentions,
     String? richContent,
-    String? replyToSenderId, // [NEW] Notification target for replies
+    String? replyToSenderId,
     String type = 'text',
     Map<String, dynamic>? metadata,
   }) async {
     if (currentUserId == null) return null;
 
     final now = DateTime.now().millisecondsSinceEpoch;
-
-    // Use cached sender data to avoid Firestore fetch on every message
     final userData = await _getSenderData();
 
     final firstName = userData?['firstName'] as String? ?? '';
@@ -139,13 +140,12 @@ class ChatMessagingService {
       'senderHostCountryCode': hostCountryCode,
       'senderHomeCountryCode': homeCountryCode,
       'content': content,
-
-      'type': type, // [FIX] Use passed type (default 'text')
+      'type': type,
       'timestamp': now,
       'status': 'sent',
       'mentions': ?mentions,
       'richContent': ?richContent,
-      'metadata': ?metadata, // [NEW]
+      'metadata': ?metadata,
     };
 
     if (replyToMessageId != null) {
@@ -156,8 +156,6 @@ class ChatMessagingService {
       messageData['adminId'] = currentUserId;
       messageData['adminImage'] = profileImage;
     }
-
-    // ...
 
     try {
       final newMsgRef = _messagesCol(chatId).doc();
@@ -173,75 +171,40 @@ class ChatMessagingService {
         'metadata': ?metadata,
       };
 
-      // Determine participants for the chat document
       var targetParticipants = participants;
 
-      // If participants are missing, try to reconstruct from Firestore
       if (targetParticipants == null || targetParticipants.isEmpty) {
-        debugPrint(
-          '⚠️ Participants missing. Fetching from Firestore chat doc...',
-        );
         final chatDoc = await _chatsCol.doc(chatId).get();
         if (chatDoc.exists) {
           final chatData = chatDoc.data()!;
           targetParticipants = List<String>.from(
             chatData['participants'] ?? [],
           );
+          if (targetParticipants.isEmpty && currentUserId != null) {
+            targetParticipants = [currentUserId!];
+            final createdBy = chatData['createdBy'] as String?;
+            if (createdBy != null && createdBy != currentUserId) {
+              targetParticipants.add(createdBy);
+            }
+            final adminId = chatData['adminId'] as String?;
+            if (adminId != null && !targetParticipants.contains(adminId)) {
+              targetParticipants.add(adminId);
+            }
+          }
         }
       }
 
-      // If STILL missing, reconstruct from userChats subcollections
-      if (targetParticipants == null || targetParticipants.isEmpty) {
-        debugPrint('🔄 Self-healing: Reconstructing participants...');
-        targetParticipants = [currentUserId!];
-        try {
-          final chatDoc = await _chatsCol.doc(chatId).get();
-          final createdBy = chatDoc.data()?['createdBy'] as String?;
-          if (createdBy != null && createdBy != currentUserId) {
-            targetParticipants.add(createdBy);
-          }
-          final adminId = chatDoc.data()?['adminId'] as String?;
-          if (adminId != null && !targetParticipants.contains(adminId)) {
-            targetParticipants.add(adminId);
-          }
-        } catch (e) {
-          debugPrint('⚠️ Could not reconstruct participants: $e');
-        }
-      }
+      targetParticipants ??= [currentUserId!];
 
-      // Build chat doc update
       final chatDocUpdate = <String, dynamic>{
         'lastMessage': lastMessageData,
         'updatedAt': now,
       };
 
-      // Message delivery must not also repair chat schema fields such as
-      // participants/type. Legacy users may be authorized through userChats,
-      // while those unrelated chat-document changes are correctly denied.
-
-      // [FIX] Use WriteBatch — all writes in a single network round-trip
       final batch = _firestore.batch();
-
-      // 1. Write the message document
       batch.set(newMsgRef, messageData);
-
-      // 2. Update the chat document
       batch.set(_chatsCol.doc(chatId), chatDocUpdate, SetOptions(merge: true));
 
-      // 3. Update all participant userChats
-      final Set<String> allTargets = {};
-      allTargets.addAll(targetParticipants);
-      if (mentions != null) allTargets.addAll(mentions);
-      if (replyToSenderId != null) allTargets.add(replyToSenderId);
-      if (senderIdOverride != null) {
-        allTargets.add(senderIdOverride);
-      } else if (currentUserId != null) {
-        allTargets.add(currentUserId!);
-      }
-
-      // The client may update only its own inbox index. A Firestore trigger
-      // fans the canonical message out to every other participant and makes
-      // unread increments idempotent.
       if (currentUserId != null) {
         final userChatUpdates = <String, dynamic>{
           'chatId': chatId,
@@ -266,12 +229,7 @@ class ChatMessagingService {
         );
       }
 
-      // Single network round-trip for ALL writes
       await batch.commit();
-
-      debugPrint(
-        '✅ Message committed; server fan-out queued for ${allTargets.length} targets',
-      );
 
       return Message.fromFirestoreData(newMsgRef.id, chatId, messageData);
     } catch (e, stack) {
@@ -286,17 +244,19 @@ class ChatMessagingService {
     String groupName,
     List<String> invitedUserIds,
   ) async {
-    if (currentUserId == null) return;
+    if (currentUserId == null || invitedUserIds.isEmpty) return;
 
-    for (final userId in invitedUserIds) {
-      try {
-        await FirebaseFunctions.instance
-            .httpsCallable('manageChatMembers')
-            .call({'chatId': groupId, 'inviteUserId': userId});
-      } catch (e) {
-        debugPrint('Error sending invitation to $userId: $e');
-      }
-    }
+    await Future.wait(
+      invitedUserIds.map((userId) async {
+        try {
+          await FirebaseFunctions.instance
+              .httpsCallable('manageChatMembers')
+              .call({'chatId': groupId, 'inviteUserId': userId});
+        } catch (e) {
+          debugPrint('Error sending invitation to $userId: $e');
+        }
+      }),
+    );
   }
 
   Future<Message?> forwardMessage(
@@ -310,8 +270,6 @@ class ChatMessagingService {
     if (currentUserId == null) return null;
 
     final now = DateTime.now().millisecondsSinceEpoch;
-
-    // Use cached sender data
     final userData = await _getSenderData();
 
     final firstName = userData?['firstName'] as String? ?? '';
@@ -347,7 +305,6 @@ class ChatMessagingService {
           originalMessage.originalTimestamp ?? originalMessage.timestamp,
     };
 
-    // Copy media fields
     if (originalMessage.imageUrl != null) {
       messageData['imageUrl'] = originalMessage.imageUrl;
     }
@@ -378,9 +335,7 @@ class ChatMessagingService {
 
     try {
       final newMsgRef = _messagesCol(targetChatId).doc();
-      await newMsgRef.set(messageData);
 
-      // Update lastMessage
       String lastMessageContent = originalMessage.content;
       if (lastMessageContent.isEmpty) {
         lastMessageContent = _getMessageTypeLabel(originalMessage.type);
@@ -396,40 +351,23 @@ class ChatMessagingService {
         'status': 'sent',
       };
 
-      await _chatsCol.doc(targetChatId).set({
+      final batch = _firestore.batch();
+      batch.set(newMsgRef, messageData);
+      batch.set(_chatsCol.doc(targetChatId), {
         'lastMessage': lastMessageData,
         'updatedAt': now,
       }, SetOptions(merge: true));
 
-      var targetParticipants = participants;
-      if (targetParticipants == null || targetParticipants.isEmpty) {
-        final chatDoc = await _chatsCol.doc(targetChatId).get();
-        if (chatDoc.exists) {
-          targetParticipants = List<String>.from(
-            chatDoc.data()?['participants'] ?? [],
-          );
-        }
+      if (currentUserId != null) {
+        batch.set(_userChatsCol(currentUserId!).doc(targetChatId), {
+          'chatId': targetChatId,
+          'lastMessage': lastMessageData,
+          'updatedAt': now,
+          'isDeleted': false,
+        }, SetOptions(merge: true));
       }
 
-      if (targetParticipants != null) {
-        for (final userId in targetParticipants) {
-          try {
-            final userChatUpdates = <String, dynamic>{
-              'lastMessage': lastMessageData,
-              'updatedAt': now,
-              'isDeleted': false,
-            };
-            if (userId != currentUserId) {
-              userChatUpdates['unreadCount'] = FieldValue.increment(1);
-            }
-            await _userChatsCol(
-              userId,
-            ).doc(targetChatId).set(userChatUpdates, SetOptions(merge: true));
-          } catch (e) {
-            debugPrint('Error updating userChat for $userId: $e');
-          }
-        }
-      }
+      await batch.commit();
 
       return Message.fromFirestoreData(newMsgRef.id, targetChatId, messageData);
     } catch (e) {
@@ -458,7 +396,7 @@ class ChatMessagingService {
   }
 
   // ============================================
-  // MEDIA MESSAGING
+  // MEDIA MESSAGING (0ms Optimistic Return)
   // ============================================
 
   Future<Message?> sendImageMessage(
@@ -473,14 +411,14 @@ class ChatMessagingService {
     String? senderImageOverride,
     List<String>? participants,
     String? replyToSenderId,
-    Map<String, dynamic>? metadata, // [NEW]
+    Map<String, dynamic>? metadata,
   }) async {
     if (currentUserId == null) return null;
 
     final now = DateTime.now().millisecondsSinceEpoch;
     final tempId = 'pending_${now}_$currentUserId';
 
-    final userData = await _getSenderData();
+    final userData = getSenderDataSync();
     final firstName = userData?['firstName'] as String? ?? '';
     final lastName = userData?['lastName'] as String? ?? '';
     final profileImage = userData?['profileImage'] as String?;
@@ -499,26 +437,28 @@ class ChatMessagingService {
       replyTo: replyToMessageId,
       adminId: senderIdOverride != null ? currentUserId : null,
       adminImage: senderIdOverride != null ? profileImage : null,
-      metadata: metadata, // [NEW]
+      metadata: metadata,
     );
 
-    await _uploadMediaAsync(
-      chatId: chatId,
-      file: imageFile,
-      type: 'image',
-      caption: caption,
-      now: now,
-      metadata: metadata, // [NEW]
-      senderData: userData,
-      replyToMessageId: replyToMessageId,
-      tempId: tempId,
-      onConfirmed: onConfirmed,
-      onError: onError,
-      senderIdOverride: senderIdOverride,
-      senderNameOverride: senderNameOverride,
-      senderImageOverride: senderImageOverride,
-      participants: participants,
-      replyToSenderId: replyToSenderId,
+    unawaited(
+      _uploadMediaAsync(
+        chatId: chatId,
+        file: imageFile,
+        type: 'image',
+        caption: caption,
+        now: now,
+        metadata: metadata,
+        senderData: userData,
+        replyToMessageId: replyToMessageId,
+        tempId: tempId,
+        onConfirmed: onConfirmed,
+        onError: onError,
+        senderIdOverride: senderIdOverride,
+        senderNameOverride: senderNameOverride,
+        senderImageOverride: senderImageOverride,
+        participants: participants,
+        replyToSenderId: replyToSenderId,
+      ),
     );
 
     return optimisticMessage;
@@ -536,13 +476,13 @@ class ChatMessagingService {
     String? senderImageOverride,
     List<String>? participants,
     String? replyToSenderId,
-    Map<String, dynamic>? metadata, // [NEW]
+    Map<String, dynamic>? metadata,
   }) async {
     if (currentUserId == null) throw Exception('User not logged in');
     final now = DateTime.now().millisecondsSinceEpoch;
     final tempId = 'pending_video_${now}_$currentUserId';
 
-    final userData = await _getSenderData();
+    final userData = getSenderDataSync();
     final firstName = userData?['firstName'] as String? ?? '';
     final lastName = userData?['lastName'] as String? ?? '';
     final profileImage = userData?['profileImage'] as String?;
@@ -555,32 +495,34 @@ class ChatMessagingService {
       senderImage: senderImageOverride ?? profileImage,
       content: caption?.trim() ?? '',
       type: 'video',
-      documentUrl: videoFile.path, // Temporary mapping
+      documentUrl: videoFile.path,
       timestamp: now,
       status: 'sending',
       replyTo: replyToMessageId,
       adminId: senderIdOverride != null ? currentUserId : null,
       adminImage: senderIdOverride != null ? profileImage : null,
-      metadata: metadata, // [NEW]
+      metadata: metadata,
     );
 
-    await _uploadMediaAsync(
-      chatId: chatId,
-      file: videoFile,
-      type: 'video',
-      caption: caption,
-      now: now,
-      metadata: metadata, // [NEW]
-      senderData: userData,
-      replyToMessageId: replyToMessageId,
-      tempId: tempId,
-      onConfirmed: onConfirmed,
-      onError: onError,
-      senderIdOverride: senderIdOverride,
-      senderNameOverride: senderNameOverride,
-      senderImageOverride: senderImageOverride,
-      participants: participants,
-      replyToSenderId: replyToSenderId,
+    unawaited(
+      _uploadMediaAsync(
+        chatId: chatId,
+        file: videoFile,
+        type: 'video',
+        caption: caption,
+        now: now,
+        metadata: metadata,
+        senderData: userData,
+        replyToMessageId: replyToMessageId,
+        tempId: tempId,
+        onConfirmed: onConfirmed,
+        onError: onError,
+        senderIdOverride: senderIdOverride,
+        senderNameOverride: senderNameOverride,
+        senderImageOverride: senderImageOverride,
+        participants: participants,
+        replyToSenderId: replyToSenderId,
+      ),
     );
 
     return optimisticMessage;
@@ -600,13 +542,13 @@ class ChatMessagingService {
     List<String>? participants,
     String messageType = 'audio',
     String? replyToSenderId,
-    Map<String, dynamic>? metadata, // [NEW]
+    Map<String, dynamic>? metadata,
   }) async {
     if (currentUserId == null) return null;
     final now = DateTime.now().millisecondsSinceEpoch;
     final tempId = 'pending_voice_${now}_$currentUserId';
 
-    final userData = await _getSenderData();
+    final userData = getSenderDataSync();
     final firstName = userData?['firstName'] as String? ?? '';
     final lastName = userData?['lastName'] as String? ?? '';
     final profileImage = userData?['profileImage'] as String?;
@@ -618,7 +560,7 @@ class ChatMessagingService {
       senderName: senderNameOverride ?? '$firstName $lastName'.trim(),
       senderImage: senderImageOverride ?? profileImage,
       content: caption?.trim() ?? '',
-      type: messageType, // Use dynamic type
+      type: messageType,
       documentUrl: audioFile.path,
       audioDuration: durationSeconds,
       timestamp: now,
@@ -626,27 +568,29 @@ class ChatMessagingService {
       replyTo: replyToMessageId,
       adminId: senderIdOverride != null ? currentUserId : null,
       adminImage: senderIdOverride != null ? profileImage : null,
-      metadata: metadata, // [NEW]
+      metadata: metadata,
     );
 
-    await _uploadMediaAsync(
-      chatId: chatId,
-      file: audioFile,
-      type: messageType, // Use dynamic type
-      caption: caption,
-      now: now,
-      metadata: metadata, // [NEW]
-      senderData: userData,
-      duration: durationSeconds,
-      replyToMessageId: replyToMessageId,
-      tempId: tempId,
-      onConfirmed: onConfirmed,
-      onError: onError,
-      senderIdOverride: senderIdOverride,
-      senderNameOverride: senderNameOverride,
-      senderImageOverride: senderImageOverride,
-      participants: participants,
-      replyToSenderId: replyToSenderId,
+    unawaited(
+      _uploadMediaAsync(
+        chatId: chatId,
+        file: audioFile,
+        type: messageType,
+        caption: caption,
+        now: now,
+        metadata: metadata,
+        senderData: userData,
+        duration: durationSeconds,
+        replyToMessageId: replyToMessageId,
+        tempId: tempId,
+        onConfirmed: onConfirmed,
+        onError: onError,
+        senderIdOverride: senderIdOverride,
+        senderNameOverride: senderNameOverride,
+        senderImageOverride: senderImageOverride,
+        participants: participants,
+        replyToSenderId: replyToSenderId,
+      ),
     );
 
     return optimisticMessage;
@@ -662,7 +606,7 @@ class ChatMessagingService {
     String? senderImageOverride,
     List<String>? participants,
     String? replyToSenderId,
-    Map<String, dynamic>? metadata, // [NEW]
+    Map<String, dynamic>? metadata,
   }) async {
     return sendAudioMessage(
       chatId,
@@ -675,7 +619,7 @@ class ChatMessagingService {
       participants: participants,
       messageType: 'audio_file',
       replyToSenderId: replyToSenderId,
-      metadata: metadata, // [NEW]
+      metadata: metadata,
     );
   }
 
@@ -691,13 +635,13 @@ class ChatMessagingService {
     String? senderImageOverride,
     List<String>? participants,
     String? replyToSenderId,
-    Map<String, dynamic>? metadata, // [NEW]
+    Map<String, dynamic>? metadata,
   }) async {
     if (currentUserId == null) throw Exception('User not logged in');
     final now = DateTime.now().millisecondsSinceEpoch;
     final tempId = 'pending_doc_${now}_$currentUserId';
 
-    final userData = await _getSenderData();
+    final userData = getSenderDataSync();
     final firstName = userData?['firstName'] as String? ?? '';
     final lastName = userData?['lastName'] as String? ?? '';
     final profileImage = userData?['profileImage'] as String?;
@@ -716,28 +660,28 @@ class ChatMessagingService {
       replyTo: replyToMessageId,
       adminId: senderIdOverride != null ? currentUserId : null,
       adminImage: senderIdOverride != null ? profileImage : null,
-      metadata: metadata, // [NEW]
+      metadata: metadata,
     );
 
-    await _uploadMediaAsync(
-      chatId: chatId,
-      file: file,
-      type: 'document',
-      caption: caption,
-      now: now,
-      metadata: metadata, // [NEW]
-
-      senderData: userData,
-      replyToMessageId: replyToMessageId,
-      tempId: tempId,
-      onConfirmed: onConfirmed,
-      onError: onError,
-      senderIdOverride: senderIdOverride,
-      senderNameOverride: senderNameOverride,
-      senderImageOverride: senderImageOverride,
-
-      participants: participants,
-      replyToSenderId: replyToSenderId,
+    unawaited(
+      _uploadMediaAsync(
+        chatId: chatId,
+        file: file,
+        type: 'document',
+        caption: caption,
+        now: now,
+        metadata: metadata,
+        senderData: userData,
+        replyToMessageId: replyToMessageId,
+        tempId: tempId,
+        onConfirmed: onConfirmed,
+        onError: onError,
+        senderIdOverride: senderIdOverride,
+        senderNameOverride: senderNameOverride,
+        senderImageOverride: senderImageOverride,
+        participants: participants,
+        replyToSenderId: replyToSenderId,
+      ),
     );
 
     return optimisticMessage;
@@ -766,7 +710,6 @@ class ChatMessagingService {
     final hostCountryCode = userData?['hostCountryCode'] as String?;
     final homeCountryCode = userData?['homeCountryCode'] as String?;
 
-    // Use caption as content if provided, otherwise fall back to address
     final messageContent = (caption != null && caption.trim().isNotEmpty)
         ? caption.trim()
         : (address ?? 'Location');
@@ -845,9 +788,10 @@ class ChatMessagingService {
     String? senderImageOverride,
     List<String>? participants,
     String? replyToSenderId,
-    Map<String, dynamic>? metadata, // [NEW]
+    Map<String, dynamic>? metadata,
   }) async {
     try {
+      final resolvedSenderData = senderData ?? await _getSenderData();
       final folder = type == 'image'
           ? 'chat_images'
           : type == 'video'
@@ -878,7 +822,6 @@ class ChatMessagingService {
           ext = '.wav';
           mimeType = 'audio/wav';
         } else {
-          // Fallback
           final dotIndex = file.path.lastIndexOf('.');
           if (dotIndex != -1) {
             ext = file.path.substring(dotIndex);
@@ -893,10 +836,6 @@ class ChatMessagingService {
 
       final fileName = '${now}_$type$ext';
       final storageRef = _storage.ref().child('$folder/$chatId/$fileName');
-
-      debugPrint(
-        '🚀 Starting media upload: $fileName ($mimeType) to path: $folder/$chatId/$fileName',
-      );
 
       final storageMetadata = SettableMetadata(
         contentType: mimeType,
@@ -913,33 +852,19 @@ class ChatMessagingService {
         if (!ioFile.existsSync()) {
           throw Exception('File does not exist at path: ${file.path}');
         }
-        debugPrint('📂 File exists, size: ${ioFile.lengthSync()} bytes');
         uploadTask = storageRef.putFile(ioFile, storageMetadata);
       }
 
-      // Monitor progress
-      uploadTask.snapshotEvents.listen(
-        (event) {
-          debugPrint(
-            '⏳ Upload Progress: ${(event.bytesTransferred / event.totalBytes * 100).round()}%',
-          );
-        },
-        onError: (e) {
-          debugPrint('❌ Upload Stream Error: $e');
-        },
-      );
-
       final snapshot = await uploadTask;
-      debugPrint('✅ Upload completed with state: ${snapshot.state}');
       final derivedUrl = await snapshot.ref.getDownloadURL();
 
-      debugPrint('✅ Download URL retrieved: $derivedUrl');
-
-      final firstName = senderData?['firstName'] as String? ?? '';
-      final lastName = senderData?['lastName'] as String? ?? '';
-      final profileImage = senderData?['profileImage'] as String?;
-      final hostCountryCode = senderData?['hostCountryCode'] as String?;
-      final homeCountryCode = senderData?['homeCountryCode'] as String?;
+      final firstName = resolvedSenderData?['firstName'] as String? ?? '';
+      final lastName = resolvedSenderData?['lastName'] as String? ?? '';
+      final profileImage = resolvedSenderData?['profileImage'] as String?;
+      final hostCountryCode =
+          resolvedSenderData?['hostCountryCode'] as String?;
+      final homeCountryCode =
+          resolvedSenderData?['homeCountryCode'] as String?;
 
       final messageData = <String, dynamic>{
         'senderId': senderIdOverride ?? currentUserId,
@@ -977,7 +902,6 @@ class ChatMessagingService {
 
       final newMsgRef = _messagesCol(chatId).doc();
 
-      // Icon for last message
       String icon = type == 'image'
           ? 'Photo'
           : type == 'video'
@@ -1024,7 +948,6 @@ class ChatMessagingService {
       debugPrint('❌ Media upload failed: $e');
       debugPrint('Stack trace: $stack');
       if (onError != null) onError(e.toString());
-      rethrow;
     }
   }
 
@@ -1036,7 +959,7 @@ class ChatMessagingService {
     required String chatId,
     required String messageId,
     required String emoji,
-    required String messageSenderId, // TARGET for notification
+    required String messageSenderId,
   }) async {
     final currentUserId = _auth.currentUser?.uid;
     if (currentUserId == null) return;

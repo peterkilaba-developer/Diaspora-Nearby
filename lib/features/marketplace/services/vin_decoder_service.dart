@@ -131,16 +131,26 @@ class VinDecoderService {
   static const _baseUrl =
       'https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues';
 
+  static final Map<String, VinDecodedData> _cache = {};
+
+  /// Synchronous 0ms lookup if this VIN was already decoded in this session.
+  static VinDecodedData? getCached(String vin) =>
+      _cache[vin.trim().toUpperCase()];
+
   /// Decodes a 17-character VIN and returns vehicle data.
   static Future<VinDecodedData> decode(String vin) async {
-    if (vin.length != 17) {
+    final normalized = vin.trim().toUpperCase();
+    if (normalized.length != 17) {
       return const VinDecodedData(
         errorMessage: 'VIN must be exactly 17 characters',
       );
     }
 
+    final cached = _cache[normalized];
+    if (cached != null) return cached;
+
     try {
-      final url = Uri.parse('$_baseUrl/$vin?format=json');
+      final url = Uri.parse('$_baseUrl/$normalized?format=json');
       final response = await http.get(url).timeout(const Duration(seconds: 10));
 
       if (response.statusCode != 200) {
@@ -177,7 +187,7 @@ class VinDecoderService {
       debugPrint('[VIN] Raw TransmissionStyle: $rawTransmission');
       debugPrint('[VIN] Raw DriveType: $rawDriveType');
 
-      return VinDecodedData(
+      final decoded = VinDecodedData(
         make: _getString(data, 'Make'),
         model: _getString(data, 'Model'),
         year: _getString(data, 'ModelYear'),
@@ -212,6 +222,11 @@ class VinDecoderService {
         electrificationType: _getString(data, 'ElectrificationLevel'),
         batteryKWh: _getString(data, 'BatteryKWh'),
       );
+
+      if (decoded.isValid) {
+        _cache[normalized] = decoded;
+      }
+      return decoded;
     } catch (e) {
       debugPrint('VIN decode error: $e');
       return const VinDecodedData(
@@ -291,30 +306,18 @@ class VinDecoderService {
     if (lower.contains('van') || lower.contains('minivan')) return 'Van';
     if (lower.contains('crossover')) return 'Crossover';
 
-    // Return original if no mapping found
     return nhtsaBody;
   }
 
-  /// Maps NHTSA drive type to standard options.
-  ///
-  /// Common NHTSA patterns:
-  ///  • "Front-Wheel Drive" → FWD
-  ///  • "Rear-Wheel Drive" → RWD
-  ///  • "AWD/All-Wheel Drive" → AWD
-  ///  • "4WD/4-Wheel Drive/4x4" → 4WD
-  ///  • "4x2" → FWD (2-wheel drive, front-biased default)
-  ///  • "4x4" → 4WD
   static String? _mapDriveType(String? nhtsaDrive) {
     if (nhtsaDrive == null) return null;
     final lower = nhtsaDrive.toLowerCase();
 
-    // AWD first ("AWD/All-Wheel Drive")
     if (lower.contains('awd') ||
         lower.contains('all-wheel') ||
         lower.contains('all wheel')) {
       return 'AWD';
     }
-    // 4WD / 4x4
     if (lower.contains('4wd') ||
         lower.contains('4x4') ||
         lower.contains('four-wheel') ||
@@ -322,11 +325,8 @@ class VinDecoderService {
         lower.contains('4-wheel')) {
       return '4WD';
     }
-    // FWD
     if (lower.contains('front')) return 'FWD';
-    // RWD
     if (lower.contains('rear')) return 'RWD';
-    // "4x2" = two-wheel drive — default to FWD (most common)
     if (lower == '4x2') return 'FWD';
 
     debugPrint('[VIN] Unmapped drive type: $nhtsaDrive');

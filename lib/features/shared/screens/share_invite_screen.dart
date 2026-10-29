@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
@@ -12,7 +13,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
-import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/dsp/services/epoch_service.dart';
 
 class ShareInviteScreen extends ConsumerStatefulWidget {
@@ -43,48 +43,43 @@ class ShareInviteBody extends ConsumerStatefulWidget {
 }
 
 class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
-  bool _isGenerating = false;
+  static final Map<String, File> _cachedShareCards = {};
+
   // Cache the future so FutureBuilder doesn't reset on every rebuild.
-  // A new future is only created once we know the user uid, and again
-  // after generating a code so the freshly-created code is fetched.
+  // A new future is only created once we know the user uid.
   Future<String?>? _codeFuture;
+  String? _cachedCode;
   String? _lastUid;
 
   void _initCodeFuture(String uid) {
+    final pointsRepo = ref.read(pointsRepositoryProvider);
+    final syncCode = pointsRepo.getCachedReferralCode(uid);
+    if (syncCode != null && syncCode.isNotEmpty) {
+      _cachedCode = syncCode;
+      _prewarmShareCard(syncCode);
+    }
     if (_lastUid != uid || _codeFuture == null) {
       _lastUid = uid;
-      _codeFuture = ref.read(pointsRepositoryProvider).getReferralCode(uid);
+      _codeFuture = pointsRepo.getReferralCode(uid).then((code) {
+        if (code != null && code.isNotEmpty) {
+          _cachedCode = code;
+          _prewarmShareCard(code);
+        }
+        return code;
+      });
     }
   }
 
-  Future<void> _generateCode(String userId) async {
-    setState(() => _isGenerating = true);
-    try {
-      // Fetch profile for name/country
-      final profile = await ref.read(userProfileByIdProvider(userId).future);
-      if (profile != null) {
-        final firstName = profile.firstName;
-        final countryCode = profile.homeLocation.countryCode ?? 'US';
-
-        await ref
-            .read(pointsRepositoryProvider)
-            .generateReferralCode(userId, firstName, countryCode);
-        // Force re-fetch after generation
-        setState(() {
-          _codeFuture = ref
-              .read(pointsRepositoryProvider)
-              .getReferralCode(userId);
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Error generating code: $e")));
-      }
-    } finally {
-      if (mounted) setState(() => _isGenerating = false);
-    }
+  void _prewarmShareCard(String code) {
+    if (_cachedShareCards.containsKey(code)) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(
+        _buildShareCard(code)
+            .then((file) => _cachedShareCards[code] = file)
+            .catchError((_) => File('')),
+      );
+    });
   }
 
   @override
@@ -97,9 +92,11 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
 
     return FutureBuilder<String?>(
       future: _codeFuture,
+      initialData: _cachedCode,
       builder: (context, snapshot) {
+        final effectiveCode = snapshot.data ?? _cachedCode;
         if (snapshot.connectionState == ConnectionState.waiting &&
-            !_isGenerating) {
+            effectiveCode == null) {
           return Scaffold(
             backgroundColor: Theme.of(context).scaffoldBackgroundColor,
             appBar: AppBar(
@@ -128,7 +125,7 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
           );
         }
 
-        final code = snapshot.data;
+        final code = effectiveCode;
 
         return Scaffold(
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -178,6 +175,9 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
                           ),
                           const SizedBox(height: 16),
                           OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide.none,
+                            ),
                             onPressed: () => setState(() {
                               _codeFuture = ref
                                   .read(pointsRepositoryProvider)
@@ -192,8 +192,7 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
                     _buildReferralQR(context, code),
                     const SizedBox(height: 20),
                     _buildCodeCard(context, code),
-                  ] else
-                    _buildGenerateCard(context, user.uid),
+                  ],
 
                   const SizedBox(height: 24),
                   const Text(
@@ -204,14 +203,7 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
                   const SizedBox(height: 16),
 
                   if (code != null)
-                    _buildDirectShareButtons(context, code)
-                  else if (!snapshot.hasError)
-                    const Center(
-                      child: Text(
-                        "Generate a code to start sharing!",
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    ),
+                    _buildDirectShareButtons(context, code),
 
                   const SizedBox(height: 16),
                 ],
@@ -516,14 +508,17 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
     canvas.drawParagraph(paragraph, Offset(dx, y));
   }
 
-  /// Share with dynamically generated branded card
+  /// Share with dynamically generated branded card (uses pre-rendered cache when ready)
   Future<void> _shareWithLogo(String message, String code) async {
     try {
       final String link = 'https://diasporanearby.com/invite?code=$code';
       final String fullMessage = '$message\n\nJoin here: $link';
 
-      // Build dynamic share card with actual code + progress
-      final cardFile = await _buildShareCard(code);
+      File? cardFile = _cachedShareCards[code];
+      if (cardFile == null || !cardFile.existsSync()) {
+        cardFile = await _buildShareCard(code);
+        _cachedShareCards[code] = cardFile;
+      }
 
       await SharePlus.instance.share(
         ShareParams(text: fullMessage, files: [XFile(cardFile.path)]),
@@ -557,50 +552,6 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
             borderRadius: BorderRadius.circular(12),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildGenerateCard(BuildContext context, String userId) {
-    return Container(
-      padding: const EdgeInsets.all(AppTheme.cardPadding),
-      decoration: AppTheme.cardDecoration(context),
-      child: Column(
-        children: [
-          const Icon(LucideIcons.sparkles, size: 40, color: AppTheme.accent),
-          const SizedBox(height: 16),
-          const Text(
-            "No Invite Code Yet",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            "Invite family and friends from home and abroad to connect and earn.",
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey),
-          ),
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: _isGenerating ? null : () => _generateCode(userId),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppTheme.accent,
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppTheme.pageHorizontalPadding,
-                vertical: 12,
-              ),
-            ),
-            child: _isGenerating
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Text("Generate Code"),
-          ),
-        ],
       ),
     );
   }

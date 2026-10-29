@@ -1,8 +1,11 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
+import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/notifications/services/push_notification_service.dart';
 import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
@@ -54,8 +57,11 @@ class AccountSection extends ConsumerWidget {
                   'Manage notification preferences',
                 ),
                 onTap: () {
-                  if (userProfile != null && userProfile!.uid != null) {
-                    _showNotificationDialog(context, ref, userProfile!);
+                  final effectiveProfile =
+                      ref.read(userProfileProvider).value ?? userProfile;
+                  if (effectiveProfile != null &&
+                      effectiveProfile.uid != null) {
+                    _showNotificationDialog(context, ref, effectiveProfile);
                   }
                 },
                 actionId: ExplorationAction.moreScreenNotifications,
@@ -373,61 +379,89 @@ class AccountSection extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (context) {
-        bool isEnabled = userProfile.notificationsEnabled ?? false;
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              insetPadding: const EdgeInsets.symmetric(
-                horizontal: 8,
-                vertical: 24,
-              ),
-              title: const Row(
-                children: [
-                  Icon(LucideIcons.bell),
-                  SizedBox(width: 8),
-                  Text('Notifications'),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SwitchListTile(
-                    title: const Text('Enable Notifications'),
-                    subtitle: Text(
-                      isEnabled
-                          ? 'You will receive updates'
-                          : 'Notifications are disabled',
-                    ),
-                    value: isEnabled,
-                    activeThumbColor: Colors.purple,
-                    onChanged: (val) async {
-                      setDialogState(() => isEnabled = val);
-                      if (val) {
-                        await ref
-                            .read(pushNotificationServiceProvider)
-                            .registerForUser(userProfile.uid!);
-                      } else {
-                        await ref
-                            .read(pushNotificationServiceProvider)
-                            .disableNotifications(userProfile.uid!);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Customize individual alerts in system settings.',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Done'),
+        final latestProfile =
+            ref.read(userProfileProvider).value ?? userProfile;
+        bool isEnabled = latestProfile.notificationsEnabled ?? false;
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: StatefulBuilder(
+            builder: (context, setDialogState) {
+              return AlertDialog(
+                insetPadding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 24,
                 ),
-              ],
-            );
-          },
+                title: const Row(
+                  children: [
+                    Icon(LucideIcons.bell),
+                    SizedBox(width: 8),
+                    Text('Notifications'),
+                  ],
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SwitchListTile(
+                      title: const Text('Enable Notifications'),
+                      subtitle: Text(
+                        isEnabled
+                            ? 'You will receive updates'
+                            : 'Notifications are disabled',
+                      ),
+                      value: isEnabled,
+                      activeThumbColor: Colors.purple,
+                      onChanged: (val) {
+                        setDialogState(() => isEnabled = val);
+                        final uid = userProfile.uid;
+                        if (uid != null) {
+                          final current =
+                              ref.read(userProfileProvider).value ??
+                              ref
+                                  .read(profileRepositoryProvider)
+                                  .getCachedProfile(uid) ??
+                              userProfile;
+                          final updated = current.copyWith(
+                            notificationsEnabled: val,
+                          );
+                          ref
+                              .read(userProfileProvider.notifier)
+                              .updateProfile(updated);
+                          ref
+                              .read(profileRepositoryProvider)
+                              .cacheProfile(uid, updated);
+
+                          if (val) {
+                            unawaited(
+                              ref
+                                  .read(pushNotificationServiceProvider)
+                                  .registerForUser(uid),
+                            );
+                          } else {
+                            unawaited(
+                              ref
+                                  .read(pushNotificationServiceProvider)
+                                  .disableNotifications(uid),
+                            );
+                          }
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Customize individual alerts in system settings.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Done'),
+                  ),
+                ],
+              );
+            },
+          ),
         );
       },
     );
@@ -436,56 +470,61 @@ class AccountSection extends ConsumerWidget {
   void _showDeleteAccountConfirm(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
-        title: const Row(
-          children: [
-            Icon(LucideIcons.alertTriangle, color: Colors.red),
-            SizedBox(width: 8),
-            Text('Delete Account?', style: TextStyle(color: Colors.red)),
+      builder: (context) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          title: const Row(
+            children: [
+              Icon(LucideIcons.alertTriangle, color: Colors.red),
+              SizedBox(width: 8),
+              Text('Delete Account?', style: TextStyle(color: Colors.red)),
+            ],
+          ),
+          content: const Text(
+            'Are you sure you want to permanently delete your account?\n\n'
+            '• Your profile will be wiped\n'
+            '• Your points will be lost\n'
+            '• You will be removed from all communities\n'
+            '• Communities where you are the ONLY member will be deleted\n\n'
+            'This action cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () async {
+                Navigator.pop(context);
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (_) => BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: const Center(child: CircularProgressIndicator()),
+                  ),
+                );
+                try {
+                  await ref.read(authRepositoryProvider).deleteAccount();
+                  if (context.mounted) Navigator.pop(context);
+                } catch (e) {
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error deleting account: $e')),
+                    );
+                  }
+                }
+              },
+              child: const Text('DELETE PERMANENTLY'),
+            ),
           ],
         ),
-        content: const Text(
-          'Are you sure you want to permanently delete your account?\n\n'
-          '• Your profile will be wiped\n'
-          '• Your points will be lost\n'
-          '• You will be removed from all communities\n'
-          '• Communities where you are the ONLY member will be deleted\n\n'
-          'This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () async {
-              Navigator.pop(context);
-              showDialog(
-                context: context,
-                barrierDismissible: false,
-                builder: (_) =>
-                    const Center(child: CircularProgressIndicator()),
-              );
-              try {
-                await ref.read(authRepositoryProvider).deleteAccount();
-                if (context.mounted) Navigator.pop(context);
-              } catch (e) {
-                if (context.mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error deleting account: $e')),
-                  );
-                }
-              }
-            },
-            child: const Text('DELETE PERMANENTLY'),
-          ),
-        ],
       ),
     );
   }
@@ -493,23 +532,26 @@ class AccountSection extends ConsumerWidget {
   void _showLogoutConfirm(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
-        title: const Text('Log Out'),
-        content: const Text('Are you sure you want to log out?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await ref.read(authRepositoryProvider).signOut();
-            },
-            child: const Text('Log Out'),
-          ),
-        ],
+      builder: (context) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          title: const Text('Log Out'),
+          content: const Text('Are you sure you want to log out?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                await ref.read(authRepositoryProvider).signOut();
+              },
+              child: const Text('Log Out', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        ),
       ),
     );
   }

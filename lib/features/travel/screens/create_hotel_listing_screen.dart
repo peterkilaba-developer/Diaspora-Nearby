@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -174,8 +175,14 @@ class _CreateHotelListingScreenState
   Future<void> _onPlaceSelected(AutocompletePrediction prediction) async {
     setState(() {
       _predictions = [];
-      _isFetchingDetails = true;
+      _isFetchingDetails = false;
       _searchC.text = prediction.primaryText;
+      if (prediction.primaryText.isNotEmpty) {
+        _titleC.text = prediction.primaryText;
+      }
+      if (prediction.secondaryText.isNotEmpty) {
+        _addressC.text = prediction.secondaryText;
+      }
     });
 
     try {
@@ -266,9 +273,8 @@ class _CreateHotelListingScreenState
         }
       }
 
-      setState(() => _isFetchingDetails = false);
-
       if (mounted) {
+        setState(() => _isFetchingDetails = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Row(
@@ -292,12 +298,6 @@ class _CreateHotelListingScreenState
     } catch (e) {
       if (mounted) {
         setState(() => _isFetchingDetails = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Could not fetch details: $e'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
       }
     }
   }
@@ -357,32 +357,23 @@ class _CreateHotelListingScreenState
         throw Exception('Not logged in');
       }
 
-      // Upload images to Firebase Storage
-      final imageUrls = <String>[];
-      for (int i = 0; i < _selectedImages.length; i++) {
-        final file = File(_selectedImages[i].path);
-        final storageRef = FirebaseStorage.instance.ref().child(
-          'hotels/${user.uid}/${DateTime.now().millisecondsSinceEpoch}_$i.jpg',
-        );
-        await storageRef.putFile(file);
-        final url = await storageRef.getDownloadURL();
-        imageUrls.add(url);
-        if (mounted) setState(() => _uploadedCount = i + 1);
-      }
-
-      setState(() => _isUploading = false);
-
       final repo = ref.read(peerListingRepositoryProvider);
+      final isEditing = widget.existing != null;
+      final listingId = isEditing
+          ? widget.existing!.id
+          : repo.generateListingId();
+      final imagesToUpload = List<XFile>.from(_selectedImages);
+      final existingPhotos = widget.existing?.photos ?? const <String>[];
 
-      final listing = PeerListing(
-        id: widget.existing?.id ?? '',
+      final optimisticListing = PeerListing(
+        id: listingId,
         type: 'hotel',
         ownerId: user.uid,
         ownerName: profile.fullName,
         ownerPhoto: profile.profileImage,
         title: _titleC.text.trim(),
         description: _descC.text.trim(),
-        photos: imageUrls,
+        photos: existingPhotos,
         pricePerUnit: double.tryParse(_priceC.text.trim()) ?? 0,
         city: _cityC.text.trim(),
         country: _countryC.text.trim().isNotEmpty
@@ -404,41 +395,60 @@ class _CreateHotelListingScreenState
         maxGuests: _maxGuests,
         checkInTime: _checkInTimeC.text.trim(),
         checkOutTime: _checkOutTimeC.text.trim(),
-        amenities: _selectedAmenities,
+        amenities: List<String>.from(_selectedAmenities),
       );
 
-      if (widget.existing != null) {
-        await repo.updateListing(widget.existing!.id, listing.toJson());
-        if (mounted) {
-          Navigator.pop(context, true);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Hotel listing updated!'),
-              behavior: SnackBarBehavior.floating,
+      repo.cacheListing(optimisticListing);
+
+      if (mounted) {
+        final navigator = Navigator.of(context);
+        final messenger = ScaffoldMessenger.of(context);
+        navigator.pop(true);
+        if (!isEditing) {
+          navigator.push(
+            MaterialPageRoute(
+              builder: (_) =>
+                  PeerListingDetailScreen(listing: optimisticListing),
             ),
           );
         }
-      } else {
-        final newId = await repo.createListing(listing);
-        final created = await repo.getListing(newId);
-        if (mounted) {
-          Navigator.pop(context, true);
-          if (created != null) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => PeerListingDetailScreen(listing: created),
-              ),
-            );
-          }
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Hotel listing created!'),
-              behavior: SnackBarBehavior.floating,
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              isEditing ? 'Hotel listing updated!' : 'Hotel listing created!',
             ),
-          );
-        }
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
+
+      unawaited(() async {
+        try {
+          final timestamp = DateTime.now().millisecondsSinceEpoch;
+          final uploadedUrls = await Future.wait(
+            List.generate(imagesToUpload.length, (i) async {
+              final file = File(imagesToUpload[i].path);
+              final storageRef = FirebaseStorage.instance.ref().child(
+                'hotels/${user.uid}/${timestamp}_$i.jpg',
+              );
+              await storageRef.putFile(file);
+              return storageRef.getDownloadURL();
+            }),
+          );
+          final finalPhotos = uploadedUrls.isNotEmpty
+              ? uploadedUrls
+              : existingPhotos;
+          final finalListing = optimisticListing.copyWith(photos: finalPhotos);
+          repo.cacheListing(finalListing);
+          if (isEditing) {
+            await repo.updateListing(listingId, finalListing.toJson());
+          } else {
+            await repo.createListing(finalListing);
+          }
+        } catch (e) {
+          debugPrint('CreateHotelListingScreen save error: $e');
+        }
+      }());
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -449,7 +459,12 @@ class _CreateHotelListingScreenState
         );
       }
     } finally {
-      if (mounted) setState(() => _isSaving = false);
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+          _isUploading = false;
+        });
+      }
     }
   }
 

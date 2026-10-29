@@ -4,26 +4,54 @@ import 'package:flutter/services.dart';
 import 'package:diaspora_nearby/features/travel/models/airport.dart';
 import 'package:diaspora_nearby/features/travel/utils/geo_utils.dart';
 
+List<Airport> _parseAirportsJson(String jsonString) {
+  final List<dynamic> jsonList = jsonDecode(jsonString);
+  return jsonList.map((j) => Airport.fromJson(j)).toList();
+}
+
 class AirportService {
-  List<Airport> _airports = [];
-  bool _isInit = false;
+  static List<Airport> _staticAirports = [];
+  static bool _staticIsInit = false;
+  static Future<void>? _initFuture;
+  static final Map<String, Airport?> _closestCache = {};
+  static final Map<String, Airport?> _closestIntlCache = {};
+
+  List<Airport> get _airports => _staticAirports;
+
+  static String _coordKey(double lat, double lon) =>
+      '${lat.toStringAsFixed(2)},${lon.toStringAsFixed(2)}';
 
   Future<void> init() async {
-    if (_isInit) return;
-    try {
-      final String jsonString = await rootBundle.loadString(
-        'assets/data/airports.json',
-      );
-      final List<dynamic> jsonList = jsonDecode(jsonString);
-      _airports = jsonList.map((j) => Airport.fromJson(j)).toList();
-      _isInit = true;
-    } catch (e) {
-      debugPrint('Error loading airports: \$e');
+    if (_staticIsInit) return;
+    if (_initFuture != null) {
+      await _initFuture;
+      return;
     }
+    _initFuture = () async {
+      try {
+        final String jsonString = await rootBundle.loadString(
+          'assets/data/airports.json',
+        );
+        _staticAirports = await compute(_parseAirportsJson, jsonString);
+        _staticIsInit = true;
+      } catch (e) {
+        debugPrint('Error loading airports: $e');
+      } finally {
+        _initFuture = null;
+      }
+    }();
+    await _initFuture;
   }
+
+  /// Synchronous lookup if already cached
+  Airport? getCachedClosestInternationalAirport(double lat, double lon) =>
+      _closestIntlCache[_coordKey(lat, lon)];
 
   /// Finds the closest airport algorithmically using Haversine distance
   Future<Airport?> getClosestAirport(double lat, double lon) async {
+    final key = _coordKey(lat, lon);
+    if (_closestCache.containsKey(key)) return _closestCache[key];
+
     await init();
     if (_airports.isEmpty) return null;
 
@@ -38,6 +66,7 @@ class AirportService {
       }
     }
 
+    _closestCache[key] = closest;
     return closest;
   }
 
@@ -48,42 +77,42 @@ class AirportService {
     double lat,
     double lon,
   ) async {
+    final key = _coordKey(lat, lon);
+    if (_closestIntlCache.containsKey(key)) return _closestIntlCache[key];
+
     await init();
     if (_airports.isEmpty) return null;
 
-    final largeAirports = _airports
-        .where((a) => a.type == 'large_airport')
-        .toList();
+    Airport? closestLarge;
+    double minLargeDist = double.infinity;
+    Airport? closestAny;
+    double minAnyDist = double.infinity;
 
-    Airport? closest;
-    double minDist = double.infinity;
-
-    for (final airport in largeAirports) {
+    for (final airport in _airports) {
       final dist = GeoUtils.haversine(lat, lon, airport.lat, airport.lon);
-      if (dist < minDist) {
-        minDist = dist;
-        closest = airport;
+      if (dist < minAnyDist) {
+        minAnyDist = dist;
+        closestAny = airport;
+      }
+      if (airport.type == 'large_airport' && dist < minLargeDist) {
+        minLargeDist = dist;
+        closestLarge = airport;
       }
     }
+
+    _closestCache[key] = closestAny;
 
     // If closest large airport is >500km away, fall back to any closest airport
-    if (closest == null || minDist > 500) {
-      final anyClosest = await getClosestAirport(lat, lon);
-      if (anyClosest != null) {
-        final anyDist = GeoUtils.haversine(
-          lat,
-          lon,
-          anyClosest.lat,
-          anyClosest.lon,
-        );
-        // Only use fallback if it's significantly closer
-        if (closest == null || anyDist < minDist * 0.5) {
-          return anyClosest;
-        }
+    if (closestLarge == null || minLargeDist > 500) {
+      if (closestAny != null &&
+          (closestLarge == null || minAnyDist < minLargeDist * 0.5)) {
+        _closestIntlCache[key] = closestAny;
+        return closestAny;
       }
     }
 
-    return closest;
+    _closestIntlCache[key] = closestLarge;
+    return closestLarge;
   }
 
   /// Search airports by query string (IATA code, name, city, or country).

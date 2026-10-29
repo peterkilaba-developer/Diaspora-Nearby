@@ -44,7 +44,13 @@ exports.transferDiaspora = functions
       // All transfers via Smart Wallet (Account Abstraction) — no EOA path.
       const { ethers } = require('ethers');
 
-      const existingRequest = await requestRef.get();
+      const senderUserRef = db.collection('users').doc(fromUserId);
+      const recipientUserRef = db.collection('users').doc(toUserId);
+      const [existingRequest, senderUserSnap, recipientUserSnap] = await db.getAll(
+        requestRef,
+        senderUserRef,
+        recipientUserRef,
+      );
       if (existingRequest.exists) {
         if (existingRequest.data().status === 'succeeded') {
           return { success: true, duplicate: true, txHash: existingRequest.data().txHash || null };
@@ -54,18 +60,6 @@ exports.transferDiaspora = functions
           'This transfer is already being processed or requires support review.',
         );
       }
-      await requestRef.create({
-        userId: fromUserId,
-        toUserId,
-        amount,
-        assetType: type,
-        status: 'processing',
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-
-      // 1. Get Sender and Recipient Info
-      const senderUserRef = db.collection('users').doc(fromUserId);
-      const senderUserSnap = await senderUserRef.get();
 
       if (!senderUserSnap.exists) {
         throw new functions.https.HttpsError('not-found', 'Sender user not found.');
@@ -85,9 +79,6 @@ exports.transferDiaspora = functions
         );
       }
 
-      const recipientUserRef = db.collection('users').doc(toUserId);
-      const recipientUserSnap = await recipientUserRef.get();
-
       if (!recipientUserSnap.exists) {
         throw new functions.https.HttpsError('not-found', 'Recipient user not found.');
       }
@@ -96,6 +87,15 @@ exports.transferDiaspora = functions
       if (!toAddress) {
         throw new functions.https.HttpsError('failed-precondition', 'Recipient does not have a wallet address.');
       }
+
+      await requestRef.create({
+        userId: fromUserId,
+        toUserId,
+        amount,
+        assetType: type,
+        status: 'processing',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
 
       let txHash = null;
       let settlementMode = 'simulated_test';
@@ -140,21 +140,42 @@ exports.transferDiaspora = functions
             await senderUserRef.set({ walletDeploymentPending: false }, { merge: true });
           }
 
-          const SMART_WALLET_ABI = [
-            "function transferToken(address token, address to, uint256 amount) returns (bool)",
-          ];
-
-          const smartWallet = new ethers.Contract(senderWalletAddress, SMART_WALLET_ABI, signer);
+          const { transferTokenFromSmartWallet } = require('./wallet');
           const tokenAmount = ethers.parseEther(amount.toString());
+          const tokenContract = new ethers.Contract(
+            tokenContractAddress,
+            ["function balanceOf(address account) view returns (uint256)"],
+            provider
+          );
+          const senderBalance = await tokenContract.balanceOf(senderWalletAddress);
+          if (senderBalance < tokenAmount) {
+            const formattedBal = ethers.formatUnits(senderBalance, 18);
+            throw new functions.https.HttpsError(
+              'failed-precondition',
+              `Insufficient $DIASPORA balance (available: ${formattedBal}, requested: ${amount}).`
+            );
+          }
 
-          const tx = await smartWallet.transferToken(tokenContractAddress, toAddress, tokenAmount);
-          const receipt = await tx.wait();
+          const receipt = await transferTokenFromSmartWallet({
+            provider,
+            signer,
+            walletAddress: senderWalletAddress,
+            tokenAddress: tokenContractAddress,
+            toAddress,
+            amountWei: tokenAmount,
+          });
           txHash = receipt.hash;
           settlementMode = 'on_chain';
           testReference = null;
           console.log(`[SmartWallet Transfer] Token transfer via smart wallet: ${txHash}`);
         } catch (txError) {
           console.error('[Token Transfer] Blockchain Error:', txError);
+          await requestRef.set({
+            status: 'failed',
+            error: (txError.message || 'unknown').slice(0, 500),
+            failedAt: admin.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true }).catch(() => {});
+          if (txError instanceof functions.https.HttpsError) throw txError;
           throw new functions.https.HttpsError('aborted', 'On-chain transaction failed.', txError.message);
         }
       }

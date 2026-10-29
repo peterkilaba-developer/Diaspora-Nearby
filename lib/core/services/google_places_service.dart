@@ -22,24 +22,44 @@ String get _placesProxyBaseUrl {
 class GooglePlacesService {
   String? _sessionToken;
   final Uuid _uuid = const Uuid();
+  Map<String, String>? _cachedHeaders;
+  DateTime? _cachedHeadersAt;
+  String? _cachedUid;
 
   GooglePlacesService(String apiKey);
 
   Future<Map<String, String>> _proxyHeaders({required bool useProxy}) async {
     if (!useProxy) return const {};
+    final now = DateTime.now();
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    if (_cachedHeaders != null &&
+        _cachedHeadersAt != null &&
+        _cachedUid == currentUid &&
+        now.difference(_cachedHeadersAt!) < const Duration(minutes: 5)) {
+      return _cachedHeaders!;
+    }
+
+    final results = await Future.wait<String?>([
+      FirebaseAppCheck.instance.getToken().catchError((Object e) {
+        debugPrint('[Places] AppCheck token fetch warning: $e');
+        return null;
+      }),
+      (FirebaseAuth.instance.currentUser?.getIdToken() ?? Future.value(null))
+          .catchError((Object e) {
+            debugPrint('[Places] Auth token fetch warning: $e');
+            return null;
+          }),
+    ]);
+
     final headers = <String, String>{};
-    try {
-      final appCheckToken = await FirebaseAppCheck.instance.getToken();
-      if (appCheckToken != null) headers['X-Firebase-AppCheck'] = appCheckToken;
-    } catch (e) {
-      debugPrint('[Places] AppCheck token fetch warning: $e');
-    }
-    try {
-      final idToken = await FirebaseAuth.instance.currentUser?.getIdToken();
-      if (idToken != null) headers['Authorization'] = 'Bearer $idToken';
-    } catch (e) {
-      debugPrint('[Places] Auth token fetch warning: $e');
-    }
+    final appCheckToken = results[0];
+    final idToken = results[1];
+    if (appCheckToken != null) headers['X-Firebase-AppCheck'] = appCheckToken;
+    if (idToken != null) headers['Authorization'] = 'Bearer $idToken';
+
+    _cachedHeaders = headers;
+    _cachedHeadersAt = now;
+    _cachedUid = currentUid;
     return headers;
   }
 
@@ -141,19 +161,12 @@ class GooglePlacesService {
           if (filter == PlaceTypeFilter.VENUES) {
             return predictions.where((p) {
               final t = p.placeTypes ?? [];
-              // Exclude if it is purely a coarse region
-              // We want to keep: establishment, premise, street_address, route, geocode (if precise)
-              // We want to remove: locality, country, administrative_area_level_X, continent, political (if alone)
-
               final isCoarse =
                   t.contains('locality') ||
                   t.contains('administrative_area_level_1') ||
                   t.contains('administrative_area_level_2') ||
                   t.contains('country') ||
                   t.contains('continent');
-
-              // If it's coarse, only keep it if it ALSO has specific types (unlikely)
-              // But usually 'locality' is just 'locality, political'.
               return !isCoarse;
             }).toList();
           }
@@ -177,8 +190,6 @@ class GooglePlacesService {
   }
 
   Future<FetchPlaceResponse?> getPlaceDetails(String placeId) async {
-    // FALLBACK: Use HTTP directly because the native plugin has version conflicts
-    // with the latest Google Places Android SDK on some devices (Samsung S22+ etc).
     return _fetchPlaceHttp(placeId);
   }
 
@@ -187,12 +198,9 @@ class GooglePlacesService {
     try {
       final apiKey = Env.googleMapsApiKey;
       final useProxy = kIsWeb || apiKey.isEmpty;
-      // Pass the session token to link this selection to the search
-      // Request critical fields and rich data
       final fields =
           'formatted_address,geometry,name,place_id,types,address_components,website,international_phone_number,url,rating,user_ratings_total,opening_hours,photos,price_level,editorial_summary';
 
-      // On web (or if client API key is not embedded), use the Cloud Functions proxy
       final Uri url;
       if (useProxy) {
         url = Uri.parse(_placesProxyBaseUrl).replace(
@@ -250,7 +258,6 @@ class GooglePlacesService {
                 .toList();
           }
 
-          // [FIX] Use shared location parsing to ensure correct naming conventions (UK etc)
           String cleanAddress = result['formatted_address'] ?? '';
           final fullAddress = cleanAddress;
 
@@ -263,7 +270,6 @@ class GooglePlacesService {
               final parts = <String>[];
               if (parsed.city != null) parts.add(parsed.city!);
               if (parsed.state != null) parts.add(parsed.state!);
-              // For UK, parsed.country will be "England", "Scotland" etc.
               parts.add(parsed.country);
 
               if (parts.isNotEmpty) {
@@ -275,12 +281,11 @@ class GooglePlacesService {
           final place = Place(
             id: result['place_id'],
             name: result['name'],
-            address: cleanAddress, // Standardized: City, State, Country
-            fullAddress: fullAddress, // [NEW] Full raw address
+            address: cleanAddress,
+            fullAddress: fullAddress,
             latLng: latLng,
             addressComponents: addressComponents,
             types: (result['types'] as List?)?.cast<String>(),
-            // Rich Data Mapping
             websiteUri: result['website'] != null
                 ? Uri.tryParse(result['website'])
                 : null,
@@ -289,12 +294,10 @@ class GooglePlacesService {
                 ? (result['rating'] as num).toDouble()
                 : null,
             userRatingsTotal: result['user_ratings_total'] as int?,
-            openingHours: result['opening_hours'], // Keep as dynamic map
-            photoMetadatas: result['photos'], // Keep as dynamic list
+            openingHours: result['opening_hours'],
+            photoMetadatas: result['photos'],
             priceLevel: result['price_level'] as int?,
             editorialSummary: result['editorial_summary']?['overview'],
-
-            // Defaults for others
             attributions: [],
             businessStatus: null,
             nameLanguageCode: null,
@@ -304,7 +307,6 @@ class GooglePlacesService {
             reviews: null,
           );
 
-          // Clear session token on success to start a fresh session next time
           _clearSessionToken();
 
           return FetchPlaceResponse(place);

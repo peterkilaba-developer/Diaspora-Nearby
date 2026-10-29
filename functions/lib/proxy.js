@@ -177,14 +177,18 @@ exports.placesProxy = functions
     const authorization = String(req.header('Authorization') || '');
     const match = authorization.match(/^Bearer ([A-Za-z0-9._-]+)$/);
     if (!match) throw new Error('missing bearer token');
-    const decodedAuth = await admin.auth().verifyIdToken(match[1]);
+    const token = process.env.FUNCTIONS_EMULATOR !== 'true'
+      ? req.header('X-Firebase-AppCheck')
+      : null;
+    const [decodedAuth, decodedAppCheck] = await Promise.all([
+      admin.auth().verifyIdToken(match[1]),
+      token ? admin.appCheck().verifyToken(token) : Promise.resolve(null),
+    ]);
     uid = decodedAuth.uid;
 
     if (process.env.FUNCTIONS_EMULATOR !== 'true') {
-      const token = req.header('X-Firebase-AppCheck');
       if (token) {
-        const decoded = await admin.appCheck().verifyToken(token);
-        if (!decoded.appId && stableAppCheckSubject(decoded) === 'unknown') {
+        if (!decodedAppCheck.appId && stableAppCheckSubject(decodedAppCheck) === 'unknown') {
           throw new Error('invalid app token');
         }
       } else if (process.env.ENFORCE_APP_CHECK === 'true') {

@@ -99,9 +99,16 @@ class _ShareDestinationScreenState
             padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding),
             child: TextField(
               controller: _commentController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: 'Write a message...',
-                border: OutlineInputBorder(),
+                filled: true,
+                fillColor: theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.3,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
               ),
               maxLines: 3,
             ),
@@ -173,24 +180,16 @@ class _ShareDestinationScreenState
     BuildContext context,
     String destinationType,
   ) async {
-    // TODO: Implement actual sharing logic
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Sharing to this destination is not available yet.'),
-        ),
-      );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Sharing to this destination is not available yet.'),
+      ),
+    );
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/dashboard');
     }
-
-    // Delay pop to show snackbar
-    Future.delayed(const Duration(seconds: 1), () {
-      if (context.mounted) {
-        if (context.canPop()) {
-          context.pop();
-        } else {
-          context.go('/dashboard');
-        }
-      }
-    });
   }
 }

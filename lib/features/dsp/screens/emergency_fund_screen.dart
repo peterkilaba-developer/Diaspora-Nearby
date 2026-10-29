@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:diaspora_nearby/features/dsp/models/emergency_fund_model.dart';
@@ -22,6 +24,33 @@ import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:diaspora_nearby/features/dsp/services/smart_wallet_service.dart';
+
+final _emergencyFundEligibilityProvider =
+    FutureProvider.family<EligibilityResult, String>((ref, userId) {
+      if (userId.isEmpty) {
+        return Future.value(
+          EligibilityResult(
+            isProfileComplete: false,
+            hasEnoughQrScans: false,
+            qrScanCount: 0,
+          ),
+        );
+      }
+      return ref.watch(emergencyFundServiceProvider).checkEligibility(userId);
+    });
+
+final _activeMembersCountProvider = FutureProvider<int>((ref) async {
+  try {
+    final agg = await FirebaseFirestore.instance
+        .collection('emergency_fund_memberships')
+        .where('status', isEqualTo: 'active')
+        .count()
+        .get();
+    return agg.count ?? 0;
+  } catch (_) {
+    return 0;
+  }
+});
 
 class EmergencyFundScreen extends ConsumerStatefulWidget {
   const EmergencyFundScreen({super.key});
@@ -63,12 +92,13 @@ class _EmergencyFundScreenState extends ConsumerState<EmergencyFundScreen>
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authRepositoryProvider).currentUser;
-    final eligibilityFuture = ref
-        .watch(emergencyFundServiceProvider)
-        .checkEligibility(user?.uid ?? '');
+    final uid = user?.uid ?? '';
+    final eligibilityFuture = ref.watch(
+      _emergencyFundEligibilityProvider(uid).future,
+    );
     final membershipStream = ref
         .watch(emergencyFundServiceProvider)
-        .streamMembership(user?.uid ?? '');
+        .streamMembership(uid);
 
     return Scaffold(
       body: NestedScrollView(
@@ -958,6 +988,7 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
 
   bool _isSecretary = false;
   String? _secretaryCommunityId;
+  final Set<String> _optimisticallyHandledProxyRequestIds = {};
 
   @override
   void initState() {
@@ -1556,53 +1587,61 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
   void _designateProxy(Relationship rel) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Designate Proxy'),
-        content: Text(
-          'Are you sure you want to designate ${rel.name} as your proxy?\n\n'
-          'They will receive a notification to accept this role. '
-          'Once accepted, they will be your point of contact and can manage your '
-          'emergency fund on your behalf if you are unable to.',
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          title: const Text('Designate Proxy'),
+          content: Text(
+            'Are you sure you want to designate ${rel.name} as your proxy?\n\n'
+            'They will receive a notification to accept this role. '
+            'Once accepted, they will be your point of contact and can manage your '
+            'emergency fund on your behalf if you are unable to.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Confirm'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Confirm'),
-          ),
-        ],
       ),
     );
 
     if (confirmed == true && mounted) {
       try {
-        // Get the current user's name for the request
-        final myProfile = await ref
-            .read(profileRepositoryProvider)
-            .getUserProfile(widget.userId);
-        final myName = myProfile != null
-            ? '${myProfile.firstName} ${myProfile.lastName}'.trim()
-            : 'Someone';
-
+        final cachedProfile =
+            ref.read(profileRepositoryProvider).getCachedProfile(widget.userId) ??
+            ref.read(userProfileProvider).value;
+        var myName = cachedProfile != null
+            ? '${cachedProfile.firstName} ${cachedProfile.lastName}'.trim()
+            : '';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Proxy request sent to ${rel.name}. Waiting for acceptance.',
+            ),
+          ),
+        );
+        if (myName.isEmpty) {
+          final myProfile = await ref
+              .read(profileRepositoryProvider)
+              .getUserProfile(widget.userId);
+          myName = myProfile != null
+              ? '${myProfile.firstName} ${myProfile.lastName}'.trim()
+              : 'Someone';
+        }
         await ref
             .read(emergencyFundServiceProvider)
             .updateProxy(
               userId: widget.userId,
-              userName: myName,
+              userName: myName.isEmpty ? 'Someone' : myName,
               proxyUserId: rel.id,
             );
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Proxy request sent to ${rel.name}. Waiting for acceptance.',
-              ),
-            ),
-          );
-        }
       } catch (e) {
         debugPrint('âŒ [EmergencyFund] Failed to set proxy: $e');
         if (mounted) {
@@ -1652,7 +1691,12 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
           return const SizedBox.shrink();
         }
 
-        final requests = snapshot.data!.docs;
+        final requests = snapshot.data!.docs
+            .where((d) => !_optimisticallyHandledProxyRequestIds.contains(d.id))
+            .toList();
+        if (requests.isEmpty) {
+          return const SizedBox.shrink();
+        }
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1754,6 +1798,18 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
     required String fromName,
     required bool accepted,
   }) async {
+    setState(() {
+      _optimisticallyHandledProxyRequestIds.add(requestId);
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          accepted
+              ? 'You accepted $fromName\'s proxy request.'
+              : 'You declined $fromName\'s proxy request.',
+        ),
+      ),
+    );
     try {
       await ref
           .read(emergencyFundServiceProvider)
@@ -1762,17 +1818,6 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
             fromUserId: fromUserId,
             accepted: accepted,
           );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              accepted
-                  ? 'You accepted $fromName\'s proxy request.'
-                  : 'You declined $fromName\'s proxy request.',
-            ),
-          ),
-        );
-      }
     } catch (e) {
       debugPrint('âŒ [EmergencyFund] Failed to respond to proxy: $e');
       if (mounted) {
@@ -1815,10 +1860,12 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
   Future<List<Relationship>> _filterFundMembers(
     List<Relationship> family,
   ) async {
+    if (family.isEmpty) return const [];
+    final flags = await Future.wait(family.map((rel) => _isFundMember(rel.id)));
     final results = <Relationship>[];
-    for (final rel in family) {
-      if (await _isFundMember(rel.id)) {
-        results.add(rel);
+    for (int i = 0; i < family.length; i++) {
+      if (flags[i]) {
+        results.add(family[i]);
       }
     }
     return results;
@@ -2094,7 +2141,7 @@ class _SupportRequestFormState extends ConsumerState<_SupportRequestForm> {
   // Google Places for hospital
   String? _hospitalName;
   DateTime? _incidentDate;
-  bool _isLoading = false;
+  final bool _isLoading = false;
 
   @override
   void dispose() {
@@ -2162,19 +2209,24 @@ class _SupportRequestFormState extends ConsumerState<_SupportRequestForm> {
 
   Future<void> _onSubmitTap() async {
     final svc = ref.read(emergencyFundServiceProvider);
-    int activeMembers = 0;
-    try {
-      final agg = await FirebaseFirestore.instance
-          .collection('emergency_fund_memberships')
-          .where('status', isEqualTo: 'active')
-          .count()
-          .get();
-      activeMembers = agg.count ?? 0;
-    } catch (_) {}
+    final activeMembersAsync = ref.read(_activeMembersCountProvider);
+    final balanceAsync = ref.read(tokenBalanceProvider);
 
-    final balanceStr = await ref.read(tokenBalanceProvider.future);
+    final results = await Future.wait<dynamic>([
+      activeMembersAsync.hasValue
+          ? Future.value(activeMembersAsync.value!)
+          : ref.read(_activeMembersCountProvider.future),
+      balanceAsync.hasValue
+          ? Future.value(balanceAsync.value!)
+          : ref.read(tokenBalanceProvider.future),
+      svc.streamMembership(widget.userId).first,
+    ]);
+
+    final activeMembers = results[0] as int;
+    final balanceStr = results[1] as String;
+    final membership = results[2] as EmergencyFundMembership?;
+
     final balance = num.tryParse(balanceStr) ?? 0;
-    final membership = await svc.streamMembership(widget.userId).first;
     final isActive = membership?.status == MembershipStatus.active;
 
     final fundOpen = activeMembers >= _fundOpenThreshold;
@@ -2189,14 +2241,17 @@ class _SupportRequestFormState extends ConsumerState<_SupportRequestForm> {
     if (!mounted) return;
     await showDialog<void>(
       context: context,
-      builder: (ctx) => _SupportLockedDialog(
-        activeMembers: activeMembers,
-        threshold: _fundOpenThreshold,
-        balance: balance,
-        required: _requiredDiaspora,
-        fundOpen: fundOpen,
-        isActiveMember: isActive,
-        hasEnoughBalance: hasEnoughBalance,
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: _SupportLockedDialog(
+          activeMembers: activeMembers,
+          threshold: _fundOpenThreshold,
+          balance: balance,
+          required: _requiredDiaspora,
+          fundOpen: fundOpen,
+          isActiveMember: isActive,
+          hasEnoughBalance: hasEnoughBalance,
+        ),
       ),
     );
   }
@@ -2209,8 +2264,6 @@ class _SupportRequestFormState extends ConsumerState<_SupportRequestForm> {
       ).showSnackBar(const SnackBar(content: Text('Please select a date')));
       return;
     }
-
-    setState(() => _isLoading = true);
 
     // Build description with type-specific fields
     final desc = StringBuffer(_descController.text);
@@ -2227,32 +2280,30 @@ class _SupportRequestFormState extends ConsumerState<_SupportRequestForm> {
       desc.write('\nLawyer/Contact: ${_lawyerController.text}');
     }
 
-    try {
-      await ref
-          .read(emergencyFundServiceProvider)
-          .submitClaim(
-            userId: widget.userId,
-            type: widget.type,
-            beneficiaryName: 'Self',
-            relationship: 'Self',
-            incidentDate: _incidentDate!,
-            description: desc.toString(),
-          );
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$_formTitle submitted successfully')),
+    final incidentDate = _incidentDate!;
+    final description = desc.toString();
+    final title = _formTitle;
+    final svc = ref.read(emergencyFundServiceProvider);
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.pop(context);
+    messenger.showSnackBar(
+      SnackBar(content: Text('$title submitted successfully')),
+    );
+
+    unawaited(() async {
+      try {
+        await svc.submitClaim(
+          userId: widget.userId,
+          type: widget.type,
+          beneficiaryName: 'Self',
+          relationship: 'Self',
+          incidentDate: incidentDate,
+          description: description,
         );
+      } catch (e) {
+        messenger.showSnackBar(SnackBar(content: Text('Error: $e')));
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+    }());
   }
 
   @override
@@ -2551,30 +2602,8 @@ class _SecretaryAnnouncementSheetState
     });
   }
 
-  void _announceForMember(ProfileData member) async {
-    // Guard: Check if the member's status is already 'deceased' via relationships
-    // For the secretary, we check the user doc directly
-    final userDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(member.uid)
-        .get();
-    final deceased = userDoc.data()?['isDeceased'] == true;
-    if (deceased) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'This member has already been announced as passed away.',
-            ),
-          ),
-        );
-      }
-      return;
-    }
-
-    if (!mounted) return;
-
-    // Create a temporary Relationship for the modal
+  void _announceForMember(ProfileData member) {
+    // Create a temporary Relationship for the modal immediately in 0ms
     final tempRel = Relationship(
       id: member.uid ?? '',
       type: 'Community Member',
@@ -2583,11 +2612,34 @@ class _SecretaryAnnouncementSheetState
       status: 'active',
     );
 
-    Navigator.pop(context);
+    final nav = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    nav.pop();
     showDialog(
-      context: context,
-      builder: (context) => BereavementAnnouncementModal(relationship: tempRel),
+      context: nav.context,
+      builder: (context) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: BereavementAnnouncementModal(relationship: tempRel),
+      ),
     );
+
+    unawaited(() async {
+      try {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(member.uid)
+            .get();
+        if (userDoc.data()?['isDeceased'] == true) {
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text(
+                'This member has already been announced as passed away.',
+              ),
+            ),
+          );
+        }
+      } catch (_) {}
+    }());
   }
 
   @override
@@ -2654,8 +2706,12 @@ class _SecretaryAnnouncementSheetState
                       decoration: InputDecoration(
                         hintText: 'Search by name...',
                         prefixIcon: const Icon(LucideIcons.search, size: 18),
+                        filled: true,
+                        fillColor: theme.colorScheme.surfaceContainerHighest
+                            .withValues(alpha: 0.4),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
                         ),
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16,
@@ -2773,7 +2829,7 @@ class _SubmitClaimDialogState extends ConsumerState<_SubmitClaimDialog> {
   final _descController = TextEditingController();
   DateTime? _incidentDate;
   EmergencyType _type = EmergencyType.medical;
-  bool _isLoading = false;
+  final bool _isLoading = false;
 
   @override
   void dispose() {
@@ -2785,31 +2841,29 @@ class _SubmitClaimDialogState extends ConsumerState<_SubmitClaimDialog> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate() || _incidentDate == null) {
-      // ... error
       return;
     }
     final user = ref.read(authRepositoryProvider).currentUser;
     if (user == null) return;
 
-    setState(() => _isLoading = true);
+    final svc = ref.read(emergencyFundServiceProvider);
+    final name = _nameController.text;
+    final relation = _relationController.text;
+    final incidentDate = _incidentDate!;
+    final desc = _descController.text;
+    final type = _type;
+    Navigator.pop(context);
 
-    try {
-      await ref
-          .read(emergencyFundServiceProvider)
-          .submitClaim(
-            userId: user.uid,
-            type: _type,
-            beneficiaryName: _nameController.text,
-            relationship: _relationController.text,
-            incidentDate: _incidentDate!,
-            description: _descController.text,
-          );
-      if (mounted) Navigator.pop(context);
-    } catch (e) {
-      // ... error
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+    unawaited(
+      svc.submitClaim(
+        userId: user.uid,
+        type: type,
+        beneficiaryName: name,
+        relationship: relation,
+        incidentDate: incidentDate,
+        description: desc,
+      ),
+    );
   }
 
   Future<void> _pickDate() async {
@@ -2824,8 +2878,11 @@ class _SubmitClaimDialogState extends ConsumerState<_SubmitClaimDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('New Support Request'),
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+      child: AlertDialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+        title: const Text('New Support Request'),
       content: SingleChildScrollView(
         child: Form(
           key: _formKey,
@@ -2894,6 +2951,7 @@ class _SubmitClaimDialogState extends ConsumerState<_SubmitClaimDialog> {
           child: const Text('Submit'),
         ),
       ],
+    ),
     );
   }
 }
@@ -2984,7 +3042,7 @@ class _DiasporaPaymentCard extends ConsumerStatefulWidget {
 
 class _DiasporaPaymentCardState extends ConsumerState<_DiasporaPaymentCard> {
   Map<String, dynamic>? _quote;
-  bool _loadingQuote = true;
+  bool _loadingQuote = false;
   bool _paying = false;
   String? _error;
   String? _treasuryAddress;
@@ -2992,6 +3050,7 @@ class _DiasporaPaymentCardState extends ConsumerState<_DiasporaPaymentCard> {
   @override
   void initState() {
     super.initState();
+    _quote = _fallbackQuote();
     _loadQuote();
     _loadTreasury();
   }
@@ -3296,22 +3355,30 @@ class _DiasporaPaymentCardState extends ConsumerState<_DiasporaPaymentCard> {
 /// Emergency Fund interest list (visible on the transparency screen).
 /// When the user lacks enough $DIASPORA, tapping registers their interest
 /// and the heart fills + greys to indicate they're queued.
-class _InterestHeartButton extends ConsumerWidget {
+class _InterestHeartButton extends ConsumerStatefulWidget {
   final String userId;
   final bool hasEnough;
   const _InterestHeartButton({required this.userId, required this.hasEnough});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_InterestHeartButton> createState() =>
+      _InterestHeartButtonState();
+}
+
+class _InterestHeartButtonState extends ConsumerState<_InterestHeartButton> {
+  bool _optimisticInterested = false;
+
+  @override
+  Widget build(BuildContext context) {
     final service = ref.read(emergencyFundServiceProvider);
     return StreamBuilder<bool>(
-      stream: service.streamMyInterest(userId),
+      stream: service.streamMyInterest(widget.userId),
       builder: (context, snap) {
-        final interested = snap.data ?? false;
+        final interested = _optimisticInterested || (snap.data ?? false);
         final filled = interested;
         final color = interested
             ? Colors.grey.shade500
-            : (hasEnough ? Colors.redAccent : Colors.redAccent.shade100);
+            : (widget.hasEnough ? Colors.redAccent : Colors.redAccent.shade100);
         return Container(
           decoration: BoxDecoration(
             shape: BoxShape.circle,
@@ -3323,27 +3390,30 @@ class _InterestHeartButton extends ConsumerWidget {
                 : 'I\'m interested in joining',
             onPressed: interested
                 ? null
-                : () async {
-                    try {
-                      await service.expressInterest(userId);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Added to the Emergency Fund interest list.',
+                : () {
+                    setState(() => _optimisticInterested = true);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Added to the Emergency Fund interest list.',
+                        ),
+                      ),
+                    );
+                    final messenger = ScaffoldMessenger.of(context);
+                    unawaited(() async {
+                      try {
+                        await service.expressInterest(widget.userId);
+                      } catch (e) {
+                        if (mounted) {
+                          setState(() => _optimisticInterested = false);
+                          messenger.showSnackBar(
+                            SnackBar(
+                              content: Text('Could not register interest: $e'),
                             ),
-                          ),
-                        );
+                          );
+                        }
                       }
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Could not register interest: $e'),
-                          ),
-                        );
-                      }
-                    }
+                    }());
                   },
             icon: Icon(
               filled ? Icons.favorite : Icons.favorite_border,

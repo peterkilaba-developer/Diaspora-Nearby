@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -45,12 +47,26 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
   @override
   void initState() {
     super.initState();
+    final repo = ref.read(marketplaceRepositoryProvider);
+    final cached = repo.getCachedListing(widget.listingId);
+    if (cached != null) {
+      _listing = cached;
+      _isLoading = false;
+      _isSaved = repo.isListingSavedSync(widget.listingId);
+      _listingChat = ref
+          .read(chatRepositoryProvider)
+          .getCachedListingChat(cached.id);
+    }
+    _viewerCountryCode = ref.read(userProfileProvider).value?.hostCountryCode;
     _loadListing();
-    // Load viewer's country code for currency conversion
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       final profile = ref.read(userProfileProvider).value;
-      if (mounted && profile != null) {
+      if (profile != null && _viewerCountryCode != profile.hostCountryCode) {
         setState(() => _viewerCountryCode = profile.hostCountryCode);
+      }
+      if (_listing != null) {
+        _listingChatFuture ??= _ensureListingChat(_listing!);
       }
     });
   }
@@ -64,25 +80,29 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
   Future<void> _loadListing() async {
     try {
       final repo = ref.read(marketplaceRepositoryProvider);
-      final listing = await repo.getListingById(widget.listingId);
-      if (listing != null) {
-        // Increment view
-        repo.incrementViewCount(widget.listingId);
+      final user = ref.read(authRepositoryProvider).currentUser;
 
-        // Pre-warm listing chat in background for 0ms tap latency
-        final user = ref.read(authRepositoryProvider).currentUser;
+      final listingFuture = repo.getListingById(widget.listingId);
+      final savedFuture = user != null
+          ? repo.isListingSaved(widget.listingId, user.uid)
+          : Future.value(false);
+
+      final listing = await listingFuture;
+      if (listing != null) {
+        unawaited(repo.incrementViewCount(widget.listingId));
+
         if (user != null) {
-          _listingChat = ref
+          _listingChat ??= ref
               .read(chatRepositoryProvider)
               .getCachedListingChat(listing.id);
-          _listingChatFuture = _ensureListingChat(listing);
-          final saved = await repo.isListingSaved(widget.listingId, user.uid);
-          if (mounted) setState(() => _isSaved = saved);
+          _listingChatFuture ??= _ensureListingChat(listing);
         }
       }
+      final saved = await savedFuture;
       if (mounted) {
         setState(() {
-          _listing = listing;
+          if (listing != null) _listing = listing;
+          _isSaved = saved;
           _isLoading = false;
         });
       }
@@ -90,7 +110,6 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
       debugPrint('❌ Error loading listing ${widget.listingId}: $e');
       if (mounted) {
         setState(() {
-          _listing = null;
           _isLoading = false;
         });
       }
@@ -1236,10 +1255,13 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
     final userId = ref.read(authRepositoryProvider).currentUser?.uid;
     final isOwner = listing.sellerId == userId;
 
-    // Fetch live profile for the seller
+    // Fetch live profile for the seller with synchronous cache fallback (0ms)
     final sellerProfileAsync = ref.watch(
       userProfileByIdProvider(listing.sellerId),
     );
+    final profile =
+        sellerProfileAsync.asData?.value ??
+        ref.read(profileRepositoryProvider).getCachedProfile(listing.sellerId);
 
     // Label based on listing type
     final roleLabel = listing.listingType == ListingType.job
@@ -1248,148 +1270,139 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
         ? 'Offered by'
         : 'Sold by';
 
-    return sellerProfileAsync.when(
-      data: (profile) {
-        final displayName =
-            listing.orgName ??
-            (profile != null
-                ? '${profile.firstName} ${profile.lastName}'
-                : listing.sellerName);
-        final photoUrl = profile?.profileImage ?? listing.sellerPhoto;
-        final city = profile?.hostLocation.city ?? listing.sellerCity;
+    final displayName =
+        listing.orgName ??
+        (profile != null
+            ? '${profile.firstName} ${profile.lastName}'
+            : listing.sellerName);
+    final photoUrl =
+        (profile != null && profile.profileImage.isNotEmpty)
+        ? profile.profileImage
+        : listing.sellerPhoto;
+    final city =
+        (profile?.hostLocation.city?.isNotEmpty == true)
+        ? profile!.hostLocation.city!
+        : listing.sellerCity;
 
-        return InkWell(
-          onTap: () => context.push('/profile/${listing.sellerId}'),
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest.withValues(
-                alpha: 0.2,
-              ),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              children: [
-                // Avatar
-                CircleAvatar(
-                  radius: 20,
-                  backgroundImage: photoUrl != null && photoUrl.isNotEmpty
-                      ? CachedNetworkImageProvider(photoUrl)
-                      : null,
-                  backgroundColor: isDark
-                      ? Colors.white.withValues(alpha: 0.06)
-                      : Colors.black.withValues(alpha: 0.04),
-                  child: (photoUrl == null || photoUrl.isEmpty)
-                      ? Icon(
-                          LucideIcons.user,
-                          size: 18,
-                          color: theme.colorScheme.onSurface.withValues(
-                            alpha: 0.5,
-                          ),
-                        )
-                      : null,
-                ),
-                const SizedBox(width: 12),
-                // Name + role label
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        roleLabel,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              displayName,
-                              style: theme.textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          const Icon(
-                            Icons.verified,
-                            size: 14,
-                            color: AppTheme.info,
-                          ),
-                        ],
-                      ),
-                      if (city != null && city.isNotEmpty) ...[
-                        const SizedBox(height: 1),
-                        Row(
-                          children: [
-                            Icon(
-                              LucideIcons.mapPin,
-                              size: 10,
-                              color: theme.hintColor,
-                            ),
-                            const SizedBox(width: 3),
-                            Text(
-                              city,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: theme.hintColor,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                // Quick action button (only for non-owners): In-app listing chat
-                if (!isOwner)
-                  IconButton(
-                    icon: _isOpeningChat
-                        ? SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: theme.colorScheme.primary,
-                            ),
-                          )
-                        : Icon(
-                            LucideIcons.messageCircle,
-                            size: 18,
-                            color: theme.colorScheme.primary,
-                          ),
-                    tooltip: 'Listing Chat',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: _isOpeningChat
-                        ? null
-                        : () => _openListingChat(listing),
-                  ),
-                if (isOwner)
-                  Icon(
-                    LucideIcons.chevronRight,
-                    size: 16,
-                    color: theme.hintColor,
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
-      loading: () => Container(
-        height: 56,
+    return InkWell(
+      onTap: () => context.push('/profile/${listing.sellerId}'),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: theme.colorScheme.surfaceContainerHighest.withValues(
             alpha: 0.2,
           ),
           borderRadius: BorderRadius.circular(16),
         ),
-        child: const Center(child: LinearProgressIndicator()),
+        child: Row(
+          children: [
+            // Avatar
+            CircleAvatar(
+              radius: 20,
+              backgroundImage: photoUrl != null && photoUrl.isNotEmpty
+                  ? CachedNetworkImageProvider(photoUrl)
+                  : null,
+              backgroundColor: isDark
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : Colors.black.withValues(alpha: 0.04),
+              child: (photoUrl == null || photoUrl.isEmpty)
+                  ? Icon(
+                      LucideIcons.user,
+                      size: 18,
+                      color: theme.colorScheme.onSurface.withValues(
+                        alpha: 0.5,
+                      ),
+                    )
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            // Name + role label
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    roleLabel,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          displayName,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(
+                        Icons.verified,
+                        size: 14,
+                        color: AppTheme.info,
+                      ),
+                    ],
+                  ),
+                  if (city != null && city.isNotEmpty) ...[
+                    const SizedBox(height: 1),
+                    Row(
+                      children: [
+                        Icon(
+                          LucideIcons.mapPin,
+                          size: 10,
+                          color: theme.hintColor,
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          city,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: theme.hintColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            // Quick action button (only for non-owners): In-app listing chat
+            if (!isOwner)
+              IconButton(
+                icon: _isOpeningChat
+                    ? SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: theme.colorScheme.primary,
+                        ),
+                      )
+                    : Icon(
+                        LucideIcons.messageCircle,
+                        size: 18,
+                        color: theme.colorScheme.primary,
+                      ),
+                tooltip: 'Listing Chat',
+                visualDensity: VisualDensity.compact,
+                onPressed: _isOpeningChat
+                    ? null
+                    : () => _openListingChat(listing),
+              ),
+            if (isOwner)
+              Icon(
+                LucideIcons.chevronRight,
+                size: 16,
+                color: theme.hintColor,
+              ),
+          ],
+        ),
       ),
-      error: (_, _) => const SizedBox.shrink(),
     );
   }
 
@@ -1541,14 +1554,25 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
     if (user == null) return;
     final repo = ref.read(marketplaceRepositoryProvider);
 
-    setState(() => _isSaved = !_isSaved);
+    final nextSaved = !_isSaved;
+    setState(() => _isSaved = nextSaved);
 
-    if (_isSaved) {
-      await repo.saveListing(listing.id, user.uid);
-      await repo.saveListingToUser(listing.id, user.uid);
-    } else {
-      await repo.unsaveListing(listing.id, user.uid);
-      await repo.unsaveListingFromUser(listing.id, user.uid);
+    try {
+      if (nextSaved) {
+        await Future.wait([
+          repo.saveListing(listing.id, user.uid),
+          repo.saveListingToUser(listing.id, user.uid),
+        ]);
+      } else {
+        await Future.wait([
+          repo.unsaveListing(listing.id, user.uid),
+          repo.unsaveListingFromUser(listing.id, user.uid),
+        ]);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSaved = !nextSaved);
+      }
     }
   }
 
@@ -1617,30 +1641,33 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (modalCtx) => _MarketplaceCheckoutModal(
-        listing: listing,
-        onPayToken: (int tokenAmount) async {
-          Navigator.pop(modalCtx);
-          await _executeTokenCheckout(listing, tokenAmount);
-        },
-        onPayFiat:
-            (
-              double amount,
-              String currency,
-              double convertedAmount,
-              String receiverCurrency,
-              double exchangeRate,
-            ) async {
-              Navigator.pop(modalCtx);
-              await _executeFiatCheckout(
-                listing,
-                amount,
-                currency,
-                convertedAmount,
-                receiverCurrency,
-                exchangeRate,
-              );
-            },
+      builder: (modalCtx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: _MarketplaceCheckoutModal(
+          listing: listing,
+          onPayToken: (int tokenAmount) async {
+            Navigator.pop(modalCtx);
+            await _executeTokenCheckout(listing, tokenAmount);
+          },
+          onPayFiat:
+              (
+                double amount,
+                String currency,
+                double convertedAmount,
+                String receiverCurrency,
+                double exchangeRate,
+              ) async {
+                Navigator.pop(modalCtx);
+                await _executeFiatCheckout(
+                  listing,
+                  amount,
+                  currency,
+                  convertedAmount,
+                  receiverCurrency,
+                  exchangeRate,
+                );
+              },
+        ),
       ),
     );
   }
@@ -1654,55 +1681,67 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
     if (currentUserId == null || !mounted) return;
 
     try {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => const Center(child: CircularProgressIndicator()),
-      );
+      final chatRepo = ref.read(chatRepositoryProvider);
+      final fastChat = _listingChat ?? chatRepo.getCachedListingChat(listing.id);
+      if (fastChat != null && mounted) {
+        context.push('/chats/${fastChat.id}');
+      }
 
-      await ref
-          .read(pointsServiceProvider)
-          .transferAsset(
+      final pointsService = ref.read(pointsServiceProvider);
+      unawaited(() async {
+        try {
+          await pointsService.transferAsset(
             fromUserId: currentUserId,
             toUserId: listing.sellerId,
             amount: amount,
             assetType: 'token',
           );
-
-      if (mounted && Navigator.canPop(context)) {
-        Navigator.pop(context);
-      }
-
-      final chatRepo = ref.read(chatRepositoryProvider);
-      final chat = await (_listingChatFuture ?? _ensureListingChat(listing));
-
-      if (chat != null) {
-        await chatRepo.sendTextMessage(
-          chat.id,
-          'Paid $amount \$DIASPORA for ${listing.title}',
-          type: 'dsp_transfer',
-          metadata: {
-            'amount': amount,
-            'currency': 'DIASPORA',
-            'assetType': 'token',
-            'listingId': listing.id,
-            'listingTitle': listing.title,
-          },
-          participants: chat.participants,
-        );
-        if (mounted) {
-          context.push('/chats/${chat.id}');
+          final chat =
+              fastChat ??
+              await (_listingChatFuture ?? _ensureListingChat(listing));
+          if (chat != null) {
+            await chatRepo.sendTextMessage(
+              chat.id,
+              'Paid $amount \$DIASPORA for ${listing.title}',
+              type: 'dsp_transfer',
+              metadata: {
+                'amount': amount,
+                'currency': 'DIASPORA',
+                'assetType': 'token',
+                'listingId': listing.id,
+                'listingTitle': listing.title,
+              },
+              participants: chat.participants,
+            );
+            if (fastChat == null && mounted) {
+              context.push('/chats/${chat.id}');
+            }
+          }
+        } catch (e) {
+          debugPrint('CHECKOUT_TOKEN_ERROR: $e');
+          if (mounted) {
+            final cleanMsg = e
+                .toString()
+                .split('\n')
+                .first
+                .replaceFirst(RegExp(r'^\[firebase_functions/[^\]]+\]\s*'), '');
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text('Checkout failed: $cleanMsg')));
+          }
         }
-      }
+      }());
     } catch (e) {
-      if (mounted && Navigator.canPop(context)) {
-        Navigator.pop(context);
-      }
       debugPrint('CHECKOUT_TOKEN_ERROR: $e');
       if (mounted) {
+        final cleanMsg = e
+            .toString()
+            .split('\n')
+            .first
+            .replaceFirst(RegExp(r'^\[firebase_functions/[^\]]+\]\s*'), '');
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Checkout failed: $e')));
+        ).showSnackBar(SnackBar(content: Text('Checkout failed: $cleanMsg')));
       }
     }
   }
@@ -1721,52 +1760,77 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
 
     try {
       final chatRepo = ref.read(chatRepositoryProvider);
-      final chat = await (_listingChatFuture ?? _ensureListingChat(listing));
+      final formattedAmount = CurrencyHelper.formatFiatAmount(amount);
+      final formattedConverted = CurrencyHelper.formatFiatAmount(
+        convertedAmount,
+      );
+      final caption = currency != receiverCurrency && convertedAmount > 0
+          ? 'Paid $formattedAmount $currency (≈ $formattedConverted $receiverCurrency) for ${listing.title}'
+          : 'Paid $formattedAmount $currency for ${listing.title}';
 
-      if (chat != null) {
-        final formattedAmount = CurrencyHelper.formatFiatAmount(amount);
-        final formattedConverted = CurrencyHelper.formatFiatAmount(
-          convertedAmount,
-        );
-        final caption = currency != receiverCurrency && convertedAmount > 0
-            ? 'Paid $formattedAmount $currency (≈ $formattedConverted $receiverCurrency) for ${listing.title}'
-            : 'Paid $formattedAmount $currency for ${listing.title}';
-
-        await chatRepo.sendTextMessage(
-          chat.id,
-          caption,
-          type: 'money-transfer',
-          metadata: {
-            'amount': amount,
-            'currency': currency,
-            'convertedAmount': convertedAmount,
-            'convertedCurrency': receiverCurrency,
-            'exchangeRate': exchangeRate,
-            'deliveryMethod': 'Mobile Money / Bank Settlement',
-            'fee': 0.0,
-            'status': 'Completed',
-            'assetType': 'fiat',
-            'recipientId': listing.sellerId,
-            'listingId': listing.id,
-            'listingTitle': listing.title,
-            'timestamp': DateTime.now().millisecondsSinceEpoch,
-          },
-          participants: chat.participants,
-        );
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Payment of $formattedAmount $currency sent for ${listing.title}!',
-              ),
-              backgroundColor: Colors.green.shade700,
-              behavior: SnackBarBehavior.floating,
+      final fastChat = _listingChat ?? chatRepo.getCachedListingChat(listing.id);
+      if (fastChat != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Payment of $formattedAmount $currency sent for ${listing.title}!',
             ),
-          );
-          context.push('/chats/${chat.id}');
-        }
+            backgroundColor: Colors.green.shade700,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        context.push('/chats/${fastChat.id}');
       }
+
+      unawaited(() async {
+        try {
+          final chat =
+              fastChat ??
+              await (_listingChatFuture ?? _ensureListingChat(listing));
+          if (chat != null) {
+            await chatRepo.sendTextMessage(
+              chat.id,
+              caption,
+              type: 'money-transfer',
+              metadata: {
+                'amount': amount,
+                'currency': currency,
+                'convertedAmount': convertedAmount,
+                'convertedCurrency': receiverCurrency,
+                'exchangeRate': exchangeRate,
+                'deliveryMethod': 'Mobile Money / Bank Settlement',
+                'fee': 0.0,
+                'status': 'Completed',
+                'assetType': 'fiat',
+                'recipientId': listing.sellerId,
+                'listingId': listing.id,
+                'listingTitle': listing.title,
+                'timestamp': DateTime.now().millisecondsSinceEpoch,
+              },
+              participants: chat.participants,
+            );
+            if (fastChat == null && mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Payment of $formattedAmount $currency sent for ${listing.title}!',
+                  ),
+                  backgroundColor: Colors.green.shade700,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+              context.push('/chats/${chat.id}');
+            }
+          }
+        } catch (e) {
+          debugPrint('CHECKOUT_FIAT_ERROR: $e');
+          if (mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text('Checkout failed: $e')));
+          }
+        }
+      }());
     } catch (e) {
       debugPrint('CHECKOUT_FIAT_ERROR: $e');
       if (mounted) {
@@ -1828,49 +1892,72 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
         context.push('/marketplace/create', extra: listing);
         break;
       case 'pause':
-        await repo.updateListingStatus(listing.id, ListingStatus.paused);
-        await _notifyShopChatStatus(listing, 'Listing paused by seller');
-        _loadListing();
+        final paused = listing.copyWith(status: ListingStatus.paused);
+        setState(() => _listing = paused);
+        repo.cacheListing(paused);
+        unawaited(() async {
+          await repo.updateListingStatus(listing.id, ListingStatus.paused);
+          await _notifyShopChatStatus(listing, 'Listing paused by seller');
+        }());
         break;
       case 'activate':
-        await repo.updateListingStatus(listing.id, ListingStatus.active);
-        await _notifyShopChatStatus(listing, 'Listing is now available again');
-        _loadListing();
+        final active = listing.copyWith(status: ListingStatus.active);
+        setState(() => _listing = active);
+        repo.cacheListing(active);
+        unawaited(() async {
+          await repo.updateListingStatus(listing.id, ListingStatus.active);
+          await _notifyShopChatStatus(
+            listing,
+            'Listing is now available again',
+          );
+        }());
         break;
       case 'sold':
-        await repo.updateListingStatus(listing.id, ListingStatus.sold);
-        await _notifyShopChatStatus(
-          listing,
-          listing.listingType == ListingType.job
-              ? 'Position marked as Filled'
-              : 'Item marked as Sold',
-        );
-        _loadListing();
+        final sold = listing.copyWith(status: ListingStatus.sold);
+        setState(() => _listing = sold);
+        repo.cacheListing(sold);
+        unawaited(() async {
+          await repo.updateListingStatus(listing.id, ListingStatus.sold);
+          await _notifyShopChatStatus(
+            listing,
+            listing.listingType == ListingType.job
+                ? 'Position marked as Filled'
+                : 'Item marked as Sold',
+          );
+        }());
         break;
       case 'delete':
         final confirmed = await showDialog<bool>(
           context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Delete Listing?'),
-            content: const Text('This action cannot be undone.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel'),
+          builder: (ctx) => BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: AlertDialog(
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 24,
               ),
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text(
-                  'Delete',
-                  style: TextStyle(color: AppTheme.error),
+              title: const Text('Delete Listing?'),
+              content: const Text('This action cannot be undone.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel'),
                 ),
-              ),
-            ],
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text(
+                    'Delete',
+                    style: TextStyle(color: AppTheme.error),
+                  ),
+                ),
+              ],
+            ),
           ),
         );
         if (confirmed == true && mounted) {
-          await repo.deleteListing(listing.id);
-          if (mounted) context.pop();
+          repo.removeCachedListing(listing.id);
+          context.pop();
+          unawaited(repo.deleteListing(listing.id));
         }
     }
   }
@@ -1902,46 +1989,57 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
       context: context,
       builder: (ctx) {
         final reasonController = TextEditingController();
-        return AlertDialog(
-          title: const Text('Report Listing'),
-          content: TextField(
-            controller: reasonController,
-            decoration: const InputDecoration(
-              hintText: 'Why are you reporting this?',
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: AlertDialog(
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 24,
             ),
-            maxLines: 3,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
+            title: const Text('Report Listing'),
+            content: TextField(
+              controller: reasonController,
+              decoration: const InputDecoration(
+                hintText: 'Why are you reporting this?',
+                border: InputBorder.none,
+              ),
+              maxLines: 3,
             ),
-            TextButton(
-              onPressed: () async {
-                final messenger = ScaffoldMessenger.of(context);
-                final user = ref.read(authRepositoryProvider).currentUser;
-                if (user != null) {
-                  await ref
-                      .read(marketplaceRepositoryProvider)
-                      .reportListing(
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  final reason = reasonController.text;
+                  final messenger = ScaffoldMessenger.of(context);
+                  final user = ref.read(authRepositoryProvider).currentUser;
+                  final repo = ref.read(marketplaceRepositoryProvider);
+                  if (ctx.mounted) {
+                    Navigator.pop(ctx);
+                  }
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('Report submitted')),
+                  );
+                  if (user != null) {
+                    unawaited(
+                      repo.reportListing(
                         listing.id,
                         user.uid,
-                        reasonController.text,
-                      );
-                }
-                if (ctx.mounted) {
-                  Navigator.pop(ctx);
-                }
-                messenger.showSnackBar(
-                  const SnackBar(content: Text('Report submitted')),
-                );
-              },
-              child: const Text(
-                'Submit',
-                style: TextStyle(color: AppTheme.error),
+                        reason,
+                        sellerId: listing.sellerId,
+                      ),
+                    );
+                  }
+                },
+                child: const Text(
+                  'Submit',
+                  style: TextStyle(color: AppTheme.error),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );

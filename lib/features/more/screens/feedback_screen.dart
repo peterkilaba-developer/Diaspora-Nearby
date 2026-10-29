@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -13,34 +14,31 @@ class FeedbackScreen extends ConsumerStatefulWidget {
 
 class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
   final _contentController = TextEditingController();
-  bool _isSubmitting = false;
 
-  Future<void> _submitFeedback() async {
+  @override
+  void dispose() {
+    _contentController.dispose();
+    super.dispose();
+  }
+
+  void _submitFeedback() {
     final content = _contentController.text.trim();
     if (content.isEmpty) return;
 
-    setState(() => _isSubmitting = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Thank you for your feedback!')),
+    );
+    Navigator.pop(context);
 
-    try {
-      await FirebaseFunctions.instance.httpsCallable('submitFeedback').call({
-        'content': content,
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Thank you for your feedback!')),
-        );
-        if (mounted) Navigator.pop(context);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error sending feedback: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _isSubmitting = false);
-    }
+    unawaited(
+      FirebaseFunctions.instance
+          .httpsCallable('submitFeedback')
+          .call<void>({'content': content})
+          .then<void>((_) {})
+          .catchError((Object e) {
+            debugPrint('Error sending feedback: $e');
+          }),
+    );
   }
 
   @override
@@ -94,6 +92,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                         hintText: 'Type your feedback here...',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
                         ),
                         filled: true,
                         fillColor: theme.colorScheme.surface,
@@ -101,7 +100,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                     ),
                     const SizedBox(height: 24),
                     ElevatedButton(
-                      onPressed: _isSubmitting ? null : _submitFeedback,
+                      onPressed: _submitFeedback,
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
@@ -110,16 +109,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                         backgroundColor: theme.colorScheme.primary,
                         foregroundColor: theme.colorScheme.onPrimary,
                       ),
-                      child: _isSubmitting
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text('Submit Feedback'),
+                      child: const Text('Submit Feedback'),
                     ),
                   ],
                 ),

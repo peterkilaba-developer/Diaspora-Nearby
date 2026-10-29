@@ -24,8 +24,6 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
   final _phoneController = TextEditingController();
   final _searchController = TextEditingController();
 
-  /// Feature flag: controls whether standard SMS option is displayed.
-  /// Set to false to keep only WhatsApp sign-in visible while preserving SMS code.
   static const bool _showSmsOption = false;
 
   late country_data.Country _selectedCountry;
@@ -33,12 +31,8 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
   @override
   void initState() {
     super.initState();
-    // Instant guess from device locale list so the UI never shows a blank flag.
     _selectedCountry = _detectCountryFromLocales();
-    // Upgrade to SIM/network country async — more reliable when UI language
-    // differs from physical location (e.g. PH user with en-US phone language).
     _refineCountryFromSim();
-    // Async phone number hint
     _tryGetPhoneNumber();
   }
 
@@ -48,8 +42,6 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
       if (iso == null || iso.isEmpty) return;
       final detected = country_data.getCountryByCode(iso.toUpperCase());
       if (detected == null || !mounted) return;
-      // If phone controller is empty or if current country was incorrectly defaulted,
-      // allow SIM country to refine it cleanly.
       if (_phoneController.text.isEmpty ||
           (_selectedCountry.code != detected.code &&
               _selectedCountry.dialCode == detected.dialCode)) {
@@ -67,15 +59,11 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
       if (mobileNumber != null && mobileNumber.isNotEmpty) {
         if (!mounted) return;
 
-        // Mobile number usually comes with country code, e.g., +15551234567
-        // We need to parse this to find the matching country
         final cleanNumber = mobileNumber.replaceAll(RegExp(r'[^\d+]'), '');
 
         country_data.Country? bestMatch;
         String? remainingNumber;
 
-        // 1. Primary: Use PhoneNumber.parse (Google libphonenumber metadata)
-        // to accurately resolve area codes (e.g. +1 602 -> US, +1 787 -> PR, +1 416 -> CA)
         try {
           final parsed = PhoneNumber.parse(cleanNumber);
           final iso = parsed.isoCode.name.toUpperCase();
@@ -91,7 +79,6 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
           debugPrint('PhoneNumber.parse hint fallback: $e');
         }
 
-        // 2. Fallback: Sort by dial code length descending, prioritizing US for +1
         if (bestMatch == null) {
           final sortedCountries =
               List<country_data.Country>.from(country_data.countries)..sort((
@@ -100,7 +87,6 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
               ) {
                 final cmp = b.dialCode.length.compareTo(a.dialCode.length);
                 if (cmp != 0) return cmp;
-                // Always prioritize United States over overseas territories for +1
                 if (a.code == 'US') return -1;
                 if (b.code == 'US') return 1;
                 return a.name.compareTo(b.name);
@@ -120,11 +106,6 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
             _selectedCountry = bestMatch!;
             _phoneController.text = remainingNumber!;
           });
-          debugPrint(
-            '✅ Auto-filled phone: ${bestMatch.dialCode} $remainingNumber (${bestMatch.name})',
-          );
-        } else {
-          debugPrint('⚠️ Could not parse country from: $mobileNumber');
         }
       }
     } catch (e) {
@@ -132,11 +113,6 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
     }
   }
 
-  /// Synchronously detect country from the device's preferred-locale list.
-  /// Walks every locale Android/iOS reports (not just the primary) so a user
-  /// whose UI language is "English (US)" but who has "en-PH" in their
-  /// preferred languages still resolves to PH. SIM/network country (more
-  /// reliable) is layered on top async by [_refineCountryFromSim].
   country_data.Country _detectCountryFromLocales() {
     try {
       for (final locale in ui.PlatformDispatcher.instance.locales) {
@@ -144,7 +120,6 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
         if (code == null || code.isEmpty) continue;
         final detected = country_data.getCountryByCode(code);
         if (detected != null) {
-          debugPrint('Country from locales[$code]: ${detected.name}');
           return detected;
         }
       }
@@ -166,19 +141,25 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => CountryPickerSheet(
-        selectedCountry: _selectedCountry,
-        showDialCode: true,
-        onCountrySelected: (country) {
-          setState(() {
-            _selectedCountry = country;
-          });
-          Navigator.pop(context);
-        },
+      backgroundColor: Colors.transparent,
+      builder: (context) => BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: CountryPickerSheet(
+            selectedCountry: _selectedCountry,
+            showDialCode: true,
+            onCountrySelected: (country) {
+              setState(() {
+                _selectedCountry = country;
+              });
+              Navigator.pop(context);
+            },
+          ),
+        ),
       ),
     );
   }
@@ -191,13 +172,6 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
       return null;
     }
 
-    // Combine dial code + user-entered digits, then run through libphonenumber
-    // to validate against country metadata.
-    // Strip any leading trunk prefix "0" first — many countries (TZ, NG, KE,
-    // GH, ZA, UK, DE, …) use a leading 0 in national format (e.g. 0712345678)
-    // which must NOT appear in E.164.  phone_numbers_parser only removes the
-    // trunk prefix when the input has no leading "+", but we are about to
-    // prepend the dial code ourselves, so we must strip it here instead.
     final digits = _phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
     final rawDialCodeDigits = _selectedCountry.dialCode.replaceAll(
       RegExp(r'\D'),
@@ -261,7 +235,6 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
       canPop: !kIsWeb,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) {
-          // On web, if keyboard is open, unfocus to dismiss it cleanly
           final currentFocus = FocusManager.instance.primaryFocus;
           if (currentFocus != null) {
             currentFocus.unfocus();
@@ -287,7 +260,6 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                   children: [
                     const SizedBox(height: 40),
 
-                    // Logo - Using the actual app logo with sage green tint
                     Center(
                       child: Image.asset(
                         'assets/icons/logo-transparent-128.png',
@@ -316,7 +288,6 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                     ),
                     const SizedBox(height: 24),
 
-                    // Title
                     Text(
                       'Welcome to Diaspora Nearby',
                       style: theme.textTheme.headlineSmall?.copyWith(
@@ -327,7 +298,6 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                     ),
                     const SizedBox(height: 12),
 
-                    // Subtitle
                     Text(
                       'Discover and Connect with people from your home country nearby or across the world',
                       style: theme.textTheme.bodyMedium?.copyWith(
@@ -338,7 +308,6 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                     ),
                     const SizedBox(height: 32),
 
-                    // Phone input container
                     Container(
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
@@ -346,7 +315,6 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                       ),
                       child: Row(
                         children: [
-                          // Country Code Picker
                           InkWell(
                             onTap: _showCountryPicker,
                             borderRadius: const BorderRadius.horizontal(
@@ -383,7 +351,6 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                             color: theme.colorScheme.outline,
                           ),
                           const SizedBox(width: 12),
-                          // Phone Number Input
                           Expanded(
                             child: TextField(
                               controller: _phoneController,
@@ -417,11 +384,9 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
 
                     const Spacer(),
 
-                    // D-C-B Circles
                     _buildDiscoverConnectBelong(),
                     const SizedBox(height: 28),
 
-                    // Standard SMS Button (preserved in code, hidden while _showSmsOption is false)
                     if (_showSmsOption) ...[
                       SizedBox(
                         height: 56,
@@ -437,83 +402,32 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                             disabledBackgroundColor: theme.colorScheme.primary
                                 .withValues(alpha: 0.5),
                           ),
-                          child: isLoading
-                              ? const Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    SizedBox(
-                                      height: 20,
-                                      width: 20,
-                                      child: CircularProgressIndicator(
-                                        color: Colors.white,
-                                        strokeWidth: 2,
-                                      ),
-                                    ),
-                                    SizedBox(width: 12),
-                                    Flexible(
-                                      child: Text(
-                                        'Securing connection...',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              : const Text(
-                                  'Send Verification Code',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
+                          child: const Text(
+                            'Send Verification Code',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 16),
                     ],
 
-                    // Primary WhatsApp Sign-In Button
                     SizedBox(
                       height: 56,
                       child: ElevatedButton.icon(
                         onPressed: isLoading ? null : _submitWhatsApp,
                         icon: const Icon(LucideIcons.messageCircle, size: 22),
-                        label: isLoading
-                            ? const Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 2,
-                                    ),
-                                  ),
-                                  SizedBox(width: 12),
-                                  Flexible(
-                                    child: Text(
-                                      'Connecting WhatsApp...',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              )
-                            : const Text(
-                                'Sign in with WhatsApp',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                        label: Text(
+                          isLoading
+                              ? 'Connecting WhatsApp...'
+                              : 'Sign in with WhatsApp',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF25D366),
                           foregroundColor: Colors.white,
@@ -532,7 +446,6 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Terms of Service & Privacy Policy
                     RichText(
                       textAlign: TextAlign.center,
                       text: TextSpan(

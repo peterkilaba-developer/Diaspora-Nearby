@@ -37,7 +37,6 @@ class _OrganizationInfoScreenState
   Map<String, dynamic>? _orgData;
   bool _isLoading = true;
   bool _isFollowing = false;
-  bool _isFollowLoading = false;
   List<ProfileData> _participants = [];
   List<ProfileData> _admins = [];
   List<ProfileData> _followers = [];
@@ -47,11 +46,29 @@ class _OrganizationInfoScreenState
   @override
   void initState() {
     super.initState();
+    _seedInitialState();
     _loadData();
   }
 
+  void _seedInitialState() {
+    String orgId = widget.chatId;
+    if (orgId.startsWith('org_')) {
+      orgId = orgId.substring(4);
+    }
+    final cachedChat = ref
+        .read(chatRepositoryProvider)
+        .getCachedChat(widget.chatId);
+    _orgData = {
+      'id': orgId,
+      'businessName': widget.orgName,
+      'profileImage': widget.orgImage ?? cachedChat?.photoUrl,
+      'description': cachedChat?.description,
+      if (cachedChat?.metadata != null) ...cachedChat!.metadata!,
+    };
+    _isLoading = false;
+  }
+
   Future<void> _loadData() async {
-    setState(() => _isLoading = true);
     try {
       final repo = ref.read(organizationRepositoryProvider);
 
@@ -61,35 +78,58 @@ class _OrganizationInfoScreenState
         orgId = orgId.substring(4);
       }
 
-      final data = await repo.getOrganization(orgId);
+      // Parallelize org fetch, muteDoc fetch, and chatDoc fetch
+      final results = await Future.wait([
+        repo.getOrganization(orgId),
+        FirebaseFirestore.instance
+            .collection('users')
+            .doc(widget.currentUserId)
+            .collection('userChats')
+            .doc(widget.chatId)
+            .get()
+            .then<DocumentSnapshot<Map<String, dynamic>>?>((doc) => doc)
+            .catchError((e) {
+              debugPrint('Error fetching mute status: $e');
+              return null;
+            }),
+        FirebaseFirestore.instance
+            .collection('chats')
+            .doc(widget.chatId)
+            .get()
+            .then<DocumentSnapshot<Map<String, dynamic>>?>((doc) => doc)
+            .catchError((e) {
+              debugPrint('Error fetching chat doc: $e');
+              return null;
+            }),
+      ]);
+
+      final data = results[0] as Map<String, dynamic>?;
+      final muteDoc = results[1] as DocumentSnapshot<Map<String, dynamic>>?;
+      final chatDoc = results[2] as DocumentSnapshot<Map<String, dynamic>>?;
+
       if (data != null) {
-        _orgData = data;
-        _isFollowing = List<String>.from(
-          data['followers'] ?? [],
-        ).contains(widget.currentUserId);
-        _isAdmin =
-            List<String>.from(
-              data['admins'] ?? [],
-            ).contains(widget.currentUserId) ||
-            data['superAdminId'] == widget.currentUserId;
-
-        // Load Participants and Admins details
-        await _loadMembers(data);
-
-        // [NEW] Fetch Mute Status
-        try {
-          final muteDoc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(widget.currentUserId)
-              .collection('userChats')
-              .doc(widget.chatId)
-              .get();
-          if (muteDoc.exists && muteDoc.data()?['muted'] == true) {
-            _isMuted = true;
-          }
-        } catch (e) {
-          debugPrint('Error fetching mute status: $e');
+        if (muteDoc != null &&
+            muteDoc.exists &&
+            muteDoc.data()?['muted'] == true) {
+          _isMuted = true;
         }
+        if (mounted) {
+          setState(() {
+            _orgData = data;
+            _isFollowing = List<String>.from(
+              data['followers'] ?? [],
+            ).contains(widget.currentUserId);
+            _isAdmin =
+                List<String>.from(
+                  data['admins'] ?? [],
+                ).contains(widget.currentUserId) ||
+                data['superAdminId'] == widget.currentUserId;
+            _isLoading = false;
+          });
+        }
+
+        // Load Participants and Admins details in parallel
+        await _loadMembers(data, chatDoc);
       }
     } catch (e) {
       debugPrint('Error loading organization info: $e');
@@ -98,7 +138,10 @@ class _OrganizationInfoScreenState
     }
   }
 
-  Future<void> _loadMembers(Map<String, dynamic> orgData) async {
+  Future<void> _loadMembers(
+    Map<String, dynamic> orgData,
+    DocumentSnapshot<Map<String, dynamic>>? chatDoc,
+  ) async {
     final profileRepo = ref.read(profileRepositoryProvider);
 
     // 1. Helper to get clean IDs
@@ -111,13 +154,8 @@ class _OrganizationInfoScreenState
       adminIds.insert(0, superAdminId);
     }
 
-    // Fetch Participants from Firestore
-    final chatDoc = await FirebaseFirestore.instance
-        .collection('chats')
-        .doc(widget.chatId)
-        .get();
     List<String> chatParticipantIds = [];
-    if (chatDoc.exists) {
+    if (chatDoc != null && chatDoc.exists) {
       chatParticipantIds = List<String>.from(
         chatDoc.data()?['participants'] ?? [],
       );
@@ -156,8 +194,14 @@ class _OrganizationInfoScreenState
       }
     }
 
-    // Fetch Profiles
-    final adminProfiles = await profileRepo.getProfiles(finalAdminIds);
+    // Fetch Profiles in parallel
+    final profileLists = await Future.wait([
+      profileRepo.getProfiles(finalAdminIds),
+      profileRepo.getProfiles(finalParticipantIds),
+      profileRepo.getProfiles(finalFollowerIds),
+    ]);
+
+    final adminProfiles = profileLists[0];
     // Sort admins to match ID order (Super admin first)
     adminProfiles.sort(
       (a, b) => finalAdminIds
@@ -165,10 +209,8 @@ class _OrganizationInfoScreenState
           .compareTo(finalAdminIds.indexOf(b.uid ?? '')),
     );
 
-    final participantProfiles = await profileRepo.getProfiles(
-      finalParticipantIds,
-    );
-    final followerProfiles = await profileRepo.getProfiles(finalFollowerIds);
+    final participantProfiles = profileLists[1];
+    final followerProfiles = profileLists[2];
 
     if (mounted) {
       setState(() {
@@ -264,29 +306,30 @@ class _OrganizationInfoScreenState
 
   Future<void> _toggleFollow() async {
     if (_orgData == null) return;
-    setState(() => _isFollowLoading = true);
+    final repo = ref.read(organizationRepositoryProvider);
+    final orgId = _orgData!['id'];
+    final wasFollowing = _isFollowing;
+
+    // Optimistic 0ms update
+    setState(() {
+      _isFollowing = !wasFollowing;
+    });
 
     try {
-      final repo = ref.read(organizationRepositoryProvider);
-      final orgId = _orgData!['id'];
-
-      if (_isFollowing) {
+      if (wasFollowing) {
         await repo.unfollowOrganization(orgId, widget.currentUserId);
       } else {
         await repo.followOrganization(orgId, widget.currentUserId);
       }
-
-      setState(() {
-        _isFollowing = !_isFollowing;
-      });
     } catch (e) {
       if (mounted) {
+        setState(() {
+          _isFollowing = wasFollowing;
+        });
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
-    } finally {
-      if (mounted) setState(() => _isFollowLoading = false);
     }
   }
 
@@ -364,6 +407,11 @@ class _OrganizationInfoScreenState
                               icon: const Icon(LucideIcons.shieldCheck),
                               label: const Text('Chamber Member'),
                               style: OutlinedButton.styleFrom(
+                                side: BorderSide.none,
+                                backgroundColor: theme
+                                    .colorScheme
+                                    .surfaceContainerHighest
+                                    .withValues(alpha: 0.3),
                                 padding: const EdgeInsets.symmetric(
                                   vertical: 12,
                                 ),
@@ -373,28 +421,23 @@ class _OrganizationInfoScreenState
                               ),
                             )
                           : OutlinedButton.icon(
-                              onPressed: _isFollowLoading
-                                  ? null
-                                  : _toggleFollow,
-                              icon: _isFollowLoading
-                                  ? const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : Icon(
-                                      _isFollowing
-                                          ? LucideIcons.check
-                                          : LucideIcons.plus,
-                                    ),
+                              onPressed: _toggleFollow,
+                              icon: Icon(
+                                _isFollowing
+                                    ? LucideIcons.check
+                                    : LucideIcons.plus,
+                              ),
                               label: Text(
                                 _isFollowing
                                     ? 'Following'
                                     : 'Follow Organization',
                               ),
                               style: OutlinedButton.styleFrom(
+                                side: BorderSide.none,
+                                backgroundColor: theme
+                                    .colorScheme
+                                    .surfaceContainerHighest
+                                    .withValues(alpha: 0.3),
                                 padding: const EdgeInsets.symmetric(
                                   vertical: 12,
                                 ),

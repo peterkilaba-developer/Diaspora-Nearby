@@ -32,10 +32,9 @@ class LoyaltyRewardsScreen extends ConsumerWidget {
       body: SafeArea(
         top: false,
         bottom: true,
-        child: userPointsAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(child: Text('Error: $e')),
-          data: (userPoints) {
+        child: Builder(
+          builder: (context) {
+            final userPoints = userPointsAsync.value;
             // Extract travel-specific lifetime earnings
             final earnings = userPoints?.lifetimeEarnings ?? <String, int>{};
             final flightBookings = earnings['travel_booking_flight'] ?? 0;

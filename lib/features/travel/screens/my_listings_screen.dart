@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -28,13 +29,28 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
   @override
   void initState() {
     super.initState();
+    final uid = ref.read(authRepositoryProvider).currentUser?.uid;
+    if (uid != null) {
+      final cached = ref
+          .read(peerListingRepositoryProvider)
+          .getCachedMyListings(uid, type: widget.filterType);
+      if (cached.isNotEmpty) {
+        _listings = cached;
+        _isLoading = false;
+      }
+    }
     _load();
   }
 
   Future<void> _load() async {
-    setState(() => _isLoading = true);
+    if (_listings == null || _listings!.isEmpty) {
+      setState(() => _isLoading = true);
+    }
     final uid = ref.read(authRepositoryProvider).currentUser?.uid;
-    if (uid == null) return;
+    if (uid == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
 
     final repo = ref.read(peerListingRepositoryProvider);
     final all = await repo.getMyListings(uid);
@@ -50,9 +66,30 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
 
   Future<void> _toggleStatus(PeerListing listing) async {
     final repo = ref.read(peerListingRepositoryProvider);
+    final prevStatus = listing.status;
     final newStatus = listing.status == 'active' ? 'paused' : 'active';
-    await repo.toggleListingStatus(listing.id, newStatus);
-    _load();
+    setState(() {
+      if (_listings != null) {
+        _listings = [
+          for (final l in _listings!)
+            if (l.id == listing.id) l.copyWith(status: newStatus) else l,
+        ];
+      }
+    });
+    unawaited(
+      repo.toggleListingStatus(listing.id, newStatus).catchError((_) {
+        if (mounted) {
+          setState(() {
+            if (_listings != null) {
+              _listings = [
+                for (final l in _listings!)
+                  if (l.id == listing.id) l.copyWith(status: prevStatus) else l,
+              ];
+            }
+          });
+        }
+      }),
+    );
   }
 
   Future<void> _deleteListing(PeerListing listing) async {
@@ -86,8 +123,19 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
 
     if (confirm == true) {
       final repo = ref.read(peerListingRepositoryProvider);
-      await repo.deleteListing(listing.id);
-      _load();
+      final prevListings = _listings != null
+          ? List<PeerListing>.from(_listings!)
+          : null;
+      setState(() {
+        _listings?.removeWhere((l) => l.id == listing.id);
+      });
+      unawaited(
+        repo.deleteListing(listing.id).catchError((_) {
+          if (mounted && prevListings != null) {
+            setState(() => _listings = prevListings);
+          }
+        }),
+      );
     }
   }
 

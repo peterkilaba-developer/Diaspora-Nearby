@@ -721,17 +721,25 @@ async function calculateHierarchicalCascade(communityId, requestedAmount) {
     }
   }
 
-  // Query balances for each tier and allocate
+  // Query balances for all tiers in a single db.getAll round-trip
   let totalAvailable = 0;
-  for (const item of tierPlan) {
-    let balance = 0;
+  let tierSnaps = [];
+  if (tierPlan.length > 0) {
     try {
-      const doc = await db.collection("communities").doc(item.communityId).get();
-      if (doc.exists) {
-        const d = doc.data();
-        balance = Number(d.treasuryBalance || d.dspBalance || d.points || 0);
-      }
+      tierSnaps = await db.getAll(
+        ...tierPlan.map((item) => db.collection("communities").doc(item.communityId)),
+      );
     } catch (_) {}
+  }
+
+  for (let i = 0; i < tierPlan.length; i++) {
+    const item = tierPlan[i];
+    const doc = tierSnaps[i];
+    let balance = 0;
+    if (doc && doc.exists) {
+      const d = doc.data();
+      balance = Number(d.treasuryBalance || d.dspBalance || d.points || 0);
+    }
 
     totalAvailable += balance;
     const allocated = Math.min(remainingNeeded, balance);

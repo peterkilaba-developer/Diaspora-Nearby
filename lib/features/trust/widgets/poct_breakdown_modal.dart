@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -5,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
+import 'package:diaspora_nearby/features/trust/repository/trust_repository.dart';
 import 'package:diaspora_nearby/features/trust/models/trust_data.dart';
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
 
@@ -34,10 +36,13 @@ class PoctBreakdownModal extends ConsumerWidget {
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => PoctBreakdownModal(
-        userId: userId,
-        displayName: displayName,
-        trustScore: trustScore,
+      builder: (_) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: PoctBreakdownModal(
+          userId: userId,
+          displayName: displayName,
+          trustScore: trustScore,
+        ),
       ),
     );
   }
@@ -55,6 +60,15 @@ class PoctBreakdownModal extends ConsumerWidget {
     final theme = Theme.of(context);
     final trustAsync = ref.watch(userTrustProvider(userId));
     final pointsAsync = ref.watch(userPointsProvider(userId));
+    final t =
+        trustAsync.value ??
+        ref.read(trustRepositoryProvider).getCachedTrustData(userId);
+    final pts =
+        pointsAsync.value ??
+        ref.read(pointsRepositoryProvider).getCachedUserPoints(userId);
+    final signupDate = pts?.signupDate ?? DateTime.now();
+    final daysActive = DateTime.now().difference(signupDate).inDays;
+    final balance = pts?.availablePoints ?? 0;
     final color = _trustColor(trustScore);
 
     return Container(
@@ -149,247 +163,224 @@ class PoctBreakdownModal extends ConsumerWidget {
 
           const Divider(height: 1),
 
-          // --- Scrollable Breakdown ---
+          // --- Scrollable Breakdown (0ms immediate render) ---
           Expanded(
-            child: trustAsync.when(
-              data: (trustData) {
-                final t = trustData;
-                // Compute days active from UserPoints signup date
-                final pts = pointsAsync.value;
-                final signupDate = pts?.signupDate ?? DateTime.now();
-                final daysActive = DateTime.now().difference(signupDate).inDays;
-
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // === SECTION 1: Genesis Milestones ===
-                      _buildSectionHeader(
-                        theme,
-                        'Genesis Milestones',
-                        'One-time +10 PCT at first 10 unique',
-                        LucideIcons.award,
-                      ),
-                      const SizedBox(height: 12),
-
-                      _buildTransparencyRow(
-                        theme,
-                        icon: LucideIcons.mapPin,
-                        label: 'Current Location Transparency',
-                        achieved: trustScore >= 10,
-                        poct: 10,
-                      ),
-                      _buildMilestoneRow(
-                        theme,
-                        icon: LucideIcons.userCheck,
-                        label: 'Profile Completion',
-                        count:
-                            t?.awardedQualificationMilestones.contains(
-                                  'Profile',
-                                ) ==
-                                true
-                            ? 1
-                            : 0,
-                        milestone: 1,
-                        poct: 10,
-                        achieved:
-                            t?.awardedQualificationMilestones.contains(
-                              'Profile',
-                            ) ==
-                            true,
-                      ),
-                      _buildMilestoneRow(
-                        theme,
-                        icon: LucideIcons.qrCode,
-                        label: 'QR Identity Exchanges',
-                        count: (t?.uniqueQrCount ?? 0).clamp(0, 10),
-                        milestone: 10,
-                        poct: 10,
-                        achieved: (t?.uniqueQrCount ?? 0) >= 10,
-                      ),
-                      _buildMilestoneRow(
-                        theme,
-                        icon: LucideIcons.users,
-                        label: 'Family Connections',
-                        count: (t?.uniqueFamilyCount ?? 0).clamp(0, 10),
-                        milestone: 10,
-                        poct: 10,
-                        achieved: (t?.uniqueFamilyCount ?? 0) >= 10,
-                      ),
-                      _buildMilestoneRow(
-                        theme,
-                        icon: LucideIcons.userPlus,
-                        label: 'Friend Connections',
-                        count: (t?.uniqueFriendCount ?? 0).clamp(0, 10),
-                        milestone: 10,
-                        poct: 10,
-                        achieved: (t?.uniqueFriendCount ?? 0) >= 10,
-                      ),
-                      _buildMilestoneRow(
-                        theme,
-                        icon: LucideIcons.shieldCheck,
-                        label: 'Vouched by Peers',
-                        count: (t?.uniqueVouchCount ?? 0).clamp(0, 10),
-                        milestone: 10,
-                        poct: 10,
-                        achieved: (t?.uniqueVouchCount ?? 0) >= 10,
-                      ),
-                      _buildMilestoneRow(
-                        theme,
-                        icon: LucideIcons.badgeCheck,
-                        label: 'Verified by Peers',
-                        count: (t?.uniqueVerificationCount ?? 0).clamp(0, 10),
-                        milestone: 10,
-                        poct: 10,
-                        achieved: (t?.uniqueVerificationCount ?? 0) >= 10,
-                      ),
-
-                      const SizedBox(height: 8),
-                      _buildMilestoneSummary(theme, t),
-
-                      const SizedBox(height: 24),
-
-                      // === SECTION 3: Community Participation ===
-                      _buildSectionHeader(
-                        theme,
-                        'Community Participation',
-                        'One-time +10 PCT per milestone',
-                        LucideIcons.users2,
-                      ),
-                      const SizedBox(height: 12),
-
-                      _buildMilestoneRow(
-                        theme,
-                        icon: LucideIcons.calendarCheck,
-                        label: 'Event Attendance (QR)',
-                        count: (t?.verifiedCheckInCount ?? 0).clamp(0, 10),
-                        milestone: 10,
-                        poct: 10,
-                        achieved: (t?.verifiedCheckInCount ?? 0) >= 10,
-                      ),
-                      _buildTransparencyRow(
-                        theme,
-                        icon: LucideIcons.heartHandshake,
-                        label: 'Emergency Fund Contributor',
-                        achieved: false, // Can't infer from TrustData alone
-                        poct: 10,
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      // === SECTION 4: Trust Slider (Ongoing PCT) ===
-                      _buildSectionHeader(
-                        theme,
-                        'Trust Slider Vouches',
-                        '+1 PCT per 10 unique full-trust (>90) voters',
-                        LucideIcons.heartHandshake,
-                      ),
-                      const SizedBox(height: 12),
-
-                      _buildTrustSliderStats(theme, t),
-
-                      const SizedBox(height: 24),
-
-                      // === SECTION 5: Economic Transactions ===
-                      _buildSectionHeader(
-                        theme,
-                        'Economic Transactions',
-                        '+1 PCT per 10 completed P2P/B2B/C2B transactions',
-                        LucideIcons.arrowLeftRight,
-                      ),
-                      const SizedBox(height: 12),
-
-                      _buildEconomicTxRow(theme, t),
-
-                      const SizedBox(height: 24),
-
-                      // === SECTION 6: Seniority ===
-                      _buildSectionHeader(
-                        theme,
-                        'Seniority',
-                        '+1 PCT per 100 days active',
-                        LucideIcons.calendar,
-                      ),
-                      const SizedBox(height: 12),
-
-                      _buildSeniorityRow(theme, daysActive),
-
-                      const SizedBox(height: 24),
-
-                      // === SECTION 7: Penalties ===
-                      _buildSectionHeader(
-                        theme,
-                        'Penalties',
-                        '-10 PCT per 10 occurrences',
-                        LucideIcons.shieldAlert,
-                      ),
-                      const SizedBox(height: 12),
-
-                      _buildPenaltiesSection(theme, t),
-
-                      const SizedBox(height: 24),
-
-                      // === SECTION 5: DSP Balance ===
-                      pointsAsync.when(
-                        data: (points) {
-                          final balance = points?.availablePoints ?? 0;
-                          return Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.amber.shade100,
-                                  Colors.amber.shade50,
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  LucideIcons.coins,
-                                  color: Colors.amber.shade800,
-                                  size: 28,
-                                ),
-                                const SizedBox(width: 12),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'DSP Balance',
-                                      style: TextStyle(
-                                        color: Colors.amber.shade900,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                    Text(
-                                      '${NumberFormat('#,###').format(balance)} \$DIASPORA',
-                                      style: TextStyle(
-                                        color: Colors.amber.shade900,
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                        loading: () => const SizedBox.shrink(),
-                        error: (_, _) => const SizedBox.shrink(),
-                      ),
-
-                      const SizedBox(height: 40),
-                    ],
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // === SECTION 1: Genesis Milestones ===
+                  _buildSectionHeader(
+                    theme,
+                    'Genesis Milestones',
+                    'One-time +10 PCT at first 10 unique',
+                    LucideIcons.award,
                   ),
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (_, _) =>
-                  const Center(child: Text('Unable to load trust data')),
+                  const SizedBox(height: 12),
+
+                  _buildTransparencyRow(
+                    theme,
+                    icon: LucideIcons.mapPin,
+                    label: 'Current Location Transparency',
+                    achieved: trustScore >= 10,
+                    poct: 10,
+                  ),
+                  _buildMilestoneRow(
+                    theme,
+                    icon: LucideIcons.userCheck,
+                    label: 'Profile Completion',
+                    count:
+                        t?.awardedQualificationMilestones.contains('Profile') ==
+                            true
+                        ? 1
+                        : 0,
+                    milestone: 1,
+                    poct: 10,
+                    achieved:
+                        t?.awardedQualificationMilestones.contains('Profile') ==
+                        true,
+                  ),
+                  _buildMilestoneRow(
+                    theme,
+                    icon: LucideIcons.qrCode,
+                    label: 'QR Identity Exchanges',
+                    count: (t?.uniqueQrCount ?? 0).clamp(0, 10),
+                    milestone: 10,
+                    poct: 10,
+                    achieved: (t?.uniqueQrCount ?? 0) >= 10,
+                  ),
+                  _buildMilestoneRow(
+                    theme,
+                    icon: LucideIcons.users,
+                    label: 'Family Connections',
+                    count: (t?.uniqueFamilyCount ?? 0).clamp(0, 10),
+                    milestone: 10,
+                    poct: 10,
+                    achieved: (t?.uniqueFamilyCount ?? 0) >= 10,
+                  ),
+                  _buildMilestoneRow(
+                    theme,
+                    icon: LucideIcons.userPlus,
+                    label: 'Friend Connections',
+                    count: (t?.uniqueFriendCount ?? 0).clamp(0, 10),
+                    milestone: 10,
+                    poct: 10,
+                    achieved: (t?.uniqueFriendCount ?? 0) >= 10,
+                  ),
+                  _buildMilestoneRow(
+                    theme,
+                    icon: LucideIcons.shieldCheck,
+                    label: 'Vouched by Peers',
+                    count: (t?.uniqueVouchCount ?? 0).clamp(0, 10),
+                    milestone: 10,
+                    poct: 10,
+                    achieved: (t?.uniqueVouchCount ?? 0) >= 10,
+                  ),
+                  _buildMilestoneRow(
+                    theme,
+                    icon: LucideIcons.badgeCheck,
+                    label: 'Verified by Peers',
+                    count: (t?.uniqueVerificationCount ?? 0).clamp(0, 10),
+                    milestone: 10,
+                    poct: 10,
+                    achieved: (t?.uniqueVerificationCount ?? 0) >= 10,
+                  ),
+
+                  const SizedBox(height: 8),
+                  _buildMilestoneSummary(theme, t),
+
+                  const SizedBox(height: 24),
+
+                  // === SECTION 3: Community Participation ===
+                  _buildSectionHeader(
+                    theme,
+                    'Community Participation',
+                    'One-time +10 PCT per milestone',
+                    LucideIcons.users2,
+                  ),
+                  const SizedBox(height: 12),
+
+                  _buildMilestoneRow(
+                    theme,
+                    icon: LucideIcons.calendarCheck,
+                    label: 'Event Attendance (QR)',
+                    count: (t?.verifiedCheckInCount ?? 0).clamp(0, 10),
+                    milestone: 10,
+                    poct: 10,
+                    achieved: (t?.verifiedCheckInCount ?? 0) >= 10,
+                  ),
+                  _buildTransparencyRow(
+                    theme,
+                    icon: LucideIcons.heartHandshake,
+                    label: 'Emergency Fund Contributor',
+                    achieved:
+                        t?.awardedQualificationMilestones.contains(
+                          'EmergencyFund',
+                        ) ==
+                        true,
+                    poct: 10,
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // === SECTION 4: Trust Slider (Ongoing PCT) ===
+                  _buildSectionHeader(
+                    theme,
+                    'Trust Slider Vouches',
+                    '+1 PCT per 10 unique full-trust (>90) voters',
+                    LucideIcons.heartHandshake,
+                  ),
+                  const SizedBox(height: 12),
+
+                  _buildTrustSliderStats(theme, t),
+
+                  const SizedBox(height: 24),
+
+                  // === SECTION 5: Economic Transactions ===
+                  _buildSectionHeader(
+                    theme,
+                    'Economic Transactions',
+                    '+1 PCT per 10 completed P2P/B2B/C2B transactions',
+                    LucideIcons.arrowLeftRight,
+                  ),
+                  const SizedBox(height: 12),
+
+                  _buildEconomicTxRow(theme, t),
+
+                  const SizedBox(height: 24),
+
+                  // === SECTION 6: Seniority ===
+                  _buildSectionHeader(
+                    theme,
+                    'Seniority',
+                    '+1 PCT per 100 days active',
+                    LucideIcons.calendar,
+                  ),
+                  const SizedBox(height: 12),
+
+                  _buildSeniorityRow(theme, daysActive),
+
+                  const SizedBox(height: 24),
+
+                  // === SECTION 7: Penalties ===
+                  _buildSectionHeader(
+                    theme,
+                    'Penalties',
+                    '-10 PCT per 10 occurrences',
+                    LucideIcons.shieldAlert,
+                  ),
+                  const SizedBox(height: 12),
+
+                  _buildPenaltiesSection(theme, t),
+
+                  const SizedBox(height: 24),
+
+                  // === SECTION 5: DSP Balance ===
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.amber.shade100, Colors.amber.shade50],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          LucideIcons.coins,
+                          color: Colors.amber.shade800,
+                          size: 28,
+                        ),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'DSP Balance',
+                              style: TextStyle(
+                                color: Colors.amber.shade900,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            Text(
+                              '${NumberFormat('#,###').format(balance)} \$DIASPORA',
+                              style: TextStyle(
+                                color: Colors.amber.shade900,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 40),
+                ],
+              ),
             ),
           ),
         ],
@@ -912,7 +903,6 @@ class PoctBreakdownModal extends ConsumerWidget {
   // ── Economic Transactions ──
 
   Widget _buildEconomicTxRow(ThemeData theme, TrustData? t) {
-    // We don't have the exact tx count in TrustData, so show from the score
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(

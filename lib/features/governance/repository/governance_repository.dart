@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:rxdart/rxdart.dart';
 import '../models/governance_unit.dart';
 import '../models/election_result.dart';
 import '../models/governance_roles.dart';
@@ -19,14 +18,48 @@ final governanceUnitStreamProvider =
 class GovernanceRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  static final Map<String, GovernanceUnit> _unitCache = {};
+  static List<GovernanceUnit>? _activeElectionsCache;
+  static final Map<String, List<Map<String, dynamic>>> _roleVotesCache = {};
+  static final Map<String, List<Map<String, dynamic>>> _votesCache = {};
+  static final Map<String, List<ElectionResult>> _historyCache = {};
+  static final Map<String, List<String>> _communityMemberIdsCache = {};
+
+  GovernanceUnit? getCachedGovernanceUnit(String id) => _unitCache[id];
+
+  void cacheGovernanceUnit(GovernanceUnit unit) {
+    _unitCache[unit.id] = unit;
+  }
+
+  List<GovernanceUnit>? getCachedActiveElections() => _activeElectionsCache;
+
+  List<Map<String, dynamic>>? getCachedRoleVotes(String unitId, String role) =>
+      _roleVotesCache['${unitId}_$role'];
+
+  void cacheRoleVotes(
+    String unitId,
+    String role,
+    List<Map<String, dynamic>> votes,
+  ) {
+    _roleVotesCache['${unitId}_$role'] = votes;
+  }
+
+  List<ElectionResult>? getCachedElectionHistory(String unitId) =>
+      _historyCache[unitId];
+
+  List<String>? getCachedCommunityMemberIds(String communityId) =>
+      _communityMemberIdsCache[communityId];
+
   Future<GovernanceUnit?> getGovernanceUnit(String id) async {
     final doc = await _firestore.collection('governance').doc(id).get();
-    if (!doc.exists) return null;
+    if (!doc.exists) return _unitCache[id];
     final data = doc.data()!;
     data['id'] ??= doc.id;
     data['name'] ??= doc.id.replaceAll('_', ' ').toUpperCase();
     data['type'] ??= 'local'; // Default type if missing
-    return GovernanceUnit.fromJson(data);
+    final unit = GovernanceUnit.fromJson(data);
+    _unitCache[id] = unit;
+    return unit;
   }
 
   Future<GovernanceUnit?> getGovernanceUnitByCommunityId(
@@ -41,29 +74,50 @@ class GovernanceRepository {
     final doc = snapshot.docs.first;
     final data = doc.data();
     data['id'] ??= doc.id;
-    return GovernanceUnit.fromJson(data);
+    final unit = GovernanceUnit.fromJson(data);
+    _unitCache[unit.id] = unit;
+    return unit;
   }
 
   Future<void> saveGovernanceUnit(GovernanceUnit unit) async {
+    _unitCache[unit.id] = unit;
     await _firestore.collection('governance').doc(unit.id).set(unit.toJson());
   }
 
   Stream<GovernanceUnit?> watchGovernanceUnit(String id) {
-    return _firestore
-        .collection('governance')
-        .doc(id)
-        .snapshots()
-        .map((doc) {
-          if (!doc.exists) return null;
-          final data = doc.data()!;
+    return Stream.multi((controller) {
+      final cached = _unitCache[id];
+      if (cached != null) {
+        controller.add(cached);
+      }
+      final sub = _firestore.collection('governance').doc(id).snapshots().listen(
+        (doc) {
+          if (!doc.exists || doc.data() == null) {
+            controller.add(_unitCache[id]);
+            return;
+          }
+          final data = Map<String, dynamic>.from(doc.data()!);
           data['id'] ??= doc.id;
-          return GovernanceUnit.fromJson(data);
-        })
-        .onErrorReturn(null)
-        .startWith(null);
+          data['name'] ??= doc.id.replaceAll('_', ' ').toUpperCase();
+          data['type'] ??= 'local';
+          final unit = GovernanceUnit.fromJson(data);
+          _unitCache[id] = unit;
+          controller.add(unit);
+        },
+        onError: (_) => controller.add(_unitCache[id]),
+        onDone: controller.close,
+      );
+      controller.onCancel = sub.cancel;
+    });
   }
 
   Future<void> updateSigners(String id, List<String> signerIds) async {
+    final cached = _unitCache[id];
+    if (cached != null) {
+      final json = cached.toJson();
+      json['signers'] = signerIds;
+      _unitCache[id] = GovernanceUnit.fromJson(json);
+    }
     await _firestore.collection('governance').doc(id).update({
       'signers': signerIds,
       'updatedAt': FieldValue.serverTimestamp(),
@@ -75,6 +129,13 @@ class GovernanceRepository {
     List<String>? councilMembers,
     List<String>? signers,
   }) async {
+    final cached = _unitCache[id];
+    if (cached != null) {
+      final json = cached.toJson();
+      if (councilMembers != null) json['councilMembers'] = councilMembers;
+      if (signers != null) json['signers'] = signers;
+      _unitCache[id] = GovernanceUnit.fromJson(json);
+    }
     final Map<String, dynamic> updates = {
       'updatedAt': FieldValue.serverTimestamp(),
     };
@@ -90,16 +151,33 @@ class GovernanceRepository {
         .where('unitId', isEqualTo: unitId)
         .limit(500)
         .get();
-    return snapshot.docs.map((doc) => doc.data()).toList();
+    final list = snapshot.docs.map((doc) => doc.data()).toList();
+    _votesCache[unitId] = list;
+    return list;
   }
 
   Stream<List<Map<String, dynamic>>> watchVotes(String unitId) {
-    return _firestore
-        .collection('governance_votes')
-        .where('unitId', isEqualTo: unitId)
-        .limit(500)
-        .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
+    return Stream.multi((controller) {
+      final cached = _votesCache[unitId];
+      if (cached != null) {
+        controller.add(cached);
+      }
+      final sub = _firestore
+          .collection('governance_votes')
+          .where('unitId', isEqualTo: unitId)
+          .limit(500)
+          .snapshots()
+          .listen(
+            (snapshot) {
+              final list = snapshot.docs.map((doc) => doc.data()).toList();
+              _votesCache[unitId] = list;
+              controller.add(list);
+            },
+            onError: controller.addError,
+            onDone: controller.close,
+          );
+      controller.onCancel = sub.cancel;
+    });
   }
 
   Future<void> startElection(String id, int durationDays) async {
@@ -164,24 +242,41 @@ class GovernanceRepository {
         .orderBy('timestamp', descending: true)
         .limit(100)
         .get();
-    return snapshot.docs
+    final list = snapshot.docs
         .map((doc) => ElectionResult.fromJson(doc.data()))
         .toList();
+    _historyCache[unitId] = list;
+    return list;
   }
 
   Stream<List<GovernanceUnit>> watchActiveElections() {
-    return _firestore
-        .collection('governance')
-        .where('isActiveElection', isEqualTo: true)
-        .limit(100)
-        .snapshots()
-        .map(
-          (snapshot) => snapshot.docs.map((doc) {
-            final data = doc.data();
-            data['id'] ??= doc.id;
-            return GovernanceUnit.fromJson(data);
-          }).toList(),
-        );
+    return Stream.multi((controller) {
+      final cached = _activeElectionsCache;
+      if (cached != null) {
+        controller.add(cached);
+      }
+      final sub = _firestore
+          .collection('governance')
+          .where('isActiveElection', isEqualTo: true)
+          .limit(100)
+          .snapshots()
+          .listen(
+            (snapshot) {
+              final list = snapshot.docs.map((doc) {
+                final data = doc.data();
+                data['id'] ??= doc.id;
+                final unit = GovernanceUnit.fromJson(data);
+                _unitCache[unit.id] = unit;
+                return unit;
+              }).toList();
+              _activeElectionsCache = list;
+              controller.add(list);
+            },
+            onError: controller.addError,
+            onDone: controller.close,
+          );
+      controller.onCancel = sub.cancel;
+    });
   }
 
   Future<List<GovernanceUnit>> getGovernanceUnitsForUser(String userId) async {
@@ -194,7 +289,9 @@ class GovernanceRepository {
     return snapshot.docs.map((doc) {
       final data = doc.data();
       data['id'] ??= doc.id;
-      return GovernanceUnit.fromJson(data);
+      final unit = GovernanceUnit.fromJson(data);
+      _unitCache[unit.id] = unit;
+      return unit;
     }).toList();
   }
 
@@ -209,6 +306,22 @@ class GovernanceRepository {
     required String role,
     required String verdict,
   }) async {
+    final key = '${unitId}_$role';
+    final existing = List<Map<String, dynamic>>.from(
+      _roleVotesCache[key] ?? const [],
+    );
+    existing.removeWhere(
+      (v) => v['candidateId'] == candidateId && v['voterId'] == voterId,
+    );
+    existing.add({
+      'unitId': unitId,
+      'role': role,
+      'candidateId': candidateId,
+      'voterId': voterId,
+      'verdict': verdict,
+    });
+    _roleVotesCache[key] = existing;
+
     await FirebaseFunctions.instance.httpsCallable('castGovernanceVote').call({
       'unitId': unitId,
       'candidateId': candidateId,
@@ -238,13 +351,29 @@ class GovernanceRepository {
     String unitId,
     String role,
   ) {
-    return _firestore
-        .collection('governance_votes')
-        .where('unitId', isEqualTo: unitId)
-        .where('role', isEqualTo: role)
-        .limit(500)
-        .snapshots()
-        .map((s) => s.docs.map((d) => d.data()).toList());
+    final key = '${unitId}_$role';
+    return Stream.multi((controller) {
+      final cached = _roleVotesCache[key];
+      if (cached != null) {
+        controller.add(cached);
+      }
+      final sub = _firestore
+          .collection('governance_votes')
+          .where('unitId', isEqualTo: unitId)
+          .where('role', isEqualTo: role)
+          .limit(500)
+          .snapshots()
+          .listen(
+            (s) {
+              final list = s.docs.map((d) => d.data()).toList();
+              _roleVotesCache[key] = list;
+              controller.add(list);
+            },
+            onError: controller.addError,
+            onDone: controller.close,
+          );
+      controller.onCancel = sub.cancel;
+    });
   }
 
   /// Get vote summary (yay/nay/abstain counts) for a candidate.
@@ -283,6 +412,18 @@ class GovernanceRepository {
     String userId,
     String role,
   ) async {
+    final cached = _unitCache[unitId];
+    if (cached != null) {
+      final json = cached.toJson();
+      final roleCandidates = Map<String, dynamic>.from(
+        json['roleCandidates'] as Map? ?? {},
+      );
+      final current = List<String>.from(roleCandidates[role] as List? ?? []);
+      if (!current.contains(userId)) current.add(userId);
+      roleCandidates[role] = current;
+      json['roleCandidates'] = roleCandidates;
+      _unitCache[unitId] = GovernanceUnit.fromJson(json);
+    }
     await _firestore.collection('governance').doc(unitId).set({
       'roleCandidates': {
         role: FieldValue.arrayUnion([userId]),
@@ -332,7 +473,9 @@ class GovernanceRepository {
       final data = chatDoc.data();
       final participants = data?['participants'] as List<dynamic>?;
       if (participants != null && participants.isNotEmpty) {
-        return participants.cast<String>();
+        final list = participants.cast<String>();
+        _communityMemberIdsCache[communityId] = list;
+        return list;
       }
     }
 
@@ -343,7 +486,9 @@ class GovernanceRepository {
         .collection('members')
         .limit(500)
         .get();
-    return membersSnapshot.docs.map((d) => d.id).toList();
+    final list = membersSnapshot.docs.map((d) => d.id).toList();
+    _communityMemberIdsCache[communityId] = list;
+    return list;
   }
 
   /// Check if a user has already voted for a specific candidate in a role.
@@ -353,6 +498,12 @@ class GovernanceRepository {
     String candidateId,
     String role,
   ) async {
+    final cachedVotes = _roleVotesCache['${unitId}_$role'];
+    if (cachedVotes != null) {
+      return cachedVotes.any(
+        (v) => v['candidateId'] == candidateId && v['voterId'] == voterId,
+      );
+    }
     final snapshot = await _firestore
         .collection('governance_votes')
         .where('unitId', isEqualTo: unitId)

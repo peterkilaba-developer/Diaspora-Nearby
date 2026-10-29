@@ -16,15 +16,136 @@ class PeerListingRepository {
   final FirebaseFunctions _functions;
   PeerListingRepository(this._firestore, this._functions);
 
+  static final Map<String, List<PeerListing>> _listingsByTypeCache = {};
+  static final Map<String, PeerListing> _listingsByIdCache = {};
+  static final Map<String, List<PeerListing>> _myListingsCache = {};
+  static final Map<String, List<PeerBooking>> _guestBookingsCache = {};
+  static final Map<String, List<PeerBooking>> _hostBookingsCache = {};
+  static final Map<String, List<PeerBooking>> _listingBookingsCache = {};
+  static final Set<String> _savedListingIdsCache = {};
+
   CollectionReference get _listings => _firestore.collection('peer_listings');
   CollectionReference get _bookings => _firestore.collection('peer_bookings');
+
+  String generateListingId() => _listings.doc().id;
+  String generateBookingId() => _bookings.doc().id;
+
+  PeerListing? getCachedListing(String id) => _listingsByIdCache[id];
+
+  List<PeerListing> getCachedListings({required String type}) =>
+      List.unmodifiable(_listingsByTypeCache[type] ?? const []);
+
+  List<PeerListing> getCachedMyListings(String uid, {String? type}) {
+    final list =
+        _myListingsCache[uid] ??
+        _listingsByIdCache.values.where((l) => l.ownerId == uid).toList();
+    if (type == null) return List.unmodifiable(list);
+    return list.where((l) => l.type == type).toList();
+  }
+
+  List<PeerBooking> getCachedGuestBookings(String uid) =>
+      List.unmodifiable(_guestBookingsCache[uid] ?? const []);
+
+  List<PeerBooking> getCachedHostBookings(String uid) =>
+      List.unmodifiable(_hostBookingsCache[uid] ?? const []);
+
+  List<PeerBooking> getCachedListingBookings(String listingId) =>
+      List.unmodifiable(_listingBookingsCache[listingId] ?? const []);
+
+  bool isListingSavedSync(String listingId) =>
+      _savedListingIdsCache.contains(listingId);
+
+  void cacheListing(PeerListing listing) {
+    if (listing.id.isEmpty) return;
+    _listingsByIdCache[listing.id] = listing;
+
+    final typeList = _listingsByTypeCache[listing.type] ?? <PeerListing>[];
+    final typeIdx = typeList.indexWhere((l) => l.id == listing.id);
+    if (listing.status == 'active') {
+      if (typeIdx >= 0) {
+        typeList[typeIdx] = listing;
+      } else {
+        _listingsByTypeCache[listing.type] = [listing, ...typeList];
+      }
+    } else if (typeIdx >= 0) {
+      typeList.removeAt(typeIdx);
+    }
+
+    final myList = _myListingsCache[listing.ownerId];
+    if (myList != null) {
+      final myIdx = myList.indexWhere((l) => l.id == listing.id);
+      if (myIdx >= 0) {
+        myList[myIdx] = listing;
+      } else {
+        _myListingsCache[listing.ownerId] = [listing, ...myList];
+      }
+    }
+  }
+
+  void removeCachedListing(String id) {
+    final removed = _listingsByIdCache.remove(id);
+    _savedListingIdsCache.remove(id);
+    for (final list in _listingsByTypeCache.values) {
+      list.removeWhere((l) => l.id == id);
+    }
+    if (removed != null) {
+      _myListingsCache[removed.ownerId]?.removeWhere((l) => l.id == id);
+    }
+  }
+
+  void cacheBooking(PeerBooking booking) {
+    if (booking.id.isEmpty) return;
+    final guestList = _guestBookingsCache[booking.guestId] ?? <PeerBooking>[];
+    final gIdx = guestList.indexWhere((b) => b.id == booking.id);
+    if (gIdx >= 0) {
+      guestList[gIdx] = booking;
+    } else {
+      _guestBookingsCache[booking.guestId] = [booking, ...guestList];
+    }
+
+    final hostList = _hostBookingsCache[booking.hostId] ?? <PeerBooking>[];
+    final hIdx = hostList.indexWhere((b) => b.id == booking.id);
+    if (hIdx >= 0) {
+      hostList[hIdx] = booking;
+    } else {
+      _hostBookingsCache[booking.hostId] = [booking, ...hostList];
+    }
+
+    final listingList =
+        _listingBookingsCache[booking.listingId] ?? <PeerBooking>[];
+    final lIdx = listingList.indexWhere((b) => b.id == booking.id);
+    if (lIdx >= 0) {
+      listingList[lIdx] = booking;
+    } else {
+      _listingBookingsCache[booking.listingId] = [booking, ...listingList];
+    }
+  }
+
+  void updateCachedBookingStatus(String bookingId, String status) {
+    for (final list in _guestBookingsCache.values) {
+      final idx = list.indexWhere((b) => b.id == bookingId);
+      if (idx >= 0) list[idx] = list[idx].copyWith(status: status);
+    }
+    for (final list in _hostBookingsCache.values) {
+      final idx = list.indexWhere((b) => b.id == bookingId);
+      if (idx >= 0) list[idx] = list[idx].copyWith(status: status);
+    }
+    for (final list in _listingBookingsCache.values) {
+      final idx = list.indexWhere((b) => b.id == bookingId);
+      if (idx >= 0) list[idx] = list[idx].copyWith(status: status);
+    }
+  }
 
   // ─── LISTINGS ─────────────────────────────────────────
 
   /// Create a new listing
   Future<String> createListing(PeerListing listing) async {
-    final doc = _listings.doc();
-    await doc.set(listing.toJson());
+    final doc = listing.id.isNotEmpty
+        ? _listings.doc(listing.id)
+        : _listings.doc();
+    final withId = listing.copyWith(id: doc.id);
+    cacheListing(withId);
+    await doc.set(withId.toJson());
     return doc.id;
   }
 
@@ -36,11 +157,16 @@ class PeerListingRepository {
 
   /// Delete a listing
   Future<void> deleteListing(String id) async {
+    removeCachedListing(id);
     await _listings.doc(id).delete();
   }
 
   /// Toggle listing status (active/paused)
   Future<void> toggleListingStatus(String id, String newStatus) async {
+    final existing = _listingsByIdCache[id];
+    if (existing != null) {
+      cacheListing(existing.copyWith(status: newStatus));
+    }
     await _listings.doc(id).update({
       'status': newStatus,
       'updatedAt': FieldValue.serverTimestamp(),
@@ -65,11 +191,15 @@ class PeerListingRepository {
           .toList();
       // Sort newest first client-side
       listings.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      for (final l in listings) {
+        _listingsByIdCache[l.id] = l;
+      }
+      _myListingsCache[uid] = List.from(listings);
       return listings;
     } catch (e, st) {
       debugPrint('Error getting my listings: $e');
       debugPrint('Stack trace: $st');
-      return [];
+      return getCachedMyListings(uid);
     }
   }
 
@@ -125,6 +255,13 @@ class PeerListingRepository {
 
       // Filter out non-active listings client-side
       listings = listings.where((l) => l.status == 'active').toList();
+
+      for (final l in listings) {
+        _listingsByIdCache[l.id] = l;
+      }
+      if (countryCode == null || countryCode.isEmpty) {
+        _listingsByTypeCache[type] = List.from(listings);
+      }
 
       // Location filter — matches structured fields AND legacy city/address
       final locationQuery = locality ?? city;
@@ -216,11 +353,16 @@ class PeerListingRepository {
   Future<PeerListing?> getListing(String id) async {
     try {
       final doc = await _listings.doc(id).get();
-      if (!doc.exists) return null;
-      return PeerListing.fromJson(doc.data() as Map<String, dynamic>, doc.id);
+      if (!doc.exists) return _listingsByIdCache[id];
+      final listing = PeerListing.fromJson(
+        doc.data() as Map<String, dynamic>,
+        doc.id,
+      );
+      cacheListing(listing);
+      return listing;
     } catch (e) {
       debugPrint('Error getting listing: $e');
-      return null;
+      return _listingsByIdCache[id];
     }
   }
 
@@ -228,6 +370,9 @@ class PeerListingRepository {
 
   /// Create a booking request
   Future<String> createBooking(PeerBooking booking) async {
+    if (booking.id.isNotEmpty) {
+      cacheBooking(booking);
+    }
     final result = await _functions
         .httpsCallable('createPeerBooking')
         .call<Map<String, dynamic>>({
@@ -237,11 +382,14 @@ class PeerListingRepository {
           'guests': booking.guests,
           'notes': booking.notes,
         });
-    return result.data['bookingId'] as String;
+    final bookingId = result.data['bookingId'] as String;
+    cacheBooking(booking.copyWith(id: bookingId));
+    return bookingId;
   }
 
   /// Update booking status
   Future<void> updateBookingStatus(String id, String status) async {
+    updateCachedBookingStatus(id, status);
     await _functions.httpsCallable('updatePeerBookingStatus').call<void>({
       'bookingId': id,
       'status': status,
@@ -261,11 +409,12 @@ class PeerListingRepository {
           )
           .toList();
       bookings.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      _guestBookingsCache[uid] = List.from(bookings);
       return bookings;
     } catch (e, st) {
       debugPrint('Error getting guest bookings: $e');
       debugPrint('Stack trace: $st');
-      return [];
+      return getCachedGuestBookings(uid);
     }
   }
 
@@ -282,11 +431,12 @@ class PeerListingRepository {
           )
           .toList();
       bookings.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      _hostBookingsCache[uid] = List.from(bookings);
       return bookings;
     } catch (e, st) {
       debugPrint('Error getting host bookings: $e');
       debugPrint('Stack trace: $st');
-      return [];
+      return getCachedHostBookings(uid);
     }
   }
 
@@ -303,11 +453,12 @@ class PeerListingRepository {
           )
           .toList();
       bookings.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      _listingBookingsCache[listingId] = List.from(bookings);
       return bookings;
     } catch (e, st) {
       debugPrint('Error getting listing bookings: $e');
       debugPrint('Stack trace: $st');
-      return [];
+      return getCachedListingBookings(listingId);
     }
   }
 
@@ -323,6 +474,7 @@ class PeerListingRepository {
 
   /// Save (bookmark) a listing
   Future<void> saveListing(String listingId, String userId) async {
+    _savedListingIdsCache.add(listingId);
     await _functions.httpsCallable('setListingSaved').call({
       'listingType': 'peer',
       'listingId': listingId,
@@ -332,6 +484,7 @@ class PeerListingRepository {
 
   /// Unsave (remove bookmark) a listing
   Future<void> unsaveListing(String listingId, String userId) async {
+    _savedListingIdsCache.remove(listingId);
     await _functions.httpsCallable('setListingSaved').call({
       'listingType': 'peer',
       'listingId': listingId,
@@ -346,6 +499,11 @@ class PeerListingRepository {
         .collection('saved_by')
         .doc(userId)
         .get();
+    if (doc.exists) {
+      _savedListingIdsCache.add(listingId);
+    } else {
+      _savedListingIdsCache.remove(listingId);
+    }
     return doc.exists;
   }
 }

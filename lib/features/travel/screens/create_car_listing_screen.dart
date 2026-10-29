@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -196,9 +197,13 @@ class _CreateCarListingScreenState
 
       final repo = ref.read(peerListingRepositoryProvider);
       final title = _generateTitle();
+      final isEditing = widget.existing != null;
+      final listingId = isEditing
+          ? widget.existing!.id
+          : repo.generateListingId();
 
       final listing = PeerListing(
-        id: widget.existing?.id ?? '',
+        id: listingId,
         type: 'car',
         ownerId: user.uid,
         ownerName: profile.fullName,
@@ -243,41 +248,43 @@ class _CreateCarListingScreenState
         batteryKWh: _vehicleBatteryKWh,
         plantCountry: _vehiclePlantCountry,
         plantCity: _vehiclePlantCity,
-        features: _selectedFeatures,
+        features: List<String>.from(_selectedFeatures),
       );
 
-      if (widget.existing != null) {
-        await repo.updateListing(widget.existing!.id, listing.toJson());
-        if (mounted) {
-          Navigator.pop(context, true);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Listing updated!'),
-              behavior: SnackBarBehavior.floating,
+      repo.cacheListing(listing);
+
+      if (mounted) {
+        final navigator = Navigator.of(context);
+        final messenger = ScaffoldMessenger.of(context);
+        navigator.pop(true);
+        if (!isEditing) {
+          navigator.push(
+            MaterialPageRoute(
+              builder: (_) => PeerListingDetailScreen(listing: listing),
             ),
           );
         }
-      } else {
-        final newId = await repo.createListing(listing);
-        final created = await repo.getListing(newId);
-        if (mounted) {
-          Navigator.pop(context, true);
-          if (created != null) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => PeerListingDetailScreen(listing: created),
-              ),
-            );
-          }
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Car listed for rental!'),
-              behavior: SnackBarBehavior.floating,
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              isEditing ? 'Listing updated!' : 'Car listed for rental!',
             ),
-          );
-        }
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
+
+      unawaited(() async {
+        try {
+          if (isEditing) {
+            await repo.updateListing(listingId, listing.toJson());
+          } else {
+            await repo.createListing(listing);
+          }
+        } catch (e) {
+          debugPrint('CreateCarListingScreen save error: $e');
+        }
+      }());
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -297,10 +304,13 @@ class _CreateCarListingScreenState
     final vin = _vehicleVinController.text.trim().toUpperCase();
     if (vin.length != 17) return;
 
-    setState(() => _vinLookupLoading = true);
+    final cachedVin = VinDecoderService.getCached(vin);
+    if (cachedVin == null) {
+      setState(() => _vinLookupLoading = true);
+    }
 
     try {
-      final result = await VinDecoderService.decode(vin);
+      final result = cachedVin ?? await VinDecoderService.decode(vin);
       if (!mounted) return;
 
       if (!result.isValid) {

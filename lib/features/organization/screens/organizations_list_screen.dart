@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:diaspora_nearby/features/travel/utils/geo_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -33,8 +34,6 @@ class _OrganizationsListScreenState
       false; // Toggle: false = My Community Orgs, true = All Orgs
   String? _userHomeCountryCode; // Current user's home country code
 
-  // Animation for logo icon
-
   // User location for distance calc
   double? _userLat;
   double? _userLng;
@@ -53,8 +52,8 @@ class _OrganizationsListScreenState
   void initState() {
     super.initState();
 
-    // Animation setup
-    _loadUserLocation();
+    _loadUserLocationSync();
+    _seedCachedOrganizations();
     _loadOrganizations();
   }
 
@@ -64,11 +63,15 @@ class _OrganizationsListScreenState
     super.dispose();
   }
 
-  Future<void> _loadUserLocation() async {
+  void _loadUserLocationSync() {
     try {
-      final userProfile = ref.read(userProfileProvider).value;
+      final user = ref.read(authRepositoryProvider).currentUser;
+      final userProfile =
+          ref.read(userProfileProvider).value ??
+          (user != null
+              ? ref.read(profileRepositoryProvider).getCachedProfile(user.uid)
+              : null);
 
-      // Store home country code for filtering
       _userHomeCountryCode = userProfile?.homeCountryCode;
 
       if (userProfile?.hostLocation.geometry?.location != null) {
@@ -80,61 +83,98 @@ class _OrganizationsListScreenState
     }
   }
 
+  void _seedCachedOrganizations() {
+    final orgRepo = ref.read(organizationRepositoryProvider);
+    final user = ref.read(authRepositoryProvider).currentUser;
+    final cachedAll = orgRepo.getCachedAllOrganizations();
+    final cachedMy = user != null
+        ? orgRepo.getCachedUserOrganizations(user.uid)
+        : null;
+
+    if (cachedAll != null || cachedMy != null) {
+      final merged = <Map<String, dynamic>>[
+        ...(cachedAll ?? const <Map<String, dynamic>>[]).map(
+          (o) => Map<String, dynamic>.from(o),
+        ),
+      ];
+      if (cachedMy != null) {
+        for (final myOrg in cachedMy) {
+          if (!merged.any((o) => o['id'] == myOrg['id'])) {
+            merged.add(Map<String, dynamic>.from(myOrg));
+          }
+        }
+      }
+      _computeDistancesAndSort(merged);
+      _organizations = merged;
+      _filteredOrgs = _filterOrganizationsList(merged);
+      _isLoading = false;
+    }
+  }
+
+  void _computeDistancesAndSort(List<Map<String, dynamic>> orgs) {
+    if (_userLat != null && _userLng != null) {
+      for (final org in orgs) {
+        final location = org['location'] as Map<String, dynamic>?;
+        if (location != null) {
+          final lat = (location['lat'] as num?)?.toDouble();
+          final lng = (location['lng'] as num?)?.toDouble();
+          if (lat != null && lng != null) {
+            org['distance'] = GeoUtils.haversine(
+              _userLat!,
+              _userLng!,
+              lat,
+              lng,
+            );
+          }
+        }
+      }
+
+      orgs.sort((a, b) {
+        final distA = a['distance'] as double? ?? double.infinity;
+        final distB = b['distance'] as double? ?? double.infinity;
+        return distA.compareTo(distB);
+      });
+    }
+  }
+
   Future<void> _loadOrganizations() async {
-    setState(() => _isLoading = true);
+    if (_organizations.isEmpty) {
+      setState(() => _isLoading = true);
+    }
 
     try {
       final orgRepo = ref.read(organizationRepositoryProvider);
       final user = ref.read(authRepositoryProvider).currentUser;
 
-      // Get active orgs
-      var orgs = await orgRepo.getAllOrganizations();
+      final results = await Future.wait<List<Map<String, dynamic>>>([
+        orgRepo.getAllOrganizations(),
+        if (user != null)
+          orgRepo.getUserOrganizations(user.uid)
+        else
+          Future.value(const <Map<String, dynamic>>[]),
+      ]);
 
-      // Also get user's own orgs (including pending) to show them immediately
-      if (user != null) {
-        final myOrgs = await orgRepo.getUserOrganizations(user.uid);
-        for (final myOrg in myOrgs) {
-          // Add if not already in list (some might be active already)
-          if (!orgs.any((o) => o['id'] == myOrg['id'])) {
-            orgs.add(myOrg);
-          }
+      final orgs = results[0].map((o) => Map<String, dynamic>.from(o)).toList();
+      final myOrgs = results[1];
+      for (final myOrg in myOrgs) {
+        if (!orgs.any((o) => o['id'] == myOrg['id'])) {
+          orgs.add(Map<String, dynamic>.from(myOrg));
         }
       }
 
-      // Calculate distances if user location available
-      if (_userLat != null && _userLng != null) {
-        for (final org in orgs) {
-          final location = org['location'] as Map<String, dynamic>?;
-          if (location != null) {
-            final lat = (location['lat'] as num?)?.toDouble();
-            final lng = (location['lng'] as num?)?.toDouble();
-            if (lat != null && lng != null) {
-              org['distance'] = GeoUtils.haversine(
-                _userLat!,
-                _userLng!,
-                lat,
-                lng,
-              );
-            }
-          }
-        }
+      _computeDistancesAndSort(orgs);
 
-        // Sort by distance within same type
-        orgs.sort((a, b) {
-          final distA = a['distance'] as double? ?? double.infinity;
-          final distB = b['distance'] as double? ?? double.infinity;
-          return distA.compareTo(distB);
-        });
-      }
-
+      if (!mounted) return;
       setState(() {
         _organizations = orgs;
+        _filteredOrgs = _filterOrganizationsList(orgs);
         _isLoading = false;
       });
-      _applyFilters(); // Apply home country filter
     } catch (e) {
       debugPrint('Error loading organizations: $e');
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -162,29 +202,25 @@ class _OrganizationsListScreenState
 
   /// Get country flag emoji from country name
   String _getCountryFlag(String? countryName) {
-    if (countryName == null || countryName.isEmpty) return 'Ã°ÂŸÂ“Â';
+    if (countryName == null || countryName.isEmpty) return '📍';
 
-    // Try to find country by name
     final country = country_data.countries.firstWhere(
       (c) => c.name.toLowerCase() == countryName.toLowerCase(),
       orElse: () => country_data.countries.first,
     );
 
-    // If we found a match (not the default), return its flag
     if (country.name.toLowerCase() == countryName.toLowerCase()) {
       return country.flag;
     }
 
-    // Fallback to location pin
-    return 'Ã°ÂŸÂ“Â';
+    return '📍';
   }
 
-  /// Apply search query and home country filter
-  void _applyFilters() {
-    var result = _organizations;
+  List<Map<String, dynamic>> _filterOrganizationsList(
+    List<Map<String, dynamic>> source,
+  ) {
+    var result = source;
 
-    // Apply home country filter when not in global view
-    // Default: show orgs where creator's home country matches current user's home country
     if (!_isGlobalView && _userHomeCountryCode != null) {
       result = result.where((org) {
         final orgHomeCountryCode = org['homeCountryCode'] as String?;
@@ -192,7 +228,6 @@ class _OrganizationsListScreenState
       }).toList();
     }
 
-    // Apply search query (matches name, description, location, type)
     if (_searchQuery.isNotEmpty) {
       final query = _searchQuery.toLowerCase();
       result = result.where((org) {
@@ -214,7 +249,12 @@ class _OrganizationsListScreenState
       }).toList();
     }
 
-    setState(() => _filteredOrgs = result);
+    return result;
+  }
+
+  /// Apply search query and home country filter
+  void _applyFilters() {
+    setState(() => _filteredOrgs = _filterOrganizationsList(_organizations));
   }
 
   void _toggleGlobalView() {
@@ -247,7 +287,6 @@ class _OrganizationsListScreenState
       }
     }
 
-    // Remove empty groups
     grouped.removeWhere((key, value) => value.isEmpty);
 
     return grouped;
@@ -278,7 +317,6 @@ class _OrganizationsListScreenState
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // Listen to profile updates to ensure valid homeCountryCode for filtering
     ref.listen(userProfileProvider, (previous, next) {
       final newProfile = next.value;
       if (newProfile != null &&
@@ -303,7 +341,7 @@ class _OrganizationsListScreenState
       body: SafeArea(
         child: Column(
           children: [
-            // Search bar with global toggle - matching DiasporaAppBar pattern
+            // Search bar with global toggle
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: GlassContainer(
@@ -318,7 +356,6 @@ class _OrganizationsListScreenState
                     suffixIcon: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Clear button when searching
                         if (_searchQuery.isNotEmpty)
                           IconButton(
                             icon: const Icon(LucideIcons.x, size: 20),
@@ -328,7 +365,6 @@ class _OrganizationsListScreenState
                             },
                             tooltip: 'Clear search',
                           ),
-                        // Global toggle with animation (visible when not searching and unlocked)
                         if (_searchQuery.isEmpty &&
                             ref.watch(isGlobalUnlockedSyncProvider))
                           IconButton(
@@ -377,7 +413,6 @@ class _OrganizationsListScreenState
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Group header with full type name
                               Padding(
                                 padding: const EdgeInsets.symmetric(
                                   vertical: 12,
@@ -392,7 +427,7 @@ class _OrganizationsListScreenState
                                     const SizedBox(width: 8),
                                     Expanded(
                                       child: Text(
-                                        type, // Full type name
+                                        type,
                                         style: theme.textTheme.titleSmall
                                             ?.copyWith(
                                               color: theme.colorScheme.primary,
@@ -422,7 +457,6 @@ class _OrganizationsListScreenState
                                 ),
                               ),
 
-                              // Organization cards
                               ...orgs.map((org) => _buildOrgCard(org, theme)),
                             ],
                           );
@@ -474,17 +508,18 @@ class _OrganizationsListScreenState
           ),
           if (_searchQuery.isEmpty) ...[
             const SizedBox(height: 24),
-            OutlinedButton.icon(
+            FilledButton.tonalIcon(
               onPressed: () {
                 showModalBottomSheet(
                   context: context,
                   isScrollControlled: true,
                   backgroundColor: Colors.transparent,
-                  useSafeArea: true, // [FIX] Match MoreScreen
-                  builder: (context) => const BusinessRegistrationModal(),
-                ).then(
-                  (_) => _loadOrganizations(),
-                ); // Refresh after modal close
+                  useSafeArea: true,
+                  builder: (context) => BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: const BusinessRegistrationModal(),
+                  ),
+                ).then((_) => _loadOrganizations());
               },
               icon: const Icon(LucideIcons.plus, size: 18),
               label: const Text('Register Organization'),
@@ -554,8 +589,7 @@ class _OrganizationsListScreenState
                           context,
                         ),
                       ),
-                      if (status == 'pending')
-                        const SizedBox.shrink(), // Removed pending badge
+                      if (status == 'pending') const SizedBox.shrink(),
                     ],
                   ),
 
@@ -564,7 +598,6 @@ class _OrganizationsListScreenState
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        // Country flag emoji
                         Text(
                           _getCountryFlag(country),
                           style: const TextStyle(fontSize: 12),
@@ -617,9 +650,6 @@ class _OrganizationsListScreenState
                 ],
               ),
             ),
-
-            // Actions
-            // Navigation icon removed as per request
           ],
         ),
       ),

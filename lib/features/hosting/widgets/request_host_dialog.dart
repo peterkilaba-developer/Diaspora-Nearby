@@ -1,8 +1,11 @@
+import 'dart:async';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
+import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/hosting/services/hosting_service.dart';
 import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
@@ -100,7 +103,6 @@ class _RequestHostDialogState extends ConsumerState<RequestHostDialog> {
       setState(() {
         if (isArrival) {
           _arrivalDate = picked;
-          // Auto-adjust departure if it's before arrival
           if (_departureDate != null && _departureDate!.isBefore(picked)) {
             _departureDate = picked.add(const Duration(days: 1));
           }
@@ -114,63 +116,77 @@ class _RequestHostDialogState extends ConsumerState<RequestHostDialog> {
   Future<void> _submit() async {
     if (!_isValid || _isSubmitting) return;
 
-    setState(() => _isSubmitting = true);
+    final user = ref.read(authRepositoryProvider).currentUser;
+    final cachedScore = user != null
+        ? ref.read(userTrustProvider(user.uid)).value?.trustScore
+        : null;
 
-    // Validate 91+ Trust Score to Request Peer Hosting
-    final trustService = ref.read(trustServiceProvider);
-    final trustScore = await trustService.calculateTrustScore(
-      null,
-    ); // Passing null uses current user
-    if (trustScore < 91) {
-      setState(() => _isSubmitting = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Trust Score of 91+ required to request Peer Hosting.',
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-      return;
-    }
-
-    final hostingService = ref.read(hostingServiceProvider);
-    final result = await hostingService.createHostingRequest(
-      communityId: widget.communityId,
-      communityName: widget.communityName,
-      communityChatId: widget.communityChatId,
-      arrivalDate: _arrivalDate!,
-      departureDate: _departureDate!,
-      purpose: _purpose,
-      notes: _notesController.text.isNotEmpty ? _notesController.text : null,
-      guestCount: _guestCount,
-    );
-
-    setState(() => _isSubmitting = false);
-
-    if (!mounted) return;
-
-    if (result != null) {
-      Navigator.pop(context, true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Hosting request sent to ${widget.communityName}! '
-            'Community members will be notified.',
-          ),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } else {
+    if (cachedScore != null && cachedScore < 91) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Failed to create hosting request. Please try again.'),
+          content: Text(
+            'Trust Score of 91+ required to request Peer Hosting.',
+          ),
           backgroundColor: Colors.red,
         ),
       );
+      return;
     }
+
+    if (cachedScore == null) {
+      setState(() => _isSubmitting = true);
+      final trustService = ref.read(trustServiceProvider);
+      final trustScore = await trustService.calculateTrustScore(null);
+      if (trustScore < 91) {
+        if (mounted) {
+          setState(() => _isSubmitting = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Trust Score of 91+ required to request Peer Hosting.',
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+    }
+
+    if (!mounted) return;
+
+    final hostingService = ref.read(hostingServiceProvider);
+    final arrival = _arrivalDate!;
+    final departure = _departureDate!;
+    final purpose = _purpose;
+    final notes =
+        _notesController.text.isNotEmpty ? _notesController.text : null;
+    final guestCount = _guestCount;
+
+    // [PERF] Pop dialog and show confirmation immediately on frame 0
+    Navigator.pop(context, true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Hosting request sent to ${widget.communityName}! '
+          'Community members will be notified.',
+        ),
+        backgroundColor: Colors.green,
+      ),
+    );
+
+    unawaited(
+      hostingService.createHostingRequest(
+        communityId: widget.communityId,
+        communityName: widget.communityName,
+        communityChatId: widget.communityChatId,
+        arrivalDate: arrival,
+        departureDate: departure,
+        purpose: purpose,
+        notes: notes,
+        guestCount: guestCount,
+      ),
+    );
   }
 
   @override
@@ -179,262 +195,255 @@ class _RequestHostDialogState extends ConsumerState<RequestHostDialog> {
     final isDark = theme.brightness == Brightness.dark;
     final dateFormat = DateFormat('MMM d, yyyy');
 
-    return DraggableScrollableSheet(
-      initialChildSize: 0.85,
-      minChildSize: 0.3,
-      maxChildSize: 0.95,
-      expand: false,
-      builder: (context, scrollController) {
-        return Container(
-          decoration: BoxDecoration(
-            color: theme.scaffoldBackgroundColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // ── Drag Handle ── (outside scroll so it always stays on top)
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onVerticalDragUpdate: (_) {},
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: theme.hintColor.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(2),
+    return BackdropFilter(
+      filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+      child: DraggableScrollableSheet(
+        initialChildSize: 0.85,
+        minChildSize: 0.3,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) {
+          return Container(
+            decoration: BoxDecoration(
+              color: theme.scaffoldBackgroundColor,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24),
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // ── Drag Handle ──
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onVerticalDragUpdate: (_) {},
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: theme.hintColor.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
 
-              // ── Scrollable Content ──
-              Expanded(
-                child: ListView(
-                  controller: scrollController,
-                  padding: EdgeInsets.fromLTRB(
-                    20,
-                    0,
-                    20,
-                    24 + MediaQuery.of(context).viewInsets.bottom,
-                  ),
-                  children: [
-                    // Title
-                    Row(
-                      children: [
-                        const Icon(
-                          LucideIcons.plane,
-                          color: AppTheme.accent,
-                          size: 24,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Request Host in ${widget.communityName}',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
+                // ── Scrollable Content ──
+                Expanded(
+                  child: ListView(
+                    controller: scrollController,
+                    padding: EdgeInsets.fromLTRB(
+                      20,
+                      0,
+                      20,
+                      24 + MediaQuery.of(context).viewInsets.bottom,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Your request will be broadcast to the community chat. '
-                      'Interested hosts can view your profile and reach out.',
-                      style: TextStyle(fontSize: 13, color: theme.hintColor),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // ── Date Pickers ──
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _DateCard(
-                            label: 'Arrival',
-                            date: _arrivalDate,
-                            dateFormat: dateFormat,
-                            onTap: () => _pickDate(true),
-                            isDark: isDark,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _DateCard(
-                            label: 'Departure',
-                            date: _departureDate,
-                            dateFormat: dateFormat,
-                            onTap: () => _pickDate(false),
-                            isDark: isDark,
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (_stayDuration > 0) ...[
-                      const SizedBox(height: 8),
+                    children: [
+                      // Title
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
-                            LucideIcons.calendar,
-                            size: 14,
-                            color: theme.hintColor,
+                          const Icon(
+                            LucideIcons.plane,
+                            color: AppTheme.accent,
+                            size: 24,
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '$_stayDuration day${_stayDuration == 1 ? '' : 's'} • '
-                            '${_stayDuration * 10} DSP',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppTheme.accent,
-                              fontWeight: FontWeight.w500,
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Request Host in ${widget.communityName}',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ],
                       ),
-                    ],
-                    const SizedBox(height: 16),
-
-                    // ── Purpose ──
-                    Text(
-                      'Purpose of Visit',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: theme.hintColor,
+                      const SizedBox(height: 4),
+                      Text(
+                        'Your request will be broadcast to the community chat. '
+                        'Interested hosts can view your profile and reach out.',
+                        style: TextStyle(fontSize: 13, color: theme.hintColor),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _purposes.map((p) {
-                        final selected = _purpose == p;
-                        return ChoiceChip(
-                          label: Text(p),
-                          selected: selected,
-                          onSelected: (s) =>
-                              setState(() => _purpose = s ? p : null),
-                          selectedColor: AppTheme.accent.withValues(
-                            alpha: 0.15,
-                          ),
-                          labelStyle: TextStyle(
-                            color: selected
-                                ? const Color(0xFF4A7A5A)
-                                : theme.textTheme.bodyMedium?.color,
-                            fontSize: 13,
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 16),
+                      const SizedBox(height: 20),
 
-                    // ── Guest Count ──
-                    Row(
-                      children: [
-                        Text(
-                          'Guests',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: theme.hintColor,
+                      // ── Date Pickers ──
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _DateCard(
+                              label: 'Arrival',
+                              date: _arrivalDate,
+                              dateFormat: dateFormat,
+                              onTap: () => _pickDate(true),
+                              isDark: isDark,
+                            ),
                           ),
-                        ),
-                        const Spacer(),
-                        IconButton(
-                          onPressed: _guestCount > 1
-                              ? () => setState(() => _guestCount--)
-                              : null,
-                          icon: const Icon(LucideIcons.minus, size: 18),
-                          constraints: const BoxConstraints(
-                            minWidth: 36,
-                            minHeight: 36,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _DateCard(
+                              label: 'Departure',
+                              date: _departureDate,
+                              dateFormat: dateFormat,
+                              onTap: () => _pickDate(false),
+                              isDark: isDark,
+                            ),
                           ),
-                        ),
-                        Text(
-                          '$_guestCount',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: _guestCount < 10
-                              ? () => setState(() => _guestCount++)
-                              : null,
-                          icon: const Icon(LucideIcons.plus, size: 18),
-                          constraints: const BoxConstraints(
-                            minWidth: 36,
-                            minHeight: 36,
-                          ),
+                        ],
+                      ),
+                      if (_stayDuration > 0) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              LucideIcons.calendar,
+                              size: 14,
+                              color: theme.hintColor,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '$_stayDuration day${_stayDuration == 1 ? '' : 's'} • '
+                              '${_stayDuration * 10} DSP',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppTheme.accent,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 12),
+                      const SizedBox(height: 16),
 
-                    // ── Notes ──
-                    TextField(
-                      controller: _notesController,
-                      decoration: InputDecoration(
-                        hintText: 'Additional notes (optional)',
-                        hintStyle: TextStyle(color: theme.hintColor),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
+                      // ── Purpose ──
+                      Text(
+                        'Purpose of Visit',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: theme.hintColor,
                         ),
                       ),
-                      maxLines: 3,
-                      minLines: 1,
-                    ),
-                    const SizedBox(height: 20),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _purposes.map((p) {
+                          final selected = _purpose == p;
+                          return ChoiceChip(
+                            label: Text(p),
+                            selected: selected,
+                            side: BorderSide.none,
+                            onSelected: (s) =>
+                                setState(() => _purpose = s ? p : null),
+                            selectedColor: AppTheme.accent.withValues(
+                              alpha: 0.15,
+                            ),
+                            labelStyle: TextStyle(
+                              color: selected
+                                  ? const Color(0xFF4A7A5A)
+                                  : theme.textTheme.bodyMedium?.color,
+                              fontSize: 13,
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 16),
 
-                    // ── Submit Button ──
-                    ElevatedButton.icon(
-                      onPressed: _isValid && !_isSubmitting ? _submit : null,
-                      icon: _isSubmitting
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Icon(LucideIcons.send, size: 18),
-                      label: Text(
-                        _isSubmitting
-                            ? 'Sending...'
-                            : 'Send Request to Community',
+                      // ── Guest Count ──
+                      Row(
+                        children: [
+                          Text(
+                            'Guests',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: theme.hintColor,
+                            ),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            onPressed: _guestCount > 1
+                                ? () => setState(() => _guestCount--)
+                                : null,
+                            icon: const Icon(LucideIcons.minus, size: 18),
+                            constraints: const BoxConstraints(
+                              minWidth: 36,
+                              minHeight: 36,
+                            ),
+                          ),
+                          Text(
+                            '$_guestCount',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: _guestCount < 10
+                                ? () => setState(() => _guestCount++)
+                                : null,
+                            icon: const Icon(LucideIcons.plus, size: 18),
+                            constraints: const BoxConstraints(
+                              minWidth: 36,
+                              minHeight: 36,
+                            ),
+                          ),
+                        ],
                       ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.accent,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                      const SizedBox(height: 12),
+
+                      // ── Notes ──
+                      TextField(
+                        controller: _notesController,
+                        decoration: InputDecoration(
+                          hintText: 'Additional notes (optional)',
+                          hintStyle: TextStyle(color: theme.hintColor),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                        ),
+                        maxLines: 3,
+                        minLines: 1,
+                      ),
+                      const SizedBox(height: 20),
+
+                      // ── Submit Button ──
+                      ElevatedButton.icon(
+                        onPressed: _isValid && !_isSubmitting ? _submit : null,
+                        icon: const Icon(LucideIcons.send, size: 18),
+                        label: const Text('Send Request to Community'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.accent,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-        );
-      },
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }

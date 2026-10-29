@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui' as ui;
 import 'package:universal_io/io.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -30,8 +32,8 @@ import 'package:diaspora_nearby/features/chat/models/chat.dart';
 class CreateEventScreen extends ConsumerStatefulWidget {
   final Event? eventToEdit;
   final String? eventIdToEdit;
-  final String? communityId; // [NEW] Optional community context
-  final String? groupId; // [NEW] Support creating event for a group
+  final String? communityId;
+  final String? groupId;
 
   const CreateEventScreen({
     super.key,
@@ -46,56 +48,57 @@ class CreateEventScreen extends ConsumerStatefulWidget {
 }
 
 class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
-  bool _isDeleting = false;
-
   Future<void> _confirmAndDeleteEvent(Event event) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Event?'),
-        content: Text(
-          'Are you sure you want to delete "${event.title}"? This action cannot be undone.',
+      builder: (ctx) => BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          title: const Text('Delete Event?'),
+          content: Text(
+            'Are you sure you want to delete "${event.title}"? This action cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: TextButton.styleFrom(foregroundColor: AppTheme.error),
+              child: const Text('Delete'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: AppTheme.error),
-            child: const Text('Delete'),
-          ),
-        ],
       ),
     );
 
     if (confirmed != true || !mounted) return;
 
-    setState(() => _isDeleting = true);
-    try {
-      final user = ref.read(authRepositoryProvider).currentUser;
-      await ref.read(eventRepositoryProvider).deleteEvent(event.id);
-      ref.invalidate(eventDetailsProvider(event.id));
-      ref.invalidate(allRawEventsStreamProvider);
-      if (user != null) {
-        ref.invalidate(userEventsProvider(user.uid));
-        ref.invalidate(joinedEventsProvider(user.uid));
+    final repo = ref.read(eventRepositoryProvider);
+    final user = ref.read(authRepositoryProvider).currentUser;
+
+    // [PERF] Optimistically remove from cache and navigate immediately on frame 0
+    repo.removeCachedEvent(event.id);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Event deleted')));
+    context.go('/events');
+
+    unawaited(() async {
+      try {
+        await repo.deleteEvent(event.id);
+        ref.invalidate(eventDetailsProvider(event.id));
+        ref.invalidate(allRawEventsStreamProvider);
+        if (user != null) {
+          ref.invalidate(userEventsProvider(user.uid));
+          ref.invalidate(joinedEventsProvider(user.uid));
+        }
+      } catch (e) {
+        debugPrint('Failed to delete event in background: $e');
       }
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Event deleted')));
-        context.go('/events');
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isDeleting = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to delete event: $e')));
-      }
-    }
+    }());
   }
 
   @override
@@ -106,16 +109,19 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
     if (isEditing) {
       Event? resolvedEvent = widget.eventToEdit;
       if (resolvedEvent == null && widget.eventIdToEdit != null) {
+        final cached = ref
+            .read(eventRepositoryProvider)
+            .getCachedEvent(widget.eventIdToEdit!);
         final asyncEvent = ref.watch(
           eventDetailsProvider(widget.eventIdToEdit!),
         );
-        if (asyncEvent.isLoading) {
+        resolvedEvent = asyncEvent.value ?? cached;
+        if (resolvedEvent == null && asyncEvent.isLoading) {
           return Scaffold(
             appBar: AppBar(title: const Text('Manage Event')),
             body: const Center(child: CircularProgressIndicator()),
           );
         }
-        resolvedEvent = asyncEvent.value;
         if (resolvedEvent == null) {
           return Scaffold(
             appBar: AppBar(title: const Text('Manage Event')),
@@ -139,23 +145,15 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
               ),
             if (resolvedEvent != null)
               IconButton(
-                icon: _isDeleting
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(LucideIcons.trash2, color: AppTheme.error),
+                icon: const Icon(LucideIcons.trash2, color: AppTheme.error),
                 tooltip: 'Delete Event',
-                onPressed: _isDeleting
-                    ? null
-                    : () => _confirmAndDeleteEvent(resolvedEvent!),
+                onPressed: () => _confirmAndDeleteEvent(resolvedEvent!),
               ),
           ],
         ),
         body: _CreateEventForm(
           eventToEdit: resolvedEvent,
-          communityId: widget.communityId, // [NEW]
+          communityId: widget.communityId,
           groupId: widget.groupId,
         ),
       );
@@ -180,7 +178,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
             _CreateEventForm(
               communityId: widget.communityId,
               groupId: widget.groupId,
-            ), // [NEW]
+            ),
             const _JoinedEventsList(),
             const OrganizerEventsList(padding: EdgeInsets.zero),
           ],
@@ -192,7 +190,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
 
 class _CreateEventForm extends ConsumerStatefulWidget {
   final Event? eventToEdit;
-  final String? communityId; // [NEW]
+  final String? communityId;
   final String? groupId;
 
   const _CreateEventForm({this.eventToEdit, this.communityId, this.groupId});
@@ -202,6 +200,8 @@ class _CreateEventForm extends ConsumerStatefulWidget {
 }
 
 class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
+  static final Map<String, List<Community>> _cachedCommunitiesByUser = {};
+
   final _formKey = GlobalKey<FormState>();
 
   // Controllers
@@ -224,13 +224,13 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
   // Audience
   String _attendingPermission = 'global_community';
   List<Community> _myCommunities = [];
-  List<Chat> _myGroups = []; // [NEW] Groups
+  List<Chat> _myGroups = [];
   List<String> _invitedUserIds = [];
-  bool _isLoadingAudience = true;
+  bool _isLoadingAudience = false;
 
   bool _isPaid = false;
-  bool _isLoading = false;
-  bool _isPublished = true; // [NEW] Default to published
+  final bool _isLoading = false;
+  bool _isPublished = true;
 
   // Places
   List<places.AutocompletePrediction> _placePredictions = [];
@@ -282,37 +282,76 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
     if (widget.eventToEdit != null) {
       _preFillForEdit();
     } else if (widget.communityId != null) {
-      // [NEW] Pre-select community if provided
       _attendingPermission = widget.communityId!;
     } else if (widget.groupId != null) {
-      // [NEW] Pre-select group if provided
       _attendingPermission = widget.groupId!;
     }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
+    // [PERF] Seed audience & organizations synchronously on frame 0
+    _seedAudienceSynchronously();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       _fetchAudienceData();
-      final user = ref.read(authRepositoryProvider).currentUser;
-      if (user != null) {
-        debugPrint('Fetching organizations for user: ${user.uid}');
-        final orgs = await ref
-            .read(organizationRepositoryProvider)
-            .getUserOrganizations(user.uid);
-        debugPrint('Fetched ${orgs.length} organizations: $orgs');
-        if (mounted) {
-          setState(() {
-            _userOrgs = orgs;
-            // If editing, try to match existing org
-            if (widget.eventToEdit?.organizationId != null) {
-              _selectedOrgId = widget.eventToEdit!.organizationId;
-            }
-          });
-        }
-      }
     });
 
     // Listen to changes for validation
     _titleController.addListener(_onFormChanged);
     _locationController.addListener(_onFormChanged);
+  }
+
+  void _seedAudienceSynchronously() {
+    final user = ref.read(authRepositoryProvider).currentUser;
+    if (user == null) return;
+
+    final chatRepo = ref.read(chatRepositoryProvider);
+    final orgRepo = ref.read(organizationRepositoryProvider);
+    final communityRepo = ref.read(communityRepositoryProvider);
+    final profile =
+        ref.read(userProfileProvider).value ??
+        ref.read(profileRepositoryProvider).getCachedProfile(user.uid);
+
+    // Seed groups from ChatRepository cache
+    var cachedGroups = chatRepo.cachedChats
+        .where((c) => c.type == 'group')
+        .toList();
+
+    // Seed communities from cache
+    var cachedCommunities =
+        _cachedCommunitiesByUser[user.uid] ??
+        (profile?.communityMemberships ?? const <String>[])
+            .map(communityRepo.getCachedCommunity)
+            .whereType<Community>()
+            .toList();
+
+    if (widget.communityId != null) {
+      final specific = communityRepo.getCachedCommunity(widget.communityId!);
+      if (specific != null &&
+          !cachedCommunities.any((c) => c.id == specific.id)) {
+        cachedCommunities = [specific];
+      } else {
+        cachedCommunities = cachedCommunities
+            .where((c) => c.id == widget.communityId)
+            .toList();
+      }
+      cachedGroups = [];
+    } else if (widget.groupId != null) {
+      cachedGroups = cachedGroups
+          .where((g) => g.id == widget.groupId)
+          .toList();
+      cachedCommunities = [];
+    }
+
+    _myCommunities = cachedCommunities;
+    _myGroups = cachedGroups;
+    _isLoadingAudience = _myCommunities.isEmpty && _myGroups.isEmpty;
+
+    final cachedOrgs = orgRepo.getCachedUserOrganizations(user.uid);
+    if (cachedOrgs != null) {
+      _userOrgs = cachedOrgs;
+      if (widget.eventToEdit?.organizationId != null) {
+        _selectedOrgId = widget.eventToEdit!.organizationId;
+      }
+    }
   }
 
   void _onFormChanged() {
@@ -391,19 +430,31 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
     _venueCountry = e.venueCountry;
     _latitude = e.latitude;
     _longitude = e.longitude;
-    _isPublished = e.status == 'published'; // [NEW] Pre-fill status
+    _isPublished = e.status == 'published';
+    _selectedOrgId = e.organizationId;
   }
 
   Future<void> _fetchAudienceData() async {
     try {
-      final user = ref.read(authStateProvider).value;
+      final user =
+          ref.read(authStateProvider).value ??
+          ref.read(authRepositoryProvider).currentUser;
       if (user == null) return;
 
       final communityRepo = ref.read(communityRepositoryProvider);
       final chatRepo = ref.read(chatRepositoryProvider);
+      final orgRepo = ref.read(organizationRepositoryProvider);
 
-      var communities = await communityRepo.getUserCommunities(user.uid);
-      final chats = await chatRepo.getUserChats(); // [NEW] Fetch chats
+      // [PERF] Fetch communities, chats, and organizations in parallel
+      final results = await Future.wait([
+        communityRepo.getUserCommunities(user.uid),
+        chatRepo.getUserChats(),
+        orgRepo.getUserOrganizations(user.uid),
+      ]);
+
+      var communities = List<Community>.from(results[0] as List<Community>);
+      final chats = results[1] as List<Chat>;
+      final orgs = results[2] as List<Map<String, dynamic>>;
       var groups = chats.where((c) => c.type == 'group').toList();
 
       // Sort priority: global -> continent -> country -> state -> city
@@ -421,21 +472,25 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
         return pA.compareTo(pB);
       });
 
+      _cachedCommunitiesByUser[user.uid] = List<Community>.from(communities);
+
       if (mounted) {
         setState(() {
-          // [NEW] Filter if communityId is restricted
+          _userOrgs = orgs;
+          if (widget.eventToEdit?.organizationId != null) {
+            _selectedOrgId = widget.eventToEdit!.organizationId;
+          }
+
           if (widget.communityId != null) {
             communities = communities
                 .where((c) => c.id == widget.communityId)
                 .toList();
-            groups = []; // Clear groups as we are in strict community mode
+            groups = [];
           }
 
-          // [NEW] Handle groupId restriction
           if (widget.groupId != null) {
             groups = groups.where((g) => g.id == widget.groupId).toList();
-            communities =
-                []; // Clear communities as we are in strict group mode
+            communities = [];
           }
 
           _myCommunities = communities;
@@ -489,7 +544,7 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
   }
 
   Future<void> _pickImage() async {
-    FocusScope.of(context).unfocus(); // [FIX]
+    FocusScope.of(context).unfocus();
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(
       source: ImageSource.gallery,
@@ -516,6 +571,7 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
         .read(googlePlacesServiceProvider)
         .autocomplete(value, filter: places.PlaceTypeFilter.VENUES)
         .then((predictions) {
+          if (!mounted) return;
           setState(() {
             _placePredictions = predictions;
             _showPredictions = true;
@@ -523,42 +579,45 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
         });
   }
 
-  void _selectPlace(places.AutocompletePrediction prediction) async {
+  void _selectPlace(places.AutocompletePrediction prediction) {
     _locationController.text = prediction.fullText;
+    _venueName = prediction.primaryText;
+    _venueAddress = prediction.secondaryText;
     setState(() {
       _showPredictions = false;
       _placePredictions = [];
     });
     FocusScope.of(context).unfocus();
 
-    try {
-      final response = await ref
-          .read(googlePlacesServiceProvider)
-          .getPlaceDetails(prediction.placeId);
+    unawaited(() async {
+      try {
+        final response = await ref
+            .read(googlePlacesServiceProvider)
+            .getPlaceDetails(prediction.placeId);
 
-      final place = response?.place;
-      if (place != null) {
-        setState(() {
-          _venueName = place.name;
-          _venueAddress = place.address;
-          _latitude = place.latLng?.lat;
-          _longitude = place.latLng?.lng;
+        final place = response?.place;
+        if (place != null && mounted) {
+          setState(() {
+            _venueName = place.name;
+            _venueAddress = place.address;
+            _latitude = place.latLng?.lat;
+            _longitude = place.latLng?.lng;
 
-          // Parse Address Components
-          if (place.addressComponents != null) {
-            for (var comp in place.addressComponents!) {
-              if (comp.types.contains('locality')) _venueCity = comp.name;
-              if (comp.types.contains('administrative_area_level_1')) {
-                _venueState = comp.name;
+            if (place.addressComponents != null) {
+              for (var comp in place.addressComponents!) {
+                if (comp.types.contains('locality')) _venueCity = comp.name;
+                if (comp.types.contains('administrative_area_level_1')) {
+                  _venueState = comp.name;
+                }
+                if (comp.types.contains('country')) _venueCountry = comp.name;
               }
-              if (comp.types.contains('country')) _venueCountry = comp.name;
             }
-          }
-        });
+          });
+        }
+      } catch (e) {
+        debugPrint('Error fetching place details: $e');
       }
-    } catch (e) {
-      debugPrint('Error fetching place details: $e');
-    }
+    }());
   }
 
   String _formatTimeOfDay(TimeOfDay time) {
@@ -581,19 +640,18 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                     AppTheme.pageHorizontalPadding * 2,
                   ),
                   children: [
-                    // Image Picker ... (same)
-                    // Image Picker ... (same)
                     // Organization Selection
                     if (_userOrgs.isNotEmpty) ...[
                       DropdownButtonFormField<String?>(
                         initialValue: _selectedOrgId,
-                        isExpanded: true, // Fix overflow
-                        onTap: () => FocusScope.of(context).unfocus(), // [FIX]
+                        isExpanded: true,
+                        onTap: () => FocusScope.of(context).unfocus(),
                         decoration: InputDecoration(
                           labelText: 'Publish as',
                           prefixIcon: const Icon(LucideIcons.building2),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
                           ),
                           filled: true,
                           fillColor: Theme.of(context)
@@ -801,7 +859,7 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
 
                     DropdownButtonFormField<String>(
                       initialValue: _category,
-                      onTap: () => FocusScope.of(context).unfocus(), // [FIX]
+                      onTap: () => FocusScope.of(context).unfocus(),
                       decoration: InputDecoration(
                         labelText: 'Category *',
                         prefixIcon: const Icon(LucideIcons.tag),
@@ -836,8 +894,15 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                       children: [
                         Expanded(
                           child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide.none,
+                              backgroundColor: Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainerHighest
+                                  .withValues(alpha: 0.4),
+                            ),
                             onPressed: () async {
-                              FocusScope.of(context).unfocus(); // [FIX]
+                              FocusScope.of(context).unfocus();
                               final d = await showDatePicker(
                                 context: context,
                                 initialDate: _startDate,
@@ -849,7 +914,6 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                               if (d != null) {
                                 setState(() {
                                   _startDate = d;
-                                  // Auto-adjust end date if needed
                                   if (_endDate.isBefore(_startDate)) {
                                     _endDate = _startDate;
                                   }
@@ -865,8 +929,15 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide.none,
+                              backgroundColor: Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainerHighest
+                                  .withValues(alpha: 0.4),
+                            ),
                             onPressed: () async {
-                              FocusScope.of(context).unfocus(); // [FIX]
+                              FocusScope.of(context).unfocus();
                               final t = await showTimePicker(
                                 context: context,
                                 initialTime: _startTime,
@@ -892,9 +963,15 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                       children: [
                         Expanded(
                           child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide.none,
+                              backgroundColor: Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainerHighest
+                                  .withValues(alpha: 0.4),
+                            ),
                             onPressed: () async {
-                              FocusScope.of(context).unfocus(); // [FIX]
-                              // [FIX] First date is StartDate
+                              FocusScope.of(context).unfocus();
                               final d = await showDatePicker(
                                 context: context,
                                 initialDate: _endDate,
@@ -912,14 +989,20 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide.none,
+                              backgroundColor: Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainerHighest
+                                  .withValues(alpha: 0.4),
+                            ),
                             onPressed: () async {
-                              FocusScope.of(context).unfocus(); // [FIX]
+                              FocusScope.of(context).unfocus();
                               final t = await showTimePicker(
                                 context: context,
                                 initialTime: _endTime,
                               );
                               if (t != null) {
-                                // [FIX] Logical check for end time
                                 final startDateTime = DateTime(
                                   _startDate.year,
                                   _startDate.month,
@@ -936,7 +1019,6 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                                 );
 
                                 if (endDateTime.isBefore(startDateTime)) {
-                                  // If selected end time is before start time (e.g. same day), push it forward
                                   if (context.mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
@@ -946,7 +1028,6 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                                       ),
                                     );
                                   }
-                                  // Optionally auto-correct
                                   final newEnd = startDateTime.add(
                                     const Duration(minutes: 30),
                                   );
@@ -1032,14 +1113,12 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                           ListTile(
                             title: const Text('Is this a paid event?'),
                             onTap: () {
-                              FocusScope.of(context).unfocus(); // [FIX]
-                              // [FIX] Removed verification check
+                              FocusScope.of(context).unfocus();
                               setState(() => _isPaid = !_isPaid);
                             },
                             trailing: Switch(
                               value: _isPaid,
                               onChanged: (v) {
-                                // [FIX] Removed verification check
                                 setState(() => _isPaid = v);
                               },
                               activeThumbColor: Theme.of(
@@ -1102,7 +1181,7 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                         ),
                         value: _isPublished,
                         onChanged: (v) {
-                          FocusScope.of(context).unfocus(); // [FIX]
+                          FocusScope.of(context).unfocus();
                           setState(() => _isPublished = v);
                         },
                         secondary: Icon(
@@ -1135,13 +1214,12 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
                           vertical: 8,
-                        ), // [FIX] 8px horizontal padding
+                        ),
                         child: Column(
                           children: [
                             // Communities
                             if (widget.communityId != null &&
                                 _myCommunities.isNotEmpty)
-                              // [NEW] Fixed/Locked Community Display
                               ListTile(
                                 contentPadding: const EdgeInsets.symmetric(
                                   horizontal: 8,
@@ -1179,7 +1257,6 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                               )
                             else if (widget.eventToEdit != null &&
                                 _myCommunities.isNotEmpty)
-                              // Locked community display when editing
                               Builder(
                                 builder: (context) {
                                   final selected = _myCommunities.firstWhere(
@@ -1275,7 +1352,7 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                               ),
                             ],
 
-                            // [NEW] Locked Group Display
+                            // Locked Group Display
                             if (widget.groupId != null && _myGroups.isNotEmpty)
                               ListTile(
                                 contentPadding: const EdgeInsets.symmetric(
@@ -1317,7 +1394,7 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                           ],
                         ),
                       ),
-                    const SizedBox(height: 20), // Spacing for scrolling
+                    const SizedBox(height: 20),
                   ],
                 ),
               ),
@@ -1353,6 +1430,10 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                                   .read(communityProvider(widget.communityId!))
                                   .value
                                   ?.name ??
+                              ref
+                                  .read(communityRepositoryProvider)
+                                  .getCachedCommunity(widget.communityId!)
+                                  ?.name ??
                               'this community';
                           _showExclusivityDialog(communityName);
                         } else {
@@ -1368,24 +1449,13 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                   ),
                   elevation: 0,
                 ),
-                child: _isLoading
-                    ? SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          color: Theme.of(context).colorScheme.onPrimary,
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : Text(
-                        widget.eventToEdit != null
-                            ? 'Update Event'
-                            : 'Create Event',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                child: Text(
+                  widget.eventToEdit != null ? 'Update Event' : 'Create Event',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ),
           ],
@@ -1433,57 +1503,64 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
       context: context,
       builder: (ctx) {
         final theme = Theme.of(ctx);
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: Row(
-            children: [
-              Icon(
-                LucideIcons.shield,
-                color: theme.colorScheme.primary,
-                size: 22,
-              ),
-              const SizedBox(width: 8),
-              const Expanded(child: Text('Community Exclusive Event')),
-            ],
-          ),
-          content: RichText(
-            text: TextSpan(
-              style: theme.textTheme.bodyMedium,
+        return BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: AlertDialog(
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 24,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: Row(
               children: [
-                const TextSpan(
-                  text: 'This event will be exclusively for members of ',
+                Icon(
+                  LucideIcons.shield,
+                  color: theme.colorScheme.primary,
+                  size: 22,
                 ),
-                TextSpan(
-                  text: communityName,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const TextSpan(
-                  text:
-                      '. Only current and future members of this community will be able to discover and attend this event.',
-                ),
+                const SizedBox(width: 8),
+                const Expanded(child: Text('Community Exclusive Event')),
               ],
             ),
+            content: RichText(
+              text: TextSpan(
+                style: theme.textTheme.bodyMedium,
+                children: [
+                  const TextSpan(
+                    text: 'This event will be exclusively for members of ',
+                  ),
+                  TextSpan(
+                    text: communityName,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const TextSpan(
+                    text:
+                        '. Only current and future members of this community will be able to discover and attend this event.',
+                  ),
+                ],
+              ),
+            ),
+            actionsAlignment: MainAxisAlignment.center,
+            actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+            actions: [
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.of(ctx).pop(true),
+                  child: const Text('Create Event'),
+                ),
+              ),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(false),
+                  child: const Text('Cancel'),
+                ),
+              ),
+            ],
           ),
-          actionsAlignment: MainAxisAlignment.center,
-          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-          actions: [
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text('Create Event'),
-              ),
-            ),
-            SizedBox(
-              width: double.infinity,
-              child: TextButton(
-                onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('Cancel'),
-              ),
-            ),
-          ],
         );
       },
     );
@@ -1528,163 +1605,167 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
       return;
     }
 
-    setState(() => _isLoading = true);
+    final user =
+        ref.read(authStateProvider).value ??
+        ref.read(authRepositoryProvider).currentUser;
+    final profile =
+        ref.read(userProfileProvider).value ??
+        (user != null
+            ? ref.read(profileRepositoryProvider).getCachedProfile(user.uid)
+            : null);
+    if (user == null || profile == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('User not logged in')));
+      return;
+    }
 
-    try {
-      final user = ref.read(authStateProvider).value;
-      final profile = ref.read(userProfileProvider).value;
-      if (user == null || profile == null) {
-        throw Exception('User not logged in');
+    final repo = ref.read(eventRepositoryProvider);
+
+    String? orgName;
+    if (_selectedOrgId != null) {
+      final org = _userOrgs.firstWhere(
+        (o) => o['id'] == _selectedOrgId,
+        orElse: () => {'name': null},
+      );
+      orgName = org['name'] ?? org['businessName'];
+    }
+
+    final locationText = _locationController.text.trim();
+    if (PlusCodeService.isValidPlusCode(locationText)) {
+      final decoded = PlusCodeService.decode(locationText);
+      if (decoded != null) {
+        _latitude = decoded['latitude'];
+        _longitude = decoded['longitude'];
+        _plusCode = locationText;
       }
+    }
 
-      final repo = ref.read(eventRepositoryProvider);
+    final imageToUpload = _imageFile;
 
-      String? orgName;
-      if (_selectedOrgId != null) {
-        final org = _userOrgs.firstWhere(
-          (o) => o['id'] == _selectedOrgId,
-          orElse: () => {'name': null}, // Use name: null or handle gracefully
-        );
-        orgName = org['name'] ?? org['businessName'];
-      }
+    if (widget.eventToEdit != null) {
+      // UPDATE (0ms optimistic cache + immediate pop)
+      final updatedEvent = widget.eventToEdit!.copyWith(
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim(),
+        startDate: DateFormat('yyyy-MM-dd').format(_startDate),
+        startTime: _formatTimeOfDay(_startTime),
+        endDate: DateFormat('yyyy-MM-dd').format(_endDate),
+        endTime: _formatTimeOfDay(_endTime),
+        location: locationText,
+        category: _category,
+        attendingPermission: _attendingPermission,
+        venueName: _venueName,
+        venueAddress: _venueAddress,
+        venueCity: _venueCity,
+        venueState: _venueState,
+        venueCountry: _venueCountry,
+        plusCode: _plusCode,
+        latitude: _latitude,
+        longitude: _longitude,
+        status: _isPublished ? 'published' : 'hidden',
+        organizationId: _selectedOrgId,
+        organizationName: orgName,
+      );
 
-      final locationText = _locationController.text.trim();
-      if (PlusCodeService.isValidPlusCode(locationText)) {
-        final decoded = PlusCodeService.decode(locationText);
-        if (decoded != null) {
-          _latitude = decoded['latitude'];
-          _longitude = decoded['longitude'];
-          _plusCode = locationText;
-        }
-      }
+      updatedEvent.isPaid = _isPaid;
+      updatedEvent.ticketPrice = _isPaid
+          ? double.tryParse(_ticketPriceController.text) ?? 0
+          : null;
+      updatedEvent.invitedUserIds = _attendingPermission == 'private'
+          ? _invitedUserIds
+          : null;
+      updatedEvent.maxAttendees = _maxAttendeesController.text.isNotEmpty
+          ? int.tryParse(_maxAttendeesController.text)
+          : null;
 
-      if (widget.eventToEdit != null) {
-        // UPDATE
-        final updatedEvent = widget.eventToEdit!.copyWith(
-          title: _titleController.text.trim(),
-          description: _descriptionController.text.trim(),
-          startDate: DateFormat('yyyy-MM-dd').format(_startDate),
-          startTime: _formatTimeOfDay(_startTime),
-          endDate: DateFormat('yyyy-MM-dd').format(_endDate),
-          endTime: _formatTimeOfDay(_endTime),
-          location: locationText,
-          category: _category,
-          attendingPermission: _attendingPermission,
-          venueName: _venueName,
-          venueAddress: _venueAddress,
-          venueCity: _venueCity,
-          venueState: _venueState,
-          venueCountry: _venueCountry,
-          plusCode: _plusCode,
-          latitude: _latitude,
-          longitude: _longitude,
-          status: _isPublished ? 'published' : 'hidden',
-          organizationId: _selectedOrgId,
-          organizationName: orgName,
-        );
+      repo.cacheEvent(updatedEvent);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Event Updated Successfully!')),
+      );
+      context.pop();
 
-        // Directly set nullable fields that copyWith can't clear
-        // (copyWith uses ?? which keeps old value when null is passed)
-        updatedEvent.isPaid = _isPaid;
-        updatedEvent.ticketPrice = _isPaid
-            ? double.tryParse(_ticketPriceController.text) ?? 0
-            : null;
-        updatedEvent.invitedUserIds = _attendingPermission == 'private'
-            ? _invitedUserIds
-            : null;
-        updatedEvent.maxAttendees = _maxAttendeesController.text.isNotEmpty
-            ? int.tryParse(_maxAttendeesController.text)
-            : null;
-
-        await repo.updateEvent(updatedEvent, _imageFile);
-        if (mounted) {
-          // Invalidate providers so stale data is refreshed
+      unawaited(() async {
+        try {
+          await repo.updateEvent(updatedEvent, imageToUpload);
           ref.invalidate(eventDetailsProvider(updatedEvent.id));
           ref.invalidate(allRawEventsStreamProvider);
           ref.invalidate(userEventsProvider(user.uid));
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Event Updated Successfully!')),
-          );
-          context.pop();
+        } catch (e) {
+          debugPrint('Background event update failed: $e');
         }
-      } else {
-        // CREATE
-        final eventId = const Uuid().v4();
-        final event = Event(
-          id: eventId,
-          title: _titleController.text.trim(),
-          description: _descriptionController.text.trim(),
-          startDate: DateFormat('yyyy-MM-dd').format(_startDate),
-          startTime: _formatTimeOfDay(_startTime),
-          endDate: DateFormat('yyyy-MM-dd').format(_endDate),
-          endTime: _formatTimeOfDay(_endTime),
-          location: _locationController.text.trim(),
-          category: _category,
-          creatorId: user.uid,
+      }());
+    } else {
+      // CREATE (0ms optimistic cache + immediate navigation)
+      final eventId = const Uuid().v4();
+      final event = Event(
+        id: eventId,
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim(),
+        startDate: DateFormat('yyyy-MM-dd').format(_startDate),
+        startTime: _formatTimeOfDay(_startTime),
+        endDate: DateFormat('yyyy-MM-dd').format(_endDate),
+        endTime: _formatTimeOfDay(_endTime),
+        location: locationText,
+        category: _category,
+        creatorId: user.uid,
+        creatorName: '${profile.firstName} ${profile.lastName}'.trim(),
+        creatorPhoto: profile.profileImage,
+        isPaid: _isPaid,
+        ticketPrice: _isPaid
+            ? double.tryParse(_ticketPriceController.text) ?? 0
+            : null,
+        attendingPermission: _attendingPermission,
+        invitedUserIds: _attendingPermission == 'private'
+            ? _invitedUserIds
+            : null,
+        maxAttendees: _maxAttendeesController.text.isNotEmpty
+            ? int.tryParse(_maxAttendeesController.text)
+            : null,
+        homeCountry: profile.homeCountry ?? profile.homeLocation.country,
+        hostCountry: profile.hostCountry ?? profile.hostLocation.country,
+        hostCity: profile.hostLocation.city,
+        hostState: profile.hostLocation.state,
+        homeCountryCode:
+            profile.homeCountryCode ?? profile.homeLocation.countryCode,
+        hostCountryCode:
+            profile.hostCountryCode ?? profile.hostLocation.countryCode,
+        venueName: _venueName,
+        venueAddress: _venueAddress,
+        venueCity: _venueCity,
+        venueState: _venueState,
+        venueCountry: _venueCountry,
+        plusCode: _plusCode,
+        latitude: _latitude,
+        longitude: _longitude,
+        status: _isPublished ? 'published' : 'hidden',
+        createdAt: DateTime.now().toIso8601String(),
+        attendees: [user.uid],
+        attendeeCount: 1,
+        chatId: 'event_$eventId',
+        organizationId: _selectedOrgId,
+        organizationName: orgName,
+      );
 
-          isPaid: _isPaid,
-          ticketPrice: _isPaid
-              ? double.tryParse(_ticketPriceController.text) ?? 0
-              : null,
+      repo.cacheEvent(event);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Event Published Successfully!'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      context.pushReplacement('/events/${event.id}', extra: event);
 
-          attendingPermission: _attendingPermission,
-          invitedUserIds: _attendingPermission == 'private'
-              ? _invitedUserIds
-              : null,
-          maxAttendees: _maxAttendeesController.text.isNotEmpty
-              ? int.tryParse(_maxAttendeesController.text)
-              : null,
-          homeCountry: profile.homeCountry ?? profile.homeLocation.country,
-          hostCountry: profile.hostCountry ?? profile.hostLocation.country,
-          hostCity: profile.hostLocation.city,
-          hostState: profile.hostLocation.state,
-          homeCountryCode:
-              profile.homeCountryCode ?? profile.homeLocation.countryCode,
-          hostCountryCode:
-              profile.hostCountryCode ?? profile.hostLocation.countryCode,
-          venueName: _venueName,
-          venueAddress: _venueAddress,
-          venueCity: _venueCity,
-          venueState: _venueState,
-          venueCountry: _venueCountry,
-          plusCode: _plusCode,
-          latitude: _latitude,
-          longitude: _longitude,
-          status: _isPublished ? 'published' : 'hidden', // [NEW] Use toggle
-          createdAt: DateTime.now().toIso8601String(),
-          attendees: [user.uid],
-          attendeeCount: 1,
-          chatId: 'event_$eventId',
-          organizationId: _selectedOrgId,
-          organizationName: orgName,
-        );
-
-        await repo.createEvent(event, _imageFile);
-        ref.invalidate(allRawEventsStreamProvider);
-        ref.invalidate(userEventsProvider(user.uid));
-        ref.invalidate(joinedEventsProvider(user.uid));
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Event Published Successfully!'),
-              duration: Duration(seconds: 3),
-            ),
-          );
-
-          // Navigate to the new event details page
-          context.pushReplacement('/events/${event.id}', extra: event);
+      unawaited(() async {
+        try {
+          await repo.createEvent(event, imageToUpload);
+          ref.invalidate(allRawEventsStreamProvider);
+          ref.invalidate(userEventsProvider(user.uid));
+          ref.invalidate(joinedEventsProvider(user.uid));
+        } catch (e) {
+          debugPrint('Background event creation failed: $e');
         }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+      }());
     }
   }
 }
@@ -1697,26 +1778,32 @@ class _JoinedEventsList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(authStateProvider).value;
+    final user =
+        ref.watch(authStateProvider).value ??
+        ref.read(authRepositoryProvider).currentUser;
     if (user == null) return const Center(child: CircularProgressIndicator());
 
-    final eventsStream = ref
-        .watch(eventRepositoryProvider)
-        .getJoinedEvents(user.uid);
+    final repo = ref.watch(eventRepositoryProvider);
+    final cachedJoined = repo.cachedRawEvents
+        .where((e) => e.attendees?.contains(user.uid) ?? false)
+        .toList();
+    final eventsStream = repo.getJoinedEvents(user.uid);
 
     return StreamBuilder<List<Event>>(
+      initialData: cachedJoined.isNotEmpty ? cachedJoined : null,
       stream: eventsStream,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (snapshot.hasError) {
+        if (snapshot.hasError && !snapshot.hasData) {
           return Center(child: Text('Error: ${snapshot.error}'));
         }
 
         final now = DateTime.now();
         final events =
-            (snapshot.data ?? [])
+            (snapshot.data ?? cachedJoined)
                 .where((e) => !EventRepository.isEventExpired(e, now))
                 .toList()
               ..sort((a, b) {
@@ -1736,15 +1823,9 @@ class _JoinedEventsList extends ConsumerWidget {
           separatorBuilder: (_, _) => const SizedBox(height: 16),
           itemBuilder: (context, index) {
             final event = events[index];
-            // Reusing OrganizerEventCard for display, but filtering actions might be needed?
-            // OrganizerEventCard has Delete/Edit which regular joined users shouldn't see.
-            // We need a read-only card or check permissions inside card.
-            // For now, let's assume OrganizerEventCard is for ORGANIZERS.
-            // We should create a regular EventCard or reuse the one from EventsScreen?
-            // Using unified EventCard for consistency
             return EventCard(
               event: event,
-              isAttending: true, // Since it's 'Attending Events'
+              isAttending: true,
             );
           },
         );

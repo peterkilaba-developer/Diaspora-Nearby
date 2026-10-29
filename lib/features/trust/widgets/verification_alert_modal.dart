@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
@@ -35,11 +36,14 @@ class VerificationAlertModal extends StatelessWidget {
     return showDialog(
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.5),
-      builder: (context) => VerificationAlertModal(
-        type: type,
-        title: title,
-        message: message,
-        onConfirm: onConfirm,
+      builder: (context) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: VerificationAlertModal(
+          type: type,
+          title: title,
+          message: message,
+          onConfirm: onConfirm,
+        ),
       ),
     );
   }
@@ -81,9 +85,7 @@ class VerificationAlertModal extends StatelessWidget {
 
     return Dialog(
       backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(
-        horizontal: AppTheme.pageHorizontalPadding * 3,
-      ),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
       child: Container(
         padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding * 3),
         decoration: BoxDecoration(

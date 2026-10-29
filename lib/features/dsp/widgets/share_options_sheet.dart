@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
@@ -8,7 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
-class ShareOptionsSheet extends StatelessWidget {
+class ShareOptionsSheet extends StatefulWidget {
   final String referralCode;
   final String homeCountry;
   final String progressPercent;
@@ -21,6 +22,23 @@ class ShareOptionsSheet extends StatelessWidget {
     this.progressPercent = '0.0',
     this.targetLabel = '1 Million',
   });
+
+  @override
+  State<ShareOptionsSheet> createState() => _ShareOptionsSheetState();
+}
+
+class _ShareOptionsSheetState extends State<ShareOptionsSheet> {
+  static final Map<String, Future<File>> _cachedCards = {};
+  late final Future<File> _prewarmedCard;
+
+  String get _cacheKey =>
+      '${widget.referralCode}|${widget.progressPercent}|${widget.targetLabel}';
+
+  @override
+  void initState() {
+    super.initState();
+    _prewarmedCard = _cachedCards.putIfAbsent(_cacheKey, _buildShareCard);
+  }
 
   /// Build a dynamic share card with the sender's referral code and live progress
   Future<File> _buildShareCard() async {
@@ -38,7 +56,7 @@ class ShareOptionsSheet extends StatelessWidget {
     final logoFrame = await logoCodec.getNextFrame();
     final logoImg = logoFrame.image;
 
-    final progressFraction = double.tryParse(progressPercent) ?? 0.0;
+    final progressFraction = double.tryParse(widget.progressPercent) ?? 0.0;
     final progressBarMaxW = w - 148;
 
     final recorder = ui.PictureRecorder();
@@ -138,7 +156,7 @@ class ShareOptionsSheet extends StatelessWidget {
     );
     _drawText(
       canvas,
-      '$progressPercent%',
+      '${widget.progressPercent}%',
       w - cardMargin - 24,
       555,
       fontSize: 21,
@@ -170,7 +188,7 @@ class ShareOptionsSheet extends StatelessWidget {
     );
     _drawText(
       canvas,
-      'The Race to $targetLabel is $progressPercent% complete!',
+      'The Race to ${widget.targetLabel} is ${widget.progressPercent}% complete!',
       w / 2,
       612,
       fontSize: 17,
@@ -208,7 +226,7 @@ class ShareOptionsSheet extends StatelessWidget {
     );
     _drawText(
       canvas,
-      referralCode,
+      widget.referralCode,
       w / 2,
       792,
       fontSize: 40,
@@ -233,7 +251,7 @@ class ShareOptionsSheet extends StatelessWidget {
     );
     _drawText(
       canvas,
-      'diasporanearby.com/invite?code=$referralCode',
+      'diasporanearby.com/invite?code=${widget.referralCode}',
       w / 2,
       910,
       fontSize: 22,
@@ -298,15 +316,16 @@ class ShareOptionsSheet extends StatelessWidget {
     canvas.drawParagraph(p, Offset(anchorCenter ? x - width / 2 : x, y));
   }
 
-  /// Share with dynamically generated branded card
+  /// Share with dynamically generated branded card (pre-warmed on mount)
   Future<void> _shareWithLogo(BuildContext context, String message) async {
     if (context.mounted) Navigator.pop(context);
 
-    final String link = 'https://diasporanearby.com/invite?code=$referralCode';
+    final String link =
+        'https://diasporanearby.com/invite?code=${widget.referralCode}';
     final String fullMessage = '$message\n\nJoin here: $link';
 
     try {
-      final cardFile = await _buildShareCard();
+      final cardFile = await _prewarmedCard;
       await SharePlus.instance.share(
         ShareParams(text: fullMessage, files: [XFile(cardFile.path)]),
       );
@@ -318,6 +337,7 @@ class ShareOptionsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final homeCountry = widget.homeCountry;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(

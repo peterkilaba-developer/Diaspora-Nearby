@@ -73,6 +73,13 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
   @override
   void initState() {
     super.initState();
+    final cached = ref
+        .read(peerListingRepositoryProvider)
+        .getCachedListings(type: 'stay');
+    if (cached.isNotEmpty) {
+      _allListings = cached;
+      _isLoading = false;
+    }
     _loadListings();
   }
 
@@ -86,7 +93,7 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
 
   Future<void> _loadListings() async {
     setState(() {
-      _isLoading = true;
+      if (_allListings.isEmpty) _isLoading = true;
       _error = null;
     });
     try {
@@ -101,7 +108,7 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = '$e';
+          if (_allListings.isEmpty) _error = '$e';
           _isLoading = false;
         });
       }

@@ -32,6 +32,8 @@ class GooglePlacesAutocompleteField extends ConsumerStatefulWidget {
 
 class _GooglePlacesAutocompleteFieldState
     extends ConsumerState<GooglePlacesAutocompleteField> {
+  static final Map<String, List<dynamic>> _cache = {};
+
   // ... existing state items ...
   late TextEditingController _controller;
   Timer? _debounce;
@@ -77,7 +79,22 @@ class _GooglePlacesAutocompleteFieldState
       return;
     }
 
-    _debounce = Timer(const Duration(milliseconds: 300), () async {
+    final cacheKey = '${widget.filter?.name ?? "all"}:${trimmed.toLowerCase()}';
+    final cachedExact = _cache[cacheKey];
+    if (cachedExact != null) {
+      setState(() {
+        _predictions = cachedExact;
+        _isLoading = false;
+      });
+      if (_predictions.isNotEmpty && _focusNode.hasFocus) {
+        _showOverlay();
+      } else {
+        _removeOverlay();
+      }
+      return;
+    }
+
+    _debounce = Timer(const Duration(milliseconds: 120), () async {
       if (!mounted || seq != _searchSeq) return;
       setState(() => _isLoading = true);
 
@@ -87,6 +104,13 @@ class _GooglePlacesAutocompleteFieldState
           trimmed,
           filter: widget.filter,
         ); // [FIX] Pass filter
+
+        if (results.isNotEmpty) {
+          if (_cache.length > 100) {
+            _cache.remove(_cache.keys.first);
+          }
+          _cache[cacheKey] = results;
+        }
 
         if (!mounted || seq != _searchSeq || _controller.text.trim().isEmpty) {
           return;

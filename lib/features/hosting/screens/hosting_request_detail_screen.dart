@@ -13,8 +13,13 @@ import 'package:diaspora_nearby/theme/app_theme.dart';
 /// a host without needing access to the community chat.
 class HostingRequestDetailScreen extends ConsumerStatefulWidget {
   final String requestId;
+  final HostingRequest? initialRequest;
 
-  const HostingRequestDetailScreen({super.key, required this.requestId});
+  const HostingRequestDetailScreen({
+    super.key,
+    required this.requestId,
+    this.initialRequest,
+  });
 
   @override
   ConsumerState<HostingRequestDetailScreen> createState() =>
@@ -26,10 +31,26 @@ class _HostingRequestDetailScreenState
   HostingRequest? _request;
   bool _isLoading = true;
   String? _error;
+  bool _autoOpenedSheet = false;
 
   @override
   void initState() {
     super.initState();
+    // [PERF] Seed synchronously from route extra or repository cache for 0ms render
+    _request =
+        widget.initialRequest ??
+        ref.read(hostingRepositoryProvider).getCachedRequest(widget.requestId);
+    _isLoading = _request == null;
+
+    if (_request != null &&
+        _request!.interestedHostIds.isNotEmpty &&
+        _request!.isOpen) {
+      _autoOpenedSheet = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showInterestedHosts(_request!);
+      });
+    }
+
     _loadRequest();
   }
 
@@ -37,22 +58,26 @@ class _HostingRequestDetailScreenState
     try {
       final request = await ref
           .read(hostingRepositoryProvider)
-          .getRequest(widget.requestId);
+          .getRequest(widget.requestId, force: true);
       if (mounted) {
         setState(() {
-          _request = request;
+          if (request != null) {
+            _request = request;
+          }
           _isLoading = false;
-          if (request == null) {
+          if (_request == null) {
             _error = 'Hosting request not found';
           }
         });
 
         // Auto-open the interested hosts sheet if there are interested hosts
-        if (request != null &&
-            request.interestedHostIds.isNotEmpty &&
-            request.isOpen) {
+        if (!_autoOpenedSheet &&
+            _request != null &&
+            _request!.interestedHostIds.isNotEmpty &&
+            _request!.isOpen) {
+          _autoOpenedSheet = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            _showInterestedHosts(request);
+            if (mounted) _showInterestedHosts(_request!);
           });
         }
       }
@@ -60,7 +85,9 @@ class _HostingRequestDetailScreenState
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _error = 'Failed to load request: $e';
+          if (_request == null) {
+            _error = 'Failed to load request: $e';
+          }
         });
       }
     }
@@ -88,9 +115,9 @@ class _HostingRequestDetailScreenState
           style: TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
-      body: _isLoading
+      body: _isLoading && _request == null
           ? const Center(child: CircularProgressIndicator())
-          : _error != null
+          : _error != null && _request == null
           ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,

@@ -73,6 +73,18 @@ class RadioNotifier extends Notifier<RadioState> {
     _playerStateSubscription?.cancel();
     _eventSubscription?.cancel();
 
+    // Configure Android audio attributes once during initialization
+    unawaited(
+      _player
+          .setAndroidAudioAttributes(
+            const AndroidAudioAttributes(
+              contentType: AndroidAudioContentType.music,
+              usage: AndroidAudioUsage.media,
+            ),
+          )
+          .catchError((_) {}),
+    );
+
     _playerStateSubscription = _player.playerStateStream.listen((playerState) {
       final isPlaying = playerState.playing;
       final processingState = playerState.processingState;
@@ -113,42 +125,29 @@ class RadioNotifier extends Notifier<RadioState> {
   }
 
   Future<void> playStation(RadioStation station) async {
+    // Immediate 0ms optimistic state update on frame 0
+    state = state.copyWith(
+      currentStation: station,
+      isPlaying: true,
+      isLoading: true,
+      error: null,
+    );
+    _successTimer?.cancel();
+
     final repo = ref.read(radioRepositoryProvider);
 
     // --- MUTUAL EXCLUSIVITY: STOP CHAT AUDIO ---
     try {
       ref.read(audioPlaybackServiceProvider).stopAll();
-    } catch (e) {
-      debugPrint('⚠️ Could not stop chat audio: $e');
-    }
+    } catch (_) {}
     // ------------------------------------------
 
     try {
-      // Optimistic update
-      state = state.copyWith(
-        currentStation: station,
-        isLoading: true,
-        error: null,
-      );
-
-      _successTimer?.cancel();
-
       await _player.stop();
 
       // Use streamUrl which prefers url_resolved (pre-resolved direct stream)
       // over url (which may be a playlist or redirect chain).
       final streamUrl = station.streamUrl;
-      debugPrint('🎵 Radio: Playing stream URL: $streamUrl');
-      debugPrint('🎵 Radio: Original URL: ${station.url}');
-      debugPrint('🎵 Radio: Resolved URL: ${station.urlResolved}');
-
-      // Set Android-specific audio attributes for streaming optimization
-      await _player.setAndroidAudioAttributes(
-        const AndroidAudioAttributes(
-          contentType: AndroidAudioContentType.music,
-          usage: AndroidAudioUsage.media,
-        ),
-      );
 
       final source = AudioSource.uri(
         Uri.parse(streamUrl),
@@ -162,9 +161,9 @@ class RadioNotifier extends Notifier<RadioState> {
         ),
       );
 
-      // Explicitly preload to start buffering immediately
-      await _player.setAudioSource(source, preload: true);
-      await _player.play();
+      // Do not block on full stream preloading before starting playback
+      await _player.setAudioSource(source, preload: false);
+      unawaited(_player.play());
 
       // Start Success Timer (15 seconds)
       _successTimer = Timer(const Duration(seconds: 15), () {
@@ -188,21 +187,21 @@ class RadioNotifier extends Notifier<RadioState> {
 
   Future<void> stop() async {
     _successTimer?.cancel();
-    await _player.stop();
-    // Reset state completely to hide the player (currentStation = null)
+    // Reset state synchronously in 0ms to hide the player immediately
     state = RadioState();
+    await _player.stop();
   }
 
   Future<void> pause() async {
     _successTimer?.cancel();
+    state = state.copyWith(isPlaying: false, isLoading: false);
     await _player.pause();
-    state = state.copyWith(isPlaying: false);
   }
 
   Future<void> resume() async {
     if (state.currentStation != null) {
-      await _player.play();
       state = state.copyWith(isPlaying: true);
+      await _player.play();
     }
   }
 }
@@ -225,18 +224,45 @@ final selectedCountryProvider =
       SelectedCountryNotifier.new,
     );
 
-final recentStationsProvider = FutureProvider<List<RadioStation>>((ref) async {
+final recentStationsProvider = StreamProvider<List<RadioStation>>((ref) async* {
   final user = ref.watch(authStateProvider).value;
-  if (user == null) return [];
+  if (user == null) {
+    yield const [];
+    return;
+  }
   final repo = ref.watch(radioRepositoryProvider);
-  return repo.getHistory(user.uid);
+  final cached = repo.getCachedHistory(user.uid);
+  if (cached != null) {
+    yield cached;
+  }
+  yield await repo.getHistory(user.uid);
 });
 
-final favoriteStationsProvider = FutureProvider<List<RadioStation>>((
-  ref,
-) async {
-  final user = ref.watch(authStateProvider).value;
-  if (user == null) return [];
-  final repo = ref.watch(radioRepositoryProvider);
-  return repo.getFavorites(user.uid);
-});
+class OptimisticFavoritesNotifier extends Notifier<Map<String, bool>> {
+  @override
+  Map<String, bool> build() => const {};
+
+  void setFavorite(String uuid, bool isFav) {
+    state = {...state, uuid: isFav};
+  }
+}
+
+final optimisticFavoritesProvider =
+    NotifierProvider<OptimisticFavoritesNotifier, Map<String, bool>>(
+      OptimisticFavoritesNotifier.new,
+    );
+
+final favoriteStationsProvider =
+    StreamProvider<List<RadioStation>>((ref) async* {
+      final user = ref.watch(authStateProvider).value;
+      if (user == null) {
+        yield const [];
+        return;
+      }
+      final repo = ref.watch(radioRepositoryProvider);
+      final cached = repo.getCachedFavorites(user.uid);
+      if (cached != null) {
+        yield cached;
+      }
+      yield await repo.getFavorites(user.uid);
+    });
