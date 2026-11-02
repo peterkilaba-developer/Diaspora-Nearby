@@ -35,8 +35,6 @@ android {
         isCoreLibraryDesugaringEnabled = true
     }
 
-
-
     lint {
         checkReleaseBuilds = true
         abortOnError = true
@@ -45,7 +43,7 @@ android {
     defaultConfig {
         applicationId = "com.diasporanearby.diasporanearby"
         minSdk = flutter.minSdkVersion
-        targetSdk = 35 // Keep at 35 (Android 15); API 36 enforces 16KB page alignment that breaks plugin .so install
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 

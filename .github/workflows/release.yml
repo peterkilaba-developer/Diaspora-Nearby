@@ -253,7 +253,7 @@ jobs:
           releaseFiles: build/app/outputs/bundle/productionRelease/app-production-release.aab
           track: ${{ inputs.track || 'beta' }}
           status: completed
-          inAppUpdatePriority: 5
+          inAppUpdatePriority: 2
 
       - name: Update Firestore system_stats/app_version Metadata
         if: ${{ !cancelled() }}

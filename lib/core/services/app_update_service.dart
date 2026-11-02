@@ -80,7 +80,12 @@ class AppUpdateService {
         const Duration(seconds: 8),
       );
       if (info.updateAvailability == UpdateAvailability.updateAvailable) {
-        if (info.immediateUpdateAllowed) {
+        // Use flexible updates by default unless the developer explicitly set
+        // a critical in-app update priority (>= 5). Immediate updates lock the
+        // UI and fail on Android 14+ when a foreground service (e.g. active
+        // call, audio playback, or location) is running.
+        final isCritical = info.updatePriority >= 5;
+        if (isCritical && info.immediateUpdateAllowed) {
           await InAppUpdate.performImmediateUpdate();
           return true;
         } else if (info.flexibleUpdateAllowed) {
@@ -89,10 +94,17 @@ class AppUpdateService {
             await InAppUpdate.completeFlexibleUpdate();
           }
           return true;
+        } else if (info.immediateUpdateAllowed) {
+          await InAppUpdate.performImmediateUpdate();
+          return true;
         }
       } else if (info.updateAvailability ==
           UpdateAvailability.developerTriggeredUpdateInProgress) {
-        await InAppUpdate.performImmediateUpdate();
+        if (info.installStatus == InstallStatus.downloaded) {
+          await InAppUpdate.completeFlexibleUpdate();
+        } else if (info.immediateUpdateAllowed) {
+          await InAppUpdate.performImmediateUpdate();
+        }
         return true;
       } else if (info.updateAvailability ==
           UpdateAvailability.updateNotAvailable) {
