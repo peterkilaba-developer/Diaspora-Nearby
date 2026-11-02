@@ -6,8 +6,8 @@ set -e
 # The default execution directory of this script is the ci_scripts directory.
 cd "$CI_PRIMARY_REPOSITORY_PATH"
 
-# 1. Install Flutter (pinned to project version 3.44.8)
-git clone https://github.com/flutter/flutter.git --depth 1 -b 3.44.8 "$HOME/flutter"
+# 1. Install Flutter (pinned to project version 3.41.4, matching CI/CD)
+git clone https://github.com/flutter/flutter.git --depth 1 -b 3.41.4 "$HOME/flutter"
 export PATH="$PATH:$HOME/flutter/bin"
 
 # 2. Disable experimental Swift Package Manager to use CocoaPods exclusively
@@ -77,7 +77,10 @@ fi
 
 # 6. Generate iOS plugin symlinks, build number, and CocoaPods configuration for production scheme
 MAPS_KEY="${GOOGLE_MAPS_API_KEY:-AIzaSyAj0oAGYEX5osyDa_2Pn828clvv72UhEF8}"
-IOS_BUILD_NUMBER=$((45 + ${CI_BUILD_NUMBER:-1}))
+cat << EOF > "ios/Flutter/Secrets.xcconfig"
+GOOGLE_MAPS_API_KEY=$MAPS_KEY
+EOF
+IOS_BUILD_NUMBER=$((50 + ${CI_BUILD_NUMBER:-1}))
 echo "Configuring iOS production build number: $IOS_BUILD_NUMBER"
 flutter build ios --config-only --flavor production -t lib/main_production.dart --release --build-name="1.2.7" --build-number="$IOS_BUILD_NUMBER" --dart-define="GOOGLE_MAPS_API_KEY=$MAPS_KEY"
 

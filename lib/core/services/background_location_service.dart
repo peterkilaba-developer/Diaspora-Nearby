@@ -8,7 +8,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:diaspora_nearby/firebase_options.dart';
 import 'package:diaspora_nearby/core/services/location_update_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:diaspora_nearby/features/chat/services/mention_monitor_service.dart'; // [NEW]
 import 'package:geolocator/geolocator.dart'; // [NEW]
 
 @pragma('vm:entry-point')
@@ -64,7 +63,8 @@ class BackgroundLocationService {
     await service.configure(
       androidConfiguration: AndroidConfiguration(
         onStart: onStart,
-        autoStart: true,
+        autoStart: false,
+        autoStartOnBoot: false,
         isForegroundMode: true,
         notificationChannelId: silentChannelId,
         initialNotificationTitle: 'Diaspora Nearby',
@@ -72,7 +72,7 @@ class BackgroundLocationService {
         foregroundServiceNotificationId: 888,
       ),
       iosConfiguration: IosConfiguration(
-        autoStart: true,
+        autoStart: false,
         onForeground: onStart,
         onBackground: onIosBackground,
       ),
@@ -110,9 +110,6 @@ class BackgroundLocationService {
     try {
       // Initialize Firebase
       await _initFirebaseAndWork(service);
-
-      // [NEW] Start Mention Monitor in Background Service Isolate
-      await MentionMonitorService().initialize();
     } catch (e) {
       debugPrint('CRITICAL: Error in background service onStart: $e');
     }

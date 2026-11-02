@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:diaspora_nearby/config/app_environment.dart';
 import 'package:diaspora_nearby/config/environment_firebase_options.dart';
 import 'package:diaspora_nearby/features/notifications/services/push_notification_service.dart';
+import 'package:diaspora_nearby/features/shared/screens/splash_screen.dart';
 import 'package:diaspora_nearby/core/providers/locale_provider.dart';
 import 'package:diaspora_nearby/core/providers/theme_provider.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
@@ -223,8 +224,11 @@ Future<void> runDiasporaApp({AppEnvironment? environment}) async {
 Future<ProviderContainer> _bootstrapContainer() async {
   final results = await Future.wait([
     SharedPreferences.getInstance(),
-    AppBootstrap.init(),
-    warmPermissionCache(),
+    AppBootstrap.init().timeout(const Duration(seconds: 6)),
+    warmPermissionCache().timeout(
+      const Duration(seconds: 2),
+      onTimeout: () {},
+    ),
   ]);
   final preferences = results[0] as SharedPreferences;
 
@@ -322,10 +326,10 @@ class _BootstrapHostState extends State<_BootstrapHost> {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      home: Scaffold(
-        body: Center(
-          child: error != null
-              ? ConstrainedBox(
+      home: error != null
+          ? Scaffold(
+              body: Center(
+                child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 480),
                   child: Padding(
                     padding: const EdgeInsets.all(24),
@@ -362,10 +366,10 @@ class _BootstrapHostState extends State<_BootstrapHost> {
                       ],
                     ),
                   ),
-                )
-              : const SizedBox.shrink(),
-        ),
-      ),
+                ),
+              ),
+            )
+          : const SplashScreen(),
     );
   }
 }

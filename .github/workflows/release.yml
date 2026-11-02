@@ -269,23 +269,80 @@ jobs:
           node -e '
             const admin = require("./functions/node_modules/firebase-admin");
             admin.initializeApp({ projectId: "diaspora-nearby-a3dac" });
+            const db = admin.firestore();
             const buildNum = Number(process.env.BUILD_NUMBER || 45);
-            admin.firestore().doc("system_stats/app_version").set({
-              latestVersion: "1.2.7",
-              androidVersion: "1.2.7",
-              iosVersion: "1.2.7",
-              latestBuildNumber: buildNum,
-              androidBuildNumber: buildNum,
-              androidMinBuildNumber: 25,
-              iosBuildNumber: buildNum,
-              iosMinBuildNumber: 25,
-              forceUpdate: false,
-              androidUpdateUrl: "https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby",
-              androidApkUrl: admin.firestore.FieldValue.delete(),
-              iosUpdateUrl: "https://testflight.apple.com/join/vB3XzPKg",
-              releaseNotes: "Multi-language localization selector, borderless UI refinements, and diaspora community updates.",
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            }, { merge: true }).then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(0); });
+            const avatarUrl = "https://diasporanearby.com/icons/Icon-512.png";
+            const defaultLoc = {
+              formatted_address: "Global Diaspora",
+              place_id: "global_diaspora",
+              city: "Global",
+              country: "Diaspora",
+              country_code: "UN",
+              geometry: { location: { lat: 0, lng: 0 } },
+            };
+            (async () => {
+              await db.doc("system_stats/app_version").set({
+                latestVersion: "1.2.7",
+                androidVersion: "1.2.7",
+                iosVersion: "1.2.7",
+                latestBuildNumber: buildNum,
+                androidBuildNumber: buildNum,
+                androidMinBuildNumber: 25,
+                iosBuildNumber: buildNum,
+                iosMinBuildNumber: 25,
+                forceUpdate: false,
+                androidUpdateUrl: "https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby",
+                androidApkUrl: admin.firestore.FieldValue.delete(),
+                iosUpdateUrl: "https://testflight.apple.com/join/vB3XzPKg",
+                releaseNotes: "AI Agent concierge actions, voice call messages, PoH/TDE token reconciliation, and Android/iOS stability updates.",
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              }, { merge: true });
+
+              await db.doc("users/diaspora_ai_agent").set({
+                uid: "diaspora_ai_agent",
+                firstName: "Diaspora",
+                lastName: "AI Agent",
+                fullName: "Diaspora AI Agent",
+                phone: "+10000000000",
+                profilePhoto: avatarUrl,
+                profileImage: avatarUrl,
+                photoUrl: avatarUrl,
+                homeLocation: defaultLoc,
+                hostLocation: defaultLoc,
+                occupation: "AI Concierge • Multilingual 24/7",
+                bio: "Your 24/7 multilingual Diaspora Nearby AI Agent. Ask me anything, search flights, hotels, jobs, car rentals, or post listings right from chat in any language!",
+                isAiAgent: true,
+                isDiscoverable: false,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              }, { merge: true });
+
+              const aiChats = await db.collection("chats")
+                .where("participants", "array-contains", "diaspora_ai_agent")
+                .limit(500)
+                .get();
+              for (const chatDoc of aiChats.docs) {
+                const cData = chatDoc.data() || {};
+                await chatDoc.ref.set({
+                  name: "Diaspora AI Agent",
+                  photoUrl: avatarUrl,
+                  metadata: Object.assign({}, cData.metadata || {}, { isAiAgent: true }),
+                }, { merge: true });
+                const parts = Array.isArray(cData.participants) ? cData.participants : [];
+                for (const pUid of parts) {
+                  if (pUid && pUid !== "diaspora_ai_agent") {
+                    await db.collection("users").doc(pUid).collection("userChats").doc(chatDoc.id).set({
+                      chatId: chatDoc.id,
+                      type: "direct",
+                      name: "Diaspora AI Agent",
+                      photoUrl: avatarUrl,
+                      subtype: "ai_agent",
+                      isDeleted: false,
+                    }, { merge: true });
+                  }
+                }
+              }
+              process.exit(0);
+            })().catch((e) => { console.error(e); process.exit(0); });
           ' || true
           rm -f /tmp/firebase-sa.json
 

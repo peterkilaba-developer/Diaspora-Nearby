@@ -688,12 +688,30 @@ async function ensureAiAgentWelcomeChatForUser(userId, profileOverride = null) {
 
     const existingChatData = chatSnapshot.exists ? (chatSnapshot.data() || {}) : {};
     if (chatSnapshot.exists && existingChatData.lastMessage) {
-      if (!userChatSnap.exists || userChatSnap.data().isDeleted) {
+      if (
+        existingChatData.name !== DIASPORA_AI_AGENT_NAME ||
+        existingChatData.photoUrl !== DIASPORA_AI_AGENT_AVATAR ||
+        !existingChatData.metadata?.isAiAgent
+      ) {
+        transaction.set(chatRef, {
+          name: DIASPORA_AI_AGENT_NAME,
+          photoUrl: DIASPORA_AI_AGENT_AVATAR,
+          metadata: Object.assign({}, existingChatData.metadata || {}, {isAiAgent: true}),
+        }, {merge: true});
+      }
+      const userChatData = userChatSnap.exists ? (userChatSnap.data() || {}) : {};
+      if (
+        !userChatSnap.exists ||
+        userChatData.isDeleted ||
+        userChatData.name !== DIASPORA_AI_AGENT_NAME ||
+        userChatData.photoUrl !== DIASPORA_AI_AGENT_AVATAR
+      ) {
         transaction.set(userChatRef, {
           chatId: chatRef.id,
           type: "direct",
           name: DIASPORA_AI_AGENT_NAME,
           photoUrl: DIASPORA_AI_AGENT_AVATAR,
+          subtype: "ai_agent",
           lastMessage: existingChatData.lastMessage,
           updatedAt: typeof existingChatData.updatedAt === "number" ? existingChatData.updatedAt : Date.now(),
           isDeleted: false,
@@ -748,6 +766,8 @@ async function ensureAiAgentWelcomeChatForUser(userId, profileOverride = null) {
       };
       transaction.set(welcomeMsgRef, messageData);
       transaction.set(chatRef, {
+        name: DIASPORA_AI_AGENT_NAME,
+        photoUrl: DIASPORA_AI_AGENT_AVATAR,
         lastMessage: lastMessageData,
         updatedAt: nowMs,
         metadata: {isAiAgent: true},

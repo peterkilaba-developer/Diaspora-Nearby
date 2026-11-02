@@ -72,27 +72,31 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
     try {
       if (!mounted) return;
 
-      final service = FlutterBackgroundService();
-      final isRunning = await service.isRunning();
-      // No-log: Background Service status
+      // Only spin up the secondary background FlutterEngine on iOS or when
+      // explicitly needed; on Android, running a second FlutterEngine inside
+      // the same process as AudioServiceFragmentActivity causes plugin channel
+      // and Firestore SQLite contention that can freeze the UI in a black screen.
+      if (defaultTargetPlatform != TargetPlatform.android) {
+        final service = FlutterBackgroundService();
+        final isRunning = await service.isRunning();
 
-      if (!isRunning) {
-        if (await Permission.location.isGranted) {
-          // No-log: Permission granted
-
-          await BackgroundLocationService.initializeService();
-
-          if (await service.isRunning()) {
-            // No-log: Service started
-          } else {
-            // No-log: Starting manually
-            await service.startService();
+        if (!isRunning) {
+          if (await Permission.location.isGranted) {
+            await BackgroundLocationService.initializeService();
+            if (!await service.isRunning()) {
+              await service.startService();
+            }
           }
-        } else {
-          // No-log: Skipping
         }
       } else {
-        // No-log: Already running
+        // If a leftover Android BackgroundService is running from an older session,
+        // stop it cleanly so the foreground engine has exclusive plugin access.
+        try {
+          final service = FlutterBackgroundService();
+          if (await service.isRunning()) {
+            service.invoke('stopService');
+          }
+        } catch (_) {}
       }
 
       // [DEBUG] Trigger Foreground Proximity Check

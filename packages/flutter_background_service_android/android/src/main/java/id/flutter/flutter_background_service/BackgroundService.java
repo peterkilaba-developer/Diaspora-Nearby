@@ -100,7 +100,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         notificationId = config.getForegroundNotificationId();
         configForegroundTypes = config.getForegroundServiceTypes();
         updateNotificationInfo();
-        onStartCommand(null, -1, -1);
     }
 
     @Override
@@ -112,6 +111,14 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         }
         stopForeground(true);
         isRunning.set(false);
+
+        try {
+            PowerManager.WakeLock lock = getLock(getApplicationContext());
+            if (lock.isHeld()) {
+                lock.release();
+            }
+        } catch (Exception ignored) {
+        }
 
         if (backgroundEngine != null) {
             backgroundEngine.getServiceControlSurface().detachFromService();
@@ -205,13 +212,16 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     @SuppressLint("WakelockTimeout")
     private void runService() {
         try {
-            if (isRunning.get() || (backgroundEngine != null && !backgroundEngine.getDartExecutor().isExecutingDart())) {
+            if (isRunning.get() || (backgroundEngine != null && backgroundEngine.getDartExecutor().isExecutingDart())) {
                 Log.v(TAG, "Service already running, using existing service");
                 return;
             }
 
             Log.v(TAG, "Starting flutter engine for background service");
-            getLock(getApplicationContext()).acquire();
+            PowerManager.WakeLock lock = getLock(getApplicationContext());
+            if (!lock.isHeld()) {
+                lock.acquire(10 * 60 * 1000L);
+            }
 
             updateNotificationInfo();
 

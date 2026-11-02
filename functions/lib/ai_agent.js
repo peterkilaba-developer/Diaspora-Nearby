@@ -65,20 +65,50 @@ async function ensureAiAgentProfile() {
   try {
     const ref = db.collection("users").doc(DIASPORA_AI_AGENT_UID);
     const snap = await ref.get();
+    const existing = snap.exists ? (snap.data() || {}) : {};
+    const defaultLoc = {
+      formatted_address: "Global Diaspora",
+      place_id: "global_diaspora",
+      city: "Global",
+      country: "Diaspora",
+      country_code: "UN",
+      geometry: {
+        location: {
+          lat: 0,
+          lng: 0,
+        },
+      },
+    };
     const agentData = {
       uid: DIASPORA_AI_AGENT_UID,
       firstName: "Diaspora",
       lastName: "AI Agent",
       fullName: DIASPORA_AI_AGENT_NAME,
+      phone: existing.phone || "+10000000000",
+      profilePhoto: DIASPORA_AI_AGENT_AVATAR,
       profileImage: DIASPORA_AI_AGENT_AVATAR,
       photoUrl: DIASPORA_AI_AGENT_AVATAR,
+      homeLocation: existing.homeLocation && typeof existing.homeLocation === "object" ?
+        existing.homeLocation :
+        defaultLoc,
+      hostLocation: existing.hostLocation && typeof existing.hostLocation === "object" ?
+        existing.hostLocation :
+        defaultLoc,
       occupation: "AI Concierge • Multilingual 24/7",
       bio: "Your 24/7 multilingual Diaspora Nearby AI Agent. Ask me anything, search flights, hotels, jobs, car rentals, or post listings right from chat in any language!",
       isAiAgent: true,
       isDiscoverable: false,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
-    if (!snap.exists || snap.data()?.fullName !== DIASPORA_AI_AGENT_NAME) {
+    const needsUpdate =
+      !snap.exists ||
+      existing.fullName !== DIASPORA_AI_AGENT_NAME ||
+      existing.profilePhoto !== DIASPORA_AI_AGENT_AVATAR ||
+      existing.profileImage !== DIASPORA_AI_AGENT_AVATAR ||
+      typeof existing.phone !== "string" ||
+      !existing.homeLocation ||
+      !existing.hostLocation;
+    if (needsUpdate) {
       await ref.set(agentData, {merge: true});
     }
     _agentProfileEnsured = true;

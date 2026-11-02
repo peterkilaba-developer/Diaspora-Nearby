@@ -8,16 +8,20 @@ part of 'profile_data.dart';
 
 ProfileData _$ProfileDataFromJson(Map<String, dynamic> json) => ProfileData(
   uid: json['uid'] as String?,
-  homeLocation: UserLocation.fromJson(
-    json['homeLocation'] as Map<String, dynamic>,
-  ),
-  hostLocation: UserLocation.fromJson(
-    json['hostLocation'] as Map<String, dynamic>,
-  ),
-  firstName: json['firstName'] as String,
-  lastName: json['lastName'] as String,
-  phone: json['phone'] as String,
-  profileImage: json['profilePhoto'] as String,
+  homeLocation: json['homeLocation'] is Map<String, dynamic>
+      ? UserLocation.fromJson(json['homeLocation'] as Map<String, dynamic>)
+      : const UserLocation(formattedAddress: '', placeId: ''),
+  hostLocation: json['hostLocation'] is Map<String, dynamic>
+      ? UserLocation.fromJson(json['hostLocation'] as Map<String, dynamic>)
+      : const UserLocation(formattedAddress: '', placeId: ''),
+  firstName: (json['firstName'] as String?) ?? '',
+  lastName: (json['lastName'] as String?) ?? '',
+  phone: (json['phone'] as String?) ?? '',
+  profileImage:
+      (json['profilePhoto'] as String?) ??
+      (json['profileImage'] as String?) ??
+      (json['photoUrl'] as String?) ??
+      '',
   bio: json['bio'] as String?,
   interests: (json['interests'] as List<dynamic>?)
       ?.map((e) => e as String)

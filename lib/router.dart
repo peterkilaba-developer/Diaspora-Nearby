@@ -385,12 +385,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/download',
         redirect: (context, state) => '/',
-        builder: (context, state) => const SizedBox.shrink(),
+        builder: (context, state) => const SplashScreen(),
       ),
       GoRoute(
         path: '/invite',
         redirect: (context, state) => '/',
-        builder: (context, state) => const SizedBox.shrink(),
+        builder: (context, state) => const SplashScreen(),
       ),
 
       GoRoute(
@@ -399,7 +399,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           final id = state.pathParameters['id'];
           return '/communities/$id/members';
         },
-        builder: (context, state) => const SizedBox.shrink(),
+        builder: (context, state) => const SplashScreen(),
       ),
 
       // Share Destination Route
@@ -914,7 +914,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               context.go('/chats');
             });
           }
-          return const SizedBox.shrink();
+          return const SplashScreen();
         },
       ),
     ],
