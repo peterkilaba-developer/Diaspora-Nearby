@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ui';
 import 'package:universal_io/io.dart' as uio;
+import 'package:audio_session/audio_session.dart';
 import 'package:just_audio/just_audio.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -4368,6 +4369,7 @@ class _AiVoiceChatSheetState extends State<_AiVoiceChatSheet> {
   @override
   void initState() {
     super.initState();
+    _configureAudioSession();
     _playerSub = _player.playerStateStream.listen((state) {
       if (_isDisposed || !mounted) return;
       if (state.processingState == ProcessingState.completed &&
@@ -4377,6 +4379,30 @@ class _AiVoiceChatSheetState extends State<_AiVoiceChatSheet> {
       }
     });
     _startListeningTurn();
+  }
+
+  Future<void> _configureAudioSession() async {
+    try {
+      final session = await AudioSession.instance;
+      await session.configure(
+        AudioSessionConfiguration(
+          avAudioSessionCategory: AVAudioSessionCategory.playAndRecord,
+          avAudioSessionCategoryOptions:
+              AVAudioSessionCategoryOptions.defaultToSpeaker |
+              AVAudioSessionCategoryOptions.allowBluetooth |
+              AVAudioSessionCategoryOptions.allowBluetoothA2dp,
+          avAudioSessionMode: AVAudioSessionMode.voiceChat,
+          androidAudioAttributes: const AndroidAudioAttributes(
+            contentType: AndroidAudioContentType.speech,
+            usage: AndroidAudioUsage.media,
+          ),
+          androidAudioFocusGainType: AndroidAudioFocusGainType.gain,
+        ),
+      );
+      await session.setActive(true);
+    } catch (e) {
+      debugPrint('AudioSession configure fallback: $e');
+    }
   }
 
   @override
@@ -4493,7 +4519,7 @@ class _AiVoiceChatSheetState extends State<_AiVoiceChatSheet> {
               final totalMs = _recordingStartedAt != null
                   ? now.difference(_recordingStartedAt!).inMilliseconds
                   : 0;
-              if (silenceMs >= 1100 && totalMs >= 1200) {
+              if (silenceMs >= 800 && totalMs >= 950) {
                 _submitCurrentVoiceTurn();
               }
             }
@@ -4559,6 +4585,8 @@ class _AiVoiceChatSheetState extends State<_AiVoiceChatSheet> {
 
       if (replyAudioBase64 != null && replyAudioBase64.isNotEmpty) {
         try {
+          await _configureAudioSession();
+          await _player.setVolume(1.0);
           final wavBytes = base64Decode(replyAudioBase64);
           final tempDir = await getTemporaryDirectory();
           final replyPath =
@@ -4611,15 +4639,15 @@ class _AiVoiceChatSheetState extends State<_AiVoiceChatSheet> {
   String _statusHeadline() {
     switch (_voiceState) {
       case _AiVoiceState.starting:
-        return 'Connecting...';
+        return 'Live Voice Active';
       case _AiVoiceState.listening:
         return _hasDetectedSpeech
             ? 'Listening...'
             : 'Speak naturally in Kiswahili, English, or any language';
       case _AiVoiceState.thinking:
-        return 'Diaspora AI Agent is thinking...';
+        return 'In conversation...';
       case _AiVoiceState.speaking:
-        return 'Diaspora AI Agent is speaking...';
+        return 'Speaking — tap mic anytime to interrupt';
       case _AiVoiceState.error:
         return _errorMessage ?? 'Reconnecting...';
     }
@@ -4689,10 +4717,12 @@ class _AiVoiceChatSheetState extends State<_AiVoiceChatSheet> {
                 _statusHeadline(),
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: isSpeaking
+                  color: (isSpeaking || isThinking)
                       ? AppTheme.accent
                       : theme.colorScheme.onSurfaceVariant,
-                  fontWeight: isSpeaking ? FontWeight.w600 : FontWeight.w400,
+                  fontWeight: (isSpeaking || isThinking)
+                      ? FontWeight.w600
+                      : FontWeight.w400,
                 ),
               ),
               const SizedBox(height: 24),
@@ -4708,12 +4738,18 @@ class _AiVoiceChatSheetState extends State<_AiVoiceChatSheet> {
                 },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 220),
-                  width: isSpeaking || _hasDetectedSpeech ? 108 : 94,
-                  height: isSpeaking || _hasDetectedSpeech ? 108 : 94,
+                  width: (isSpeaking || isThinking || _hasDetectedSpeech)
+                      ? 108
+                      : 94,
+                  height: (isSpeaking || isThinking || _hasDetectedSpeech)
+                      ? 108
+                      : 94,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: isSpeaking
-                        ? AppTheme.accent.withValues(alpha: 0.22)
+                        ? AppTheme.accent.withValues(alpha: 0.24)
+                        : isThinking
+                        ? AppTheme.accent.withValues(alpha: 0.18)
                         : isListening
                         ? AppTheme.accent.withValues(
                             alpha: _hasDetectedSpeech ? 0.20 : 0.12,
@@ -4721,22 +4757,17 @@ class _AiVoiceChatSheetState extends State<_AiVoiceChatSheet> {
                         : theme.colorScheme.surfaceContainerHighest,
                   ),
                   child: Center(
-                    child: isThinking
-                        ? const SizedBox(
-                            width: 34,
-                            height: 34,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 3,
-                              color: AppTheme.accent,
-                            ),
-                          )
-                        : Icon(
-                            isSpeaking ? LucideIcons.volume2 : LucideIcons.mic,
-                            size: 38,
-                            color: (isListening || isSpeaking)
-                                ? AppTheme.accent
-                                : theme.colorScheme.onSurfaceVariant,
-                          ),
+                    child: Icon(
+                      isSpeaking
+                          ? LucideIcons.volume2
+                          : isThinking
+                          ? LucideIcons.sparkles
+                          : LucideIcons.mic,
+                      size: 38,
+                      color: (isListening || isSpeaking || isThinking)
+                          ? AppTheme.accent
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ),

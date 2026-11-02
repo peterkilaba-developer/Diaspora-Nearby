@@ -106,6 +106,9 @@ jobs:
       - name: Authenticate & Deploy to Firebase
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          HELICONE_API_KEY: ${{ secrets.HELICONE_API_KEY }}
         run: |
           if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
             echo "::warning::FIREBASE_SERVICE_ACCOUNT secret is not set; skipping Firebase deploy."
@@ -113,9 +116,35 @@ jobs:
           fi
           echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/firebase-sa.json
           export GOOGLE_APPLICATION_CREDENTIALS="/tmp/firebase-sa.json"
+          cat << EOF > functions/.env
+          TOKEN_ADDRESS=0x55d7e7d006938A15082752225ED44Fd130B87735
+          TGE_CONTROLLER_ADDRESS=0xb6C049D47A2FaE5413c331760C22E715D0bF4d45
+          WALLET_FACTORY_ADDRESS=0x9cF797cf332595c00410fc4ee9FdEe5C59501945
+          RPC_URL=https://mainnet.base.org
+          WHATSAPP_TEMPLATE_NAME=diaspora_auth_otp
+          WHATSAPP_TEMPLATE_LANG=en_US
+          GEMINI_API_KEY=$GEMINI_API_KEY
+          NVIDIA_API_KEY=$NVIDIA_API_KEY
+          HELICONE_API_KEY=$HELICONE_API_KEY
+          EOF
+          node -e '
+            const admin = require("./functions/node_modules/firebase-admin");
+            admin.initializeApp({ projectId: "diaspora-nearby-a3dac" });
+            const db = admin.firestore();
+            (async () => {
+              const payload = {};
+              if (process.env.GEMINI_API_KEY) payload.geminiApiKey = process.env.GEMINI_API_KEY;
+              if (process.env.NVIDIA_API_KEY) payload.nvidiaApiKey = process.env.NVIDIA_API_KEY;
+              if (process.env.HELICONE_API_KEY) payload.heliconeApiKey = process.env.HELICONE_API_KEY;
+              if (Object.keys(payload).length > 0) {
+                await db.doc("_internalConfig/social").set(payload, { merge: true });
+              }
+              process.exit(0);
+            })().catch(() => process.exit(0));
+          ' || true
           firebase target:apply hosting landing diaspora-nearby-a3dac || true
           firebase deploy --project diaspora-nearby-a3dac --only firestore:rules,storage,functions,hosting:landing --non-interactive --force
-          rm -f /tmp/firebase-sa.json
+          rm -f /tmp/firebase-sa.json functions/.env
 
   build-and-release-android:
     name: Build & Publish Signed Android Release

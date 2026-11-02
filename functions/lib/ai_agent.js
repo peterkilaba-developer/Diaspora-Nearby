@@ -710,10 +710,11 @@ function buildDraftAction({draftType, label, summaryTitle, summaryRows, payload,
 }
 
 function prepareJobDraftTool(args = {}, userProfile = {}) {
+  const ctx = extractUserProfileContext(userProfile);
   const title = String(args.title || "").trim();
-  const companyName = String(args.companyName || userProfile.company || userProfile.fullName || "Diaspora Employer").trim();
-  const city = String(args.city || userProfile.hostCity || userProfile.currentCity || "Dar es Salaam").trim();
-  const country = String(args.country || userProfile.hostCountry || userProfile.homeCountry || "Tanzania").trim();
+  const companyName = String(args.companyName || userProfile.company || ctx.fullName || "Diaspora Employer").trim();
+  const city = String(args.city || ctx.hostCity || ctx.currentCity || ctx.homeCity || "Dar es Salaam").trim();
+  const country = String(args.country || ctx.hostCountry || ctx.homeCountry || "Tanzania").trim();
   const employmentType = String(args.employmentType || "Full-time").trim();
   const salaryRange = String(args.salaryRange || "Competitive / Negotiable").trim();
   const description = String(args.description || `${title} role at ${companyName} in ${city}, ${country}.`).trim();
@@ -758,12 +759,13 @@ function prepareJobDraftTool(args = {}, userProfile = {}) {
 }
 
 function prepareCarRentalDraftTool(args = {}, userProfile = {}) {
+  const ctx = extractUserProfileContext(userProfile);
   const make = String(args.make || "").trim();
   const model = String(args.model || "").trim();
   const year = Number(args.year) || new Date().getFullYear();
   const pricePerDay = Number(args.pricePerDay) || 45;
   const currency = String(args.currency || "USD").toUpperCase();
-  const city = String(args.city || userProfile.hostCity || userProfile.currentCity || "Dar es Salaam").trim();
+  const city = String(args.city || ctx.hostCity || ctx.currentCity || ctx.homeCity || "Dar es Salaam").trim();
   const transmission = String(args.transmission || "Automatic").trim();
   const fuelType = String(args.fuelType || "Petrol").trim();
   const seats = Number(args.seats) || 5;
@@ -812,9 +814,10 @@ function prepareCarRentalDraftTool(args = {}, userProfile = {}) {
 }
 
 function prepareStayOrHotelDraftTool(args = {}, userProfile = {}) {
+  const ctx = extractUserProfileContext(userProfile);
   const subType = String(args.subType || "stay").toLowerCase() === "hotel" ? "hotel" : "stay";
   const title = String(args.title || "").trim();
-  const city = String(args.city || userProfile.hostCity || userProfile.currentCity || "Dar es Salaam").trim();
+  const city = String(args.city || ctx.hostCity || ctx.currentCity || ctx.homeCity || "Dar es Salaam").trim();
   const pricePerNight = Number(args.pricePerNight || args.pricePerDay) || 65;
   const currency = String(args.currency || "USD").toUpperCase();
   const propertyType = String(args.propertyType || (subType === "hotel" ? "Boutique Hotel" : "Entire Apartment")).trim();
@@ -861,12 +864,13 @@ function prepareStayOrHotelDraftTool(args = {}, userProfile = {}) {
 }
 
 function prepareMarketplaceDraftTool(args = {}, userProfile = {}) {
+  const ctx = extractUserProfileContext(userProfile);
   const listingType = String(args.listingType || "product").toLowerCase() === "service" ? "service" : "product";
   const title = String(args.title || "").trim();
   const priceAmount = Number(args.priceAmount || args.price) || 0;
   const currency = String(args.currency || "USD").toUpperCase();
-  const city = String(args.city || userProfile.hostCity || userProfile.currentCity || "Dar es Salaam").trim();
-  const country = String(args.country || userProfile.hostCountry || userProfile.homeCountry || "Tanzania").trim();
+  const city = String(args.city || ctx.hostCity || ctx.currentCity || ctx.homeCity || "Dar es Salaam").trim();
+  const country = String(args.country || ctx.hostCountry || ctx.homeCountry || "Tanzania").trim();
   const category = String(args.category || (listingType === "service" ? "service_consulting" : "other")).trim();
   const description = String(args.description || `${title} available in ${city}, ${country}.`).trim();
 
@@ -906,6 +910,7 @@ function prepareMarketplaceDraftTool(args = {}, userProfile = {}) {
 }
 
 function prepareRealEstateDraftTool(args = {}, userProfile = {}) {
+  const ctx = extractUserProfileContext(userProfile);
   const rawCat = String(args.category || "house").toLowerCase();
   const category = ["plot", "farm", "house"].includes(rawCat) ? rawCat : "house";
   const title = String(args.title || "").trim();
@@ -913,8 +918,8 @@ function prepareRealEstateDraftTool(args = {}, userProfile = {}) {
   const currency = String(args.currency || "USD").toUpperCase();
   const sizeSqm = Number(args.sizeSqm) || 500;
   const listingType = String(args.listingType || "sale").toLowerCase() === "rent" ? "rent" : "sale";
-  const city = String(args.city || userProfile.homeCity || "Dar es Salaam").trim();
-  const country = String(args.country || userProfile.homeCountry || "Tanzania").trim();
+  const city = String(args.city || ctx.homeCity || ctx.hostCity || "Dar es Salaam").trim();
+  const country = String(args.country || ctx.homeCountry || ctx.hostCountry || "Tanzania").trim();
   const description = String(args.description || `${title} (${sizeSqm} sqm) for ${listingType} in ${city}, ${country}.`).trim();
 
   if (!title || price <= 0) {
@@ -954,8 +959,9 @@ function prepareRealEstateDraftTool(args = {}, userProfile = {}) {
 }
 
 function prepareEventDraftTool(args = {}, userProfile = {}) {
+  const ctx = extractUserProfileContext(userProfile);
   const title = String(args.title || "").trim();
-  const location = String(args.location || userProfile.hostCity || "Dar es Salaam").trim();
+  const location = String(args.location || ctx.hostCity || ctx.currentCity || ctx.homeCity || "Dar es Salaam").trim();
   const startDate = String(args.startDate || resolveDefaultFutureDate(7)).trim();
   const startTime = String(args.startTime || "18:00").trim();
   const category = String(args.category || "Networking").trim();
@@ -994,25 +1000,150 @@ function prepareEventDraftTool(args = {}, userProfile = {}) {
   };
 }
 
+// ── Extract Rich User Profile Context (Nested & Top-Level Fields) ──
+function extractUserProfileContext(userProfile = {}) {
+  const homeLoc = (userProfile.homeLocation && typeof userProfile.homeLocation === "object") ?
+    userProfile.homeLocation :
+    {};
+  const hostLoc = (userProfile.hostLocation && typeof userProfile.hostLocation === "object") ?
+    userProfile.hostLocation :
+    {};
+  const currLoc = (userProfile.currentLocation && typeof userProfile.currentLocation === "object") ?
+    userProfile.currentLocation :
+    {};
+
+  const firstName = String(userProfile.firstName || "").trim();
+  const lastName = String(userProfile.lastName || "").trim();
+  const fullName = String(
+      userProfile.fullName ||
+      `${firstName} ${lastName}`.trim() ||
+      "Diaspora Member",
+  ).trim();
+
+  const homeCity = String(userProfile.homeCity || homeLoc.city || "").trim();
+  const homeState = String(userProfile.homeState || homeLoc.state || "").trim();
+  const homeCountry = String(userProfile.homeCountry || homeLoc.country || "").trim();
+  const homeCountryCode = String(
+      userProfile.homeCountryCode ||
+      homeLoc.country_code ||
+      homeLoc.countryCode ||
+      "",
+  ).trim();
+  const homeAddress = String(
+      homeLoc.formatted_address ||
+      homeLoc.formattedAddress ||
+      [homeCity, homeState, homeCountry].filter(Boolean).join(", ") ||
+      "Not specified",
+  ).trim();
+
+  const hostCity = String(userProfile.hostCity || hostLoc.city || userProfile.currentCity || currLoc.city || "").trim();
+  const hostState = String(userProfile.hostState || hostLoc.state || userProfile.currentState || currLoc.state || "").trim();
+  const hostCountry = String(userProfile.hostCountry || hostLoc.country || "").trim();
+  const hostCountryCode = String(
+      userProfile.hostCountryCode ||
+      hostLoc.country_code ||
+      hostLoc.countryCode ||
+      "",
+  ).trim();
+  const hostAddress = String(
+      hostLoc.formatted_address ||
+      hostLoc.formattedAddress ||
+      [hostCity, hostState, hostCountry].filter(Boolean).join(", ") ||
+      "Not specified",
+  ).trim();
+
+  const currentCity = String(userProfile.currentCity || currLoc.city || hostCity || "").trim();
+  const currentState = String(userProfile.currentState || currLoc.state || hostState || "").trim();
+  const currentCountryCode = String(
+      userProfile.currentCountryCode ||
+      currLoc.country_code ||
+      currLoc.countryCode ||
+      hostCountryCode ||
+      "",
+  ).trim();
+  const currentAddress = String(
+      currLoc.formatted_address ||
+      currLoc.formattedAddress ||
+      [currentCity, currentState, currentCountryCode].filter(Boolean).join(", ") ||
+      hostAddress,
+  ).trim();
+
+  const occupation = String(userProfile.occupation || "").trim();
+  const bio = String(userProfile.bio || "").trim();
+  const yearsInHostCountry = String(userProfile.yearsInHostCountry || "").trim();
+  const profession = Array.isArray(userProfile.profession) ? userProfile.profession.filter(Boolean).join(", ") : "";
+  const industry = Array.isArray(userProfile.industry) ? userProfile.industry.filter(Boolean).join(", ") : "";
+  const languages = Array.isArray(userProfile.languages) ? userProfile.languages.filter(Boolean).join(", ") : "";
+  const interests = Array.isArray(userProfile.interests) ? userProfile.interests.filter(Boolean).join(", ") : "";
+  const servicesOffered = Array.isArray(userProfile.servicesOffered) ? userProfile.servicesOffered.filter(Boolean).join(", ") : "";
+  const lookingFor = Array.isArray(userProfile.lookingFor) ? userProfile.lookingFor.filter(Boolean).join(", ") : "";
+  const pastLocations = Array.isArray(userProfile.pastLocations) ?
+    userProfile.pastLocations
+        .map((p) => {
+          const loc = p?.location || {};
+          const addr = loc.formatted_address || [loc.city, loc.state, loc.country].filter(Boolean).join(", ");
+          return addr ? (p.until ? `${addr} (until ${p.until})` : addr) : "";
+        })
+        .filter(Boolean)
+        .join("; ") :
+    "";
+
+  return {
+    firstName,
+    lastName,
+    fullName,
+    homeCity,
+    homeState,
+    homeCountry,
+    homeCountryCode,
+    homeAddress,
+    hostCity,
+    hostState,
+    hostCountry,
+    hostCountryCode,
+    hostAddress,
+    currentCity,
+    currentState,
+    currentCountryCode,
+    currentAddress,
+    occupation,
+    bio,
+    yearsInHostCountry,
+    profession,
+    industry,
+    languages,
+    interests,
+    servicesOffered,
+    lookingFor,
+    pastLocations,
+  };
+}
+
 // ── System Knowledge Base for Diaspora AI Agent ──
 function buildSystemInstruction(userProfile = {}, dspPoints = 0) {
-  const fullName = String(userProfile.fullName || userProfile.firstName || "Diaspora Member").trim();
-  const homeCountry = String(userProfile.homeCountry || "their homeland").trim();
-  const homeCity = String(userProfile.homeCity || "").trim();
-  const hostCountry = String(userProfile.hostCountry || "").trim();
-  const hostCity = String(userProfile.hostCity || userProfile.currentCity || "").trim();
+  const ctx = extractUserProfileContext(userProfile);
 
   return `You are **Diaspora AI Agent**, the official 24/7 multilingual AI Concierge built into the Diaspora Nearby super-app.
 Founder & Origin Story: Diaspora Nearby was founded by Peter Swai, who lived across the diaspora for 25+ years (Tanzania -> San Francisco -> Santa Monica -> Iowa -> Washington DC -> Phoenix -> returning home to Tanzania) to unite the global diaspora with their homelands.
 
-CURRENT USER CONTEXT:
-- Name: ${fullName}
-- Home Country / Origin: ${homeCity ? `${homeCity}, ` : ""}${homeCountry}
-- Current Host Location: ${hostCity ? `${hostCity}, ` : ""}${hostCountry || "Global"}
-- $DIASPORA / DSP Points Balance: ${dspPoints}
+CURRENT USER PROFILE & PERSONAL CONTEXT (Always use this when the user asks about themselves, their home location, host location, current city, background, or corridor):
+- Full Name: ${ctx.fullName}${ctx.firstName ? ` (First Name: ${ctx.firstName})` : ""}
+- Home Location (Homeland / Origin): ${ctx.homeAddress}${ctx.homeCity ? ` [City: ${ctx.homeCity}]` : ""}${ctx.homeCountry ? ` [Country: ${ctx.homeCountry} (${ctx.homeCountryCode})]` : ""}
+- Host Location (Diaspora Residence): ${ctx.hostAddress}${ctx.hostCity ? ` [City: ${ctx.hostCity}]` : ""}${ctx.hostCountry ? ` [Country: ${ctx.hostCountry} (${ctx.hostCountryCode})]` : ""}
+- Current Live Location: ${ctx.currentAddress}
+- Occupation / Bio: ${[ctx.occupation, ctx.profession, ctx.industry].filter(Boolean).join(" • ") || "Not specified"}${ctx.bio ? ` — "${ctx.bio}"` : ""}
+- Years in Host Country: ${ctx.yearsInHostCountry || "Not specified"}
+- Languages Spoken: ${ctx.languages || "Multilingual"}
+- Interests & Services: ${[ctx.interests, ctx.servicesOffered, ctx.lookingFor].filter(Boolean).join(" | ") || "General Diaspora Community"}
+${ctx.pastLocations ? `- Past Diaspora Locations: ${ctx.pastLocations}\n` : ""}- $DIASPORA / DSP Points Balance: ${dspPoints}
+
+PERSONALIZED CONTEXT RULES:
+- When the user asks about their home location, hometown, home country, host location, host city, current location, occupation, or points balance, answer directly and accurately using the CURRENT USER PROFILE & PERSONAL CONTEXT above.
+- When searching flights, if the user says "flights home" or doesn't specify origin/destination, default origin to their Host Location (${ctx.hostCity || ctx.hostCountry || "DFW"}) and destination to their Home Location (${ctx.homeCity || ctx.homeCountry || "DAR"}), or vice versa.
+- When searching hotels, car rentals, jobs, or real estate without a city specified, use their Home City (${ctx.homeCity || "Dar es Salaam"}) or Host City (${ctx.hostCity || "their city"}) contextually.
 
 MULTILINGUAL & FORMATTING RULES (CRITICAL):
-- Always reply in the EXACT language the user writes in (English, Kiswahili, French, Arabic, Spanish, Portuguese, Chinese, Hindi, Yoruba, Igbo, Hausa, Amharic, Somali, Zulu, etc.).
+- Always reply in the EXACT language the user speaks or writes in (English, Kiswahili, French, Arabic, Spanish, Portuguese, Chinese, Hindi, Yoruba, Igbo, Hausa, Amharic, Somali, Zulu, etc.).
 - If the user asks you to switch languages, switch immediately and naturally.
 - NO EMOJIS: Never use emojis in your responses or labels. Keep all text clean, clear, and professional.
 
@@ -1367,9 +1498,28 @@ function isKiswahiliText(text = "") {
 
 // ── Heuristic Fallback When API Keys Are Unavailable ──
 async function buildIntelligentFallbackResponse(userText, userProfile) {
+  const ctx = extractUserProfileContext(userProfile);
   const lower = String(userText || "").toLowerCase();
   const isSw = isKiswahiliText(userText);
   const actions = [];
+
+  if (
+    lower.includes("where am i from") ||
+    lower.includes("my home") ||
+    lower.includes("my host") ||
+    lower.includes("where do i live") ||
+    lower.includes("who am i") ||
+    lower.includes("my location") ||
+    lower.includes("natoka wapi") ||
+    lower.includes("naishi wapi")
+  ) {
+    return {
+      text: isSw ?
+        `Jina lako ni **${ctx.fullName}**. Nyumbani kwako (Home Location) ni **${ctx.homeAddress}**, na makazi yako ya sasa (Host Location) ni **${ctx.hostAddress}**.` :
+        `You are **${ctx.fullName}**. Your home location is **${ctx.homeAddress}**, and your host location is **${ctx.hostAddress}**.`,
+      aiActions: [resolveFeatureNavigationAction("nearby")],
+    };
+  }
 
   if (
     lower.includes("kiswahili") ||
@@ -1390,8 +1540,8 @@ async function buildIntelligentFallbackResponse(userText, userProfile) {
 
   if (lower.includes("flight") || lower.includes("fly") || lower.includes("ndege") || lower.includes("ticket") || lower.includes("tiketi")) {
     const res = await executeSearchFlightsTool({
-      origin: userProfile.hostCity || "DFW",
-      destination: userProfile.homeCity || "DAR",
+      origin: ctx.hostCity || ctx.hostCountry || "DFW",
+      destination: ctx.homeCity || ctx.homeCountry || "DAR",
     });
     if (res.aiAction) actions.push(res.aiAction);
     const offerLines = (res.offers || [])
@@ -1410,7 +1560,7 @@ async function buildIntelligentFallbackResponse(userText, userProfile) {
   }
 
   if (lower.includes("hotel") || lower.includes("hoteli") || lower.includes("lodge") || lower.includes("malazi")) {
-    const city = userProfile.homeCity || "Dar es Salaam";
+    const city = ctx.homeCity || ctx.hostCity || "Dar es Salaam";
     const res = await executeSearchHotelsTool({city});
     if (res.aiAction) actions.push(res.aiAction);
     const hotelLines = (res.hotels || [])
@@ -1690,8 +1840,11 @@ async function generateAiAgentResponse({
           contents,
           tools: GEMINI_TOOLS_DECLARATION,
           generationConfig: {
-            temperature: 0.5,
-            maxOutputTokens: 1024,
+            temperature: 0.4,
+            maxOutputTokens: isVoiceMode ? 280 : 1024,
+            ...(isVoiceMode && geminiModel.startsWith("gemini-2.5") ? {
+              thinkingConfig: {thinkingBudget: 0},
+            } : {}),
           },
         };
 
@@ -1738,8 +1891,11 @@ async function generateAiAgentResponse({
                 },
                 contents: secondContents,
                 generationConfig: {
-                  temperature: 0.5,
-                  maxOutputTokens: 1024,
+                  temperature: 0.4,
+                  maxOutputTokens: isVoiceMode ? 280 : 1024,
+                  ...(isVoiceMode && geminiModel.startsWith("gemini-2.5") ? {
+                    thinkingConfig: {thinkingBudget: 0},
+                  } : {}),
                 },
               },
               {timeout: 20000},
