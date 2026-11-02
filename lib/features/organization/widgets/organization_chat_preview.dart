@@ -461,6 +461,8 @@ class _OrganizationChatPreviewState
         return LucideIcons.mic;
       case 'audio_file':
         return LucideIcons.music;
+      case 'voice_call':
+        return LucideIcons.phone;
       case 'document':
         return LucideIcons.file;
       case 'location':
@@ -480,6 +482,8 @@ class _OrganizationChatPreviewState
         return 'Voice Message';
       case 'audio_file':
         return 'Audio File';
+      case 'voice_call':
+        return 'Voice Call';
       case 'document':
         return 'Document';
       case 'location':

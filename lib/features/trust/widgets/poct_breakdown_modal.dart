@@ -170,11 +170,11 @@ class PoctBreakdownModal extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // === SECTION 1: Genesis Milestones ===
+                  // === SECTION 1: Genesis Milestones (70 PCT Max) ===
                   _buildSectionHeader(
                     theme,
                     'Genesis Milestones',
-                    'One-time +10 PCT at first 10 unique',
+                    'One-time +10 PCT each (70 PCT max)',
                     LucideIcons.award,
                   ),
                   const SizedBox(height: 12),
@@ -183,7 +183,12 @@ class PoctBreakdownModal extends ConsumerWidget {
                     theme,
                     icon: LucideIcons.mapPin,
                     label: 'Current Location Transparency',
-                    achieved: trustScore >= 10,
+                    achieved:
+                        t?.awardedQualificationMilestones.contains(
+                              'LocationTransparency',
+                            ) ==
+                            true ||
+                        trustScore >= 10,
                     poct: 10,
                   ),
                   _buildMilestoneRow(
@@ -204,7 +209,7 @@ class PoctBreakdownModal extends ConsumerWidget {
                   _buildMilestoneRow(
                     theme,
                     icon: LucideIcons.qrCode,
-                    label: 'QR Identity Exchanges',
+                    label: 'QR Identity Exchanges (First 10)',
                     count: (t?.uniqueQrCount ?? 0).clamp(0, 10),
                     milestone: 10,
                     poct: 10,
@@ -213,7 +218,7 @@ class PoctBreakdownModal extends ConsumerWidget {
                   _buildMilestoneRow(
                     theme,
                     icon: LucideIcons.users,
-                    label: 'Family Connections',
+                    label: 'Family Connections (First 10)',
                     count: (t?.uniqueFamilyCount ?? 0).clamp(0, 10),
                     milestone: 10,
                     poct: 10,
@@ -222,7 +227,7 @@ class PoctBreakdownModal extends ConsumerWidget {
                   _buildMilestoneRow(
                     theme,
                     icon: LucideIcons.userPlus,
-                    label: 'Friend Connections',
+                    label: 'Friend Connections (First 10)',
                     count: (t?.uniqueFriendCount ?? 0).clamp(0, 10),
                     milestone: 10,
                     poct: 10,
@@ -230,50 +235,17 @@ class PoctBreakdownModal extends ConsumerWidget {
                   ),
                   _buildMilestoneRow(
                     theme,
-                    icon: LucideIcons.shieldCheck,
-                    label: 'Vouched by Peers',
-                    count: (t?.uniqueVouchCount ?? 0).clamp(0, 10),
-                    milestone: 10,
-                    poct: 10,
-                    achieved: (t?.uniqueVouchCount ?? 0) >= 10,
-                  ),
-                  _buildMilestoneRow(
-                    theme,
                     icon: LucideIcons.badgeCheck,
-                    label: 'Verified by Peers',
+                    label: 'Verified by Peers (First 10)',
                     count: (t?.uniqueVerificationCount ?? 0).clamp(0, 10),
                     milestone: 10,
                     poct: 10,
                     achieved: (t?.uniqueVerificationCount ?? 0) >= 10,
                   ),
-
-                  const SizedBox(height: 8),
-                  _buildMilestoneSummary(theme, t),
-
-                  const SizedBox(height: 24),
-
-                  // === SECTION 3: Community Participation ===
-                  _buildSectionHeader(
-                    theme,
-                    'Community Participation',
-                    'One-time +10 PCT per milestone',
-                    LucideIcons.users2,
-                  ),
-                  const SizedBox(height: 12),
-
-                  _buildMilestoneRow(
-                    theme,
-                    icon: LucideIcons.calendarCheck,
-                    label: 'Event Attendance (QR)',
-                    count: (t?.verifiedCheckInCount ?? 0).clamp(0, 10),
-                    milestone: 10,
-                    poct: 10,
-                    achieved: (t?.verifiedCheckInCount ?? 0) >= 10,
-                  ),
                   _buildTransparencyRow(
                     theme,
                     icon: LucideIcons.heartHandshake,
-                    label: 'Emergency Fund Contributor',
+                    label: 'Ubuntu Emergency Fund Contributor',
                     achieved:
                         t?.awardedQualificationMilestones.contains(
                           'EmergencyFund',
@@ -282,9 +254,118 @@ class PoctBreakdownModal extends ConsumerWidget {
                     poct: 10,
                   ),
 
+                  const SizedBox(height: 8),
+                  _buildMilestoneSummary(theme, t),
+
                   const SizedBox(height: 24),
 
-                  // === SECTION 4: Trust Slider (Ongoing PCT) ===
+                  // === SECTION 2: Ongoing Trust-Building Events (+1 PCT per 10) ===
+                  _buildSectionHeader(
+                    theme,
+                    'Ongoing Trust-Building Events',
+                    '+1 PCT per 10 positive trust events',
+                    LucideIcons.users2,
+                  ),
+                  const SizedBox(height: 12),
+
+                  _buildOngoingTrustActivityRow(
+                    theme,
+                    icon: LucideIcons.radio,
+                    label: 'Proximity Connections',
+                    subtitle: '10+ min within 100 ft of another member',
+                    count: t?.proximityConnectionsCount ?? 0,
+                  ),
+                  _buildOngoingTrustActivityRow(
+                    theme,
+                    icon: LucideIcons.flame,
+                    label: 'Grassroots Gatherings',
+                    subtitle: '60+ min within 100 ft at an invited gathering',
+                    count: t?.grassrootsGatheringsCount ?? 0,
+                  ),
+                  _buildOngoingTrustActivityRow(
+                    theme,
+                    icon: LucideIcons.calendarCheck,
+                    label: 'Event Attendance (Check-ins)',
+                    subtitle: 'Verified QR or venue event check-ins',
+                    count: t?.verifiedCheckInCount ?? 0,
+                  ),
+                  _buildOngoingTrustActivityRow(
+                    theme,
+                    icon: LucideIcons.calendarPlus,
+                    label: 'Event Hosting (Attendees)',
+                    subtitle: 'Verified attendees at events you host',
+                    count: t?.hostedEventAttendeesCount ?? 0,
+                  ),
+                  _buildOngoingTrustActivityRow(
+                    theme,
+                    icon: LucideIcons.qrCode,
+                    label: 'Additional QR Exchanges (11+)',
+                    subtitle: 'In-person QR scans beyond first 10 milestone',
+                    count: (t?.uniqueQrCount ?? 0) > 10
+                        ? (t!.uniqueQrCount - 10)
+                        : 0,
+                  ),
+                  _buildOngoingTrustActivityRow(
+                    theme,
+                    icon: LucideIcons.badgeCheck,
+                    label: 'Additional Peer Verifications (11+)',
+                    subtitle: 'Verifications received beyond first 10',
+                    count: (t?.uniqueVerificationCount ?? 0) > 10
+                        ? (t!.uniqueVerificationCount - 10)
+                        : 0,
+                  ),
+                  _buildOngoingTrustActivityRow(
+                    theme,
+                    icon: LucideIcons.checkCircle2,
+                    label: 'Peer Verifications Given',
+                    subtitle: 'Profile fields you verified for other members',
+                    count: t?.verificationsGivenCount ?? 0,
+                  ),
+                  _buildOngoingTrustActivityRow(
+                    theme,
+                    icon: LucideIcons.users,
+                    label: 'Additional Family & Friends (11+)',
+                    subtitle: 'Family & friend links beyond first 10 each',
+                    count:
+                        ((t?.uniqueFamilyCount ?? 0) > 10
+                            ? (t!.uniqueFamilyCount - 10)
+                            : 0) +
+                        ((t?.uniqueFriendCount ?? 0) > 10
+                            ? (t!.uniqueFriendCount - 10)
+                            : 0),
+                  ),
+                  _buildOngoingTrustActivityRow(
+                    theme,
+                    icon: LucideIcons.messageSquare,
+                    label: 'Verified Chat Solutions',
+                    subtitle: 'Helpful community answers verified by peers',
+                    count: t?.verifiedSolutionsCount ?? 0,
+                  ),
+                  _buildOngoingTrustActivityRow(
+                    theme,
+                    icon: LucideIcons.share2,
+                    label: 'Member Referrals',
+                    subtitle: 'Members who joined using your referral code',
+                    count: t?.referralCount ?? 0,
+                  ),
+                  _buildOngoingTrustActivityRow(
+                    theme,
+                    icon: LucideIcons.arrowLeftRight,
+                    label: 'Economic & Peer Stay Transactions',
+                    subtitle: 'Completed P2P/B2B/C2B & peer hosting stays',
+                    count: t?.economicTxCount ?? 0,
+                  ),
+                  _buildOngoingTrustActivityRow(
+                    theme,
+                    icon: LucideIcons.vote,
+                    label: 'Governance Votes Cast',
+                    subtitle: 'Votes cast on community governance proposals',
+                    count: t?.governanceVotesCount ?? 0,
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // === SECTION 3: Trust Slider (Ongoing PCT) ===
                   _buildSectionHeader(
                     theme,
                     'Trust Slider Vouches',
@@ -297,20 +378,7 @@ class PoctBreakdownModal extends ConsumerWidget {
 
                   const SizedBox(height: 24),
 
-                  // === SECTION 5: Economic Transactions ===
-                  _buildSectionHeader(
-                    theme,
-                    'Economic Transactions',
-                    '+1 PCT per 10 completed P2P/B2B/C2B transactions',
-                    LucideIcons.arrowLeftRight,
-                  ),
-                  const SizedBox(height: 12),
-
-                  _buildEconomicTxRow(theme, t),
-
-                  const SizedBox(height: 24),
-
-                  // === SECTION 6: Seniority ===
+                  // === SECTION 4: Seniority ===
                   _buildSectionHeader(
                     theme,
                     'Seniority',
@@ -323,11 +391,11 @@ class PoctBreakdownModal extends ConsumerWidget {
 
                   const SizedBox(height: 24),
 
-                  // === SECTION 7: Penalties ===
+                  // === SECTION 5: Penalties ===
                   _buildSectionHeader(
                     theme,
                     'Penalties',
-                    '-10 PCT per 10 occurrences',
+                    '-1 PCT per 10 occurrences (-10 PCT per 10 flagged msgs)',
                     LucideIcons.shieldAlert,
                   ),
                   const SizedBox(height: 12),
@@ -515,13 +583,19 @@ class PoctBreakdownModal extends ConsumerWidget {
   Widget _buildMilestoneSummary(ThemeData theme, TrustData? t) {
     // Seven genesis milestones × 10 = 70 max.
     int milestonePoCT = 0;
-    if ((t?.trustScore ?? 0) >= 10) milestonePoCT += 10;
+    if (t?.awardedQualificationMilestones.contains('LocationTransparency') ==
+            true ||
+        (t?.trustScore ?? 0) >= 10) {
+      milestonePoCT += 10;
+    }
     if ((t?.uniqueFamilyCount ?? 0) >= 10) milestonePoCT += 10;
     if ((t?.uniqueFriendCount ?? 0) >= 10) milestonePoCT += 10;
     if ((t?.uniqueQrCount ?? 0) >= 10) milestonePoCT += 10;
     if ((t?.uniqueVerificationCount ?? 0) >= 10) milestonePoCT += 10;
-    if ((t?.uniqueVouchCount ?? 0) >= 10) milestonePoCT += 10;
     if (t?.awardedQualificationMilestones.contains('Profile') == true) {
+      milestonePoCT += 10;
+    }
+    if (t?.awardedQualificationMilestones.contains('EmergencyFund') == true) {
       milestonePoCT += 10;
     }
 
@@ -900,43 +974,110 @@ class PoctBreakdownModal extends ConsumerWidget {
     );
   }
 
-  // ── Economic Transactions ──
+  // ── Ongoing Trust-Building Events (+1 PCT per 10) ──
 
-  Widget _buildEconomicTxRow(ThemeData theme, TrustData? t) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            LucideIcons.arrowLeftRight,
-            size: 18,
-            color: theme.colorScheme.primary,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildOngoingTrustActivityRow(
+    ThemeData theme, {
+    required IconData icon,
+    required String label,
+    required String subtitle,
+    required int count,
+  }) {
+    final earnedPoct = count ~/ 10;
+    final progressInBatch = count % 10;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: earnedPoct > 0
+              ? AppTheme.accent.withValues(alpha: 0.08)
+              : theme.colorScheme.surfaceContainerLowest,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          children: [
+            Row(
               children: [
-                const Text(
-                  'Completed Transactions',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                Icon(
+                  icon,
+                  size: 18,
+                  color: earnedPoct > 0
+                      ? AppTheme.accent
+                      : theme.colorScheme.primary,
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  'Every 10 completed P2P/B2B/C2B transactions earns +1 PCT',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: theme.colorScheme.onSurfaceVariant,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
+                ),
+                const SizedBox(width: 10),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '+$earnedPoct PCT',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: earnedPoct > 0
+                            ? AppTheme.accent
+                            : theme.hintColor,
+                      ),
+                    ),
+                    Text(
+                      '$count total',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ),
-        ],
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: progressInBatch / 10.0,
+                minHeight: 4,
+                backgroundColor: theme.dividerColor.withValues(alpha: 0.3),
+                valueColor: const AlwaysStoppedAnimation(AppTheme.accent),
+              ),
+            ),
+            const SizedBox(height: 3),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                '$progressInBatch / 10 toward next +1 PCT',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

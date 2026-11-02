@@ -6,6 +6,7 @@ const {
   consumeRateLimit,
   stableHash,
 } = require("./security");
+const { syncProfileMilestoneAndTrust } = require("./dsp");
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_BOOKING_DAYS = 365;
@@ -194,6 +195,31 @@ exports.updatePeerBookingStatus = functions.https.onCall(async (data, context) =
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       [`${nextStatus}At`]: admin.firestore.FieldValue.serverTimestamp(),
     });
+    if (nextStatus === "completed") {
+      const nowTs = admin.firestore.FieldValue.serverTimestamp();
+      for (const col of ["trust_data", "trust_scores"]) {
+        for (const pUid of [current.guestId, current.hostId].filter(Boolean)) {
+          transaction.set(db.collection(col).doc(pUid), {
+            completedHostingCount: admin.firestore.FieldValue.increment(1),
+            economicTxCount: admin.firestore.FieldValue.increment(1),
+            lastUpdated: nowTs,
+          }, {merge: true});
+        }
+      }
+    }
   });
+  if (nextStatus === "completed") {
+    try {
+      const snap = await bookingRef.get();
+      if (snap.exists) {
+        const d = snap.data() || {};
+        await Promise.all(
+          [d.guestId, d.hostId]
+            .filter(Boolean)
+            .map((pUid) => syncProfileMilestoneAndTrust(pUid).catch(() => null))
+        );
+      }
+    } catch (_) {}
+  }
   return {bookingId, status: nextStatus};
 });

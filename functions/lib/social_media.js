@@ -448,9 +448,14 @@ async function generateDiasporaContent(options = {}) {
     corridor === "tz_abroad"
       ? `
 TARGET AUDIENCE & LANGUAGE REQUIREMENT (COHORT A — TANZANIANS LIVING OUTSIDE TANZANIA):
-- Write MOSTLY IN KISWAHILI (warm, authentic Tanzanian Kiswahili addressing "Watanzania waishio nje ya Tanzania / Ughaibuni / Diaspora" in the US, UK, UAE/Dubai, South Africa, Kenya, Canada, Europe, and China), keeping technical product terms like "Diaspora Nearby", "$DIASPORA", "Base Blockchain", and "1:1 Ubuntu Match".
-- Highlight how Tanzanians abroad can discover nearby Watanzania in their host city (Houston, Washington DC, London, Dubai, Johannesburg, Nairobi), organize their city chamber, and build collective wealth for both their host city and their home region in Tanzania (Dar es Salaam, Arusha, Kilimanjaro/Moshi, Mwanza, Zanzibar, Dodoma, Mbeya).
-- On Facebook and Instagram, end with a Kiswahili Comment-to-DM hook: "Andika mji ulipo kwenye comment (mfano: HOUSTON, LONDON, DUBAI, NAIROBI) au comment 'TZ' tukutumie link ya kujiunga moja kwa moja kwenye DM! 👉 https://diasporanearby.com/invite"
+- Write MOSTLY IN KISWAHILI (warm, authentic Tanzanian Kiswahili addressing "Watanzania waishio nje ya Tanzania / Ughaibuni / Diaspora" in the US, UK, UAE/Dubai, South Africa, Kenya, Canada, Europe, and China).
+- Highlight the 5 everyday utilities built for Watanzania:
+  1. Nearby Discovery: Gundua Watanzania walio karibu nawe katika mji au mtaa unaoishi.
+  2. Nearby Notification: Pata taarifa za papo hapo Mtanzania mwenzako anapokuwa karibu nawe.
+  3. Live Radio: Sikiliza redio za nyumbani Tanzania na diaspora mubashara (24/7) ndani ya app.
+  4. Ubuntu Emergency Fund: Mfuko wa dharura na msiba wa kusaidiana kwa uwazi wakati wa matatizo.
+  5. DDI Loans (Mikopo ya DDI): Mikopo ya kuwezesha miradi na uwekezaji kupitia hazina ya jamii yetu.
+- On Facebook and Instagram, end with a Kiswahili Comment-to-DM Roll-Call hook: "Andika mkoa uliotoka TZ + mji ulipo sasa kwenye comment (mfano: IRINGA -> HOUSTON, ARUSHA -> LONDON, DAR -> DUBAI) tukutumie link ya kujiunga moja kwa moja kwenye DM! 👉 https://diasporanearby.com/invite"
 `
       : corridor === "expat_in_tz"
       ? `
@@ -461,54 +466,68 @@ TARGET AUDIENCE & LANGUAGE REQUIREMENT (COHORT B — NON-TANZANIANS / EXPATS LIV
             ? `Write in ${lang.toUpperCase()} paired with clear English so speakers of that native language in Tanzania feel immediately at home.`
             : "Write in warm, inclusive International English (and optionally weave in multicultural greetings like Bienvenue / 欢迎 / नमस्ते / مرحباً / Willkommen / Karibu)."
         }
-- Emphasize discovering compatriots from your home country living nearby in Tanzania, building verified local trust, organizing your nationality's chamber in Tanzania, and earning $DIASPORA on Base Blockchain with a 1:1 Ubuntu Community Match.
-- On Facebook and Instagram, end with a Comment-to-DM hook: "Living in Dar es Salaam, Arusha, or Zanzibar? Comment your Home Country + City below and we'll DM your Founding Member invite link! 👉 https://diasporanearby.com/invite"
+- Emphasize the 5 core utilities in Tanzania:
+  1. Nearby Discovery: Instantly find compatriots from your home country nearby in Dar, Arusha, or Zanzibar.
+  2. Nearby Notification: Real-time proximity alerts when someone from home is in your neighborhood.
+  3. Live Radio: Stream 24/7 radio stations from your home country and local diaspora hubs.
+  4. Ubuntu Emergency Fund: Transparent community mutual-aid & emergency support fund.
+  5. DDI Loans: Community-backed Diaspora Direct Investment loans to grow cross-border ventures.
+- On Facebook and Instagram, end with a Comment-to-DM Roll-Call hook: "Living in Dar es Salaam, Arusha, or Zanzibar? Comment your Home Country + City below and we'll DM your Founding Member invite link! 👉 https://diasporanearby.com/invite"
 `
       : "";
 
   const platformInstructions = {
     x: `
 - Write a punchy, relatable tweet strictly under 245 characters about "${topic}".
-- Focus strictly on discovering, connecting, and organizing diaspora communities and creating wealth across both Home and Host locations (Dual Geographic Identity) via $DIASPORA on Base Blockchain.
-- Must be 1 to 2 complete, conversational sentences. ALWAYS include the official token hashtag #$DIASPORA along with: #DiasporaNearby #FindYourPeople #BaseBlockchain #$DIASPORA
+- Focus strictly on the 5 core utilities of Diaspora Nearby: Nearby Discovery, Nearby Notification, Live Radio, Ubuntu Emergency Fund, and DDI Loans.
+- Must be 1 to 2 complete, conversational sentences. Include #DiasporaNearby #FindYourPeople #$DIASPORA
 - Output ONLY the raw tweet text. No introductory remarks, no quotes, no markdown headers.
 `,
     linkedin: `
-- Write an engaging LinkedIn post (around 1000-1500 characters) on "${topic}".
-- Weave together the human experience of discovering, connecting, and organizing diaspora communities with creating collective wealth across their Dual Geographic Identities (both Home and Host locations) via the $DIASPORA token on Base Blockchain.
-- Include short paragraphs, bold insight, whitespace, and a clear call to action to join Epoch 1 at https://diasporanearby.com
-- ALWAYS include the official token hashtag #$DIASPORA along with: #DiasporaNearby #FindYourPeople #BaseBlockchain #$DIASPORA #DualIdentity
+- Write an engaging LinkedIn post (around 900-1400 characters) on "${topic}".
+- Focus clearly on the 5 core utilities of Diaspora Nearby:
+  1. Nearby Discovery (finding compatriots nearby in your city)
+  2. Nearby Notification (real-time proximity alerts when a fellow compatriot is nearby)
+  3. Live Radio (streaming homeland & diaspora radio 24/7)
+  4. Ubuntu Emergency Fund (transparent community emergency & bereavement mutual-aid fund)
+  5. DDI Loans (Diaspora Direct Investment community-backed loans)
+- Include short paragraphs, clear structure, and a call to action to join at https://diasporanearby.com/invite
+- Include #DiasporaNearby #FindYourPeople #$DIASPORA #Ubuntu
 - Output ONLY raw post text.
 `,
     facebook: `
 - Write an authentic, warm, community-focused Facebook Page post (around 450-800 characters) on "${topic}".
-- Start with the relatable human story of diaspora life—moving to a new city, discovering and organizing compatriots nearby, and representing both Home and Host countries—then explain how every connection builds wealth for both you and your Dual Geographic Identity locations via $DIASPORA on Base Blockchain (1:1 Ubuntu match).
-- Include a clear call to action to explore https://diasporanearby.com and ALWAYS include the official token hashtag #$DIASPORA along with: #DiasporaNearby #FindYourPeople #BaseBlockchain #$DIASPORA
+- Start with a relatable human roll-call hook ("Who from your home town is right down the street from you right now?"), then highlight the 5 core utilities: Nearby Discovery, Nearby Notification, Live Homeland Radio, Ubuntu Emergency Fund, and DDI Loans.
+- Include a clear call to action to comment their Home + Host City and explore https://diasporanearby.com/invite along with #DiasporaNearby #FindYourPeople #$DIASPORA
 - Output ONLY raw post text. No introductory remarks, no markdown headers.
 `,
     instagram: `
 - Write an inspiring Instagram caption (around 400-700 characters) on "${topic}".
-- Hook the reader in the first line about discovering, connecting, and organizing your people nearby anywhere in the world, followed by 2-3 short bullet points on Proximity Discovery, Community Organization, Dual Geographic Identity, and creating wealth for both Home and Host locations via $DIASPORA on Base Blockchain.
-- End with a call to action to visit diasporanearby.com and ALWAYS include the official token hashtag #$DIASPORA along with: #DiasporaNearby #FindYourPeople #BaseBlockchain #$DIASPORA #DualIdentity #Ubuntu
+- Hook the reader in the first line about finding your people nearby, followed by the 5 core utilities:
+  📍 Nearby Discovery
+  🔔 Nearby Notification
+  📻 Live Homeland Radio
+  🤝 Ubuntu Emergency Fund
+  🏦 DDI Community Loans
+- End with a call to action to comment their Home + Host City and visit diasporanearby.com/invite along with #DiasporaNearby #FindYourPeople #$DIASPORA #Ubuntu
 - Output ONLY raw caption text.
 `,
   };
 
-  const systemInstructions = `You are the authentic executive voice of Peter Swai, Founder & CEO of Diaspora Nearby — Architect of the Global Diaspora Sovereign Economy & Trust-to-Asset Engine.
+  const systemInstructions = `You are the authentic executive voice of Peter Swai, Founder & CEO of Diaspora Nearby.
 Peter Swai lived across the diaspora for 25+ years (Tanzania -> San Francisco -> Santa Monica -> Iowa -> DC -> Phoenix -> Iowa -> now returning home to Tanzania).
-As the Architect of the Global Diaspora Sovereign Economy, your mission is to turn cross-border community trust into sovereign retained wealth.
 
-STRICT MESSAGING SCOPE (4 CORE PILLARS ONLY):
-All posts MUST focus strictly on these four foundational pillars:
-1. DISCOVERY ("Find Your People"): Real-time proximity discovery and alerts that notify verified diaspora members and compatriots when they are nearby in any city, campus, or neighborhood worldwide.
-2. CONNECTION (High-Trust Peer Network): Turning strangers into family through verified proximity check-ins, peer vouching, and Proof of Community Trust (PCT) on Base Blockchain.
-3. ORGANIZATION OF DIASPORA COMMUNITIES: Organizing local town, city, and national diaspora chambers, community hubs, and collective chapters so diaspora communities are structured and united rather than scattered.
-4. CREATING WEALTH FOR DIASPORA & THEIR DUAL GEOGRAPHIC IDENTITIES: Seamless Dual Geographic Identity (belonging to both your Host location where you live/work and your Home heritage location). Every verified connection and community action in Epoch 1 earns $DIASPORA on Base Blockchain, with a 1:1 Ubuntu Community Match that mints equal treasury reserves directly into both your local/host and homeland community treasuries.
+STRICT MESSAGING SCOPE (5 CORE UTILITIES ONLY):
+All posts MUST focus strictly on these 5 immediate everyday utilities:
+1. NEARBY DISCOVERY: Discover verified compatriots from your home country or region who live or work right near you in your city or neighborhood.
+2. NEARBY NOTIFICATION: Real-time proximity notifications that alert you when someone from your home country/town is nearby so you never pass a brother or sister on the street without knowing.
+3. LIVE RADIO: Stream live homeland and diaspora radio stations 24/7 right inside the app to stay connected to home wherever you are in the world.
+4. UBUNTU EMERGENCY FUND: A transparent, community-governed emergency & bereavement (msiba) mutual-aid fund so no diaspora member faces a crisis alone (replacing chaotic WhatsApp hat-passing with instant collective support).
+5. DDI LOANS (Diaspora Direct Investment Loans): Community-backed micro and project loans powered by community treasuries to help members build businesses, homes, and cross-border investments.
 
-CRITICAL GUARDRAILS & TERMINOLOGY RULES:
-1. NO MARKETPLACE PITCHES YET: Do NOT pitch or promote marketplace features, buying/selling goods, vendor directories, commercial listings, or remittance/money-transfer products as a core offering (those require community scale first). Any mention of everyday diaspora exchange (like sharing food, welcoming a newcomer, or future enterprise) MUST be strictly brief, human, and anecdotal—only to illustrate human connection and community organization.
-2. OFFICIAL TOKEN HASHTAG: Always include the official token hashtag #$DIASPORA in the hashtag block of every post.
-3. BASE BLOCKCHAIN TERMINOLOGY: Whenever you refer to Base, ALWAYS write "Base Blockchain" (never standalone "Base" or "Base L2") so readers clearly understand what Base is.
+CRITICAL GUARDRAILS:
+1. Keep language warm, human, and immediately understandable to everyday diaspora members—avoid heavy crypto/blockchain jargon so anyone on WhatsApp or Facebook immediately understands the 5 practical utilities.
+2. Always include the official hashtag #$DIASPORA in the hashtag block.
 
 ${corridorGuidance}
 ${platformInstructions[platform] || platformInstructions.linkedin}`;
@@ -591,14 +610,14 @@ function buildCuratedCorridorCopy({ platform = "facebook", corridor = "global", 
 
   if (corridor === "tz_abroad") {
     const xPool = [
-      "🇹🇿 Watanzania waishio nje ya Tanzania! Gundua Watanzania walio karibu nawe mji uliopo na ujenge utajiri wa pamoja (1:1 Ubuntu Match) kupitia $DIASPORA kwenye Base Blockchain 👉 https://diasporanearby.com/invite #DiasporaNearby #BaseBlockchain #$DIASPORA",
-      "🇹🇿 Popote ulipo ughaibuni (US, UK, Dubai, SA, Kenya, Canada) — ungana na Watanzania wenzako kwenye Diaspora Nearby na ujenge hazina ya mji wako na nyumbani TZ kupitia $DIASPORA kwenye Base Blockchain! 👉 https://diasporanearby.com/invite #$DIASPORA",
-      "🇹🇿 Kutoka Dar, Arusha, Moshi na Mwanza hadi Houston, London na Dubai: Jiunge na chemba ya Watanzania mji uliopo kwenye Diaspora Nearby na upate $DIASPORA kwenye Base Blockchain! 👉 https://diasporanearby.com/invite #DiasporaNearby #$DIASPORA",
+      "🇹🇿 Watanzania waishio nje ya TZ! Gundua Watanzania walio karibu nawe, sikiliza Redio za TZ live, na jiunge na Mfuko wa Dharura wa Ubuntu & Mikopo ya DDI 👉 https://diasporanearby.com/invite #DiasporaNearby #$DIASPORA",
+      "🇹🇿 Popote ulipo ughaibuni (US, UK, Dubai, SA, Kenya, Canada) — pata taarifa Mtanzania akiwa karibu nawe, sikiliza redio za nyumbani & shiriki Mikopo ya DDI! 👉 https://diasporanearby.com/invite #DiasporaNearby #$DIASPORA",
+      "🇹🇿 Kutoka Dar, Arusha, Iringa, Moshi na Mwanza hadi Houston, London na Dubai: Nearby Discovery, Live Radio, Ubuntu Emergency Fund & DDI Loans kwenye Diaspora Nearby! 👉 https://diasporanearby.com/invite #$DIASPORA",
     ];
     const longSw = [
-      "🇹🇿 Habari Watanzania wenzangu waishio nje ya Tanzania (Diaspora / Ughaibuni)!\n\nPopote ulipo — Marekani (Houston, DC/DMV, Dallas), Uingereza (London, Reading, Birmingham), Dubai/UAE, Afrika Kusini, Kenya, Canada, Ulaya au China — Diaspora Nearby imejengwa maalum kutuunganisha:\n\n1️⃣ Gundua Watanzania Karibu Nawe: Fahamu Watanzania walio mji mmoja au mtaa mmoja na wewe.\n2️⃣ Ungana kwa Uaminifu: Jenga Proof of Community Trust (PCT) kwenye Base Blockchain.\n3️⃣ Jenga Chemba za Miji na Mikoa ya TZ: Unganisha mji unaoishi sasa na mkoa uliotoka nyumbani Tanzania.\n4️⃣ 1:1 Ubuntu Match: Kila tokeni ya $DIASPORA unayopata kwenye Epoch 1 inazalisha kiasi sawa (1:1) kwenye hazina ya mji wako wa ughaibuni na hazina ya nyumbani Tanzania!\n\n💬 Andika mji ulipo kwenye comment (mfano: HOUSTON, LONDON, DUBAI, NAIROBI) au comment 'TZ' tukutumie link ya kujiunga moja kwa moja kwenye DM!\n👉 https://diasporanearby.com/invite\n\n#DiasporaNearby #WatanzaniaUghaibuni #FindYourPeople #BaseBlockchain #$DIASPORA",
-      "🇹🇿 Nyumbani ni nyumbani hata ukiwa ughaibuni! 🌍\n\nKwa miaka mingi Watanzania waishio nje ya nchi tumekuwa tukitafutana kwenye magrupu yaliyotawanyika. Sasa kupitia Diaspora Nearby, kila Mtanzania nje ya Tanzania anaweza:\n• Kuwafahamu Watanzania walio karibu naye katika mji anaoishi\n• Kujiunga na Chemba rasmi ya Watanzania wa mji wake pamoja na mkoa wake wa nyumbani (Dar es Salaam, Arusha, Kilimanjaro, Mwanza, Zanzibar, Mbeya, Dodoma)\n• Kupata tokeni za $DIASPORA kwenye Base Blockchain (Epoch 1) zenye 1:1 Ubuntu Community Match kwa ajili ya mji wako na nyumbani Tanzania.\n\n💬 Comment mji ulipo au 'TZ' hapa chini tukutumie kodi yako ya waanzilishi kwenye DM!\n👉 https://diasporanearby.com/invite\n\n#DiasporaNearby #TanzaniaDiaspora #BaseBlockchain #$DIASPORA #Ubuntu",
-      "🇹🇿 Kutoka Tanzania kwenda Ughaibuni — bila kupoteza mizizi wala umiliki wa kiuchumi!\n\nDiaspora Nearby inawaunganisha Watanzania waishio nje ya Tanzania kwenye mtandao wa kuaminiana (Proof of Community Trust) na kuwapa umiliki wa moja kwa moja kupitia $DIASPORA kwenye Base Blockchain.\n\nKila unapoungana na Mtanzania mwenzako mji uliopo, unajenga utajiri wako binafsi na pia hazina ya 1:1 Ubuntu Match kwa mji wako wa ughaibuni na mkoa wako wa Tanzania.\n\n💬 Andika 'TZ' au jina la mji wako kwenye comment tukutumie link kwenye DM!\n👉 https://diasporanearby.com/invite\n\n#DiasporaNearby #FindYourPeople #BaseBlockchain #$DIASPORA",
+      "🇹🇿 Habari Watanzania wenzangu waishio nje ya Tanzania na mikoani! 🌍\n\nPopote ulipo — Marekani (Houston, DC/DMV, Dallas), Uingereza (London, Reading), Dubai/UAE, Afrika Kusini, Kenya, Canada au Tanzania — Diaspora Nearby inakupa huduma 5 muhimu kila siku:\n\n1️⃣ Nearby Discovery: Gundua Watanzania walio karibu nawe mji au mtaa unaoishi.\n2️⃣ Nearby Notification: Pata taarifa za papo hapo Mtanzania mwenzako anapokuwa karibu nawe.\n3️⃣ Live Radio: Sikiliza redio za nyumbani Tanzania na diaspora mubashara (24/7) ndani ya app.\n4️⃣ Ubuntu Emergency Fund: Mfuko wa dharura na msiba wa kusaidiana kwa uwazi wakati wa matatizo.\n5️⃣ DDI Loans (Mikopo ya DDI): Mikopo ya kuwezesha miradi na uwekezaji kupitia hazina ya jamii yetu.\n\n💬 Andika mkoa uliotoka TZ + mji ulipo sasa kwenye comment (mfano: IRINGA -> HOUSTON, ARUSHA -> LONDON, DAR -> DUBAI) tukutumie link kwenye DM!\n👉 https://diasporanearby.com/invite\n\n#DiasporaNearby #WatanzaniaUghaibuni #FindYourPeople #Ubuntu #$DIASPORA",
+      "🇹🇿 Nyumbani ni nyumbani hata ukiwa ughaibuni! 🌍\n\nJe, unajua kuna Watanzania wangapi mtaa au mji unaoishi sasa hivi? Kupitia Diaspora Nearby unapata:\n• 📍 Nearby Discovery & 🔔 Nearby Notification (fahamu Mtanzania mwenzako akiwa karibu)\n• 📻 Live Homeland Radio (sikiliza redio za nyumbani TZ saa 24)\n• 🤝 Ubuntu Emergency Fund (mfuko wa dharura na msiba wa kusaidiana kama ndugu)\n• 🏦 DDI Loans (mikopo ya jamii kwa ajili ya uwekezaji na miradi)\n\n💬 Comment mkoa wako wa TZ + mji ulipo sasa hapa chini tukutumie link ya kujiunga kwenye DM!\n👉 https://diasporanearby.com/invite\n\n#DiasporaNearby #TanzaniaDiaspora #FindYourPeople #Ubuntu #$DIASPORA",
+      "🇹🇿 Roll Call ya Watanzania! Umetoka mkoa gani Tanzania na sasa upo mji gani?\n\nUngana na Watanzania wenzako kwenye Diaspora Nearby ufurahie:\n📍 Nearby Discovery & 🔔 Nearby Notification\n📻 Redio za Tanzania Mubashara (Live Radio)\n🤝 Mfuko wa Dharura wa Ubuntu (Ubuntu Emergency Fund)\n🏦 Mikopo ya Uwekezaji wa Jamii (DDI Loans)\n\n💬 Andika mkoa wako + mji ulipo kwenye comment tukutumie link kwenye DM!\n👉 https://diasporanearby.com/invite\n\n#DiasporaNearby #FindYourPeople #Ubuntu #$DIASPORA",
     ];
     return platform === "x" ? xPool[idx] : longSw[idx];
   }
@@ -606,31 +625,31 @@ function buildCuratedCorridorCopy({ platform = "facebook", corridor = "global", 
   if (corridor === "expat_in_tz") {
     if (lang === "fr") {
       return platform === "x"
-        ? "🇫🇷🌍 Vous vivez en Tanzanie (Dar, Arusha, Zanzibar) ? Retrouvez vos compatriotes à proximité et gagnez des $DIASPORA sur Base Blockchain (1:1 Ubuntu Match) 👉 https://diasporanearby.com/invite #DiasporaNearby #BaseBlockchain #$DIASPORA"
-        : "🇫🇷🌍 Appel à la communauté francophone et aux expatriés vivant en Tanzanie (Dar es Salaam, Arusha, Zanzibar) !\n\nAvec Diaspora Nearby, vous pouvez :\n1️⃣ Découvrir vos compatriotes vivant à proximité dans votre ville ou quartier.\n2️⃣ Bâtir un réseau de confiance vérifié (Proof of Community Trust sur Base Blockchain).\n3️⃣ Organiser la chambre locale de votre nationalité en Tanzanie.\n4️⃣ Gagner des jetons $DIASPORA sur Base Blockchain en Epoch 1 avec un abondement 1:1 Ubuntu Match pour votre communauté.\n\n💬 Commentez votre pays d'origine + votre ville (ex: DAR, ARUSHA, ZANZIBAR) et nous vous enverrons votre lien d'invitation en DM !\n👉 https://diasporanearby.com/invite\n\n#DiasporaNearby #ExpatsInTanzania #BaseBlockchain #$DIASPORA";
+        ? "🇫🇷🌍 Vous vivez en Tanzanie (Dar, Arusha, Zanzibar) ? Découverte à proximité, alertes en temps réel, radio en direct, Fonds d'urgence Ubuntu & prêts DDI 👉 https://diasporanearby.com/invite #DiasporaNearby #$DIASPORA"
+        : "🇫🇷🌍 Appel à la communauté francophone et aux expatriés vivant en Tanzanie (Dar es Salaam, Arusha, Zanzibar) !\n\nAvec Diaspora Nearby, profitez de 5 services essentiels :\n1️⃣ Nearby Discovery : Découvrez vos compatriotes vivant à proximité.\n2️⃣ Nearby Notification : Alertes instantanées lorsqu'un compatriote est près de vous.\n3️⃣ Live Radio : Écoutez les radios de votre pays d'origine en direct 24h/24.\n4️⃣ Ubuntu Emergency Fund : Fonds d'entraide et d'urgence communautaire transparent.\n5️⃣ DDI Loans : Prêts communautaires d'investissement direct de la diaspora.\n\n💬 Commentez votre pays d'origine + votre ville (ex: DAR, ARUSHA, ZANZIBAR) et nous vous enverrons votre lien d'invitation en DM !\n👉 https://diasporanearby.com/invite\n\n#DiasporaNearby #ExpatsInTanzania #Ubuntu #$DIASPORA";
     }
     const xExpat = [
-      "🌍 Living in Dar es Salaam, Arusha, or Zanzibar from abroad? Discover compatriots from your home country nearby and earn $DIASPORA on Base Blockchain (1:1 Ubuntu Match) 👉 https://diasporanearby.com/invite #DiasporaNearby #BaseBlockchain #$DIASPORA",
-      "🌍➡️🇹🇿 Expats & international community in Tanzania! Find people from your home country in Dar, Arusha & Zanzibar, join your nationality chamber, and earn $DIASPORA on Base Blockchain 👉 https://diasporanearby.com/invite #DiasporaNearby #$DIASPORA",
-      "🌍 From Masaki & Oysterbay in Dar to Arusha & Zanzibar: Never land alone in Tanzania. Connect with compatriots nearby & build 1:1 matched community wealth on Base Blockchain 👉 https://diasporanearby.com/invite #BaseBlockchain #$DIASPORA",
+      "🌍 Living in Dar es Salaam, Arusha, or Zanzibar? Get Nearby Discovery, Nearby Notifications, Live Homeland Radio, Ubuntu Emergency Fund & DDI Loans on Diaspora Nearby 👉 https://diasporanearby.com/invite #DiasporaNearby #$DIASPORA",
+      "🌍➡️🇹🇿 Expats & diaspora in Tanzania! Find compatriots nearby in Dar, Arusha & Zanzibar, stream home radio live, and access the Ubuntu Emergency Fund & DDI Loans 👉 https://diasporanearby.com/invite #DiasporaNearby #$DIASPORA",
+      "🌍 Never land alone in Tanzania. Nearby Discovery, Real-Time Proximity Alerts, 24/7 Home Radio, Ubuntu Emergency Fund & DDI Community Loans 👉 https://diasporanearby.com/invite #DiasporaNearby #$DIASPORA",
     ];
     const longExpat = [
-      "🌍➡️🇹🇿 Living in Dar es Salaam, Arusha, or Zanzibar from abroad?\n\nWhether you are a regional expat (from Kenya, South Africa, Uganda, DRC, Nigeria), an international professional, diplomat, or digital nomad (from the UK, US, India, China, EU, or Middle East) — Diaspora Nearby connects your Dual Geographic Identity in Tanzania:\n\n1️⃣ Nearby Compatriot Discovery: Instantly find verified people from your home country in Masaki, Oysterbay, Upanga, Arusha, or Zanzibar.\n2️⃣ High-Trust Peer Network: Build Proof of Community Trust (PCT) on Base Blockchain.\n3️⃣ Nationality & City Chambers: Join or lead your home country's official community hub inside Tanzania.\n4️⃣ 1:1 Ubuntu Wealth Match: Every $DIASPORA token you earn in Epoch 1 on Base Blockchain mints an equal 1:1 reserve for both your Tanzania host hub and your home country treasury.\n\n💬 Comment your Home Country + City below (e.g., 'KENYA - DAR' or 'UK - ARUSHA') and we'll DM your Founding Member invite link!\n👉 https://diasporanearby.com/invite\n\n#DiasporaNearby #ExpatsInTanzania #DarEsSalaam #Arusha #Zanzibar #BaseBlockchain #$DIASPORA",
-      "🌍 Quick Roll Call for the International & Expat Community in Tanzania (Dar · Arusha · Zanzibar)! 🇹🇿\n\nBienvenue · 欢迎 · नमस्ते · مرحباً · Willkommen · Karibu!\n\nWe are organizing verified nationality & city chambers across Dar es Salaam, Arusha, and Zanzibar on Diaspora Nearby so whenever someone from your home country arrives in Tanzania, they immediately have a trusted community nearby — while earning $DIASPORA on Base Blockchain with a 1:1 Ubuntu Community Match.\n\n💬 Drop your Home Country + City in the comments to receive your Founding Member invite in your DM!\n👉 https://diasporanearby.com/invite\n\n#DiasporaNearby #FindYourPeople #BaseBlockchain #$DIASPORA #DualIdentity",
-      "🌍➡️🇹🇿 Never land alone in Tanzania.\n\nMoving to or working in Dar es Salaam, Arusha, or Zanzibar is transformative when you can immediately discover compatriots from home right in your neighborhood. Diaspora Nearby unites expats and diaspora communities into structured city chambers backed by $DIASPORA on Base Blockchain.\n\n💬 Comment 'DAR', 'ARUSHA', or 'ZANZIBAR' below and we'll DM your direct invite link!\n👉 https://diasporanearby.com/invite\n\n#DiasporaNearby #ExpatsInDar #Arusha #Zanzibar #BaseBlockchain #$DIASPORA",
+      "🌍➡️🇹🇿 Living in Dar es Salaam, Arusha, or Zanzibar from abroad?\n\nWhether you are from Kenya, South Africa, DRC, Uganda, the UK, US, India, China, or Europe — Diaspora Nearby gives you 5 everyday community utilities in Tanzania:\n\n1️⃣ Nearby Discovery: Instantly find compatriots from your home country in Masaki, Oysterbay, Upanga, Arusha, or Zanzibar.\n2️⃣ Nearby Notification: Real-time proximity alerts when someone from home is nearby.\n3️⃣ Live Radio: Stream 24/7 radio stations from your home country and diaspora hubs.\n4️⃣ Ubuntu Emergency Fund: Transparent community mutual-aid & emergency support fund.\n5️⃣ DDI Loans: Community-backed Diaspora Direct Investment loans for your projects.\n\n💬 Comment your Home Country + City below (e.g., 'KENYA -> DAR' or 'UK -> ARUSHA') and we'll DM your invite link!\n👉 https://diasporanearby.com/invite\n\n#DiasporaNearby #ExpatsInTanzania #DarEsSalaam #Arusha #Zanzibar #$DIASPORA",
+      "🌍 Quick Roll Call for the International & Expat Community in Tanzania (Dar · Arusha · Zanzibar)! 🇹🇿\n\nBienvenue · 欢迎 · नमस्ते · مرحباً · Willkommen · Karibu!\n\nConnect with people from your home country right in your neighborhood on Diaspora Nearby:\n📍 Nearby Discovery & 🔔 Nearby Notification\n📻 Live Homeland Radio (24/7)\n🤝 Ubuntu Emergency Fund\n🏦 DDI Community Loans\n\n💬 Drop your Home Country + City in the comments to receive your Founding Member invite in your DM!\n👉 https://diasporanearby.com/invite\n\n#DiasporaNearby #FindYourPeople #Ubuntu #$DIASPORA",
+      "🌍➡️🇹🇿 Never land alone in Tanzania.\n\nDiscover compatriots from home right in your neighborhood, get real-time nearby notifications, stream live homeland radio, and back each other through the Ubuntu Emergency Fund and DDI Loans.\n\n💬 Comment 'DAR', 'ARUSHA', or 'ZANZIBAR' below and we'll DM your direct invite link!\n👉 https://diasporanearby.com/invite\n\n#DiasporaNearby #ExpatsInDar #Arusha #Zanzibar #$DIASPORA",
     ];
     return platform === "x" ? xExpat[idx] : longExpat[idx];
   }
 
   const xGlobal = [
-    "🌍 Discover verified compatriots nearby in any city, organize your local diaspora chamber, and build collective wealth across your Dual Geographic Identity via $DIASPORA on Base Blockchain 👉 https://diasporanearby.com #DiasporaNearby #BaseBlockchain #$DIASPORA",
-    "🌍 Never land alone in a new city. Diaspora Nearby connects you with compatriots nearby and matches every Epoch 1 $DIASPORA reward 1:1 on Base Blockchain for your host and home communities 👉 https://diasporanearby.com #FindYourPeople #$DIASPORA",
-    "🌍 From scattered individuals to organized diaspora chambers: Connect with your people nearby and mint 1:1 matched community wealth via $DIASPORA on Base Blockchain 👉 https://diasporanearby.com #DiasporaNearby #BaseBlockchain #$DIASPORA",
+    "🌍 5 everyday utilities for every diaspora community: Nearby Discovery, Nearby Notification, Live Homeland Radio, Ubuntu Emergency Fund & DDI Loans 👉 https://diasporanearby.com/invite #DiasporaNearby #FindYourPeople #$DIASPORA",
+    "🌍 Never pass a compatriot on the street without knowing. Get Nearby Discovery, Proximity Alerts, 24/7 Homeland Radio, Ubuntu Emergency Fund & DDI Loans 👉 https://diasporanearby.com/invite #DiasporaNearby #$DIASPORA",
+    "🌍 From finding compatriots down the street to backing each other with the Ubuntu Emergency Fund & DDI Loans — join Diaspora Nearby today 👉 https://diasporanearby.com/invite #DiasporaNearby #Ubuntu #$DIASPORA",
   ];
   const longGlobal = [
-    "🌍 Never land alone in a new city.\n\nDiaspora Nearby is built for everyone living between a Home Country and a Host Country (Dual Geographic Identity) — empowering you to discover compatriots nearby, build Proof of Community Trust (PCT), organize local diaspora chambers, and earn $DIASPORA on Base Blockchain with a 1:1 Ubuntu Community Match.\n\n👉 Join Epoch 1 today: https://diasporanearby.com\n\n#DiasporaNearby #FindYourPeople #BaseBlockchain #$DIASPORA #DualIdentity",
-    "🌍 Turning cross-border community trust into sovereign retained wealth.\n\nEvery verified connection and community action on Diaspora Nearby in Epoch 1 earns $DIASPORA on Base Blockchain while minting a 1:1 Ubuntu Community Match directly into both your host city and homeland community treasuries.\n\n👉 Explore https://diasporanearby.com\n\n#DiasporaNearby #FindYourPeople #BaseBlockchain #$DIASPORA #Ubuntu",
-    "🌍 From scattered individuals to organized communities.\n\nDiscover compatriots nearby, join your city and national diaspora chambers, and co-own the network via $DIASPORA on Base Blockchain.\n\n👉 https://diasporanearby.com\n\n#DiasporaNearby #FindYourPeople #BaseBlockchain #$DIASPORA",
+    "🌍 Who from your home town is right down the street from you right now?\n\nDiaspora Nearby brings 5 essential utilities to every diaspora community worldwide:\n📍 Nearby Discovery — Find compatriots from your home country in your city or neighborhood\n🔔 Nearby Notification — Real-time alerts when someone from home is nearby\n📻 Live Radio — Stream homeland & diaspora radio 24/7 inside the app\n🤝 Ubuntu Emergency Fund — Transparent community emergency & bereavement mutual-aid fund\n🏦 DDI Loans — Community-backed Diaspora Direct Investment loans\n\n👉 Join your city roll-call today: https://diasporanearby.com/invite\n\n#DiasporaNearby #FindYourPeople #Ubuntu #$DIASPORA",
+    "🌍 Replacing scattered WhatsApp groups with 5 real diaspora utilities:\n\n1️⃣ Nearby Discovery\n2️⃣ Nearby Notification\n3️⃣ Live Homeland Radio (24/7)\n4️⃣ Ubuntu Emergency Fund\n5️⃣ DDI Community Loans\n\n👉 Check who from home is near you: https://diasporanearby.com/invite\n\n#DiasporaNearby #FindYourPeople #Ubuntu #$DIASPORA",
+    "🌍 Never land alone in a new city.\n\nDiscover compatriots nearby, get real-time proximity notifications, listen to live radio from home, and support one another through the Ubuntu Emergency Fund and DDI Loans.\n\n👉 https://diasporanearby.com/invite\n\n#DiasporaNearby #FindYourPeople #$DIASPORA",
   ];
   return platform === "x" ? xGlobal[idx] : longGlobal[idx];
 }
@@ -893,16 +912,14 @@ async function executeDailySocialPublication(overrides = {}) {
   await ensureSocialConfigEnv();
 
   const topics = [
-    "[TZ_ABROAD] Watanzania waishio nje ya Tanzania (Marekani, UK, Dubai, Afrika Kusini, Kenya, Canada): Gundua Watanzania walio karibu nawe mji uliopo na jenga utajiri wa pamoja (1:1 Ubuntu Match) kupitia $DIASPORA kwenye Base Blockchain",
-    "[TZ_ABROAD] Kutoka Dar, Arusha, Moshi na Mwanza hadi Houston, London na Dubai: Jinsi Diaspora Nearby inavyowaunganisha Watanzania ughaibuni katika chemba za miji na kujenga hazina ya nyumbani kupitia $DIASPORA kwenye Base Blockchain",
-    "[EXPAT_IN_TZ] Living in Dar es Salaam, Arusha, or Zanzibar from abroad? Discover compatriots from your home country nearby, organize your nationality chamber in Tanzania, and earn $DIASPORA on Base Blockchain",
-    "[EXPAT_IN_TZ] From Masaki & Oysterbay in Dar to Arusha & Zanzibar: How international expats, diplomats, and diaspora in Tanzania find their people and build 1:1 matched community wealth via $DIASPORA on Base Blockchain",
-    "Discovery & Connection: How real-time proximity alerts help diaspora members find and connect with compatriots in any city worldwide",
-    "Never landing alone: Discovering and connecting with verified diaspora peers when arriving in a new host city",
-    "Organizing Diaspora Communities: How local town, city, and national community hubs unite scattered compatriots into a structured network",
-    "Dual Geographic Identity & Collective Wealth: Creating wealth for both your host city and your homeland community via $DIASPORA on Base Blockchain",
-    "1:1 Ubuntu Community Match: Why every $DIASPORA you earn on Base Blockchain mints equal treasury reserves for your dual geographic identity locations",
-    "Proof of Community Trust (PCT): How authentic peer connections and community vouching on Base Blockchain build portable trust and wealth",
+    "[TZ_ABROAD] Watanzania waishio nje ya Tanzania (Marekani, UK, Dubai, Afrika Kusini, Kenya, Canada): Gundua Watanzania walio karibu nawe (Nearby Discovery & Notification), sikiliza Redio za TZ live, na jiunge na Mfuko wa Dharura wa Ubuntu na Mikopo ya DDI",
+    "[TZ_ABROAD] Kutoka Dar, Arusha, Iringa, Moshi na Mwanza hadi Houston, London na Dubai: Jinsi Diaspora Nearby inavyowaunganisha Watanzania kupitia Nearby Discovery, Nearby Notification, Live Radio, Ubuntu Emergency Fund, na DDI Loans",
+    "[EXPAT_IN_TZ] Living in Dar es Salaam, Arusha, or Zanzibar from abroad? Get Nearby Discovery, Real-Time Proximity Notifications, 24/7 Live Homeland Radio, Ubuntu Emergency Fund, and DDI Community Loans",
+    "[EXPAT_IN_TZ] From Masaki & Oysterbay in Dar to Arusha & Zanzibar: How international expats and diaspora in Tanzania find compatriots nearby, stream homeland radio, and access the Ubuntu Emergency Fund & DDI Loans",
+    "Nearby Discovery & Nearby Notification: How real-time proximity alerts help diaspora members discover compatriots right down the street in any city worldwide",
+    "Live Homeland Radio 24/7: Staying connected to the sounds, news, and music of home from anywhere in the diaspora while connecting with peers nearby",
+    "Ubuntu Emergency Fund: Replacing chaotic WhatsApp bereavement and emergency hat-passing with a transparent, community-governed mutual-aid fund",
+    "DDI Loans (Diaspora Direct Investment Loans): How community-backed loans empower diaspora members to build businesses, homes, and cross-border projects",
   ];
 
   const selectedTopic =

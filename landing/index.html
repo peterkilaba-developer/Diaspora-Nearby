@@ -62,7 +62,7 @@
         })();
     </script>
 
-    <!-- Immediate Route & Platform Redirect for /invite and /download -->
+    <!-- Route & Referral Code Persistence for /invite and /download -->
     <script>
         (function() {
             try {
@@ -73,26 +73,13 @@
                     if (code) {
                         try { localStorage.setItem('dn_referral_code', code); } catch(e) {}
                     }
-                    var ua = navigator.userAgent || '';
-                    var isAndroid = /android/i.test(ua);
-                    var isInAppWebView = /FBAN|FBAV|Instagram|Line|MicroMessenger/i.test(ua);
-
-                    // Only auto-redirect Android when NOT inside Facebook/Instagram's broken WebView;
-                    // inside in-app WebViews, script.js renders the 1-tap Native Play Store Intent + WhatsApp card.
-                    if (isAndroid && !isInAppWebView) {
-                        var playUrl = 'https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby';
-                        if (code) {
-                            playUrl += '&referrer=' + encodeURIComponent('utm_source=invite&referral_code=' + code);
-                        }
-                        window.location.replace(playUrl);
-                    }
                 }
             } catch (e) {}
         })();
     </script>
 
     <!-- Styles -->
-    <link rel="stylesheet" href="styles.css?v=20261026a">
+    <link rel="stylesheet" href="styles.css?v=20261030a">
 
     <!-- JSON-LD Structured Data -->
     <script type="application/ld+json">
@@ -209,8 +196,16 @@
                     Find Your <span class="accent-green">People</span>, Anywhere in the <span class="accent-orange">World</span>
                 </h1>
                 <p>
-                    Bridge the gap between you and your home community. Whether you've just moved to a new city or have been abroad for years — find your people.
+                    Bridge the gap between you and your home community with 5 core everyday utilities: <strong>Nearby Discovery</strong>, <strong>Nearby Notification</strong>, <strong>24/7 Live Radio</strong>, <strong>Ubuntu Emergency Fund</strong>, and <strong>DDI Loans</strong>.
                 </p>
+
+                <div class="quick-glance-badges" style="margin: 14px auto 20px;">
+                    <span class="glance-badge" style="border:none;outline:none;">📍 Nearby Discovery</span>
+                    <span class="glance-badge" style="border:none;outline:none;">🔔 Nearby Notification</span>
+                    <span class="glance-badge" style="border:none;outline:none;">📻 Live Homeland Radio</span>
+                    <span class="glance-badge" style="border:none;outline:none;">🤝 Ubuntu Emergency Fund</span>
+                    <span class="glance-badge" style="border:none;outline:none;">🏦 DDI Loans</span>
+                </div>
 
                 <!-- Hero Action Badges (Platform-Adaptive: Single on mobile, Both on desktop/Mac) -->
                 <div class="hero-actions" id="hero-actions-container">
@@ -242,6 +237,11 @@
                                 <span class="play-badge-main">Get iOS Invite</span>
                             </div>
                         </a>
+                    </div>
+                    <div style="margin-top: 12px; display: flex; justify-content: center;">
+                        <button type="button" onclick="window.openRollCallModal && window.openRollCallModal()" style="border:none;outline:none;background:rgba(126, 176, 155, 0.14);color:var(--sage);padding:10px 18px;border-radius:999px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);display:inline-flex;align-items:center;gap:8px;">
+                            <span>🌍 Check Who's Nearby &amp; Get WhatsApp Pass</span>
+                        </button>
                     </div>
                 </div>
 
@@ -2190,7 +2190,7 @@
         });
     </script>
 
-    <script src="script.js?v=20261028a"></script>
+    <script src="script.js?v=20261030a"></script>
 </body>
 
 </html>

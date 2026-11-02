@@ -29,18 +29,19 @@ class PeerVisitService {
   }) async {
     if (visitorUid == hostUid) return;
 
-    // Check distance (50 meters threshold for home visit proximity)
-    final distanceMeters = calculateDistance(
+    // Check distance (100 feet = 30.48 meters threshold for Grassroots Gathering proximity)
+    final distanceKm = calculateDistance(
       visitorLat,
       visitorLng,
       hostLat,
       hostLng,
     );
+    final distanceMeters = distanceKm * 1000.0;
 
     final sessionKey = '${visitorUid}_$hostUid';
     final now = DateTime.now();
 
-    if (distanceMeters <= 50.0) {
+    if (distanceMeters <= 30.48) {
       // User is within 50m of host location
       if (!_activeVisitSessions.containsKey(sessionKey)) {
         // Start tracking new visit session

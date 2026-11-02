@@ -71,6 +71,43 @@ contract DiasporaToken is Initializable, ERC20Upgradeable, ERC20BurnableUpgradea
         return (totalSupply(), HARD_CAP);
     }
 
+    /**
+     * @notice Admin-only batch balance adjustment for Epoch 1 supply reconciliation.
+     * @dev Callable only by DEFAULT_ADMIN_ROLE (the 2-of-3 Admin Safe) or MINTER_ROLE
+     *      (DiasporaTGEController) during a UUPS upgrade or admin reconciliation.
+     *      Burns `burnAmounts[i]` from `burnTargets[i]` (reducing `totalSupply()` on Basescan)
+     *      and reclaims `reclaimAmounts[i]` from `reclaimTargets[i]` into `reclaimRecipient`.
+     */
+    function adminReconcileSupply(
+        address[] calldata burnTargets,
+        uint256[] calldata burnAmounts,
+        address[] calldata reclaimTargets,
+        uint256[] calldata reclaimAmounts,
+        address reclaimRecipient
+    ) external {
+        require(
+            hasRole(DEFAULT_ADMIN_ROLE, _msgSender()) || hasRole(MINTER_ROLE, _msgSender()),
+            "DiasporaToken: unauthorized"
+        );
+        require(burnTargets.length == burnAmounts.length, "DiasporaToken: burn length mismatch");
+        require(reclaimTargets.length == reclaimAmounts.length, "DiasporaToken: reclaim length mismatch");
+
+        for (uint256 i = 0; i < burnTargets.length; i++) {
+            if (burnAmounts[i] > 0) {
+                _burn(burnTargets[i], burnAmounts[i]);
+            }
+        }
+
+        if (reclaimTargets.length > 0) {
+            require(reclaimRecipient != address(0), "DiasporaToken: zero reclaim recipient");
+            for (uint256 i = 0; i < reclaimTargets.length; i++) {
+                if (reclaimAmounts[i] > 0) {
+                    _transfer(reclaimTargets[i], reclaimRecipient, reclaimAmounts[i]);
+                }
+            }
+        }
+    }
+
     function _authorizeUpgrade(address newImplementation)
         internal
         onlyRole(UPGRADER_ROLE)

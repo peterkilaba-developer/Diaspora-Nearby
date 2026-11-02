@@ -89,6 +89,17 @@ class ChatCard extends ConsumerWidget {
   bool get _isImmediateFamilyGroup =>
       chat.metadata?['isFamilyGroupImmediate'] == true;
 
+  bool _isAiAgentChat(String? currentUserId) {
+    if (chat.metadata?['isAiAgent'] == true) {
+      return true;
+    }
+    if (!chat.isDirect) return false;
+    final otherId = chat.getOtherParticipantId(currentUserId ?? '') ?? '';
+    return otherId == 'diaspora_ai_agent' ||
+        chat.participants.contains('diaspora_ai_agent') ||
+        chat.lastMessage?.senderId == 'diaspora_ai_agent';
+  }
+
   String _getCountryFlag(String? countryCode) {
     if (countryCode == null || countryCode.isEmpty) return '';
     final country = country_data.getCountryByCode(countryCode);
@@ -257,6 +268,10 @@ class ChatCard extends ConsumerWidget {
           icon = LucideIcons.music;
           text = 'Audio message';
           break;
+        case 'voice_call':
+          icon = LucideIcons.phone;
+          text = 'Voice call';
+          break;
         case 'location':
           icon = LucideIcons.mapPin;
           text = 'Location message';
@@ -340,7 +355,8 @@ class ChatCard extends ConsumerWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (lastMessage.metadata?['isShared'] == true) ...[
+        if (lastMessage.forwarded == true ||
+            lastMessage.metadata?['isShared'] == true) ...[
           Icon(
             LucideIcons.forward,
             size: 16,
@@ -381,54 +397,39 @@ class ChatCard extends ConsumerWidget {
   }
 
   Widget _buildStatusIcon(ThemeData theme, String? status) {
-    Color color;
-    bool isDouble = false;
-
     switch (status) {
+      case 'sending':
+        return Icon(
+          LucideIcons.clock,
+          size: 14,
+          color: theme.colorScheme.onSurfaceVariant,
+        );
+      case 'error':
+        return Icon(
+          LucideIcons.alertCircle,
+          size: 14,
+          color: theme.colorScheme.error,
+        );
       case 'read':
-        color = theme.colorScheme.primary;
-        isDouble = true;
-        break;
+        return const Icon(
+          LucideIcons.checkCheck,
+          size: 16,
+          color: Color(0xFF34B7F1), // Vibrant blue for read receipt
+        );
       case 'delivered':
-        color = theme.colorScheme.onSurfaceVariant;
-        isDouble = true;
-        break;
+        return Icon(
+          LucideIcons.checkCheck,
+          size: 16,
+          color: theme.colorScheme.onSurfaceVariant,
+        );
       case 'sent':
       default:
-        color = theme.colorScheme.onSurfaceVariant;
-        isDouble = false;
-        break;
+        return Icon(
+          LucideIcons.check,
+          size: 16,
+          color: theme.colorScheme.onSurfaceVariant,
+        );
     }
-
-    // Pending state (if status is null or unknown, though strictly covered by default above if passed)
-    if (status != 'sent' && status != 'delivered' && status != 'read') {
-      return Icon(
-        LucideIcons.clock,
-        size: 14,
-        color: theme.colorScheme.onSurfaceVariant,
-      );
-    }
-
-    if (isDouble) {
-      return SizedBox(
-        width: 17, // Tighter width for overlapping
-        height: 16,
-        child: Stack(
-          children: [
-            Positioned(
-              left: 0,
-              child: Icon(LucideIcons.check, size: 16, color: color),
-            ),
-            Positioned(
-              left: 5, // Overlap
-              child: Icon(LucideIcons.check, size: 16, color: color),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Icon(LucideIcons.check, size: 16, color: color);
   }
 
   IconData _getChatTypeIcon() {
@@ -474,6 +475,20 @@ class ChatCard extends ConsumerWidget {
     // For direct chats, show profile image with location flag
     if (chat.isDirect) {
       final currentUserId = ref.watch(authStateProvider).value?.uid;
+      if (_isAiAgentChat(currentUserId)) {
+        return SizedBox(
+          width: 56,
+          height: 56,
+          child: Center(
+            child: Image.asset(
+              'assets/icons/logo-transparent-128.png',
+              width: 44,
+              height: 44,
+              fit: BoxFit.contain,
+            ),
+          ),
+        );
+      }
       final otherUserId = chat.getOtherParticipantId(currentUserId ?? '') ?? '';
       final cachedPartner = otherUserId.isNotEmpty
           ? ref.read(profileRepositoryProvider).getCachedProfile(otherUserId)
@@ -633,20 +648,41 @@ class ChatCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    // [PERF] Only open a separate chat-doc listener for community chats where
-    // userChats may not receive every fan-out update. Standard DMs, groups,
-    // events, and orgs already receive live lastMessage updates via userChats.
-    final lastMessage = chat.isCommunity
-        ? (ref.watch(chatLastMessageStreamProvider(chat.id)).value ??
-              chat.lastMessage)
-        : chat.lastMessage;
+    final currentUserId = ref.watch(authStateProvider).value?.uid;
+    // Listen to canonical chat doc for community chats, direct chats, or any chat
+    // where the current user sent the last message so delivery/read check marks
+    // update in real time even when only chats/{chatId}.lastMessage.status changes.
+    final shouldWatchCanonicalLastMessage =
+        chat.isCommunity ||
+        chat.isDirect ||
+        (currentUserId != null &&
+            chat.lastMessage?.senderId == currentUserId);
+    final streamedLastMsg = shouldWatchCanonicalLastMessage
+        ? ref.watch(chatLastMessageStreamProvider(chat.id)).value
+        : null;
+    LastMessage? lastMessage = chat.lastMessage;
+    if (streamedLastMsg != null) {
+      if (lastMessage == null) {
+        lastMessage = streamedLastMsg;
+      } else if ((lastMessage.id.isNotEmpty &&
+              streamedLastMsg.id.isNotEmpty &&
+              lastMessage.id == streamedLastMsg.id) ||
+          streamedLastMsg.timestamp == lastMessage.timestamp) {
+        lastMessage = streamedLastMsg.mergeWith(lastMessage);
+      } else if (streamedLastMsg.timestamp > lastMessage.timestamp) {
+        lastMessage = streamedLastMsg;
+      }
+    }
     final hasUnread = chat.unreadCount > 0;
 
     // Get display name (for DM chats, gets the other participant's name)
     // Get display name
     String displayName = chat.name;
     ProfileData? resolvedDirectPartner;
-    if (chat.isCommunity) {
+    final isAiAgent = _isAiAgentChat(currentUserId);
+    if (isAiAgent) {
+      displayName = 'Diaspora AI Agent';
+    } else if (chat.isCommunity) {
       final viewerHomeCountryCode = ref
           .watch(userProfileProvider)
           .value
@@ -656,7 +692,6 @@ class ChatCard extends ConsumerWidget {
         viewerHomeCountryCode: viewerHomeCountryCode,
       );
     } else if (chat.isDirect) {
-      final currentUserId = ref.watch(authStateProvider).value?.uid;
       final otherUserId = chat.getOtherParticipantId(currentUserId ?? '') ?? '';
       final cachedPartner = otherUserId.isNotEmpty
           ? ref.read(profileRepositoryProvider).getCachedProfile(otherUserId)
@@ -807,7 +842,16 @@ class ChatCard extends ConsumerWidget {
                           Expanded(
                             child: Row(
                               children: [
-                                if (chat.isDirect &&
+                                if (isAiAgent)
+                                  const Padding(
+                                    padding: EdgeInsets.only(right: 6.0),
+                                    child: Icon(
+                                      Icons.auto_awesome,
+                                      size: 16,
+                                      color: AppTheme.accent,
+                                    ),
+                                  )
+                                else if (chat.isDirect &&
                                     resolvedDirectPartner != null) ...[
                                   if (resolvedDirectPartner.occupation ==
                                       'Organization')
@@ -956,11 +1000,15 @@ class ChatCard extends ConsumerWidget {
                         children: [
                           // Message status icon (for own messages)
                           if (lastMessage != null &&
-                              lastMessage.status != null &&
-                              chat.isDirect &&
-                              lastMessage.senderId ==
-                                  ref.watch(authStateProvider).value?.uid) ...[
-                            _buildStatusIcon(theme, lastMessage.status),
+                              !lastMessage.isDeleted &&
+                              lastMessage.type != 'system' &&
+                              lastMessage.type != 'voice_call' &&
+                              currentUserId != null &&
+                              lastMessage.senderId == currentUserId) ...[
+                            _buildStatusIcon(
+                              theme,
+                              lastMessage.status ?? 'sent',
+                            ),
                             const SizedBox(width: 4),
                           ],
                           // Message preview

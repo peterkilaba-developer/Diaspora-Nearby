@@ -141,6 +141,9 @@ exports.hardResetDatabase = functions
             { path: 'relationship_requests', exclude: false },
             { path: 'user_blocks', exclude: false },
             { path: 'proximity_history', exclude: false },
+            { path: 'proximity_dwell_sessions', exclude: false },
+            { path: 'grassroots_gathering_sessions', exclude: false },
+            { path: 'peer_visits', exclude: false },
             { path: 'proximity-notifications', exclude: false }
           ]);
           break;
@@ -157,7 +160,8 @@ exports.hardResetDatabase = functions
         case 'events':
           await processTarget('events', [
             { path: 'events', exclude: false },
-            { path: 'check_ins', exclude: false }
+            { path: 'check_ins', exclude: false },
+            { path: 'grassroots_gathering_sessions', exclude: false }
           ]);
           break;
 
@@ -245,6 +249,9 @@ exports.hardResetDatabase = functions
         case 'proximity':
           await processTarget('proximity', [
             { path: 'proximity_history', exclude: false },
+            { path: 'proximity_dwell_sessions', exclude: false },
+            { path: 'grassroots_gathering_sessions', exclude: false },
+            { path: 'peer_visits', exclude: false },
             { path: 'proximity-notifications', exclude: false }
           ]);
           break;

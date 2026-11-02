@@ -229,12 +229,15 @@ void main() {
       when(
         mockTrustRepo.getVouchesForUser(userId),
       ).thenAnswer((_) async => []); // Regular vouches empty
-      // Old trust data with 10 event check-ins (+10 P.o.C.T participation)
+      // Old trust data with ongoing positive trust-building events (+1 PCT per 10 each:
+      // 10 event check-ins = +1 PCT, 50 proximity connections = +5 PCT, 40 grassroots gatherings = +4 PCT => +10 PCT total)
       when(mockTrustRepo.getTrustData(userId)).thenAnswer(
         (_) async => TrustData(
           uid: userId,
           trustScore: 0,
           verifiedCheckInCount: 10,
+          proximityConnectionsCount: 50,
+          grassrootsGatheringsCount: 40,
           lastUpdated: DateTime.now(),
         ),
       );
@@ -267,6 +270,9 @@ void main() {
       expect(savedData.uniqueFamilyCount, 10);
       expect(savedData.uniqueQrCount, 10);
       expect(savedData.uniqueVouchCount, 90);
+      expect(savedData.proximityConnectionsCount, 50);
+      expect(savedData.grassrootsGatheringsCount, 40);
+      expect(savedData.verifiedCheckInCount, 10);
       expect(savedData.isCouncilEligible, true);
     });
 

@@ -75,6 +75,32 @@ class ChatProfileImage {
   };
 }
 
+/// Rank message delivery/read statuses so higher states ('read' > 'delivered' > 'sent')
+/// are never overwritten by stale lower states during multi-source sync.
+int messageStatusRank(String? status) {
+  switch (status) {
+    case 'read':
+      return 4;
+    case 'delivered':
+      return 3;
+    case 'sent':
+      return 2;
+    case 'sending':
+      return 1;
+    case 'error':
+      return 0;
+    default:
+      return 2;
+  }
+}
+
+/// Resolve the most advanced status between two candidate status values.
+String? resolveHigherMessageStatus(String? a, String? b) {
+  if (a == null || a.isEmpty) return b;
+  if (b == null || b.isEmpty) return a;
+  return messageStatusRank(b) > messageStatusRank(a) ? b : a;
+}
+
 /// Last message preview for chat list
 @JsonSerializable()
 class LastMessage {
@@ -180,6 +206,68 @@ class LastMessage {
   bool isOwnMessage(String userId) => senderId == userId;
 
   bool get isDeleted => deletedForEveryone == true || type == 'deleted';
+
+  LastMessage copyWith({
+    String? id,
+    String? content,
+    int? timestamp,
+    String? senderId,
+    String? senderName,
+    String? type,
+    List<String>? mentions,
+    bool? forwarded,
+    String? status,
+    bool? deletedForEveryone,
+    Map<String, dynamic>? metadata,
+  }) {
+    return LastMessage(
+      id: id ?? this.id,
+      content: content ?? this.content,
+      timestamp: timestamp ?? this.timestamp,
+      senderId: senderId ?? this.senderId,
+      senderName: senderName ?? this.senderName,
+      type: type ?? this.type,
+      mentions: mentions ?? this.mentions,
+      forwarded: forwarded ?? this.forwarded,
+      status: status ?? this.status,
+      deletedForEveryone: deletedForEveryone ?? this.deletedForEveryone,
+      metadata: metadata ?? this.metadata,
+    );
+  }
+
+  /// Merge with another representation of the same message (e.g., `chats/{id}.lastMessage`
+  /// vs `userChats/{id}.lastMessage`), preserving the highest delivery/read status
+  /// and rich fields (`metadata`, `forwarded`, `mentions`, `deletedForEveryone`).
+  LastMessage mergeWith(LastMessage other) {
+    final mergedDeleted =
+        (deletedForEveryone == true || other.deletedForEveryone == true)
+        ? true
+        : (deletedForEveryone ?? other.deletedForEveryone);
+    final mergedType = (type == 'deleted' || other.type == 'deleted')
+        ? 'deleted'
+        : (type.isNotEmpty ? type : other.type);
+    final mergedContent = mergedType == 'deleted'
+        ? (type == 'deleted' ? content : other.content)
+        : (content.isNotEmpty ? content : other.content);
+    return LastMessage(
+      id: id.isNotEmpty ? id : other.id,
+      content: mergedContent,
+      timestamp: timestamp >= other.timestamp ? timestamp : other.timestamp,
+      senderId: senderId.isNotEmpty ? senderId : other.senderId,
+      senderName:
+          (senderName.isNotEmpty && senderName != 'Unknown')
+          ? senderName
+          : other.senderName,
+      type: mergedType,
+      mentions: mentions ?? other.mentions,
+      forwarded: (forwarded == true || other.forwarded == true)
+          ? true
+          : (forwarded ?? other.forwarded),
+      status: resolveHigherMessageStatus(status, other.status),
+      deletedForEveryone: mergedDeleted,
+      metadata: metadata ?? other.metadata,
+    );
+  }
 }
 
 /// Chat conversation model
@@ -325,9 +413,19 @@ class Chat {
       final userLastMsg = LastMessage.fromFirestore(
         Map<String, dynamic>.from(rawUserLastMsg),
       );
-      if (effectiveLastMessage == null ||
-          userLastMsg.timestamp >= effectiveLastMessage.timestamp) {
+      if (effectiveLastMessage == null) {
         effectiveLastMessage = userLastMsg;
+      } else {
+        final isSameMessage =
+            (effectiveLastMessage.id.isNotEmpty &&
+                userLastMsg.id.isNotEmpty &&
+                effectiveLastMessage.id == userLastMsg.id) ||
+            userLastMsg.timestamp == effectiveLastMessage.timestamp;
+        if (isSameMessage) {
+          effectiveLastMessage = effectiveLastMessage.mergeWith(userLastMsg);
+        } else if (userLastMsg.timestamp > effectiveLastMessage.timestamp) {
+          effectiveLastMessage = userLastMsg;
+        }
       }
     }
 

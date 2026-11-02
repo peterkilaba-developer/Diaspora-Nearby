@@ -418,7 +418,7 @@ contract DiasporaTGEControllerV2 is Initializable, AccessControlUpgradeable, UUP
     }
 
     /**
-     * @notice Distribute Genesis 7,000 $DIASPORA tokens upon completing 6 base PoH milestones.
+     * @notice Distribute Genesis up to 70,000 $DIASPORA tokens upon completing PoH milestones.
      */
     function distributeGenesisTokens(
         address userRecipient,
@@ -432,8 +432,7 @@ contract DiasporaTGEControllerV2 is Initializable, AccessControlUpgradeable, UUP
         require(userAmount > 0, "TGE: zero user amount");
         require(merkleRoot != bytes32(0), "TGE: missing merkle root");
 
-        uint256 cap = maxGenesisDistribution > 0 ? maxGenesisDistribution : maxWelcomeBonusPerRecipient;
-        if (cap == 0) cap = 7000 * 10**18;
+        uint256 cap = maxGenesisDistribution > 0 ? maxGenesisDistribution : 70000 * 10**18;
         require(userAmount <= cap, "TGE: user amount exceeds genesis cap");
         require(
             genesisDistributionReceived[userRecipient] + userAmount <= cap,
@@ -476,6 +475,41 @@ contract DiasporaTGEControllerV2 is Initializable, AccessControlUpgradeable, UUP
         require(newMax > 0, "TGE: zero max");
         emit MaxGenesisDistributionUpdated(maxGenesisDistribution, newMax);
         maxGenesisDistribution = newMax;
+    }
+
+    /**
+     * @notice Admin or Oracle state reconciliation for Epoch 1 (TDE 7) alignment.
+     * @dev `_stats` is a 10-element array:
+     *      [0] currentEpoch, [1] currentTgeEvent, [2] totalMinted, [3] totalDistributed,
+     *      [4] totalBurned, [5] tgeCount, [6] epochLockedSupply, [7] epochDistributed,
+     *      [8] totalWelcomeBonuses, [9] maxGenesisDistribution
+     */
+    function adminReconcileState(
+        uint256[10] calldata _stats,
+        address[] calldata _genesisUsers,
+        uint256[] calldata _genesisAmounts
+    ) external {
+        require(
+            hasRole(DEFAULT_ADMIN_ROLE, _msgSender()) || hasRole(TGE_ORACLE_ROLE, _msgSender()),
+            "TGE: unauthorized"
+        );
+        require(_genesisUsers.length == _genesisAmounts.length, "TGE: genesis length mismatch");
+
+        currentEpoch = _stats[0];
+        currentTgeEvent = _stats[1];
+        totalMinted = _stats[2];
+        totalDistributed = _stats[3];
+        totalBurned = _stats[4];
+        tgeCount = _stats[5];
+        epochLockedSupply = _stats[6];
+        epochDistributed = _stats[7];
+        totalWelcomeBonuses = _stats[8];
+        if (_stats[9] > 0) {
+            maxGenesisDistribution = _stats[9];
+        }
+        for (uint256 i = 0; i < _genesisUsers.length; i++) {
+            genesisDistributionReceived[_genesisUsers[i]] = _genesisAmounts[i];
+        }
     }
 
     function _authorizeUpgrade(address newImplementation) internal onlyRole(UPGRADER_ROLE) override {}

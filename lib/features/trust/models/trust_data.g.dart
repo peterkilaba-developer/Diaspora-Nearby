@@ -43,6 +43,23 @@ TrustData _$TrustDataFromJson(Map<String, dynamic> json) => TrustData(
           .toList() ??
       const [],
   verifiedCheckInCount: (json['verifiedCheckInCount'] as num?)?.toInt() ?? 0,
+  proximityConnectionsCount:
+      (json['proximityConnectionsCount'] as num?)?.toInt() ?? 0,
+  grassrootsGatheringsCount:
+      (json['grassrootsGatheringsCount'] as num?)?.toInt() ??
+      (json['verifiedGatheringVisitsCount'] as num?)?.toInt() ??
+      0,
+  verifiedGatheringVisitsCount:
+      (json['verifiedGatheringVisitsCount'] as num?)?.toInt() ??
+      (json['grassrootsGatheringsCount'] as num?)?.toInt() ??
+      0,
+  hostedEventAttendeesCount:
+      (json['hostedEventAttendeesCount'] as num?)?.toInt() ?? 0,
+  verificationsGivenCount:
+      (json['verificationsGivenCount'] as num?)?.toInt() ?? 0,
+  completedHostingCount: (json['completedHostingCount'] as num?)?.toInt() ?? 0,
+  economicTxCount: (json['economicTxCount'] as num?)?.toInt() ?? 0,
+  governanceVotesCount: (json['governanceVotesCount'] as num?)?.toInt() ?? 0,
   unresponsiveLiaisonCount:
       (json['unresponsiveLiaisonCount'] as num?)?.toInt() ?? 0,
   reliabilityScore: (json['reliabilityScore'] as num?)?.toDouble() ?? 0.0,
@@ -145,6 +162,14 @@ Map<String, dynamic> _$TrustDataToJson(TrustData instance) => <String, dynamic>{
   'hasReceivedPohTokenDistribution': instance.hasReceivedPohTokenDistribution,
   'awardedQualificationMilestones': instance.awardedQualificationMilestones,
   'verifiedCheckInCount': instance.verifiedCheckInCount,
+  'proximityConnectionsCount': instance.proximityConnectionsCount,
+  'grassrootsGatheringsCount': instance.grassrootsGatheringsCount,
+  'verifiedGatheringVisitsCount': instance.verifiedGatheringVisitsCount,
+  'hostedEventAttendeesCount': instance.hostedEventAttendeesCount,
+  'verificationsGivenCount': instance.verificationsGivenCount,
+  'completedHostingCount': instance.completedHostingCount,
+  'economicTxCount': instance.economicTxCount,
+  'governanceVotesCount': instance.governanceVotesCount,
   'unresponsiveLiaisonCount': instance.unresponsiveLiaisonCount,
   'rejectedFamilyConnectionsCount': instance.rejectedFamilyConnectionsCount,
   'eventNoShowCount': instance.eventNoShowCount,

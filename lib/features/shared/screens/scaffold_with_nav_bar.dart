@@ -108,6 +108,7 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
 
   @override
   void dispose() {
+    LocationUpdateService().stopProximityHeartbeat();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -146,6 +147,7 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
   Future<void> _updateLocation() async {
     final user = ref.read(authRepositoryProvider).currentUser;
     if (user != null) {
+      LocationUpdateService().startProximityHeartbeat(user.uid);
       await LocationUpdateService().updateCurrentLocation(user.uid);
     }
   }

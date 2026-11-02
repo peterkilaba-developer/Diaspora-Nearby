@@ -724,13 +724,13 @@ exports.provisionSignupCommunities = functions.https.onCall(async (data, context
   await batch.commit();
 
   try {
-    const {ensureFounderWelcomeChatForUser} = require("./relationships");
-    const founderChatId = await ensureFounderWelcomeChatForUser(uid, profile);
-    if (founderChatId && !chatIds.includes(founderChatId)) {
-      chatIds.unshift(founderChatId);
+    const {ensureAiAgentWelcomeChatForUser} = require("./relationships");
+    const aiChatId = await ensureAiAgentWelcomeChatForUser(uid, profile);
+    if (aiChatId && !chatIds.includes(aiChatId)) {
+      chatIds.unshift(aiChatId);
     }
-  } catch (founderErr) {
-    console.warn(`[provisionSignupCommunities] Founder welcome DM warning: ${founderErr.message}`);
+  } catch (aiErr) {
+    console.warn(`[provisionSignupCommunities] AI Agent welcome DM warning: ${aiErr.message}`);
   }
 
   return {communityIds, chatIds, success: true};

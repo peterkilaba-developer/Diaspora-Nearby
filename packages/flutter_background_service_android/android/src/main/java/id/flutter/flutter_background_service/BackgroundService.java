@@ -87,12 +87,13 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         mainHandler = new Handler(Looper.getMainLooper());
 
         String notificationChannelId = config.getNotificationChannelId();
-        if (notificationChannelId == null) {
-            this.notificationChannelId = "FOREGROUND_DEFAULT";
-            createNotificationChannel();
+        if (notificationChannelId == null || "diaspora_location_v2".equals(notificationChannelId)) {
+            this.notificationChannelId = "diaspora_location_silent";
+            config.setNotificationChannelId(this.notificationChannelId);
         } else {
             this.notificationChannelId = notificationChannelId;
         }
+        createNotificationChannel();
 
         notificationTitle = config.getInitialNotificationTitle();
         notificationContent = config.getInitialNotificationContent();
@@ -134,19 +135,31 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     private void createNotificationChannel() {
         if (SDK_INT >= Build.VERSION_CODES.O) {
             CharSequence name = "Background Service";
-            String description = "Executing process in background";
+            String description = "Silent background location updates";
 
             int importance = NotificationManager.IMPORTANCE_LOW;
             NotificationChannel channel = new NotificationChannel(notificationChannelId, name, importance);
             channel.setDescription(description);
+            channel.setSound(null, null);
+            channel.enableVibration(false);
+            channel.setShowBadge(false);
 
             NotificationManager notificationManager = getSystemService(NotificationManager.class);
-            notificationManager.createNotificationChannel(channel);
+            if (notificationManager != null) {
+                notificationManager.deleteNotificationChannel("diaspora_location_v2");
+                notificationManager.createNotificationChannel(channel);
+            }
         }
     }
 
     protected void updateNotificationInfo() {
         if (config.isForeground()) {
+            String configuredChannelId = config.getNotificationChannelId();
+            if (configuredChannelId != null && !"diaspora_location_v2".equals(configuredChannelId) && !configuredChannelId.equals(this.notificationChannelId)) {
+                this.notificationChannelId = configuredChannelId;
+                createNotificationChannel();
+            }
+
             String packageName = getApplicationContext().getPackageName();
             Intent i = getPackageManager().getLaunchIntentForPackage(packageName);
 
@@ -160,6 +173,9 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     .setSmallIcon(R.drawable.ic_bg_service_small)
                     .setAutoCancel(true)
                     .setOngoing(true)
+                    .setSilent(true)
+                    .setOnlyAlertOnce(true)
+                    .setPriority(NotificationCompat.PRIORITY_LOW)
                     .setContentTitle(notificationTitle)
                     .setContentText(notificationContent)
                     .setContentIntent(pi);

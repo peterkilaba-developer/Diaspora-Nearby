@@ -2049,7 +2049,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                                           style: TextStyle(fontSize: 10),
                                         ),
                                         Text(
-                                          '${(efficiency * 100).toInt()}%',
+                                          '${(efficiency * 100).round()}%',
                                           style: TextStyle(
                                             fontSize: 10,
                                             fontWeight: FontWeight.bold,

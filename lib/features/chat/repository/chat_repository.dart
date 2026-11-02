@@ -44,6 +44,9 @@ class ChatRepository {
   final Map<String, List<Message>> _messagesCache = {};
   final Map<String, StreamController<List<Message>>> _messageStreamControllers =
       {};
+  final Set<String> _reconciledLastMessageIds = {};
+  final Set<String> _healedMessageStatuses = {};
+  final Set<String> _deletedMessageIds = {};
   List<Chat>? _discoverableChatsCache;
   StreamSubscription? _chatsSubscription;
   StreamSubscription? _realtimeSubscription;
@@ -94,14 +97,23 @@ class ChatRepository {
   }
 
   /// [PERF] Synchronously upsert a chat in memory cache and notify listeners
-  void upsertChatInCache(Chat chat) {
+  void upsertChatInCache(Chat chat, {bool notify = true}) {
     final idx = _chatsCache.indexWhere((c) => c.id == chat.id);
     if (idx >= 0) {
       _chatsCache[idx] = chat;
     } else {
       _chatsCache.add(chat);
     }
-    if (!_chatsController.isClosed) {
+    if (notify && !_chatsController.isClosed) {
+      _chatsController.add(_sortedChatsList());
+    }
+  }
+
+  /// Remove a chat from in-memory cache by id
+  void removeChatFromCache(String chatId, {bool notify = true}) {
+    final before = _chatsCache.length;
+    _chatsCache.removeWhere((c) => c.id == chatId);
+    if (notify && _chatsCache.length != before && !_chatsController.isClosed) {
       _chatsController.add(_sortedChatsList());
     }
   }
@@ -329,8 +341,9 @@ class ChatRepository {
               preferCache: false,
             );
             if (chat != null) {
-              final chatWithPrefs = chat.withUserPreferences(data);
-              _handleDeliveryReceipt(chatWithPrefs, uid);
+              var chatWithPrefs = chat.withUserPreferences(data);
+              chatWithPrefs = _handleDeliveryReceipt(chatWithPrefs, uid);
+              _reconcileSenderLastMessageStatus(chatWithPrefs, uid);
               final existingIdx = _chatsCache.indexWhere((c) => c.id == chatId);
               if (existingIdx >= 0) {
                 _chatsCache[existingIdx] = chatWithPrefs;
@@ -364,9 +377,10 @@ class ChatRepository {
             preferCache: preferCache,
           );
           if (chat != null) {
-            final chatWithPrefs = chat.withUserPreferences(data);
+            var chatWithPrefs = chat.withUserPreferences(data);
             if (!preferCache) {
-              _handleDeliveryReceipt(chatWithPrefs, uid);
+              chatWithPrefs = _handleDeliveryReceipt(chatWithPrefs, uid);
+              _reconcileSenderLastMessageStatus(chatWithPrefs, uid);
             }
             final existingIdx = _chatsCache.indexWhere((c) => c.id == chatId);
             if (existingIdx >= 0) {
@@ -383,24 +397,160 @@ class ChatRepository {
     );
   }
 
-  void _handleDeliveryReceipt(Chat chat, String uid) {
+  Chat _handleDeliveryReceipt(Chat chat, String uid) {
     try {
       final lastMsg = chat.lastMessage;
-      if (lastMsg == null) return;
+      if (lastMsg == null) return chat;
       if (lastMsg.senderId.isNotEmpty &&
           lastMsg.senderId != uid &&
-          lastMsg.status == 'sent' &&
-          lastMsg.id.isNotEmpty) {
-        _messagesCol(
-          chat.id,
-        ).doc(lastMsg.id).set({'status': 'delivered'}, SetOptions(merge: true));
-        _chatsCol.doc(chat.id).set({
-          'lastMessage': {'status': 'delivered'},
-        }, SetOptions(merge: true));
+          lastMsg.senderId != 'system' &&
+          (lastMsg.status == 'sent' || lastMsg.status == null)) {
+        final deliveredChat = chat.copyWith(
+          lastMessage: lastMsg.copyWith(status: 'delivered'),
+        );
+        if (lastMsg.id.isNotEmpty) {
+          unawaited(
+            _messagesCol(chat.id)
+                .doc(lastMsg.id)
+                .update({'status': 'delivered'})
+                .catchError((Object _) {}),
+          );
+        }
+        unawaited(
+          _chatsCol
+              .doc(chat.id)
+              .update({'lastMessage.status': 'delivered'})
+              .catchError((Object _) {}),
+        );
+        unawaited(
+          _userChatsCol(uid)
+              .doc(chat.id)
+              .update({'lastMessage.status': 'delivered'})
+              .catchError((Object _) {}),
+        );
+        if (chat.isDirect) {
+          unawaited(_markRecentIncomingMessagesDelivered(chat.id, uid));
+        }
+        return deliveredChat;
       }
     } catch (e) {
       debugPrint('Error handling delivery receipt: $e');
     }
+    return chat;
+  }
+
+  Future<void> _markRecentIncomingMessagesDelivered(
+    String chatId,
+    String uid,
+  ) async {
+    try {
+      final snap = await _messagesCol(
+        chatId,
+      ).orderBy('timestamp', descending: true).limit(15).get();
+      final batch = _firestore.batch();
+      int count = 0;
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        final senderId = data['senderId']?.toString() ?? '';
+        final status = data['status']?.toString();
+        if (senderId.isNotEmpty &&
+            senderId != uid &&
+            senderId != 'system' &&
+            (status == 'sent' || status == null)) {
+          batch.update(doc.reference, {'status': 'delivered'});
+          count++;
+        }
+      }
+      if (count > 0) {
+        await batch.commit();
+      }
+    } catch (_) {}
+  }
+
+  /// Self-heals `chat.lastMessage.status` for own messages when the underlying
+  /// message document in `chats/{chatId}/messages` has already progressed to
+  /// `'delivered'` or `'read'`, or when a newer reply exists.
+  void _reconcileSenderLastMessageStatus(Chat chat, String uid) {
+    final lastMsg = chat.lastMessage;
+    if (lastMsg == null) return;
+    if (lastMsg.senderId != uid) return;
+    if (lastMsg.status == 'read') return;
+
+    final key = '${chat.id}_${lastMsg.id}_${lastMsg.timestamp}';
+    if (_reconciledLastMessageIds.contains(key)) return;
+    _reconciledLastMessageIds.add(key);
+
+    unawaited(() async {
+      try {
+        String? resolvedStatus = lastMsg.status;
+        String resolvedId = lastMsg.id;
+
+        if (lastMsg.id.isNotEmpty) {
+          final msgDoc = await _messagesCol(chat.id).doc(lastMsg.id).get();
+          if (msgDoc.exists) {
+            final docStatus = msgDoc.data()?['status']?.toString();
+            resolvedStatus = resolveHigherMessageStatus(
+              resolvedStatus,
+              docStatus,
+            );
+          }
+        } else {
+          final latestSnap = await _messagesCol(
+            chat.id,
+          ).orderBy('timestamp', descending: true).limit(1).get();
+          if (latestSnap.docs.isNotEmpty) {
+            final doc = latestSnap.docs.first;
+            final data = doc.data();
+            if (data['senderId'] == uid) {
+              resolvedId = doc.id;
+              resolvedStatus = resolveHigherMessageStatus(
+                resolvedStatus,
+                data['status']?.toString(),
+              );
+            }
+          }
+        }
+
+        if (resolvedStatus != null &&
+            messageStatusRank(resolvedStatus) >
+                messageStatusRank(lastMsg.status)) {
+          final idx = _chatsCache.indexWhere((c) => c.id == chat.id);
+          if (idx >= 0) {
+            final current = _chatsCache[idx];
+            final curLast = current.lastMessage;
+            if (curLast != null &&
+                (curLast.id == lastMsg.id ||
+                    curLast.timestamp == lastMsg.timestamp)) {
+              final updatedChat = current.copyWith(
+                lastMessage: curLast.copyWith(
+                  id: resolvedId.isNotEmpty ? resolvedId : curLast.id,
+                  status: resolvedStatus,
+                ),
+              );
+              _chatsCache[idx] = updatedChat;
+              unawaited(_localService.saveChat(updatedChat));
+              if (!_chatsController.isClosed) {
+                _chatsController.add(_sortedChatsList());
+              }
+            }
+          }
+          unawaited(
+            _chatsCol
+                .doc(chat.id)
+                .update({'lastMessage.status': resolvedStatus})
+                .catchError((Object _) {}),
+          );
+          unawaited(
+            _userChatsCol(uid)
+                .doc(chat.id)
+                .update({'lastMessage.status': resolvedStatus})
+                .catchError((Object _) {}),
+          );
+        }
+      } catch (e) {
+        debugPrint('Error reconciling sender lastMessage status: $e');
+      }
+    }());
   }
 
   Future<void> _cacheMessagesLocally(
@@ -464,10 +614,146 @@ class ChatRepository {
 
                 for (final doc in snapshot.docs) {
                   try {
-                    messages.add(Message.fromFirestore(chatId, doc));
+                    if (_deletedMessageIds.contains(doc.id)) continue;
+                    final rawData = doc.data();
+                    if (rawData['isDeleted'] == true) continue;
+                    final parsed = Message.fromFirestore(chatId, doc);
+                    if (parsed.isDeletedForEveryone ||
+                        parsed.isDeletedFor(uid)) {
+                      continue;
+                    }
+                    messages.add(parsed);
                   } catch (e) {
                     debugPrint('Error parsing message ${doc.id}: $e');
                   }
+                }
+
+                // Causal status reconciliation & delivery healing across messages
+                final cachedChatIdx = _chatsCache.indexWhere(
+                  (c) => c.id == chatId,
+                );
+                final isDirectChat =
+                    (cachedChatIdx >= 0 && _chatsCache[cachedChatIdx].isDirect) ||
+                    chatId.startsWith('direct_') ||
+                    chatId.startsWith('dm_');
+                bool seenOtherUserReplyOrRead = false;
+                bool seenDeliveredOrHigher = false;
+                final Map<String, String> messageStatusHeals = {};
+
+                for (int i = 0; i < messages.length; i++) {
+                  final m = messages[i];
+                  if (m.isSystem) continue;
+
+                  if (m.senderId != uid) {
+                    if (isDirectChat) {
+                      seenOtherUserReplyOrRead = true;
+                      seenDeliveredOrHigher = true;
+                    }
+                    if (m.status == 'sent' || m.status == null) {
+                      messages[i] = m.copyWith(status: 'delivered');
+                      if (m.id.isNotEmpty && !m.id.startsWith('temp_')) {
+                        final healKey = '${chatId}_${m.id}_delivered';
+                        if (_healedMessageStatuses.add(healKey)) {
+                          messageStatusHeals[m.id] = 'delivered';
+                        }
+                      }
+                    }
+                  } else {
+                    final currentStatus = m.status ?? 'sent';
+                    if (currentStatus == 'read') {
+                      seenOtherUserReplyOrRead = true;
+                      seenDeliveredOrHigher = true;
+                    } else if (currentStatus == 'delivered') {
+                      seenDeliveredOrHigher = true;
+                    }
+
+                    if (seenOtherUserReplyOrRead &&
+                        currentStatus != 'read' &&
+                        currentStatus != 'sending' &&
+                        currentStatus != 'error') {
+                      messages[i] = m.copyWith(status: 'read');
+                      if (m.id.isNotEmpty && !m.id.startsWith('temp_')) {
+                        final healKey = '${chatId}_${m.id}_read';
+                        if (_healedMessageStatuses.add(healKey)) {
+                          messageStatusHeals[m.id] = 'read';
+                        }
+                      }
+                    } else if (seenDeliveredOrHigher &&
+                        currentStatus == 'sent') {
+                      messages[i] = m.copyWith(status: 'delivered');
+                      if (m.id.isNotEmpty && !m.id.startsWith('temp_')) {
+                        final healKey = '${chatId}_${m.id}_delivered';
+                        if (_healedMessageStatuses.add(healKey)) {
+                          messageStatusHeals[m.id] = 'delivered';
+                        }
+                      }
+                    } else if (m.status == null) {
+                      messages[i] = m.copyWith(status: 'sent');
+                    }
+                  }
+                }
+
+                // Synchronize newest message status with chat.lastMessage.status
+                if (messages.isNotEmpty && cachedChatIdx >= 0) {
+                  final newest = messages.first;
+                  final currentChat = _chatsCache[cachedChatIdx];
+                  final curLast = currentChat.lastMessage;
+                  if (curLast != null &&
+                      (curLast.id == newest.id ||
+                          curLast.timestamp == newest.timestamp)) {
+                    final resolved = resolveHigherMessageStatus(
+                      newest.status,
+                      curLast.status,
+                    );
+                    if (resolved != null) {
+                      if (newest.status != resolved) {
+                        messages[0] = newest.copyWith(status: resolved);
+                        if (newest.id.isNotEmpty &&
+                            !newest.id.startsWith('temp_')) {
+                          final healKey = '${chatId}_${newest.id}_$resolved';
+                          if (_healedMessageStatuses.add(healKey)) {
+                            messageStatusHeals[newest.id] = resolved;
+                          }
+                        }
+                      }
+                      if (curLast.status != resolved) {
+                        final updatedChat = currentChat.copyWith(
+                          lastMessage: curLast.copyWith(status: resolved),
+                        );
+                        _chatsCache[cachedChatIdx] = updatedChat;
+                        unawaited(_localService.saveChat(updatedChat));
+                        if (!_chatsController.isClosed) {
+                          _chatsController.add(_sortedChatsList());
+                        }
+                        unawaited(
+                          _chatsCol
+                              .doc(chatId)
+                              .update({'lastMessage.status': resolved})
+                              .catchError((Object _) {}),
+                        );
+                        unawaited(
+                          _userChatsCol(uid)
+                              .doc(chatId)
+                              .update({'lastMessage.status': resolved})
+                              .catchError((Object _) {}),
+                        );
+                      }
+                    }
+                  }
+                }
+
+                if (messageStatusHeals.isNotEmpty) {
+                  unawaited(() async {
+                    try {
+                      final batch = _firestore.batch();
+                      messageStatusHeals.forEach((msgId, newStatus) {
+                        batch.update(_messagesCol(chatId).doc(msgId), {
+                          'status': newStatus,
+                        });
+                      });
+                      await batch.commit();
+                    } catch (_) {}
+                  }());
                 }
 
                 lastMessages = messages;
@@ -503,14 +789,22 @@ class ChatRepository {
               if (newClearedAt != clearedAt) {
                 clearedAt = newClearedAt;
                 if (lastMessages.isNotEmpty && !controller.isClosed) {
-                  final filtered = clearedAt > 0
-                      ? lastMessages
-                            .where((m) => m.timestamp > clearedAt)
-                            .toList()
-                      : lastMessages;
+                  final filtered = lastMessages
+                      .where(
+                        (m) =>
+                            !_deletedMessageIds.contains(m.id) &&
+                            !m.isDeletedForEveryone &&
+                            !m.isDeletedFor(uid) &&
+                            (clearedAt <= 0 || m.timestamp > clearedAt),
+                      )
+                      .toList();
                   _messagesCache[chatId] = filtered;
                   controller.add(filtered);
                 }
+              }
+              final unread = (data?['unreadCount'] as int?) ?? 0;
+              if (unread > 0) {
+                unawaited(markChatAsRead(chatId));
               }
             },
             onError: (Object error, StackTrace stackTrace) {
@@ -819,6 +1113,9 @@ class ChatRepository {
           return msg;
         });
   }
+
+  void updateChatCacheWithMessage(String chatId, Message msg) =>
+      _updateChatCacheWithMessage(chatId, msg);
 
   void _updateChatCacheWithMessage(String chatId, Message msg) {
     final idx = _chatsCache.indexWhere((c) => c.id == chatId);
@@ -1678,13 +1975,46 @@ class ChatRepository {
   ) async {
     if (currentUserId == null || messageIds.isEmpty) return;
 
+    final idSet = messageIds.toSet();
+    final cachedMsgs = _messagesCache[chatId];
+    if (cachedMsgs != null && cachedMsgs.isNotEmpty) {
+      bool changed = false;
+      final updatedMsgs = cachedMsgs.map((m) {
+        if (idSet.contains(m.id) &&
+            m.senderId != currentUserId &&
+            m.status != 'read') {
+          changed = true;
+          return m.copyWith(status: 'read');
+        }
+        return m;
+      }).toList();
+      if (changed) {
+        _emitMessagesUpdate(chatId, updatedMsgs);
+      }
+    }
+
     final idx = _chatsCache.indexWhere((c) => c.id == chatId);
-    if (idx >= 0 && _chatsCache[idx].unreadCount > 0) {
-      final cur = _chatsCache[idx].unreadCount;
+    if (idx >= 0) {
+      final currentChat = _chatsCache[idx];
+      final cur = currentChat.unreadCount;
       final next = (cur - messageIds.length).clamp(0, cur);
-      _chatsCache[idx] = _chatsCache[idx].copyWith(unreadCount: next);
-      if (!_chatsController.isClosed) {
-        _chatsController.add(_sortedChatsList());
+      LastMessage? updatedLastMsg = currentChat.lastMessage;
+      if (updatedLastMsg != null &&
+          updatedLastMsg.senderId.isNotEmpty &&
+          updatedLastMsg.senderId != currentUserId &&
+          updatedLastMsg.senderId != 'system' &&
+          (updatedLastMsg.id.isEmpty || idSet.contains(updatedLastMsg.id))) {
+        updatedLastMsg = updatedLastMsg.copyWith(status: 'read');
+      }
+      if (next != cur || updatedLastMsg != currentChat.lastMessage) {
+        _chatsCache[idx] = currentChat.copyWith(
+          unreadCount: next,
+          lastMessage: updatedLastMsg,
+        );
+        unawaited(_localService.saveChat(_chatsCache[idx]));
+        if (!_chatsController.isClosed) {
+          _chatsController.add(_sortedChatsList());
+        }
       }
     }
 
@@ -1699,7 +2029,9 @@ class ChatRepository {
       final batch = _firestore.batch();
 
       for (final id in messageIds) {
-        batch.update(_messagesCol(chatId).doc(id), {'status': 'read'});
+        if (id.isNotEmpty && !id.startsWith('temp_')) {
+          batch.update(_messagesCol(chatId).doc(id), {'status': 'read'});
+        }
       }
 
       if (userChatDoc.exists) {
@@ -1707,18 +2039,32 @@ class ChatRepository {
         if (data['isDeleted'] != true) {
           final current = (data['unreadCount'] as int?) ?? 0;
           final newVal = (current - messageIds.length).clamp(0, current);
-          batch.update(_userChatsCol(currentUserId!).doc(chatId), {
+          final updates = <String, dynamic>{
             'unreadCount': newVal,
             if (newVal == 0) 'unreadNotificationLines': <String>[],
-          });
+          };
+          final userLastMsg = data['lastMessage'];
+          if (userLastMsg is Map &&
+              userLastMsg['senderId'] != currentUserId &&
+              userLastMsg['senderId'] != 'system') {
+            final uLastId = userLastMsg['id']?.toString();
+            if (uLastId == null || uLastId.isEmpty || idSet.contains(uLastId)) {
+              updates['lastMessage.status'] = 'read';
+            }
+          }
+          batch.update(_userChatsCol(currentUserId!).doc(chatId), updates);
         }
       }
 
       if (chatDoc.exists) {
         final lastMsg = chatDoc.data()?['lastMessage'] as Map<String, dynamic>?;
-        if (lastMsg != null && lastMsg['senderId'] != currentUserId) {
+        if (lastMsg != null &&
+            lastMsg['senderId'] != currentUserId &&
+            lastMsg['senderId'] != 'system') {
           final lastMsgId = lastMsg['id']?.toString();
-          if (lastMsgId != null && messageIds.contains(lastMsgId)) {
+          if (lastMsgId == null ||
+              lastMsgId.isEmpty ||
+              idSet.contains(lastMsgId)) {
             batch.update(_chatsCol.doc(chatId), {'lastMessage.status': 'read'});
           }
         }
@@ -1731,27 +2077,117 @@ class ChatRepository {
   }
 
   Future<void> markChatAsRead(String chatId) async {
-    if (currentUserId == null) return;
+    final uid = currentUserId;
+    if (uid == null) return;
+
     final idx = _chatsCache.indexWhere((c) => c.id == chatId);
-    if (idx >= 0 && _chatsCache[idx].unreadCount > 0) {
-      _chatsCache[idx] = _chatsCache[idx].copyWith(unreadCount: 0);
-      if (!_chatsController.isClosed) {
-        _chatsController.add(_sortedChatsList());
+    if (idx >= 0) {
+      final currentChat = _chatsCache[idx];
+      final curLast = currentChat.lastMessage;
+      final shouldMarkLastRead =
+          curLast != null &&
+          curLast.senderId.isNotEmpty &&
+          curLast.senderId != uid &&
+          curLast.senderId != 'system' &&
+          curLast.status != 'read';
+      if (currentChat.unreadCount > 0 || shouldMarkLastRead) {
+        _chatsCache[idx] = currentChat.copyWith(
+          unreadCount: 0,
+          lastMessage: shouldMarkLastRead
+              ? curLast.copyWith(status: 'read')
+              : curLast,
+        );
+        unawaited(_localService.saveChat(_chatsCache[idx]));
+        if (!_chatsController.isClosed) {
+          _chatsController.add(_sortedChatsList());
+        }
       }
     }
+
+    final cachedMsgs = _messagesCache[chatId];
+    if (cachedMsgs != null && cachedMsgs.isNotEmpty) {
+      bool changed = false;
+      final updatedMsgs = cachedMsgs.map((m) {
+        if (!m.isSystem && m.senderId != uid && m.status != 'read') {
+          changed = true;
+          return m.copyWith(status: 'read');
+        }
+        return m;
+      }).toList();
+      if (changed) {
+        _emitMessagesUpdate(chatId, updatedMsgs);
+      }
+    }
+
     try {
-      final userChatRef = _userChatsCol(currentUserId!).doc(chatId);
-      final snap = await userChatRef.get();
+      final userChatRef = _userChatsCol(uid).doc(chatId);
+      final chatRef = _chatsCol.doc(chatId);
+      final results = await Future.wait<Object?>([
+        userChatRef.get(),
+        chatRef.get(),
+        _messagesCol(
+          chatId,
+        ).orderBy('timestamp', descending: true).limit(30).get(),
+      ]);
+
+      final snap = results[0] as DocumentSnapshot<Map<String, dynamic>>;
+      final chatSnap = results[1] as DocumentSnapshot<Map<String, dynamic>>;
+      final recentMessages = results[2] as QuerySnapshot<Map<String, dynamic>>;
+
+      final batch = _firestore.batch();
+      int ops = 0;
+
+      for (final msgDoc in recentMessages.docs) {
+        final msgData = msgDoc.data();
+        final senderId = msgData['senderId']?.toString() ?? '';
+        final status = msgData['status']?.toString();
+        final type = msgData['type']?.toString();
+        if (senderId.isNotEmpty &&
+            senderId != uid &&
+            senderId != 'system' &&
+            type != 'system' &&
+            status != 'read') {
+          batch.update(msgDoc.reference, {'status': 'read'});
+          ops++;
+        }
+      }
+
+      if (chatSnap.exists) {
+        final lastMsg =
+            chatSnap.data()?['lastMessage'] as Map<String, dynamic>?;
+        if (lastMsg != null &&
+            lastMsg['senderId'] != null &&
+            lastMsg['senderId'] != uid &&
+            lastMsg['senderId'] != 'system' &&
+            lastMsg['status'] != 'read') {
+          batch.update(chatRef, {'lastMessage.status': 'read'});
+          ops++;
+        }
+      }
 
       if (snap.exists) {
         final data = snap.data() ?? {};
         if (data['isDeleted'] != true) {
-          await userChatRef.update({
+          final userUpdates = <String, dynamic>{
             'unreadCount': 0,
             'unreadNotificationLines': <String>[],
             'lastRead': DateTime.now().millisecondsSinceEpoch,
-          });
+          };
+          final userLastMsg = data['lastMessage'];
+          if (userLastMsg is Map &&
+              userLastMsg['senderId'] != null &&
+              userLastMsg['senderId'] != uid &&
+              userLastMsg['senderId'] != 'system' &&
+              userLastMsg['status'] != 'read') {
+            userUpdates['lastMessage.status'] = 'read';
+          }
+          batch.update(userChatRef, userUpdates);
+          ops++;
         }
+      }
+
+      if (ops > 0) {
+        await batch.commit();
       }
     } catch (e) {
       debugPrint('Error marking chat as read: $e');
@@ -1760,28 +2196,7 @@ class ChatRepository {
 
   Future<void> markMessageAsRead(String chatId, String messageId) async {
     if (currentUserId == null) return;
-    try {
-      final msgDoc = await _messagesCol(chatId).doc(messageId).get();
-      if (msgDoc.exists) {
-        final data = msgDoc.data() ?? {};
-        if (data['senderId'] != currentUserId && data['status'] != 'read') {
-          await _messagesCol(chatId).doc(messageId).update({'status': 'read'});
-
-          final chatDoc = await _chatsCol.doc(chatId).get();
-          if (chatDoc.exists) {
-            final lastMsg =
-                chatDoc.data()?['lastMessage'] as Map<String, dynamic>?;
-            if (lastMsg != null && lastMsg['senderId'] != currentUserId) {
-              await _chatsCol.doc(chatId).update({
-                'lastMessage.status': 'read',
-              });
-            }
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('Error marking message as read: $e');
-    }
+    await markMessagesAsRead(chatId, [messageId]);
   }
 
   Future<int> getUnreadCount(String chatId) async => 0;
@@ -1840,10 +2255,11 @@ class ChatRepository {
       _chatsController.add(_sortedChatsList());
     }
 
-    await _userChatsCol(currentUserId!).doc(chatId).update({
+    await _userChatsCol(currentUserId!).doc(chatId).set({
+      'chatId': chatId,
       'isDeleted': true,
       'clearedAt': DateTime.now().millisecondsSinceEpoch,
-    });
+    }, SetOptions(merge: true));
 
     await _localService.deleteChat(chatId);
   }
@@ -1851,10 +2267,11 @@ class ChatRepository {
   Future<void> clearChat(String chatId) async {
     if (currentUserId == null) return;
     _emitMessagesUpdate(chatId, const []);
-    await _userChatsCol(currentUserId!).doc(chatId).update({
+    await _userChatsCol(currentUserId!).doc(chatId).set({
+      'chatId': chatId,
       'clearedAt': DateTime.now().millisecondsSinceEpoch,
       'lastMessage': FieldValue.delete(),
-    });
+    }, SetOptions(merge: true));
   }
 
   Future<void> clearChatMentions(String chatId) async {
@@ -1875,9 +2292,14 @@ class ChatRepository {
     String messageId, {
     bool deleteForEveryone = false,
   }) async {
-    if (currentUserId == null) return;
+    final uid = currentUserId;
+    if (uid == null || chatId.isEmpty || messageId.isEmpty) return;
+
+    _deletedMessageIds.add(messageId);
+
     final cachedMsgs = _messagesCache[chatId];
     Message? targetMsg;
+    List<Message> updated = const [];
     if (cachedMsgs != null) {
       for (final m in cachedMsgs) {
         if (m.id == messageId) {
@@ -1885,49 +2307,103 @@ class ChatRepository {
           break;
         }
       }
-      final updated = cachedMsgs.map((m) {
-        if (m.id != messageId) return m;
-        if (!deleteForEveryone) {
-          final nextDeletedFor = <String>{
-            ...?m.deletedFor,
-            currentUserId!,
-          }.toList();
-          return m.copyWith(deletedFor: nextDeletedFor);
-        }
-        return m.copyWith(
-          content: '🚫 Message deleted',
-          type: 'deleted',
-          deletedForEveryone: true,
-        );
-      }).toList();
+      updated = cachedMsgs.where((m) => m.id != messageId).toList();
       _emitMessagesUpdate(chatId, updated);
+      unawaited(_cacheMessagesLocally(chatId, updated));
     }
+
+    final isSender =
+        targetMsg?.senderId == uid || targetMsg?.adminId == uid;
+    final shouldDeleteForEveryone = deleteForEveryone || isSender;
+
+    // Optimistically update chat's lastMessage in memory if needed
+    final cachedChatIdx = _chatsCache.indexWhere((c) => c.id == chatId);
+    final cachedChat = cachedChatIdx >= 0 ? _chatsCache[cachedChatIdx] : null;
+    final wasLastMessage =
+        cachedChat?.lastMessage?.id == messageId ||
+        (targetMsg != null &&
+            cachedChat?.lastMessage?.timestamp == targetMsg.timestamp);
+
+    if (wasLastMessage && cachedChatIdx >= 0 && cachedChat != null) {
+      final nextTop = updated.isNotEmpty ? updated.first : null;
+      final nextLastMsg = nextTop != null
+          ? LastMessage(
+              id: nextTop.id,
+              content: nextTop.content,
+              senderId: nextTop.senderId,
+              senderName: nextTop.senderName,
+              timestamp: nextTop.timestamp,
+              type: nextTop.type,
+              status: nextTop.status,
+            )
+          : null;
+      _chatsCache[cachedChatIdx] = cachedChat.copyWith(
+        lastMessage: nextLastMsg,
+      );
+      if (!_chatsController.isClosed) {
+        _chatsController.add(_sortedChatsList());
+      }
+    }
+
+    if (messageId.startsWith('temp_')) return;
+
     try {
       final msgRef = _messagesCol(chatId).doc(messageId);
 
-      if (!deleteForEveryone) {
+      if (shouldDeleteForEveryone) {
+        try {
+          await msgRef.update({
+            'content': '',
+            'type': 'deleted',
+            'isDeleted': true,
+            'deletedForEveryone': true,
+            'deletedFor': FieldValue.arrayUnion([uid]),
+          });
+        } catch (_) {
+          await msgRef.update({
+            'deletedFor': FieldValue.arrayUnion([uid]),
+          });
+        }
+      } else {
         await msgRef.update({
-          'deletedFor': FieldValue.arrayUnion([currentUserId]),
+          'deletedFor': FieldValue.arrayUnion([uid]),
         });
-        return;
       }
 
-      final updates = <String, dynamic>{
-        'content': '🚫 Message deleted',
-        'type': 'deleted',
-        'deletedForEveryone': true,
-      };
+      if (wasLastMessage) {
+        final nextTop = updated.isNotEmpty ? updated.first : null;
+        if (nextTop != null) {
+          unawaited(
+            _userChatsCol(uid).doc(chatId).set({
+              'chatId': chatId,
+              'lastMessage': {
+                'id': nextTop.id,
+                'content': nextTop.content,
+                'senderId': nextTop.senderId,
+                'senderName': nextTop.senderName,
+                'timestamp': nextTop.timestamp,
+                'type': nextTop.type,
+                'status': nextTop.status ?? 'sent',
+              },
+            }, SetOptions(merge: true)).catchError((Object _) {}),
+          );
+        } else {
+          unawaited(
+            _userChatsCol(uid).doc(chatId).set({
+              'chatId': chatId,
+              'lastMessage': FieldValue.delete(),
+            }, SetOptions(merge: true)).catchError((Object _) {}),
+          );
+        }
 
-      await msgRef.update(updates);
-
-      final cachedChat = getCachedChat(chatId);
-      if (cachedChat?.lastMessage?.id == messageId ||
-          (targetMsg != null &&
-              cachedChat?.lastMessage?.timestamp == targetMsg.timestamp)) {
-        await _chatsCol.doc(chatId).update({
-          'lastMessage.content': '🚫 Message deleted',
-          'lastMessage.type': 'deleted',
-        });
+        if (shouldDeleteForEveryone) {
+          unawaited(
+            _chatsCol.doc(chatId).update({
+              'lastMessage.content': '🚫 Message deleted',
+              'lastMessage.type': 'deleted',
+            }).catchError((Object _) {}),
+          );
+        }
       }
     } catch (e) {
       debugPrint('Error deleting message: $e');
@@ -2297,16 +2773,47 @@ class ChatRepository {
         final data = snapshot.data();
         final lastMsg = data?['lastMessage'];
         if (lastMsg == null) return null;
-        final parsed = LastMessage.fromFirestore(
+        var parsed = LastMessage.fromFirestore(
           Map<String, dynamic>.from(lastMsg as Map),
         );
+        final uid = currentUserId;
         final idx = _chatsCache.indexWhere((c) => c.id == chatId);
         if (idx >= 0) {
           final current = _chatsCache[idx];
-          final currentTs = current.lastMessage?.timestamp ?? 0;
-          if (parsed.timestamp > currentTs ||
-              (parsed.timestamp == currentTs &&
-                  parsed.content != current.lastMessage?.content)) {
+          final curLast = current.lastMessage;
+          final currentTs = curLast?.timestamp ?? 0;
+          final isSameMsg =
+              curLast != null &&
+              ((curLast.id.isNotEmpty &&
+                      parsed.id.isNotEmpty &&
+                      curLast.id == parsed.id) ||
+                  parsed.timestamp == currentTs);
+          if (isSameMsg) {
+            parsed = parsed.mergeWith(curLast);
+          }
+
+          if (uid != null &&
+              parsed.senderId.isNotEmpty &&
+              parsed.senderId != uid &&
+              parsed.senderId != 'system' &&
+              (parsed.status == 'sent' || parsed.status == null)) {
+            parsed = parsed.copyWith(status: 'delivered');
+            _handleDeliveryReceipt(
+              current.copyWith(lastMessage: parsed),
+              uid,
+            );
+          }
+
+          final hasChanged =
+              curLast == null ||
+              parsed.timestamp > currentTs ||
+              (isSameMsg &&
+                  (parsed.content != curLast.content ||
+                      parsed.status != curLast.status ||
+                      parsed.isDeleted != curLast.isDeleted ||
+                      parsed.forwarded != curLast.forwarded));
+
+          if (hasChanged) {
             final newUpdatedAt = parsed.timestamp > current.updatedAt
                 ? parsed.timestamp
                 : current.updatedAt;
@@ -2314,6 +2821,7 @@ class ChatRepository {
               lastMessage: parsed,
               updatedAt: newUpdatedAt,
             );
+            unawaited(_localService.saveChat(_chatsCache[idx]));
             if (!_chatsController.isClosed) {
               _chatsController.add(_sortedChatsList());
             }

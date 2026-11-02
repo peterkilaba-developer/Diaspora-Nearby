@@ -60,42 +60,46 @@ class TrustData {
   final int reviewCount;
   final double averageRating;
   final int reportCount; // Negative signal
-  final int blockedByCount; // [NEW] -10 PCT for every 10 unique blocks
-  final int flaggedMessagesCount; // [NEW] -10 PCT for every 10 unique flags
-  final int
-  bannedVoucheeCount; // [NEW] -10 PCT if someone you vouched for is banned
-  final int
-  fakeVerificationsCount; // [NEW] -10 PCT for every 10 fake verifications
+  final int blockedByCount; // -1 PCT for every 10 unique blocks
+  final int flaggedMessagesCount; // -1 PCT for every 10 unique flags
+  final int bannedVoucheeCount; // -1 PCT if someone you vouched for is banned
+  final int fakeVerificationsCount; // -1 PCT for every 10 fake verifications
 
-  // [NEW] Reliability & Helpfulness metrics
+  // Reliability & Helpfulness metrics
   final int attendedEventsCount;
   final int joinedEventsCount;
   final int verifiedSolutionsCount;
   final bool identityQRExchange;
 
-  // [NEW] Council Eligibility Metrics
+  // Council Eligibility & PoH Metrics
   final int uniqueFamilyCount;
-  final int uniqueFriendCount; // [NEW] Non-family relationship connections
+  final int uniqueFriendCount; // Non-family relationship connections
   final int uniqueQrCount;
   final int uniqueVouchCount;
-  final int uniqueVerificationCount; // [NEW] 10 standard verifications
+  final int uniqueVerificationCount; // 10 standard verifications
   final int verifiedByCount; // How many peers verified this user
   final int vouchedByCount; // How many peers vouched for this user
   final bool isCouncilEligible;
-  final bool
-  isDdiEligible; // [NEW] 7 Genesis Milestones + 100+ days active + PCT 91+
-  final List<String> awardedQualificationMilestones; // [NEW] Track awards
+  final bool isDdiEligible; // 7 Genesis Milestones + 100+ days active + PCT 91+
+  final List<String> awardedQualificationMilestones;
   final int verifiedCheckInCount;
+  final int proximityConnectionsCount; // +1 PCT per 10 proximity connections (10+ min within 100 ft)
+  final int grassrootsGatheringsCount; // +1 PCT per 10 grassroots gatherings (60+ min within 100 ft)
+  final int verifiedGatheringVisitsCount; // Alias/mirror for grassroots gatherings
+  final int hostedEventAttendeesCount; // +1 PCT per 10 event attendees hosted
+  final int verificationsGivenCount; // +1 PCT per 10 peer profiles verified
+  final int completedHostingCount; // +1 PCT per 10 completed peer stays/hosting sessions
+  final int economicTxCount; // +1 PCT per 10 completed economic/marketplace transactions
+  final int governanceVotesCount; // +1 PCT per 10 governance votes cast
   final int unresponsiveLiaisonCount;
-  final int rejectedFamilyConnectionsCount; // [NEW] -10 PCT
+  final int rejectedFamilyConnectionsCount;
 
-  final int eventNoShowCount; // [NEW] -10 PCT
-  final int reportedFraudCount; // [NEW] -10 PCT
-  final int referralCount; // [NEW] +1 PCT per 10 referrals (linear)
-  final bool
-  hasReceivedPohTokenDistribution; // 7,000 DSP Genesis conversion to on-chain $DIASPORA
+  final int eventNoShowCount;
+  final int reportedFraudCount;
+  final int referralCount; // +1 PCT per 10 referrals (linear)
+  final bool hasReceivedPohTokenDistribution; // 7,000 DSP Genesis conversion to on-chain $DIASPORA
 
-  // [NEW] Ledger for already awarded/penalized HTS units (sets of 10)
+  // Ledger for already awarded/penalized HTS units (sets of 10)
   final Map<String, int> awardedHtsTracking;
 
   // Components (Physical/Behavioral)
@@ -107,11 +111,10 @@ class TrustData {
 
   // Vouching
   final List<String> vouchedBy; // UIDs of users who vouched for this user
-  final List<String>
-  fullTrustVoterIds; // UIDs of users who gave full trust (90-100)
+  final List<String> fullTrustVoterIds; // UIDs of users who gave full trust (90-100)
   final List<String> noTrustVoterIds; // UIDs of users who gave no trust (0-10)
 
-  // [NEW] Genesis Milestone qualifying IDs (deduplicated, max 10 each)
+  // Genesis Milestone qualifying IDs (deduplicated, max 10 each)
   final List<String> genesisFamilyIds;
   final List<String> genesisFriendIds;
   final List<String> genesisQrIds;
@@ -148,6 +151,14 @@ class TrustData {
     this.hasReceivedPohTokenDistribution = false,
     this.awardedQualificationMilestones = const [],
     this.verifiedCheckInCount = 0,
+    this.proximityConnectionsCount = 0,
+    this.grassrootsGatheringsCount = 0,
+    this.verifiedGatheringVisitsCount = 0,
+    this.hostedEventAttendeesCount = 0,
+    this.verificationsGivenCount = 0,
+    this.completedHostingCount = 0,
+    this.economicTxCount = 0,
+    this.governanceVotesCount = 0,
     this.unresponsiveLiaisonCount = 0,
     this.reliabilityScore = 0.0,
     this.helpfulnessScore = 0.0,
@@ -156,7 +167,6 @@ class TrustData {
     this.bannedVoucheeCount = 0,
     this.fakeVerificationsCount = 0,
     this.rejectedFamilyConnectionsCount = 0,
-
     this.eventNoShowCount = 0,
     this.reportedFraudCount = 0,
     this.referralCount = 0,
@@ -216,6 +226,14 @@ class TrustData {
     bool? hasReceivedPohTokenDistribution,
     List<String>? awardedQualificationMilestones,
     int? verifiedCheckInCount,
+    int? proximityConnectionsCount,
+    int? grassrootsGatheringsCount,
+    int? verifiedGatheringVisitsCount,
+    int? hostedEventAttendeesCount,
+    int? verificationsGivenCount,
+    int? completedHostingCount,
+    int? economicTxCount,
+    int? governanceVotesCount,
     int? unresponsiveLiaisonCount,
     double? reliabilityScore,
     double? helpfulnessScore,
@@ -235,7 +253,6 @@ class TrustData {
     int? bannedVoucheeCount,
     int? fakeVerificationsCount,
     int? rejectedFamilyConnectionsCount,
-
     int? eventNoShowCount,
     int? reportedFraudCount,
     int? referralCount,
@@ -274,6 +291,20 @@ class TrustData {
       awardedQualificationMilestones:
           awardedQualificationMilestones ?? this.awardedQualificationMilestones,
       verifiedCheckInCount: verifiedCheckInCount ?? this.verifiedCheckInCount,
+      proximityConnectionsCount:
+          proximityConnectionsCount ?? this.proximityConnectionsCount,
+      grassrootsGatheringsCount:
+          grassrootsGatheringsCount ?? this.grassrootsGatheringsCount,
+      verifiedGatheringVisitsCount:
+          verifiedGatheringVisitsCount ?? this.verifiedGatheringVisitsCount,
+      hostedEventAttendeesCount:
+          hostedEventAttendeesCount ?? this.hostedEventAttendeesCount,
+      verificationsGivenCount:
+          verificationsGivenCount ?? this.verificationsGivenCount,
+      completedHostingCount:
+          completedHostingCount ?? this.completedHostingCount,
+      economicTxCount: economicTxCount ?? this.economicTxCount,
+      governanceVotesCount: governanceVotesCount ?? this.governanceVotesCount,
       unresponsiveLiaisonCount:
           unresponsiveLiaisonCount ?? this.unresponsiveLiaisonCount,
       reliabilityScore: reliabilityScore ?? this.reliabilityScore,
@@ -297,7 +328,6 @@ class TrustData {
           fakeVerificationsCount ?? this.fakeVerificationsCount,
       rejectedFamilyConnectionsCount:
           rejectedFamilyConnectionsCount ?? this.rejectedFamilyConnectionsCount,
-
       eventNoShowCount: eventNoShowCount ?? this.eventNoShowCount,
       reportedFraudCount: reportedFraudCount ?? this.reportedFraudCount,
       referralCount: referralCount ?? this.referralCount,

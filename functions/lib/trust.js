@@ -44,7 +44,9 @@ exports.createQrHandshake = functions.https.onCall(async (data, context) => {
   return { token, expiresInSeconds: QR_CHALLENGE_TTL_MS / 1000 };
 });
 
-exports.completeQrHandshake = functions.https.onCall(async (data, context) => {
+exports.completeQrHandshake = functions
+  .runWith({ secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
+  .https.onCall(async (data, context) => {
   requireAppCheck(context);
   const scannerUid = requireAuth(context);
   await consumeRateLimit("qr-challenge-complete", scannerUid, 40, 60 * 60 * 1000);
@@ -250,6 +252,14 @@ exports.verifyChatSolution = functions.https.onCall(async (data, context) => {
       verifiedSolutionsCount: admin.firestore.FieldValue.increment(1),
       lastUpdated: now,
     }, {merge: true});
+    transaction.set(db.collection("trust_data").doc(reporterId), {
+      verifiedSolutionsCount: admin.firestore.FieldValue.increment(1),
+      lastUpdated: now,
+    }, {merge: true});
+    transaction.set(db.collection("trust_scores").doc(reporterId), {
+      verifiedSolutionsCount: admin.firestore.FieldValue.increment(1),
+      lastUpdated: now,
+    }, {merge: true});
   });
 
   if (!alreadyVerified && senderId) {
@@ -285,7 +295,15 @@ exports.verifyChatSolution = functions.https.onCall(async (data, context) => {
         });
         await distributeUbuntuMatchingSupply(rewardBatch, uid, REWARD, now, `${action}_match`);
       }
-      await rewardBatch.commit();
+      await Promise.all([
+        rewardBatch.commit(),
+        syncProfileMilestoneAndTrust(senderId).catch((err) => {
+          console.warn(`[verifyChatSolution] syncProfileMilestoneAndTrust sender warning: ${err.message}`);
+        }),
+        syncProfileMilestoneAndTrust(reporterId).catch((err) => {
+          console.warn(`[verifyChatSolution] syncProfileMilestoneAndTrust reporter warning: ${err.message}`);
+        }),
+      ]);
     } catch (err) {
       console.warn(`[verifyChatSolution] Reward warning: ${err.message}`);
     }
@@ -300,7 +318,9 @@ exports.verifyChatSolution = functions.https.onCall(async (data, context) => {
  * and calls syncProfileMilestoneAndTrust(toUserId) so uniqueVerificationCount, verifiedFieldsCount,
  * flaggedFieldsCount, and the 10-verification PoH milestone (+10,000 DSP & +10 PCT) are synced.
  */
-exports.onFieldVerificationWrite = functions.firestore
+exports.onFieldVerificationWrite = functions
+  .runWith({ secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
+  .firestore
   .document("field_verifications/{verificationId}")
   .onWrite(async (change) => {
     const beforeData = change.before.exists ? change.before.data() : null;
@@ -322,6 +342,12 @@ exports.onFieldVerificationWrite = functions.firestore
           const now = admin.firestore.FieldValue.serverTimestamp();
           const REWARD = 1000;
           rewardBatch.set(change.after.ref, { dspRewarded: true }, { merge: true });
+          for (const col of ["trust_data", "trust_scores"]) {
+            rewardBatch.set(db.collection(col).doc(fromUserId), {
+              verificationsGivenCount: admin.firestore.FieldValue.increment(1),
+              lastUpdated: now,
+            }, { merge: true });
+          }
 
           for (const [uid, action, peerUid] of [
             [fromUserId, "verifier_reward", toUserId],
@@ -360,9 +386,12 @@ exports.onFieldVerificationWrite = functions.firestore
     }
 
     try {
-      await syncProfileMilestoneAndTrust(toUserId);
+      await Promise.all([
+        syncProfileMilestoneAndTrust(toUserId),
+        syncProfileMilestoneAndTrust(fromUserId),
+      ]);
     } catch (syncErr) {
-      console.warn(`[onFieldVerificationWrite] syncProfileMilestoneAndTrust warning for ${toUserId}: ${syncErr.message}`);
+      console.warn(`[onFieldVerificationWrite] syncProfileMilestoneAndTrust warning: ${syncErr.message}`);
     }
 
     return null;

@@ -1410,6 +1410,9 @@ class _MessageInputState extends ConsumerState<MessageInput>
     } else if (replyingTo.type == 'audio' || replyingTo.type == 'audio_file') {
       contentText = 'Voice message';
       mediaIcon = LucideIcons.mic;
+    } else if (replyingTo.type == 'voice_call') {
+      contentText = 'Voice call';
+      mediaIcon = LucideIcons.phone;
     } else if (replyingTo.type == 'location') {
       contentText = 'Location';
       mediaIcon = LucideIcons.mapPin;
@@ -1678,6 +1681,9 @@ class _AttachmentPickerModalState
 
     // Handle keyboard
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final isAiAgentChat =
+        widget.recipientUserId == 'diaspora_ai_agent' ||
+        (widget.chatId?.startsWith('ai_agent_') ?? false);
 
     return SafeArea(
       child: Container(
@@ -1692,58 +1698,90 @@ class _AttachmentPickerModalState
             children: [
               // ─── MEDIA GRID (visible only when no asset selected) ───
               if (!hasSelection) ...[
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildButton(
-                      context,
-                      LucideIcons.camera,
-                      'Camera',
-                      widget.onPickCamera,
-                    ),
-                    _buildButton(
-                      context,
-                      LucideIcons.image,
-                      'Photo',
-                      widget.onPickImage,
-                    ),
-                    _buildButton(
-                      context,
-                      LucideIcons.video,
-                      'Video',
-                      widget.onPickVideo,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildButton(
-                      context,
-                      LucideIcons.music,
-                      'Audio',
-                      widget.onPickAudio,
-                    ),
-                    _buildButton(
-                      context,
-                      LucideIcons.fileText,
-                      'Document',
-                      widget.onPickDocument,
-                    ),
-                    _buildButton(
-                      context,
-                      LucideIcons.mapPin,
-                      'Location',
-                      widget.onPickLocation,
-                    ),
-                  ],
-                ),
+                if (isAiAgentChat) ...[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildButton(
+                        context,
+                        LucideIcons.camera,
+                        'Camera',
+                        widget.onPickCamera,
+                      ),
+                      _buildButton(
+                        context,
+                        LucideIcons.image,
+                        'Photo',
+                        widget.onPickImage,
+                      ),
+                      _buildButton(
+                        context,
+                        LucideIcons.fileText,
+                        'Document',
+                        widget.onPickDocument,
+                      ),
+                      _buildButton(
+                        context,
+                        LucideIcons.mapPin,
+                        'Location',
+                        widget.onPickLocation,
+                      ),
+                    ],
+                  ),
+                ] else ...[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildButton(
+                        context,
+                        LucideIcons.camera,
+                        'Camera',
+                        widget.onPickCamera,
+                      ),
+                      _buildButton(
+                        context,
+                        LucideIcons.image,
+                        'Photo',
+                        widget.onPickImage,
+                      ),
+                      _buildButton(
+                        context,
+                        LucideIcons.video,
+                        'Video',
+                        widget.onPickVideo,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildButton(
+                        context,
+                        LucideIcons.music,
+                        'Audio',
+                        widget.onPickAudio,
+                      ),
+                      _buildButton(
+                        context,
+                        LucideIcons.fileText,
+                        'Document',
+                        widget.onPickDocument,
+                      ),
+                      _buildButton(
+                        context,
+                        LucideIcons.mapPin,
+                        'Location',
+                        widget.onPickLocation,
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 20),
               ],
 
-              // ─── VALUE TRANSFER BAR (peer-to-peer chats only) ───
-              if (widget.recipientUserId != null) ...[
+              // ─── VALUE TRANSFER BAR (peer-to-peer human chats only) ───
+              if (widget.recipientUserId != null && !isAiAgentChat) ...[
                 // ─── TRANSACTION HISTORY (above toggle, scrollable) ───
                 if (hasSelection && !isFiat)
                   _buildWiredTransactionHistory(

@@ -901,3 +901,8 @@ exports.amadeusProxy = functions
       throw new functions.https.HttpsError('internal', `Travel proxy error: ${error.message}`);
     }
   });
+
+exports.fetchRealFlightsFromGoogle = fetchRealFlightsFromGoogle;
+exports.fetchRealHotelsFromPlaces = fetchRealHotelsFromPlaces;
+exports.buildRealHotelOffers = buildRealHotelOffers;
+

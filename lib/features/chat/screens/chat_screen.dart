@@ -1,7 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ui';
+import 'package:universal_io/io.dart' as uio;
+import 'package:just_audio/just_audio.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -78,6 +82,8 @@ import 'package:diaspora_nearby/features/shared/utils/whatsapp_utils.dart';
 import 'package:diaspora_nearby/features/chat/widgets/chat_scroll_to_bottom_fab.dart';
 import 'package:diaspora_nearby/features/chat/widgets/chat_typing_indicator.dart';
 import 'package:diaspora_nearby/features/notifications/services/push_notification_service.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 
 // Local providers removed (moved to chat_providers.dart)
 
@@ -127,6 +133,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
 
   /// Cached reference to PushNotificationService for safe cleanup in dispose()
   PushNotificationService? _pushNotificationService;
+
+  /// Cached reference to ChatRepository for safe cleanup in dispose()
+  ChatRepository? _chatRepository;
 
   /// Message being replied to (null if not replying)
   Message? _replyingTo;
@@ -178,9 +187,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     _activeChatId = widget.chatId;
     _activePartnerUserId = widget.pendingUserId;
     _pushNotificationService = ref.read(pushNotificationServiceProvider);
+    _chatRepository = ref.read(chatRepositoryProvider);
     _scrollController.addListener(_onScroll);
 
-    final chatRepo = ref.read(chatRepositoryProvider);
+    final chatRepo = _chatRepository!;
     final currentUserId = chatRepo.currentUserId;
 
     // [PERF] If opened as pendingDM, synchronously check if direct chat already exists in cache
@@ -221,6 +231,28 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         final chatRepo = ref.read(chatRepositoryProvider);
         final currentUserId = chatRepo.currentUserId;
         if (currentUserId == null) return;
+
+        if (_activeChatId != null && _activeChatId!.startsWith('ai_agent_')) {
+          try {
+            final ensureRes = await FirebaseFunctions.instance
+                .httpsCallable('ensureDirectChat')
+                .call<Map<String, dynamic>>({
+                  'otherUserId': 'diaspora_ai_agent',
+                  'isAiAgentWelcome': true,
+                });
+            final realChatId = ensureRes.data['chatId']?.toString();
+            if (realChatId != null &&
+                realChatId.isNotEmpty &&
+                !realChatId.startsWith('ai_agent_') &&
+                mounted) {
+              setState(() {
+                _activeChatId = realChatId;
+              });
+            }
+          } catch (e) {
+            debugPrint('Error pre-resolving AI agent chat: $e');
+          }
+        }
 
         // Fetch chat once to check participation and type
         final chat =
@@ -327,10 +359,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     if (_visibleUnreadMessageIds.isNotEmpty) {
       final ids = _visibleUnreadMessageIds.toList();
       _visibleUnreadMessageIds.clear();
-      // Fire and forget - we can't await in dispose
-      final chatRepo = ref.read(chatRepositoryProvider);
+      // Fire and forget - use cached _chatRepository instead of ref.read in dispose
       if (_activeChatId != null) {
-        chatRepo.markMessagesAsRead(_activeChatId!, ids);
+        _chatRepository?.markMessagesAsRead(_activeChatId!, ids);
       }
     }
     _readReceiptDebounceTimer?.cancel();
@@ -496,7 +527,28 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         }
       }
     } else if (_activeChatId != null) {
-      final activeChatId = _activeChatId!;
+      var activeChatId = _activeChatId!;
+      if (activeChatId.startsWith('ai_agent_')) {
+        try {
+          final ensureRes = await FirebaseFunctions.instance
+              .httpsCallable('ensureDirectChat')
+              .call<Map<String, dynamic>>({
+                'otherUserId': 'diaspora_ai_agent',
+                'isAiAgentWelcome': true,
+              });
+          final realChatId = ensureRes.data['chatId']?.toString();
+          if (realChatId != null && realChatId.isNotEmpty) {
+            activeChatId = realChatId;
+            if (mounted) {
+              setState(() {
+                _activeChatId = realChatId;
+              });
+            }
+          }
+        } catch (e) {
+          debugPrint('Error resolving canonical AI agent chatId: $e');
+        }
+      }
       if (currentUserId != null) {
         final optimisticMessage = Message(
           id: tempId,
@@ -564,6 +616,168 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
               ?.map((e) => e.toString())
               .toList(),
           richContent: metadata?['richContent'] as String?,
+        );
+      }
+    }
+
+    _scrollToBottom();
+  }
+
+  Future<void> _handleWhatsAppCall(String phone) async {
+    unawaited(_sendVoiceCallMessage(phone));
+
+    final success = await WhatsAppUtils.launchWhatsApp(phone);
+    if (!success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not launch WhatsApp'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _sendVoiceCallMessage(String phone) async {
+    final chatRepo = ref.read(chatRepositoryProvider);
+    final identity = ref.read(chatIdentityProvider);
+    String? senderIdOverride;
+    String? senderNameOverride;
+    String? senderImageOverride;
+
+    if (identity != null) {
+      senderIdOverride = identity['id'];
+      senderNameOverride = identity['businessName'] ?? identity['name'];
+      senderImageOverride = identity['profileImage'];
+    }
+
+    final currentUserId = chatRepo.currentUserId;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final tempId = 'temp_call_${now}_${currentUserId ?? "me"}';
+    final callMetadata = <String, dynamic>{
+      'phone': phone,
+      'platform': 'whatsapp',
+    };
+
+    if (_isPendingDM && _activeChatId == null) {
+      final pendingKey = _pendingDmCacheKey;
+      final optimisticMessage = Message(
+        id: tempId,
+        chatId: pendingKey,
+        senderId: senderIdOverride ?? (currentUserId ?? ''),
+        senderName: senderNameOverride ?? 'Me',
+        senderImage: senderImageOverride,
+        content: 'Voice call',
+        type: 'voice_call',
+        timestamp: now,
+        status: 'sending',
+        metadata: callMetadata,
+      );
+
+      ref
+          .read(pendingMessagesProvider.notifier)
+          .addMessage(pendingKey, optimisticMessage);
+      _scrollToBottom(false);
+
+      try {
+        final chatId = await _ensureChatCreated();
+        if (chatId != null) {
+          chatRepo.updateChatCacheWithMessage(
+            chatId,
+            optimisticMessage.copyWith(chatId: chatId, status: 'sent'),
+          );
+          final participants = chatRepo.getCachedChat(chatId)?.participants;
+          await chatRepo.sendTextMessage(
+            chatId,
+            'Voice call',
+            type: 'voice_call',
+            metadata: callMetadata,
+            senderIdOverride: senderIdOverride,
+            senderNameOverride: senderNameOverride,
+            senderImageOverride: senderImageOverride,
+            participants: participants,
+          );
+        }
+      } catch (e) {
+        debugPrint('❌ Error sending voice call message in pending DM: $e');
+      } finally {
+        ref
+            .read(pendingMessagesProvider.notifier)
+            .removeMessage(pendingKey, tempId);
+      }
+    } else if (_activeChatId != null) {
+      var activeChatId = _activeChatId!;
+      if (activeChatId.startsWith('ai_agent_')) {
+        try {
+          final ensureRes = await FirebaseFunctions.instance
+              .httpsCallable('ensureDirectChat')
+              .call<Map<String, dynamic>>({
+                'otherUserId': 'diaspora_ai_agent',
+                'isAiAgentWelcome': true,
+              });
+          final realChatId = ensureRes.data['chatId']?.toString();
+          if (realChatId != null && realChatId.isNotEmpty) {
+            activeChatId = realChatId;
+            if (mounted) {
+              setState(() {
+                _activeChatId = realChatId;
+              });
+            }
+          }
+        } catch (e) {
+          debugPrint('Error resolving canonical AI agent chatId: $e');
+        }
+      }
+      if (currentUserId != null) {
+        final optimisticMessage = Message(
+          id: tempId,
+          chatId: activeChatId,
+          senderId: senderIdOverride ?? currentUserId,
+          senderName: senderNameOverride ?? 'Me',
+          senderImage: senderImageOverride,
+          content: 'Voice call',
+          type: 'voice_call',
+          timestamp: now,
+          status: 'sending',
+          metadata: callMetadata,
+        );
+
+        ref
+            .read(pendingMessagesProvider.notifier)
+            .addMessage(activeChatId, optimisticMessage);
+        chatRepo.updateChatCacheWithMessage(
+          activeChatId,
+          optimisticMessage.copyWith(status: 'sent'),
+        );
+        _scrollToBottom(false);
+
+        final participants = chatRepo.getCachedChat(activeChatId)?.participants;
+
+        try {
+          await chatRepo.sendTextMessage(
+            activeChatId,
+            'Voice call',
+            type: 'voice_call',
+            metadata: callMetadata,
+            senderIdOverride: senderIdOverride,
+            senderNameOverride: senderNameOverride,
+            senderImageOverride: senderImageOverride,
+            participants: participants,
+          );
+        } catch (e) {
+          debugPrint('❌ Error sending voice call message: $e');
+        } finally {
+          ref
+              .read(pendingMessagesProvider.notifier)
+              .removeMessage(activeChatId, tempId);
+        }
+      } else {
+        await chatRepo.sendTextMessage(
+          activeChatId,
+          'Voice call',
+          type: 'voice_call',
+          metadata: callMetadata,
+          senderIdOverride: senderIdOverride,
+          senderNameOverride: senderNameOverride,
+          senderImageOverride: senderImageOverride,
         );
       }
     }
@@ -1306,18 +1520,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                           color: Colors.green,
                         ),
                         tooltip: 'Call on WhatsApp',
-                        onPressed: () async {
-                          final success = await WhatsAppUtils.launchWhatsApp(
-                            profile.phone,
-                          );
-                          if (!success && mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Could not launch WhatsApp'),
-                              ),
-                            );
-                          }
-                        },
+                        onPressed: () => _handleWhatsAppCall(profile.phone),
                       );
                     }
                     return const SizedBox.shrink();
@@ -1362,6 +1565,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                 ? [widget.pendingUserId!]
                 : [],
             recipientUserId: widget.pendingUserId,
+            showAudioRecording: widget.pendingUserId != 'diaspora_ai_agent',
             controller: _messageController, // [NEW] Inject controller
             onSendMessage: (text, {type, metadata}) =>
                 _sendMessage(text, metadata: metadata),
@@ -1518,11 +1722,45 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
             ),
           ),
           data: (chat) {
+            final effectiveChat = chat ?? cachedChat;
+            final isAiAgentDirect =
+                (_activeChatId?.startsWith('ai_agent_') ?? false) ||
+                effectiveChat?.metadata?['isAiAgent'] == true ||
+                (effectiveChat?.participants.contains('diaspora_ai_agent') ??
+                    false);
+            if (isAiAgentDirect) {
+              return ChatHeaderTitle(
+                profile: null,
+                fallbackTitle: 'Diaspora AI Agent',
+                titlePrefixIcon: const Icon(
+                  Icons.auto_awesome,
+                  size: 16,
+                  color: AppTheme.accent,
+                ),
+                customAvatarWidget: SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: Center(
+                    child: Image.asset(
+                      'assets/icons/logo-transparent-128.png',
+                      width: 32,
+                      height: 32,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                ),
+                eventStatus: 'AI Concierge • Multilingual 24/7',
+                onTap: effectiveChat != null
+                    ? () => _showMoreMenu(context, effectiveChat, ref)
+                    : null,
+              );
+            }
             if (chat != null && chat.isDirect) {
+              final otherUid = chat.getOtherParticipantId(currentUserId);
+
               final profileAsync = ref.watch(
                 chatScreenUserProfileProvider(chat),
               );
-              final otherUid = chat.getOtherParticipantId(currentUserId);
               final cachedPartnerProfile = otherUid != null
                   ? ref.read(profileRepositoryProvider).getCachedProfile(
                       otherUid,
@@ -1836,38 +2074,52 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
           },
         ),
         actions: [
-          // WhatsApp Call Button
-          if (chatAsync.value?.isDirect == true)
-            ref
-                .watch(chatScreenUserProfileProvider(chatAsync.value!))
-                .when(
-                  data: (profile) {
-                    if (profile?.phone != null && profile!.phone.isNotEmpty) {
-                      return IconButton(
-                        icon: const Icon(
-                          LucideIcons.phone,
-                          color: Colors.green,
-                        ),
-                        tooltip: 'Call on WhatsApp',
-                        onPressed: () async {
-                          final success = await WhatsAppUtils.launchWhatsApp(
-                            profile.phone,
+          // AI Agent Voice Chat Mic Button (in place of WhatsApp phone button)
+          Builder(
+            builder: (context) {
+              final effectiveChatForAction = chatAsync.value ?? cachedChat;
+              final isAiAgentDirect =
+                  (_activeChatId?.startsWith('ai_agent_') ?? false) ||
+                  effectiveChatForAction?.metadata?['isAiAgent'] == true ||
+                  (effectiveChatForAction?.participants.contains(
+                        'diaspora_ai_agent',
+                      ) ??
+                      false);
+              if (isAiAgentDirect) {
+                return IconButton(
+                  icon: const Icon(
+                    LucideIcons.mic,
+                    color: AppTheme.accent,
+                  ),
+                  tooltip: 'Voice chat with AI Agent',
+                  onPressed: () => _showAiVoiceChatSheet(context),
+                );
+              }
+              if (chatAsync.value?.isDirect == true) {
+                return ref
+                    .watch(chatScreenUserProfileProvider(chatAsync.value!))
+                    .when(
+                      data: (profile) {
+                        if (profile?.phone != null &&
+                            profile!.phone.isNotEmpty) {
+                          return IconButton(
+                            icon: const Icon(
+                              LucideIcons.phone,
+                              color: Colors.green,
+                            ),
+                            tooltip: 'Call on WhatsApp',
+                            onPressed: () => _handleWhatsAppCall(profile.phone),
                           );
-                          if (!success && mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Could not launch WhatsApp'),
-                              ),
-                            );
-                          }
-                        },
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  },
-                  loading: () => const SizedBox.shrink(),
-                  error: (_, _) => const SizedBox.shrink(),
-                ),
+                        }
+                        return const SizedBox.shrink();
+                      },
+                      loading: () => const SizedBox.shrink(),
+                      error: (_, _) => const SizedBox.shrink(),
+                    );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
 
           // More Options Menu (Only if member)
           Builder(
@@ -1974,12 +2226,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                 final pendingMessages =
                     ref.watch(pendingMessagesProvider)[_activeChatId!] ?? [];
 
+                final visibleStreamMessages = streamMessages
+                    .where(
+                      (sm) =>
+                          !sm.isDeletedForEveryone &&
+                          (currentUserId.isEmpty ||
+                              !sm.isDeletedFor(currentUserId)),
+                    )
+                    .toList();
+
                 // Merge strategies:
                 // Deduplicate: if a stream message matches a pending message
                 // (same sender + similar timestamp), skip the stream copy.
                 final filteredStream = pendingMessages.isEmpty
-                    ? streamMessages
-                    : streamMessages.where((sm) {
+                    ? visibleStreamMessages
+                    : visibleStreamMessages.where((sm) {
                         return !pendingMessages.any(
                           (pm) =>
                               pm.senderId == sm.senderId &&
@@ -1992,6 +2253,34 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                       }).toList();
 
                 final allMessages = [...pendingMessages, ...filteredStream];
+                final currentChat = chatAsync.value ?? cachedChat;
+                final isAiAgentChat =
+                    currentChat?.metadata?['isAiAgent'] == true ||
+                    (currentChat?.participants.contains('diaspora_ai_agent') ??
+                        false) ||
+                    (_activeChatId?.startsWith('ai_agent_') ?? false);
+                if (allMessages.isEmpty &&
+                    isAiAgentChat &&
+                    currentChat?.lastMessage != null) {
+                  final lm = currentChat!.lastMessage!;
+                  allMessages.add(
+                    Message(
+                      id: lm.id.isNotEmpty ? lm.id : 'welcome_from_ai_agent',
+                      chatId: _activeChatId!,
+                      senderId: lm.senderId.isNotEmpty
+                          ? lm.senderId
+                          : 'diaspora_ai_agent',
+                      senderName: lm.senderName.isNotEmpty
+                          ? lm.senderName
+                          : 'Diaspora AI Agent',
+                      content: lm.content,
+                      type: lm.type,
+                      timestamp: lm.timestamp,
+                      status: lm.status,
+                      metadata: lm.metadata,
+                    ),
+                  );
+                }
                 allMessages.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
                 if (allMessages.isEmpty) {
@@ -2238,21 +2527,33 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                 );
               }
 
+              final effectiveChatForInput = chat ?? cachedChat;
+              final isAiAgentForInput =
+                  (_activeChatId?.startsWith('ai_agent_') ?? false) ||
+                  effectiveChatForInput?.metadata?['isAiAgent'] == true ||
+                  (effectiveChatForInput?.participants.contains(
+                        'diaspora_ai_agent',
+                      ) ??
+                      false);
+
               return SafeArea(
                 child: MessageInput(
                   controller: _messageController, // [NEW] Inject controller
                   chatId: _activeChatId!,
                   participantIds:
-                      chat?.participants
+                      effectiveChatForInput?.participants
                           .where((id) => id != currentUserId)
                           .toList() ??
                       [],
                   // [NEW] Pass recipient ID for transfers (only valid for Direct chats)
-                  recipientUserId: (chat?.isDirect == true)
-                      ? chat?.participants
+                  recipientUserId: isAiAgentForInput
+                      ? 'diaspora_ai_agent'
+                      : (effectiveChatForInput?.isDirect == true)
+                      ? effectiveChatForInput?.participants
                             .where((id) => id != currentUserId)
                             .firstOrNull
                       : null,
+                  showAudioRecording: !isAiAgentForInput,
                   onSendMessage: (text, {type, metadata}) =>
                       _sendMessage(text, metadata: metadata),
                   onSendMedia: _sendMedia,
@@ -2332,12 +2633,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     String currentUserId,
   ) {
     // Only mark as read if:
-    // 1. It's visible (visibleFraction > 0.5)
+    // 1. It's visible (visibleFraction > 0.1 so tall messages/media still trigger)
     // 2. It's NOT our own message
     // 3. It's not already read
     // 4. We haven't already queued it
-    if (info.visibleFraction > 0.5 &&
+    if (info.visibleFraction > 0.1 &&
         message.senderId != currentUserId &&
+        !message.isSystem &&
         message.status != 'read' &&
         !_visibleUnreadMessageIds.contains(message.id)) {
       _visibleUnreadMessageIds.add(message.id);
@@ -2347,7 +2649,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         _readReceiptDebounceTimer!.cancel();
       }
       _readReceiptDebounceTimer = Timer(
-        const Duration(milliseconds: 500),
+        const Duration(milliseconds: 150),
         _processVisibleMessages,
       );
     }
@@ -2942,6 +3244,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                   community,
                 );
               },
+              onStartAiVoiceChat: () {
+                _showAiVoiceChatSheet(outerContext);
+              },
+              onSendAiPrompt: (prompt) {
+                _sendMessage(prompt);
+              },
             );
           },
         ),
@@ -2950,6 +3258,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       setModalState = null;
       _isShowingMoreMenu = false;
     });
+  }
+
+  void _showAiVoiceChatSheet(BuildContext context) {
+    final currentUserId = ref.read(chatRepositoryProvider).currentUserId ?? '';
+    final resolvedChatId =
+        _activeChatId ??
+        (currentUserId.isNotEmpty ? 'ai_agent_$currentUserId' : '');
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: _AiVoiceChatSheet(
+          chatId: resolvedChatId,
+        ),
+      ),
+    );
   }
 
   void _handleLeaderElections(
@@ -3362,7 +3688,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     if (message.isDeletedForEveryone) return;
 
     final currentUserId = ref.read(chatRepositoryProvider).currentUserId;
-    final isOwn = message.senderId == currentUserId;
+    final isOwn =
+        currentUserId != null &&
+        (message.senderId == currentUserId || message.adminId == currentUserId);
 
     showModalBottomSheet(
       context: context,
@@ -3453,11 +3781,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
 
   // [NEW] Handle Delete
   void _handleDeleteMessage(Message message) {
+    final chatRepo = ref.read(chatRepositoryProvider);
+    final currentUserId = chatRepo.currentUserId;
+    final isOwn =
+        currentUserId != null &&
+        (message.senderId == currentUserId || message.adminId == currentUserId);
+    final String targetChatId = message.chatId.isNotEmpty
+        ? message.chatId
+        : (_activeChatId ?? widget.chatId ?? '');
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => BackdropFilter(
+      builder: (sheetContext) => BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: ChatConfirmationSheet(
           title: 'Delete Message',
@@ -3465,13 +3802,27 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
               'Are you sure you want to delete this message? This action cannot be undone.',
           actionTitle: 'Delete Message',
           subtitle: 'This will permanently remove the message from this chat',
+          icon: LucideIcons.trash2,
           onAction: () {
-            Navigator.pop(context);
-            unawaited(
+            Navigator.pop(sheetContext);
+            if (targetChatId.isNotEmpty) {
               ref
-                  .read(chatRepositoryProvider)
-                  .deleteMessage(message.chatId, message.id),
-            );
+                  .read(pendingMessagesProvider.notifier)
+                  .removeMessage(targetChatId, message.id);
+              unawaited(
+                chatRepo.deleteMessage(
+                  targetChatId,
+                  message.id,
+                  deleteForEveryone: isOwn,
+                ),
+              );
+            }
+            if (_pendingDmCacheKey.isNotEmpty &&
+                _pendingDmCacheKey != targetChatId) {
+              ref
+                  .read(pendingMessagesProvider.notifier)
+                  .removeMessage(_pendingDmCacheKey, message.id);
+            }
           },
         ),
       ),
@@ -3973,6 +4324,459 @@ class _ChamberFollowerGateState extends ConsumerState<_ChamberFollowerGate> {
           ),
         );
       },
+    );
+  }
+}
+
+enum _AiVoiceState {
+  starting,
+  listening,
+  thinking,
+  speaking,
+  error,
+}
+
+class _AiVoiceChatSheet extends StatefulWidget {
+  final String chatId;
+
+  const _AiVoiceChatSheet({
+    required this.chatId,
+  });
+
+  @override
+  State<_AiVoiceChatSheet> createState() => _AiVoiceChatSheetState();
+}
+
+class _AiVoiceChatSheetState extends State<_AiVoiceChatSheet> {
+  final AudioRecorder _recorder = AudioRecorder();
+  final AudioPlayer _player = AudioPlayer();
+  Timer? _timer;
+  StreamSubscription<Amplitude>? _ampSub;
+  StreamSubscription<PlayerState>? _playerSub;
+
+  _AiVoiceState _voiceState = _AiVoiceState.starting;
+  int _durationSeconds = 0;
+  String? _errorMessage;
+  String _agentTranscript = '';
+  bool _hasDetectedSpeech = false;
+  double _peakDb = -160.0;
+  double _noiseFloorDb = -50.0;
+  DateTime? _lastSpeechAt;
+  DateTime? _recordingStartedAt;
+  bool _isDisposed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _playerSub = _player.playerStateStream.listen((state) {
+      if (_isDisposed || !mounted) return;
+      if (state.processingState == ProcessingState.completed &&
+          _voiceState == _AiVoiceState.speaking) {
+        // Automatically resume listening for continuous back-and-forth conversation!
+        _startListeningTurn();
+      }
+    });
+    _startListeningTurn();
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    _timer?.cancel();
+    _ampSub?.cancel();
+    _playerSub?.cancel();
+    _recorder.dispose();
+    _player.dispose();
+    super.dispose();
+  }
+
+  Future<void> _startListeningTurn() async {
+    if (_isDisposed || !mounted) return;
+    _timer?.cancel();
+    await _ampSub?.cancel();
+    try {
+      await _player.stop();
+    } catch (_) {}
+
+    if (!mounted) return;
+    setState(() {
+      _voiceState = _AiVoiceState.starting;
+      _errorMessage = null;
+      _hasDetectedSpeech = false;
+      _peakDb = -160.0;
+      _noiseFloorDb = -50.0;
+      _lastSpeechAt = null;
+      _durationSeconds = 0;
+    });
+
+    try {
+      final hasPerm = await _recorder.hasPermission();
+      if (!hasPerm) {
+        if (mounted) {
+          setState(() {
+            _voiceState = _AiVoiceState.error;
+            _errorMessage =
+                'Microphone permission is required for live voice conversation.';
+          });
+        }
+        return;
+      }
+
+      final tempDir = await getTemporaryDirectory();
+      final path =
+          '${tempDir.path}/ai_live_turn_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      await _recorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          bitRate: 64000,
+          sampleRate: 24000,
+        ),
+        path: path,
+      );
+
+      if (_isDisposed || !mounted) return;
+      _recordingStartedAt = DateTime.now();
+      setState(() {
+        _voiceState = _AiVoiceState.listening;
+        _durationSeconds = 0;
+      });
+
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted && _voiceState == _AiVoiceState.listening) {
+          setState(() {
+            _durationSeconds++;
+          });
+        }
+      });
+
+      // Automatic adaptive Voice Activity Detection (VAD):
+      // Tracks user peak speech level and ambient noise floor so when the user
+      // finishes a sentence and pauses naturally (~1.1s), it replies automatically
+      // without needing any "Done Speaking" button!
+      _ampSub = _recorder
+          .onAmplitudeChanged(const Duration(milliseconds: 120))
+          .listen((amp) {
+            if (_isDisposed ||
+                !mounted ||
+                _voiceState != _AiVoiceState.listening) {
+              return;
+            }
+            final now = DateTime.now();
+            final db = amp.current.isFinite ? amp.current : -160.0;
+
+            if (db > _peakDb) {
+              _peakDb = db;
+            }
+            if (!_hasDetectedSpeech) {
+              _noiseFloorDb = (_noiseFloorDb * 0.85) + (db * 0.15);
+            }
+
+            // Speech is active when level exceeds -36 dBFS or is > 8 dB above ambient floor,
+            // and hasn't dropped more than 12 dB below the current sentence's peak.
+            final dynamicSilenceCeiling = (_peakDb - 12.0).clamp(-42.0, -18.0);
+            final isSpeakingNow =
+                db > -36.0 &&
+                db > (_noiseFloorDb + 6.0) &&
+                db >= dynamicSilenceCeiling;
+
+            if (isSpeakingNow) {
+              if (!_hasDetectedSpeech && mounted) {
+                setState(() {
+                  _hasDetectedSpeech = true;
+                });
+              } else {
+                _hasDetectedSpeech = true;
+              }
+              _lastSpeechAt = now;
+            } else if (_hasDetectedSpeech && _lastSpeechAt != null) {
+              final silenceMs = now.difference(_lastSpeechAt!).inMilliseconds;
+              final totalMs = _recordingStartedAt != null
+                  ? now.difference(_recordingStartedAt!).inMilliseconds
+                  : 0;
+              if (silenceMs >= 1100 && totalMs >= 1200) {
+                _submitCurrentVoiceTurn();
+              }
+            }
+          });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _voiceState = _AiVoiceState.error;
+          _errorMessage = 'Could not start microphone: $e';
+        });
+      }
+    }
+  }
+
+  Future<void> _submitCurrentVoiceTurn() async {
+    if (_isDisposed || _voiceState != _AiVoiceState.listening) return;
+    _timer?.cancel();
+    await _ampSub?.cancel();
+
+    setState(() {
+      _voiceState = _AiVoiceState.thinking;
+    });
+
+    try {
+      final path = await _recorder.stop();
+      if (path == null || path.isEmpty) {
+        await _startListeningTurn();
+        return;
+      }
+
+      final bytes = await XFile(path).readAsBytes();
+      if (bytes.length < 500) {
+        await _startListeningTurn();
+        return;
+      }
+
+      final audioBase64 = base64Encode(bytes);
+      final callable = FirebaseFunctions.instance.httpsCallable(
+        'converseAiAgentVoice',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 45)),
+      );
+      final response = await callable.call(<String, dynamic>{
+        'chatId': widget.chatId,
+        'audioBase64': audioBase64,
+        'mimeType': 'audio/mp4',
+        'voiceName': 'Aoede',
+      });
+
+      if (_isDisposed || !mounted) return;
+      final data = response.data is Map
+          ? Map<String, dynamic>.from(response.data as Map)
+          : <String, dynamic>{};
+
+      final replyText = (data['replyText'] as String? ?? '').trim();
+      final replyAudioBase64 = data['audioBase64'] as String?;
+
+      setState(() {
+        if (replyText.isNotEmpty) {
+          _agentTranscript = replyText;
+        }
+        _voiceState = _AiVoiceState.speaking;
+      });
+
+      if (replyAudioBase64 != null && replyAudioBase64.isNotEmpty) {
+        try {
+          final wavBytes = base64Decode(replyAudioBase64);
+          final tempDir = await getTemporaryDirectory();
+          final replyPath =
+              '${tempDir.path}/ai_reply_${DateTime.now().millisecondsSinceEpoch}.wav';
+          final outFile = uio.File(replyPath);
+          await outFile.writeAsBytes(wavBytes, flush: true);
+
+          if (_isDisposed || !mounted) return;
+          await _player.setFilePath(replyPath);
+          unawaited(_player.play());
+        } catch (playErr) {
+          debugPrint('Error playing AI voice reply audio: $playErr');
+          await Future<void>.delayed(const Duration(seconds: 3));
+          if (!_isDisposed && mounted) {
+            await _startListeningTurn();
+          }
+        }
+      } else {
+        // If audio synthesis was unavailable, pause briefly so user can read transcript then listen again
+        await Future<void>.delayed(const Duration(seconds: 3));
+        if (!_isDisposed && mounted) {
+          await _startListeningTurn();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error in converseAiAgentVoice: $e');
+      if (!_isDisposed && mounted) {
+        // Automatically resume listening so the natural conversation never stalls on an error screen
+        await Future<void>.delayed(const Duration(milliseconds: 900));
+        if (!_isDisposed && mounted) {
+          await _startListeningTurn();
+        }
+      }
+    }
+  }
+
+  Future<void> _interruptAndListen() async {
+    try {
+      await _player.stop();
+    } catch (_) {}
+    await _startListeningTurn();
+  }
+
+  String _formatDuration(int seconds) {
+    final m = (seconds ~/ 60).toString().padLeft(2, '0');
+    final s = (seconds % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  String _statusHeadline() {
+    switch (_voiceState) {
+      case _AiVoiceState.starting:
+        return 'Connecting...';
+      case _AiVoiceState.listening:
+        return _hasDetectedSpeech
+            ? 'Listening...'
+            : 'Speak naturally in Kiswahili, English, or any language';
+      case _AiVoiceState.thinking:
+        return 'Diaspora AI Agent is thinking...';
+      case _AiVoiceState.speaking:
+        return 'Diaspora AI Agent is speaking...';
+      case _AiVoiceState.error:
+        return _errorMessage ?? 'Reconnecting...';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isListening = _voiceState == _AiVoiceState.listening;
+    final isThinking = _voiceState == _AiVoiceState.thinking;
+    final isSpeaking = _voiceState == _AiVoiceState.speaking;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.onSurfaceVariant.withValues(
+                    alpha: 0.2,
+                  ),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Image.asset(
+                    'assets/icons/logo-transparent-128.png',
+                    width: 28,
+                    height: 28,
+                    fit: BoxFit.contain,
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(
+                    Icons.auto_awesome,
+                    size: 16,
+                    color: AppTheme.accent,
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      'Diaspora AI Agent',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _statusHeadline(),
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: isSpeaking
+                      ? AppTheme.accent
+                      : theme.colorScheme.onSurfaceVariant,
+                  fontWeight: isSpeaking ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+              const SizedBox(height: 24),
+              GestureDetector(
+                onTap: () {
+                  if (isListening && _hasDetectedSpeech) {
+                    _submitCurrentVoiceTurn();
+                  } else if (isSpeaking) {
+                    _interruptAndListen();
+                  } else if (_voiceState == _AiVoiceState.error) {
+                    _startListeningTurn();
+                  }
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  width: isSpeaking || _hasDetectedSpeech ? 108 : 94,
+                  height: isSpeaking || _hasDetectedSpeech ? 108 : 94,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isSpeaking
+                        ? AppTheme.accent.withValues(alpha: 0.22)
+                        : isListening
+                        ? AppTheme.accent.withValues(
+                            alpha: _hasDetectedSpeech ? 0.20 : 0.12,
+                          )
+                        : theme.colorScheme.surfaceContainerHighest,
+                  ),
+                  child: Center(
+                    child: isThinking
+                        ? const SizedBox(
+                            width: 34,
+                            height: 34,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 3,
+                              color: AppTheme.accent,
+                            ),
+                          )
+                        : Icon(
+                            isSpeaking ? LucideIcons.volume2 : LucideIcons.mic,
+                            size: 38,
+                            color: (isListening || isSpeaking)
+                                ? AppTheme.accent
+                                : theme.colorScheme.onSurfaceVariant,
+                          ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (isListening)
+                Text(
+                  _formatDuration(_durationSeconds),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.accent,
+                  ),
+                ),
+              if (_agentTranscript.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Container(
+                  width: double.infinity,
+                  constraints: const BoxConstraints(maxHeight: 130),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: SingleChildScrollView(
+                    child: Text(
+                      _agentTranscript,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -114,7 +114,7 @@ void main() {
 
   group('HTS Engine – Governance Genesis Milestones', () {
     test(
-      'awards 10,000 DSP for Profile milestone when profile is complete',
+      'records Profile milestone and ledger count when profile is complete',
       () async {
         final userId = 'user-1';
         final profile = _completeProfile(userId);
@@ -136,14 +136,15 @@ void main() {
           points: points,
         );
 
-        // The Profile milestone (completedMilestoneFieldCount >= 10) should award 10,000 DSP.
-        verify(
+        // Server-authoritative PoH rewards are synced via Cloud Functions;
+        // TrustService records the Profile milestone and ledger count locally.
+        verifyNever(
           mockPointsService.awardManualPoints(
             userId,
-            10000,
-            'profile_completion',
+            any,
+            any,
           ),
-        ).called(1);
+        );
 
         final captured = verify(
           mockTrustRepo.saveTrustData(captureAny),
@@ -151,11 +152,12 @@ void main() {
         final savedData = captured.first as TrustData;
         expect(savedData.awardedHtsTracking['Profile_dsp_count'], 12);
         expect(savedData.awardedQualificationMilestones, contains('Profile'));
+        expect(savedData.trustScore, greaterThanOrEqualTo(10.0));
       },
     );
 
     test(
-      'awards 10,000 DSP lump sum upon reaching 10 family connections',
+      'records Family milestone upon reaching 10 family connections',
       () async {
         final userId = 'user-1';
         final profile = _completeProfile(userId);
@@ -184,20 +186,22 @@ void main() {
           points: points,
         );
 
-        // 10 family connections = 10,000 DSP lump sum
-        verify(
+        // Server-authoritative PoH rewards are synced via Cloud Functions;
+        // TrustService records the Family milestone and ledger count locally.
+        verifyNever(
           mockPointsService.awardManualPoints(
             userId,
-            10000,
-            'family_connection',
+            any,
+            any,
           ),
-        ).called(1);
+        );
 
         final captured = verify(
           mockTrustRepo.saveTrustData(captureAny),
         ).captured;
         final savedData = captured.first as TrustData;
         expect(savedData.awardedHtsTracking['Family_dsp_count'], 10);
+        expect(savedData.awardedQualificationMilestones, contains('Family'));
         expect(savedData.uniqueFamilyCount, 10);
       },
     );

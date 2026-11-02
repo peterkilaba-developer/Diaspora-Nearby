@@ -41,7 +41,7 @@ const detectedPlatform = detectPlatform();
         } catch (e) {}
     }
 
-    // /invite or /download: redirect mobile users directly to their phone platform store
+    // /invite or /download: show interactive Diaspora Roll-Call & 5-Utility Pass modal with 1-tap Store Install
     if (rawPath === '/invite' || rawPath === '/download') {
         const platform = detectedPlatform;
         const effectiveCode = code || 'PETER-TZ-CC57';
@@ -50,39 +50,20 @@ const detectedPlatform = detectPlatform();
 
         if (platform === 'ios') {
             renderRedirectScreen('ios', TESTFLIGHT_URL, effectiveCode);
-            // Do NOT call window.location.href/replace on iOS: iOS blocks Universal Links
-            // on script-initiated navigations, and itms-beta:// opens TestFlight to the Redeem Code screen.
-            // A direct user tap on the <a href="https://testflight.apple.com/join/vB3XzPKg"> button
-            // triggers the iOS Universal Link into Diaspora Nearby's Accept/Install sheet.
             return;
         } else if (platform === 'android') {
             const referrerParam = encodeURIComponent('utm_source=invite&referral_code=' + effectiveCode);
             const androidWebUrl = PLAY_STORE_URL + '&referrer=' + referrerParam;
-            // Android native intent:// URL breaks out of Facebook/Instagram WebView directly into Google Play Store app
             const androidIntentUrl =
                 'intent://details?id=com.diasporanearby.diasporanearby&referrer=' + referrerParam +
                 '#Intent;scheme=market;package=com.android.vending;S.browser_fallback_url=' +
                 encodeURIComponent(androidWebUrl) + ';end';
 
             renderRedirectScreen('android', isInAppWebView ? androidIntentUrl : androidWebUrl, effectiveCode);
-            if (!isInAppWebView) {
-                window.location.replace(androidWebUrl);
-            }
             return;
         } else {
-            // Desktop / Mac / PC: show landing page, scroll to #get-app immediately
-            document.addEventListener('DOMContentLoaded', () => {
-                const getAppSection = document.getElementById('get-app');
-                if (getAppSection) {
-                    const offset = 64;
-                    const y = getAppSection.getBoundingClientRect().top + window.pageYOffset - offset;
-                    window.scrollTo({ top: y, behavior: 'smooth' });
-                }
-
-                if (effectiveCode) {
-                    showInviteToast(effectiveCode);
-                }
-            });
+            renderRedirectScreen('desktop', PLAY_STORE_URL, effectiveCode);
+            return;
         }
     }
 
@@ -93,30 +74,151 @@ const detectedPlatform = detectPlatform();
     }
 })();
 
-// ── Fallback UI for mobile in-app browsers ──
+window.openRollCallModal = function () {
+    const savedCode = (function () {
+        try { return localStorage.getItem('dn_referral_code'); } catch (e) { return null; }
+    })() || 'PETER-TZ-CC57';
+    const platform = detectedPlatform;
+    const targetUrl = platform === 'ios' ? TESTFLIGHT_URL : PLAY_STORE_URL;
+    renderRedirectScreen(platform, targetUrl, savedCode);
+};
+
+// ── Interactive Roll-Call & 5-Utility Pass Modal ──
 function renderRedirectScreen(platform, targetUrl, inviteCode) {
     const isIOS = platform === 'ios';
+    const isAndroid = platform === 'android';
     const cleanCode = inviteCode || 'PETER-TZ-CC57';
-    const btnLabel = isIOS ? 'Open in Apple TestFlight' : 'Install on Google Play';
+    const btnLabel = isIOS
+        ? 'Install on iPhone (TestFlight)'
+        : isAndroid
+        ? 'Install on Google Play'
+        : 'Download on Google Play';
 
     const inject = () => {
         if (document.getElementById('platform-redirect-overlay')) return;
         const overlay = document.createElement('div');
         overlay.id = 'platform-redirect-overlay';
         overlay.className = 'redirect-overlay';
+
+        const defaultShareText = encodeURIComponent(
+            `🇹🇿🌍 *DIASPORA ROLL CALL!* Nani mwingine yupo mji huu?\n\nJiunge na *Diaspora Nearby* kwa huduma 5 muhimu:\n📍 *Nearby Discovery* (gundua wenzako walio karibu)\n🔔 *Nearby Notification* (taarifa mwenzako akiwa karibu)\n📻 *Live Radio* (redio za nyumbani 24/7)\n🤝 *Ubuntu Emergency Fund* (mfuko wa dharura)\n🏦 *DDI Loans* (mikopo ya jamii)\n\n👉 https://diasporanearby.com/invite?code=${cleanCode}`
+        );
+
         overlay.innerHTML = `
-            <div class="redirect-card">
-                <img src="icons/Icon-192.png" alt="Diaspora Nearby" class="redirect-app-icon" onerror="this.src='favicon.png'">
-                <h2>Karibu Diaspora Nearby</h2>
-                <p style="margin-bottom: 20px;">Find your people, build community trust and create wealth by simply socializing.</p>
-                <a href="${targetUrl}" class="btn-primary-redirect" id="redirect-now-btn" onclick="try { navigator.clipboard && navigator.clipboard.writeText('${cleanCode}'); } catch(e) {}" style="width: 100%; justify-content: center;">
+            <div class="redirect-card" style="max-height: 92vh; overflow-y: auto; padding: 24px 18px; text-align: left;">
+                <div style="display:flex;align-items:center;justify-content:space-between;width:100%;margin-bottom:12px;">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <img src="icons/Icon-192.png" alt="Diaspora Nearby" style="width:44px;height:44px;border-radius:12px;border:none;" onerror="this.src='favicon.png'">
+                        <div>
+                            <h2 style="font-size:18px;margin:0;line-height:1.2;">Karibu Diaspora Nearby</h2>
+                            <span style="font-size:11px;color:var(--sage);font-weight:700;">Invite Code: ${cleanCode}</span>
+                        </div>
+                    </div>
+                    <button type="button" onclick="dismissRedirectOverlay(event)" style="border:none;outline:none;background:rgba(255,255,255,0.06);color:var(--fg-muted);width:32px;height:32px;border-radius:10px;cursor:pointer;font-size:16px;">✕</button>
+                </div>
+
+                <!-- 5 Focused Utilities Pills (Strictly Borderless) -->
+                <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;width:100%;">
+                    <span style="background:rgba(126,176,155,0.14);color:var(--fg);padding:5px 10px;border-radius:999px;font-size:11px;font-weight:600;border:none;">📍 Nearby Discovery</span>
+                    <span style="background:rgba(126,176,155,0.14);color:var(--fg);padding:5px 10px;border-radius:999px;font-size:11px;font-weight:600;border:none;">🔔 Nearby Notification</span>
+                    <span style="background:rgba(126,176,155,0.14);color:var(--fg);padding:5px 10px;border-radius:999px;font-size:11px;font-weight:600;border:none;">📻 24/7 Live Radio</span>
+                    <span style="background:rgba(126,176,155,0.14);color:var(--fg);padding:5px 10px;border-radius:999px;font-size:11px;font-weight:600;border:none;">🤝 Ubuntu Emergency Fund</span>
+                    <span style="background:rgba(229,147,58,0.16);color:var(--orange);padding:5px 10px;border-radius:999px;font-size:11px;font-weight:600;border:none;">🏦 DDI Loans</span>
+                </div>
+
+                <!-- Primary 1-Tap Store Install Button -->
+                <a href="${targetUrl}" class="btn-primary-redirect" id="redirect-now-btn" onclick="try { navigator.clipboard && navigator.clipboard.writeText('${cleanCode}'); } catch(e) {}" style="width: 100%; justify-content: center; margin-bottom: 8px; border: none; outline: none;">
                     <span>${btnLabel}</span>
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
                 </a>
+                ${!isIOS && !isAndroid ? `
+                <a href="${TESTFLIGHT_URL}" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:11px 16px;border-radius:12px;background:rgba(255,255,255,0.07);color:var(--fg);font-size:13px;font-weight:600;text-decoration:none;margin-bottom:10px;border:none;outline:none;">
+                    <span>Using iPhone? Open in Apple TestFlight</span>
+                </a>
+                ` : ''}
+
+                <!-- 10-Second City Roll-Call & WhatsApp Pass Form -->
+                <div style="width:100%;background:rgba(255,255,255,0.05);border-radius:16px;padding:14px;margin-top:6px;border:none;">
+                    <div style="font-size:13px;font-weight:700;color:var(--fg);margin-bottom:4px;">🌍 Check Who From Home Is Near You</div>
+                    <div style="font-size:11px;color:var(--fg-muted);margin-bottom:10px;">Enter your home town/country &amp; current city to get your direct WhatsApp pass:</div>
+                    <form id="roll-call-lead-form" style="display:flex;flex-direction:column;gap:8px;width:100%;">
+                        <input type="text" id="rc-home" placeholder="Home Town / Country (e.g. Iringa, Arusha, Dar, Kenya)" required style="width:100%;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,0.07);color:var(--fg);font-size:13px;font-family:var(--font);border:none;outline:none;">
+                        <input type="text" id="rc-host" placeholder="Current City (e.g. Houston, London, Dubai, Dar)" required style="width:100%;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,0.07);color:var(--fg);font-size:13px;font-family:var(--font);border:none;outline:none;">
+                        <input type="tel" id="rc-phone" placeholder="WhatsApp Number with Country Code (e.g. +255... or +1...)" style="width:100%;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,0.07);color:var(--fg);font-size:13px;font-family:var(--font);border:none;outline:none;">
+                        <button type="submit" id="rc-submit-btn" style="width:100%;padding:11px 16px;border-radius:12px;background:var(--sage);color:#111;font-size:13px;font-weight:700;font-family:var(--font);cursor:pointer;border:none;outline:none;">
+                            Check Nearby &amp; Send WhatsApp Pass
+                        </button>
+                    </form>
+                    <div id="rc-status-msg" style="font-size:12px;margin-top:8px;display:none;line-height:1.4;"></div>
+                </div>
+
+                <!-- 1-Tap WhatsApp Share & Bot Actions -->
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;margin-top:10px;">
+                    <a id="rc-wa-share-btn" href="https://wa.me/?text=${defaultShareText}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 10px;border-radius:12px;background:rgba(37,211,102,0.15);color:#25D366;font-size:12px;font-weight:700;text-decoration:none;border:none;outline:none;text-align:center;">
+                        <span>📲 Share to WhatsApp</span>
+                    </a>
+                    <a href="https://wa.me/16413020012?text=${encodeURIComponent('JAMBO ' + cleanCode)}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 10px;border-radius:12px;background:rgba(255,255,255,0.07);color:var(--fg);font-size:12px;font-weight:600;text-decoration:none;border:none;outline:none;text-align:center;">
+                        <span>💬 WhatsApp Bot</span>
+                    </a>
+                </div>
             </div>
         `;
         document.body.prepend(overlay);
         if (typeof lucide !== 'undefined') lucide.createIcons();
+
+        const form = document.getElementById('roll-call-lead-form');
+        if (form) {
+            form.addEventListener('submit', async (ev) => {
+                ev.preventDefault();
+                const homeVal = (document.getElementById('rc-home')?.value || '').trim();
+                const hostVal = (document.getElementById('rc-host')?.value || '').trim();
+                const phoneVal = (document.getElementById('rc-phone')?.value || '').trim();
+                const btn = document.getElementById('rc-submit-btn');
+                const statusEl = document.getElementById('rc-status-msg');
+                const shareBtn = document.getElementById('rc-wa-share-btn');
+
+                if (btn) {
+                    btn.disabled = true;
+                    btn.textContent = 'Checking Chamber...';
+                }
+                try {
+                    const res = await fetch('https://us-central1-diaspora-nearby-a3dac.cloudfunctions.net/submitWebRollCallLead', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            homeLocation: homeVal,
+                            hostLocation: hostVal,
+                            phone: phoneVal,
+                            inviteCode: cleanCode,
+                        }),
+                    });
+                    const data = await res.json();
+                    if (statusEl) {
+                        statusEl.style.display = 'block';
+                        statusEl.style.color = 'var(--sage)';
+                        statusEl.textContent = (data.whatsappDelivered || data.whatsAppDispatched)
+                            ? `✅ Roll-Call saved for ${homeVal} → ${hostVal}! We just sent your pass on WhatsApp. Tap the install button above or share with 2 compatriots below!`
+                            : `✅ Roll-Call saved for ${homeVal} → ${hostVal}! Tap the install button above to connect with your chamber (` + (data.activeMembers || 31) + `+ founding members).`;
+                    }
+                    if (shareBtn && data.shareText) {
+                        shareBtn.href = 'https://wa.me/?text=' + encodeURIComponent(data.shareText);
+                    }
+                    if (btn) {
+                        btn.textContent = '✅ Roll-Call Registered!';
+                    }
+                } catch (_err) {
+                    if (statusEl) {
+                        statusEl.style.display = 'block';
+                        statusEl.style.color = 'var(--sage)';
+                        statusEl.textContent = `✅ Welcome from ${homeVal} → ${hostVal}! Tap the install button above to join your chamber.`;
+                    }
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = 'Check Nearby & Send WhatsApp Pass';
+                    }
+                }
+            });
+        }
     };
 
     if (document.body) {

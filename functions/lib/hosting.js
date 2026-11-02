@@ -7,6 +7,7 @@ const {
   consumeRateLimit,
   stableHash,
 } = require("./security");
+const { syncProfileMilestoneAndTrust } = require("./dsp");
 
 function validId(value) {
   return typeof value === "string" && /^[A-Za-z0-9_-]{1,256}$/.test(value);
@@ -304,6 +305,15 @@ exports.updateHostingSessionState = functions.https.onCall(async (data, context)
         updatedAt: now,
       });
       transaction.update(requestRef, {status: "completed", updatedAt: now});
+      for (const col of ["trust_data", "trust_scores"]) {
+        for (const pUid of [session.travelerId, session.hostId].filter(validId)) {
+          transaction.set(db.collection(col).doc(pUid), {
+            completedHostingCount: admin.firestore.FieldValue.increment(1),
+            economicTxCount: admin.firestore.FieldValue.increment(1),
+            lastUpdated: now,
+          }, {merge: true});
+        }
+      }
       return;
     }
     if (session.status !== "confirmed") {

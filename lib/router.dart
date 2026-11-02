@@ -60,6 +60,7 @@ import 'features/travel/screens/stay_search_screen.dart';
 import 'features/travel/screens/car_rental_search_screen.dart';
 import 'features/settings/screens/settings_screen.dart';
 import 'features/sharing/screens/share_chat_selection_screen.dart';
+import 'features/sharing/services/share_receiver_service.dart';
 import 'features/marketplace/screens/marketplace_screen.dart';
 import 'features/marketplace/screens/create_listing_screen.dart';
 import 'features/marketplace/models/marketplace_listing.dart';
@@ -67,7 +68,6 @@ import 'features/marketplace/screens/listing_detail_screen.dart';
 import 'features/marketplace/screens/my_listings_screen.dart';
 import 'features/marketplace/screens/saved_listings_screen.dart';
 import 'features/marketplace/screens/compatible_parts_screen.dart';
-import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'features/hosting/screens/hosting_request_detail_screen.dart';
 import 'features/notifications/screens/notifications_screen.dart';
 import 'features/real_estate/models/real_estate_listing.dart';
@@ -130,11 +130,39 @@ class RouterNotifier extends ChangeNotifier {
   RouterNotifier(this._ref) {
     _ref.listen<AsyncValue<User?>>(
       authStateProvider,
-      (_, _) => notifyListeners(),
+      (prev, next) {
+        if ((prev?.isLoading ?? false) != next.isLoading ||
+            (prev?.hasError ?? false) != next.hasError ||
+            prev?.value?.uid != next.value?.uid) {
+          notifyListeners();
+        }
+      },
     );
     _ref.listen<AsyncValue<ProfileData?>>(
       userProfileProvider,
-      (_, _) => notifyListeners(),
+      (prev, next) {
+        final prevProfile = prev?.value;
+        final nextProfile = next.value;
+        final loadingChanged = (prev?.isLoading ?? false) != next.isLoading;
+        final errorChanged = (prev?.hasError ?? false) != next.hasError;
+        final presenceChanged = (prevProfile == null) != (nextProfile == null);
+        final firstNameChanged =
+            (prevProfile?.firstName.isNotEmpty ?? false) !=
+            (nextProfile?.firstName.isNotEmpty ?? false);
+        final membershipsChanged =
+            (prevProfile?.communityMemberships?.isNotEmpty ?? false) !=
+            (nextProfile?.communityMemberships?.isNotEmpty ?? false);
+        final bannedChanged = prevProfile?.isBanned != nextProfile?.isBanned;
+
+        if (loadingChanged ||
+            errorChanged ||
+            presenceChanged ||
+            firstNameChanged ||
+            membershipsChanged ||
+            bannedChanged) {
+          notifyListeners();
+        }
+      },
     );
   }
 }
@@ -342,10 +370,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/auth/otp',
         builder: (context, state) {
-          final extras = state.extra as Map<String, dynamic>;
+          final extras = state.extra is Map<String, dynamic>
+              ? state.extra as Map<String, dynamic>
+              : <String, dynamic>{};
           return OTPVerificationScreen(
             verificationId: (extras['verificationId'] as String?) ?? '',
-            phoneNumber: extras['phoneNumber'] as String,
+            phoneNumber: (extras['phoneNumber'] as String?) ?? '',
             isWhatsApp: extras['isWhatsApp'] as bool? ?? false,
           );
         },
@@ -377,8 +407,21 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'share_destination',
         path: '/share',
         parentNavigatorKey: _rootNavigatorKey,
+        redirect: (context, state) {
+          final files = ShareReceiverService.extractSharedFiles(
+            state.extra,
+            fallback: ref.read(shareReceiverServiceProvider).pendingSharedFiles,
+          );
+          if (files.isEmpty) {
+            return '/chats';
+          }
+          return null;
+        },
         builder: (context, state) {
-          final files = state.extra as List<SharedMediaFile>;
+          final files = ShareReceiverService.extractSharedFiles(
+            state.extra,
+            fallback: ref.read(shareReceiverServiceProvider).pendingSharedFiles,
+          );
           return ShareChatSelectionScreen(sharedFiles: files);
         },
       ),
@@ -443,8 +486,18 @@ final routerProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     path: 'forward_selection',
                     parentNavigatorKey: _rootNavigatorKey,
+                    redirect: (context, state) {
+                      final extra = state.extra;
+                      if (extra is Message || extra is Map) return null;
+                      return '/chats';
+                    },
                     builder: (context, state) {
-                      final message = state.extra as Message;
+                      final extra = state.extra;
+                      final message = extra is Message
+                          ? extra
+                          : Message.fromJson(
+                              Map<String, dynamic>.from(extra as Map),
+                            );
                       return ForwardChatSelectionScreen(message: message);
                     },
                   ),
@@ -613,11 +666,13 @@ final routerProvider = Provider<GoRouter>((ref) {
                     parentNavigatorKey: _rootNavigatorKey,
                     builder: (context, state) {
                       final eventId = state.pathParameters['eventId']!;
-                      final extra = state.extra as Map<String, dynamic>;
+                      final extra = state.extra is Map<String, dynamic>
+                          ? state.extra as Map<String, dynamic>
+                          : <String, dynamic>{};
                       return QRAttendanceScreen(
                         eventId: eventId,
-                        eventTitle: extra['title'],
-                        isCreator: extra['isCreator'],
+                        eventTitle: (extra['title'] as String?) ?? '',
+                        isCreator: (extra['isCreator'] as bool?) ?? false,
                       );
                     },
                   ),

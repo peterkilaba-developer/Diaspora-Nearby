@@ -207,7 +207,7 @@ class CountryLeaderboardItem extends StatelessWidget {
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
-                              '${(efficiency * 100).toInt()}% Yield',
+                              '${(efficiency * 100).round()}% Yield',
                               style: TextStyle(
                                 fontSize: 8,
                                 fontWeight: FontWeight.bold,

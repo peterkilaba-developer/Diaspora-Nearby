@@ -56,6 +56,9 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
         case 'audio_file':
           body = msgContent.isEmpty ? 'Audio file' : msgContent;
           break;
+        case 'voice_call':
+          body = msgContent.isEmpty ? 'Voice call' : msgContent;
+          break;
         case 'image':
           body = msgContent.isEmpty ? 'Photo' : msgContent;
           break;

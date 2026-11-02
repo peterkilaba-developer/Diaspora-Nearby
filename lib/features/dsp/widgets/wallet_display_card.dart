@@ -163,7 +163,7 @@ class WalletDisplayCard extends StatelessWidget {
                         if (trustScore != null) ...[
                           const TextSpan(text: 'Efficiency: '),
                           TextSpan(
-                            text: '${(eff * 100).toInt()}%',
+                            text: '${(eff * 100).round()}%',
                             style: TextStyle(
                               color: EpochService.getEfficiencyColor(
                                 trustScore!,

@@ -126,7 +126,19 @@ class PointsTransaction {
       case 'friend_connection':
         return 'Friend Connection';
       case 'qr_connection':
+      case 'identity_qr_exchange':
+      case 'identity_qr_exchange_continuous':
         return 'QR Code Connection';
+      case 'proximity_dwell_reward':
+        return 'Proximity Connection (10+ mins)';
+      case 'peer_visit_host_reward':
+        return 'Grassroots Gathering (Host)';
+      case 'peer_visit_visitor_reward':
+        return 'Grassroots Gathering (Guest)';
+      case 'event_attendance':
+        return 'Event Attendance Check-In';
+      case 'event_hosting_per_attendee':
+        return 'Event Hosting Reward';
       case 'trust_vouch_reward':
         return 'Trust Vouch Reward';
       case 'token_welcome_bonus':

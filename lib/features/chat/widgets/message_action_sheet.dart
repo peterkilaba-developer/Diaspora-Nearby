@@ -85,7 +85,7 @@ class ChatMessageActionSheet extends ConsumerWidget {
                 }).toList(),
               ),
             ),
-            const Divider(),
+            const SizedBox(height: 4),
 
             // Scrollable action list
             Flexible(
@@ -134,7 +134,7 @@ class ChatMessageActionSheet extends ConsumerWidget {
                               displayName: message.senderName,
                             ),
                           ),
-                          const Divider(height: 1),
+                          const SizedBox(height: 4),
                         ],
 
                         AppBottomSheetItem(
@@ -250,19 +250,20 @@ class ChatMessageActionSheet extends ConsumerWidget {
                             },
                           ),
                         ],
-                        if (isOwn)
-                          AppBottomSheetItem(
-                            icon: LucideIcons.trash2,
-                            iconColor: AppTheme.error,
-                            iconBgColor: AppTheme.error.withValues(alpha: 0.1),
-                            title: 'Delete',
-                            subtitle: 'Remove this message for everyone',
-                            isDestructive: true,
-                            onTap: () {
-                              Navigator.pop(context);
-                              onDelete?.call(message);
-                            },
-                          ),
+                        AppBottomSheetItem(
+                          icon: LucideIcons.trash2,
+                          iconColor: AppTheme.error,
+                          iconBgColor: AppTheme.error.withValues(alpha: 0.1),
+                          title: 'Delete',
+                          subtitle: isOwn
+                              ? 'Remove this message for everyone'
+                              : 'Remove this message for you',
+                          isDestructive: true,
+                          onTap: () {
+                            Navigator.pop(context);
+                            onDelete?.call(message);
+                          },
+                        ),
                       ],
                     );
                   },

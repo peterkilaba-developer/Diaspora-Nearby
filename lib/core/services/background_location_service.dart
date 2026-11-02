@@ -18,6 +18,19 @@ class BackgroundLocationService {
   static final FlutterLocalNotificationsPlugin _notificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
+  static const String silentChannelId = 'diaspora_location_silent';
+  static const String legacyChannelId = 'diaspora_location_v2';
+  static const AndroidNotificationChannel backgroundServiceChannel =
+      AndroidNotificationChannel(
+        silentChannelId,
+        'Background Service',
+        description: 'Silent background location updates',
+        importance: Importance.low,
+        playSound: false,
+        enableVibration: false,
+        showBadge: false,
+      );
+
   static Future<void> initializeService() async {
     if (_isInitialized) {
       return;
@@ -35,21 +48,16 @@ class BackgroundLocationService {
         );
     await _notificationsPlugin.initialize(settings: initializationSettings);
 
-    // [FIX] Explicitly create the Notification Channel with HIGH importance
-    const String newChannelId = 'diaspora_location_v2';
-    const AndroidNotificationChannel channel = AndroidNotificationChannel(
-      newChannelId,
-      'Background Service',
-      description: 'Used for background location updates',
-      importance: Importance.high,
-    );
-
     if (defaultTargetPlatform == TargetPlatform.android) {
-      await _notificationsPlugin
+      final androidPlugin = _notificationsPlugin
           .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin
-          >()
-          ?.createNotificationChannel(channel);
+          >();
+      // Remove legacy high-importance channel so Android does not retain sound/heads-up settings
+      await androidPlugin?.deleteNotificationChannel(
+        channelId: legacyChannelId,
+      );
+      await androidPlugin?.createNotificationChannel(backgroundServiceChannel);
     }
 
     // Configure Service
@@ -58,13 +66,13 @@ class BackgroundLocationService {
         onStart: onStart,
         autoStart: true,
         isForegroundMode: true,
-        notificationChannelId: newChannelId,
+        notificationChannelId: silentChannelId,
         initialNotificationTitle: 'Diaspora Nearby',
         initialNotificationContent: 'Background location active',
         foregroundServiceNotificationId: 888,
       ),
       iosConfiguration: IosConfiguration(
-        autoStart: false,
+        autoStart: true,
         onForeground: onStart,
         onBackground: onIosBackground,
       ),
@@ -137,29 +145,31 @@ class BackgroundLocationService {
         }
       }());
 
-      // Start location updates
-      const int distanceFilterMeters = 16093;
+      // Start location updates (15m distance filter + 3-min periodic heartbeat
+      // so 100-ft / 10-min automatic proximity and 60-min Grassroots Gatherings
+      // are continuously evaluated even while both devices sit stationary).
+      const int distanceFilterMeters = 15;
 
       late LocationSettings locationSettings;
 
       if (defaultTargetPlatform == TargetPlatform.android) {
         locationSettings = AndroidSettings(
-          accuracy: LocationAccuracy.medium,
+          accuracy: LocationAccuracy.high,
           distanceFilter: distanceFilterMeters,
           forceLocationManager: true,
         );
       } else if (defaultTargetPlatform == TargetPlatform.iOS ||
           defaultTargetPlatform == TargetPlatform.macOS) {
         locationSettings = AppleSettings(
-          accuracy: LocationAccuracy.medium,
-          activityType: ActivityType.automotiveNavigation,
+          accuracy: LocationAccuracy.high,
+          activityType: ActivityType.fitness,
           distanceFilter: distanceFilterMeters,
           pauseLocationUpdatesAutomatically: false,
           showBackgroundLocationIndicator: false,
         );
       } else {
         locationSettings = const LocationSettings(
-          accuracy: LocationAccuracy.medium,
+          accuracy: LocationAccuracy.high,
           distanceFilter: distanceFilterMeters,
         );
       }
@@ -175,6 +185,12 @@ class BackgroundLocationService {
           debugPrint('📍 [BACKGROUND] Stream Error: $e');
         },
       );
+
+      // Periodic 3-minute heartbeat so stationary devices sitting together
+      // within 100 feet complete their 10-min and 60-min dwell windows.
+      Timer.periodic(const Duration(minutes: 3), (_) async {
+        await _performBackgroundCheck(service);
+      });
     } catch (e) {
       debugPrint('CRITICAL: Error in background service onStart: $e');
     }
@@ -182,15 +198,6 @@ class BackgroundLocationService {
 
   static Future<void> _performBackgroundCheck(ServiceInstance service) async {
     try {
-      if (service is AndroidServiceInstance) {
-        if (await service.isForegroundService()) {
-          service.setForegroundNotificationInfo(
-            title: 'Diaspora Nearby',
-            content: 'Active in background (Location Updated)',
-          );
-        }
-      }
-
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         debugPrint('Background: Updating location for ${user.uid}');

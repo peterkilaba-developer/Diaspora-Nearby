@@ -38,86 +38,69 @@ const CTA_ENGLISH = `📲 Search "Diaspora Nearby" on Google Play / App Store (I
  */
 const TOPIC_SOLUTIONS = [
   {
-    id: "housing_hosting_realestate",
-    label: "Housing, Rentals, Rooms, Host Stays & Land/Real Estate",
+    id: "nearby_notification",
+    label: "Nearby Notification & Real-Time Proximity Alerts",
     keywords: [
-      "apartment", "rent", "house", "room", "flat", "accommodation", "housing", "stay",
-      "host", "masaki", "mikocheni", "oysterbay", "upanga", "arusha", "zanzibar", "plot", "land",
-      "nyumba", "chumba", "kupanga", "kiwanja", "ardhi", "makazi", "hostel", "bedspace", "sharing",
+      "alert", "notification", "pass by", "street", "neighborhood", "around", "close by", "radar",
+      "taarifa", "karibu", "mtaa", "jirani", "kupishana",
     ],
-    platformFeature: "Peer Hosting, Stays & Verified Real Estate / Land Survey",
+    platformFeature: "Nearby Notification (Real-Time Compatriot Proximity Alerts)",
     replyKiswahili: (contextSnippet) =>
-      `Kuhusu suala la ${contextSnippet || "makazi na nyumba"}: kwenye jukwaa la Diaspora Nearby tumeweka sehemu maalum ya **Peer Hosting & Stays** (kupata Watanzania wenzako wanaopangisha vyumba/nyumba au kukukaribisha ukifika mji mpya) pamoja na **Real Estate & Land Survey** kwa wanaotafuta nyumba au viwanja vilivyohakikiwa.\n\n${CTA_KISWAHILI}`,
+      `Kuhusu ${contextSnippet || "kufahamu Watanzania walioko mtaa mmoja na wewe"}: kupitia **Diaspora Nearby**, huduma ya **Nearby Notification** inakupa taarifa za papo hapo Mtanzania mwenzako anapokuwa karibu nawe, pamoja na **Nearby Discovery**, **Live Radio**, **Ubuntu Emergency Fund**, na **DDI Loans**.\n\n${CTA_KISWAHILI}`,
     replyEnglish: (contextSnippet) =>
-      `For ${contextSnippet || "finding verified housing and stays"}: you can also check **Diaspora Nearby** — our community platform has a dedicated **Stays, Peer Hosting & Real Estate** hub where verified expats and locals in Tanzania list apartments, short stays, and housing without middleman markups.\n\n${CTA_ENGLISH}`,
+      `Regarding ${contextSnippet || "knowing when compatriots are right around the corner"}: **Diaspora Nearby** includes **Nearby Notification** (real-time proximity alerts when someone from your home country is nearby), alongside **Nearby Discovery**, **24/7 Live Homeland Radio**, **Ubuntu Emergency Fund**, and **DDI Loans**.\n\n${CTA_ENGLISH}`,
   },
   {
-    id: "money_remittance_finance",
-    label: "Sending Money, Remittances, M-Pesa, Exchange Rates & Loans",
+    id: "live_radio",
+    label: "Live Homeland & Diaspora Radio Streaming (24/7)",
     keywords: [
-      "money", "send", "transfer", "remittance", "mpesa", "m-pesa", "tigo", "airtel",
-      "exchange", "rate", "dollar", "usd", "tzs", "shilling", "bank", "fee", "loan", "capital",
-      "kutuma", "pesa", "fedha", "makato", "kiwango", "mkopo", "mtaji", "benki", "wakala",
+      "radio", "music", "news", "stream", "listen", "bongo", "fm", "clouds", "wasafi", "tbc", "station", "podcast",
+      "redio", "muziki", "habari", "kusikiliza", " matangazo", "nyumbani",
     ],
-    platformFeature: "Zero-Fee Diaspora Remittances & Community Treasury (DDI)",
+    platformFeature: "Live Homeland & Diaspora Radio (24/7 Streaming)",
     replyKiswahili: (contextSnippet) =>
-      `Kama unatafuta njia rahisi na salama kuhusu ${contextSnippet || "kutuma pesa nyumbani"}: kupitia **Diaspora Nearby** tuna huduma ya **Zero-Fee Remittance (Makato 0%)** inayokuwezesha kutuma pesa moja kwa moja kwenda Mobile Money (M-Pesa/Mixx/Airtel) au Benki Tanzania bila makato makubwa, huku ukijenga uaminifu wa kifedha (PCT) kwenye Chamber yako.\n\n${CTA_KISWAHILI}`,
+      `Kuhusu ${contextSnippet || "kusikiliza redio na habari za nyumbani Tanzania"}: ndani ya **Diaspora Nearby** kuna **Live Radio** inayokuwezesha kusikiliza redio za nyumbani Tanzania na diaspora mubashara (24/7) popote ulipo, pamoja na **Nearby Discovery**, **Nearby Notification**, **Ubuntu Emergency Fund**, na **DDI Loans**.\n\n${CTA_KISWAHILI}`,
     replyEnglish: (contextSnippet) =>
-      `Regarding ${contextSnippet || "transfers and local payments in Tanzania"}: **Diaspora Nearby** offers **Zero-Fee Remittances & Instant Mobile Money / Bank Settlement** (TZS/USD) built specifically for the Tanzania corridor, so you avoid high transfer fees.\n\n${CTA_ENGLISH}`,
+      `For ${contextSnippet || "staying connected to home news and music"}: **Diaspora Nearby** has built-in **24/7 Live Homeland & Diaspora Radio**, alongside **Nearby Discovery**, **Nearby Notification**, **Ubuntu Emergency Fund**, and **DDI Community Loans**.\n\n${CTA_ENGLISH}`,
   },
   {
-    id: "marketplace_business_jobs_shipping",
-    label: "Marketplace, Buying/Selling, Cargo/Shipping, Jobs & Local Businesses",
+    id: "ubuntu_emergency_fund",
+    label: "Ubuntu Emergency Fund & Bereavement (Msiba) Mutual Aid",
     keywords: [
-      "buy", "sell", "shop", "business", "cargo", "shipping", "courier", "luggage",
-      "job", "hiring", "work", "service", "plumber", "mechanic", "doctor", "restaurant", "food",
-      "biashara", "mzigo", "mizigo", "kusafirisha", "kazi", "ajira", "duka", "bidhaa", "fundi", "chakula",
+      "emergency", "help", "urgent", "hospital", "bereavement", "funeral", "welfare", "ubuntu", "support", "crisis",
+      "msiba", "dharura", "mchango", "pole", "msaada", "ugonjwa", "hospitali", "kufiwa", "matibabu",
     ],
-    platformFeature: "Diaspora Marketplace, Verified Business Directory & Peer Luggage/Shipping",
+    platformFeature: "Ubuntu Emergency Fund (Transparent Community Emergency & Bereavement Pool)",
     replyKiswahili: (contextSnippet) =>
-      `Kuhusu ${contextSnippet || "huduma na biashara za Watanzania"}: kwenye **Diaspora Nearby** kuna **Diaspora Marketplace & Business Directory** ambapo Watanzania walio nje na nyumbani wanaweka biashara zao, bidhaa, fursa za kazi, na hata kuunganishwa na wasafiri wanaobeba mizigo.\n\n${CTA_KISWAHILI}`,
+      `Pole sana na asante kwa kushirikisha jumuiya kuhusu ${contextSnippet || "jambo hili la dharura"}. Kwenye **Diaspora Nearby**, tumejenga **Ubuntu Emergency Fund (Mfuko wa Dharura na Msiba)** ili Watanzania tuweze kusaidiana kwa uwazi wakati wa matatizo, pamoja na **Nearby Discovery**, **Nearby Notification**, **Live Radio**, na **DDI Loans**.\n\n${CTA_KISWAHILI}`,
     replyEnglish: (contextSnippet) =>
-      `If you're looking for trusted recommendations for ${contextSnippet || "local services and marketplace listings"}: check the **Diaspora Nearby Marketplace & Verified Business Directory** for Dar, Arusha, and Zanzibar — community members vouch for trusted local businesses, services, and peer listings using Proof of Community Trust.\n\n${CTA_ENGLISH}`,
+      `Thank you for sharing this with the community. To support members during emergencies and bereavement without chaotic fundraising, **Diaspora Nearby** provides a transparent **Ubuntu Emergency Fund**, alongside **Nearby Discovery**, **Nearby Notification**, **Live Radio**, and **DDI Loans**.\n\n${CTA_ENGLISH}`,
   },
   {
-    id: "travel_flights_cars",
-    label: "Flights, Car Rentals, Visas, Airport Pickup & Travel",
+    id: "ddi_loans",
+    label: "DDI Loans (Diaspora Direct Investment & Community Loans)",
     keywords: [
-      "flight", "airline", "ticket", "car", "rental", "drive", "driver", "safari",
-      "airport", "pickup", "visa", "resident permit", "travel", "trip",
-      "ndege", "tiketi", "usafiri", "gari", "kukodi", "safari", "uwanja wa ndege", "pasi",
+      "loan", "capital", "invest", "investment", "business", "project", "ddi", "credit", "finance", "funding", "build",
+      "mkopo", "mikopo", "mtaji", "uwekezaji", "biashara", "mradi", "ujenzi", "nyumba", "kiwanja",
     ],
-    platformFeature: "Travel Hub: Flights, Peer Car Rentals & Stays",
+    platformFeature: "DDI Loans (Diaspora Direct Investment Community-Backed Loans)",
     replyKiswahili: (contextSnippet) =>
-      `Kuhusu ${contextSnippet || "usafiri na magari"}: ndani ya **Diaspora Nearby** tuna **Travel Hub** yenye huduma za kutafuta tiketi za ndege, kukodi magari kwa bei nafuu kutoka kwa wanajumuiya (**Peer Car Rentals**), na kuwasiliana na Watanzania wa mji unaokwenda kabla hujasafiri.\n\n${CTA_KISWAHILI}`,
+      `Kuhusu ${contextSnippet || "mikopo na mitaji ya uwekezaji"}: kupitia **Diaspora Nearby** tuna huduma ya **DDI Loans (Mikopo ya Uwekezaji wa Diaspora)** inayowawezesha wanajumuiya kupata mikopo ya miradi na uwekezaji kupitia hazina ya jamii yetu, pamoja na **Nearby Discovery**, **Nearby Notification**, **Live Radio**, na **Ubuntu Emergency Fund**.\n\n${CTA_KISWAHILI}`,
     replyEnglish: (contextSnippet) =>
-      `For ${contextSnippet || "getting around and travel in Tanzania"}: **Diaspora Nearby** has a built-in **Peer Car Rental & Travel Hub** where verified locals and expats in Dar, Arusha, and Zanzibar list reliable cars (with no hidden agency fees) alongside flights and stays.\n\n${CTA_ENGLISH}`,
+      `Regarding ${contextSnippet || "community financing and cross-border investment"}: **Diaspora Nearby** features **DDI Loans (Diaspora Direct Investment Loans)** backed by community treasuries to fund member projects and businesses, plus **Nearby Discovery**, **Nearby Notification**, **Live Radio**, and the **Ubuntu Emergency Fund**.\n\n${CTA_ENGLISH}`,
   },
   {
-    id: "emergency_bereavement_trust",
-    label: "Emergency Support, Bereavement (Msiba), Welfare & Community Trust",
+    id: "nearby_discovery",
+    label: "Nearby Discovery (Finding Compatriots & Community Nearby)",
     keywords: [
-      "emergency", "help", "urgent", "hospital", "bereavement", "funeral", "trust", "scam", "verify",
-      "msiba", "dharura", "mchango", "pole", "msaada", "ugonjwa", "hospitali", "uaminifu", "utapeli",
+      "anyone", "who is in", "new in", "moving to", "meetup", "event", "weekend", "friends", "connect", "network", "nearby",
+      "nani yupo", "mgeni", "kukutana", "tamasha", "nyama choma", "jumuiya", "marafiki", "kufahamiana", "watanzania",
     ],
-    platformFeature: "Diaspora Emergency & Bereavement Fund (Msiba Pool) + Proof of Community Trust (PCT)",
+    platformFeature: "Nearby Discovery & Nearby Notification + Live Radio, Ubuntu Emergency Fund & DDI Loans",
     replyKiswahili: (contextSnippet) =>
-      `Pole sana na asante kwa kushirikisha jumuiya kuhusu ${contextSnippet || "jambo hili"}. Kwenye **Diaspora Nearby**, tumejenga mfumo rasmi wa **Emergency & Bereavement Fund (Mfuko wa Dharura na Msiba)** pamoja na **Proof of Community Trust (PCT)** ili Watanzania tuweze kusaidiana kwa uwazi na kuhakikisha kila mwanachama amethibitishwa na wenzake.\n\n${CTA_KISWAHILI}`,
+      `Karibu sana! Kuhusu ${contextSnippet || "kuwafahamu Watanzania wenzako karibu nawe"}: kupitia **Diaspora Nearby** unapata huduma 5 muhimu: **Nearby Discovery** (kuona Watanzania walioko mji/mtaa wako), **Nearby Notification** (taarifa Mtanzania akiwa karibu), **Live Radio** (redio za TZ saa 24), **Ubuntu Emergency Fund** (mfuko wa dharura), na **DDI Loans** (mikopo ya uwekezaji wa jamii).\n\n${CTA_KISWAHILI}`,
     replyEnglish: (contextSnippet) =>
-      `Thank you for raising this with the community. To help everyone verify who they are dealing with and support members in need, **Diaspora Nearby** includes **Peer Verification & Proof of Community Trust (PCT)** plus a transparent **Community Emergency Fund**.\n\n${CTA_ENGLISH}`,
-  },
-  {
-    id: "community_events_networking",
-    label: "Finding People Nearby, Events, Meetups & General Community Discussions",
-    keywords: [
-      "anyone", "who is in", "new in", "moving to", "meetup", "event", "weekend", "friends", "connect", "network",
-      "nani yupo", "mgeni", "kukutana", "tamasha", "nyama choma", "jumuiya", "marafiki", "kufahamiana",
-    ],
-    platformFeature: "Nearby Compatriots Radar, Bilateral City Chambers & Community Events",
-    replyKiswahili: (contextSnippet) =>
-      `Karibu sana! Kuhusu ${contextSnippet || "kufahamiana na Watanzania wenzako karibu nawe"}: kupitia **Diaspora Nearby** unaweza kuona Watanzania walioko kwenye mji wako (**Nearby Compatriots**), kujiunga kwenye **City Chamber** ya mji huo, na kuona matukio (**Events**) yanayokuja.\n\n${CTA_KISWAHILI}`,
-    replyEnglish: (contextSnippet) =>
-      `Welcome! If you're looking to ${contextSnippet || "connect with expats and locals nearby"}: **Diaspora Nearby** automatically places you into your city's local Chamber (Dar es Salaam, Arusha, Zanzibar, etc.) where you can see verified members nearby, join the live city chat, and RSVP to local meetups and events.\n\n${CTA_ENGLISH}`,
+      `Welcome! If you're looking to ${contextSnippet || "connect with compatriots nearby"}: **Diaspora Nearby** gives you 5 core utilities in your city — **Nearby Discovery**, **Nearby Notification**, **24/7 Live Homeland Radio**, **Ubuntu Emergency Fund**, and **DDI Community Loans**.\n\n${CTA_ENGLISH}`,
   },
 ];
 

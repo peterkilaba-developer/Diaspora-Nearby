@@ -6,11 +6,12 @@ import 'package:flutter/foundation.dart';
 import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 import 'package:diaspora_nearby/features/shared/models/location.dart'
     as loc_model;
-import 'package:diaspora_nearby/core/services/plus_code_service.dart';
 import 'package:diaspora_nearby/core/utils/location_utils.dart';
 
 /// Service to update user's current location in Firestore.
-/// Uses native geocoding for reliable reverse geocoding.
+/// Uses native geocoding for reliable reverse geocoding and feeds the
+/// server-authoritative proximity dwell (100 ft / >10 min) and
+/// Grassroots Gathering (100 ft / >60 min) engines.
 class LocationUpdateService {
   static final LocationUpdateService _instance =
       LocationUpdateService._internal();
@@ -18,11 +19,45 @@ class LocationUpdateService {
   LocationUpdateService._internal();
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final Map<String, DateTime> _lastUpdateByUser = {};
+  Timer? _heartbeatTimer;
+  String? _heartbeatUserId;
+
+  /// Starts a 3-minute periodic location heartbeat so stationary devices
+  /// meeting within 100 feet continuously advance the 10-minute automatic
+  /// proximity timer and 60-minute Grassroots Gathering timer.
+  void startProximityHeartbeat(String userId) {
+    if (userId.isEmpty) return;
+    if (_heartbeatTimer != null &&
+        _heartbeatTimer!.isActive &&
+        _heartbeatUserId == userId) {
+      return;
+    }
+    _heartbeatTimer?.cancel();
+    _heartbeatUserId = userId;
+    _heartbeatTimer = Timer.periodic(const Duration(minutes: 3), (_) {
+      unawaited(updateCurrentLocation(userId));
+    });
+  }
+
+  /// Stops the foreground proximity heartbeat timer.
+  void stopProximityHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+    _heartbeatUserId = null;
+  }
 
   /// Updates the user's current location in Firestore.
   /// Uses native geocoding to get full address details.
   Future<void> updateCurrentLocation(String userId) async {
     try {
+      final now = DateTime.now();
+      final lastUpdate = _lastUpdateByUser[userId];
+      if (lastUpdate != null &&
+          now.difference(lastUpdate) < const Duration(seconds: 45)) {
+        return;
+      }
+
       // Check permission
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
@@ -34,12 +69,12 @@ class LocationUpdateService {
         return;
       }
 
-      // Get current position
+      // Get current position with high accuracy for 100-ft proximity detection
       Position? position;
       try {
         position = await Geolocator.getCurrentPosition(
           locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.medium,
+            accuracy: LocationAccuracy.high,
             timeLimit: Duration(seconds: 10),
           ),
         );
@@ -55,6 +90,7 @@ class LocationUpdateService {
         return;
       }
 
+      _lastUpdateByUser[userId] = DateTime.now();
       cacheLastKnownPosition(position);
 
       // Reverse geocode using native geocoding package
@@ -125,6 +161,7 @@ class LocationUpdateService {
         'country': country,
         'countryCode': countryCode,
         'country_code': countryCode,
+        'isLiveGps': true,
         'timestamp': tsMs,
         'lastUpdated': isoNow,
       };
@@ -153,7 +190,10 @@ class LocationUpdateService {
         'locationUpdatedAt': FieldValue.serverTimestamp(),
       };
 
-      // [PERF] Commit public and private location updates in a single atomic batch
+      // [PERF] Commit public and private location updates in a single atomic batch.
+      // Writing to user_private/{userId} triggers checkProximity in Cloud Functions,
+      // which evaluates both 100-ft / 10-min Automatic Proximity Rewards and
+      // 100-ft / 60-min Grassroots Gathering rewards server-authoritatively.
       final batch = _firestore.batch();
       if (showCity) {
         final safeLat = (position.latitude * 100).round() / 100;
@@ -192,112 +232,8 @@ class LocationUpdateService {
         SetOptions(merge: true),
       );
       await batch.commit();
-
-      // [PERF] Check for automatic RSVP'd event attendance in background
-      unawaited(
-        _checkGeofencedEventAttendance(
-          userId,
-          position.latitude,
-          position.longitude,
-        ),
-      );
     } catch (e) {
       // Failed to update location
-    }
-  }
-
-  /// Checks if the user is currently located within 100 meters of an active event venue
-  /// they RSVP'd for, and auto-confirms attendance.
-  Future<void> _checkGeofencedEventAttendance(
-    String userId,
-    double userLat,
-    double userLng,
-  ) async {
-    try {
-      final now = DateTime.now();
-
-      final snapshot = await _firestore
-          .collection('events')
-          .where('attendees', arrayContains: userId)
-          .where('status', isEqualTo: 'published')
-          .limit(100)
-          .get();
-
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        final eventId = doc.id;
-
-        final confirmed = List<String>.from(data['confirmedAttendees'] ?? []);
-        if (confirmed.contains(userId)) continue;
-
-        double? venueLat = (data['latitude'] as num?)?.toDouble();
-        double? venueLng = (data['longitude'] as num?)?.toDouble();
-
-        final plusCode = data['plusCode'] as String?;
-        if ((venueLat == null || venueLng == null) &&
-            plusCode != null &&
-            plusCode.isNotEmpty) {
-          final decoded = PlusCodeService.decode(plusCode);
-          if (decoded != null) {
-            venueLat = decoded['latitude'];
-            venueLng = decoded['longitude'];
-          }
-        }
-
-        if (venueLat == null || venueLng == null) continue;
-
-        final distanceKm = calculateDistance(
-          userLat,
-          userLng,
-          venueLat,
-          venueLng,
-        );
-        final distanceMeters = distanceKm * 1000.0;
-
-        if (distanceMeters <= 100.0) {
-          final startDateStr = data['startDate'] as String? ?? '';
-          final startTimeStr = data['startTime'] as String? ?? '00:00';
-          final endDateStr = data['endDate'] as String? ?? startDateStr;
-          final endTimeStr = data['endTime'] as String? ?? '23:59';
-
-          DateTime? start;
-          DateTime? end;
-
-          try {
-            start = DateTime.parse('$startDateStr $startTimeStr');
-          } catch (_) {
-            try {
-              start = DateTime.parse(startDateStr);
-            } catch (_) {}
-          }
-
-          try {
-            end = DateTime.parse('$endDateStr $endTimeStr');
-          } catch (_) {
-            try {
-              end = DateTime.parse(endDateStr);
-            } catch (_) {}
-          }
-
-          start ??= now;
-          end ??= start.add(const Duration(hours: 3));
-
-          final windowStart = start.subtract(const Duration(minutes: 30));
-          final windowEnd = end.add(const Duration(hours: 1));
-
-          if (now.isAfter(windowStart) && now.isBefore(windowEnd)) {
-            debugPrint(
-              '📍 [GEOFENCE AUTO CHECK-IN] User $userId is ${distanceMeters.toStringAsFixed(1)}m from event $eventId',
-            );
-
-            await _firestore.collection('events').doc(eventId).update({
-              'confirmedAttendees': FieldValue.arrayUnion([userId]),
-            });
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('LocationUpdateService: Error in geofence event check: $e');
     }
   }
 
@@ -322,6 +258,7 @@ class LocationUpdateService {
         'state': hostLocation.state,
         'country': hostLocation.country,
         'countryCode': hostLocation.countryCode,
+        'isLiveGps': false,
         'timestamp': DateTime.now().millisecondsSinceEpoch,
       };
 

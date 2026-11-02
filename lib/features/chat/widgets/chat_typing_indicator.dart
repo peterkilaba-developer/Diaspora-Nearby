@@ -33,6 +33,26 @@ class ChatTypingIndicator extends ConsumerWidget {
     ThemeData theme,
   ) {
     if (typingUsers.length == 1) {
+      if (typingUsers.first == 'diaspora_ai_agent') {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.auto_awesome,
+              size: 14,
+              color: theme.colorScheme.primary,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              'Diaspora AI Agent is thinking...',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        );
+      }
       final profileAsync = ref.watch(
         userProfileByIdProvider(typingUsers.first),
       );

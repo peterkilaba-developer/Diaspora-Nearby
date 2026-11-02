@@ -328,7 +328,9 @@ exports.sendRelationshipRequest = functions.https.onCall(async (data, context) =
   return {success: true, requestId};
 });
 
-exports.respondRelationshipRequest = functions.https.onCall(async (data, context) => {
+exports.respondRelationshipRequest = functions
+  .runWith({ secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
+  .https.onCall(async (data, context) => {
   requireAppCheck(context);
   const responderId = requireAuth(context);
   await consumeRateLimit("relationship-response", responderId, 50, 24 * 60 * 60 * 1000);
@@ -614,54 +616,46 @@ exports.cancelRelationshipRequest = functions.https.onCall(async (data, context)
   return {success: true};
 });
 
+const {
+  DIASPORA_AI_AGENT_UID,
+  DIASPORA_AI_AGENT_NAME,
+  DIASPORA_AI_AGENT_AVATAR,
+  ensureAiAgentProfile,
+  buildAiAgentWelcomeText,
+  buildWelcomeAiActions,
+} = require("./ai_agent");
+
 const CANONICAL_FOUNDER_UID = "yJ2REewPGWZQyS3zhisK1KziJJD3";
 const CANONICAL_FOUNDER_ALIAS = "founder_peter_swai";
 
-async function resolveFounderAccount() {
-  const targetUid = (process.env.FOUNDER_USER_ID && validId(process.env.FOUNDER_USER_ID)) ?
-    process.env.FOUNDER_USER_ID : CANONICAL_FOUNDER_UID;
-  const canonicalSnap = await db.collection("users").doc(targetUid).get();
-  if (canonicalSnap.exists) {
-    return {uid: canonicalSnap.id, profile: canonicalSnap.data() || {}};
+async function archiveLegacyFounderWelcomeChatForUser(userId) {
+  if (!validId(userId) || userId === CANONICAL_FOUNDER_UID) return;
+  try {
+    const founderPairSnap = await directPairRef(userId, CANONICAL_FOUNDER_UID).get();
+    if (!founderPairSnap.exists) return;
+    const founderChatId = founderPairSnap.data()?.chatId;
+    if (!validId(founderChatId)) return;
+    const userChatRef = db.collection("users").doc(userId).collection("userChats").doc(founderChatId);
+    const userChatSnap = await userChatRef.get();
+    if (userChatSnap.exists && userChatSnap.data()?.lastMessage?.id === "welcome_from_founder") {
+      await userChatRef.set({isDeleted: true, unreadCount: 0}, {merge: true});
+    }
+  } catch (err) {
+    console.warn("[AI Agent] Could not archive legacy founder welcome chat:", err.message);
   }
-  const byName = await db.collection("users")
-      .where("firstName", "==", "Peter")
-      .where("lastName", "==", "Swai")
-      .limit(1)
-      .get();
-  if (!byName.empty) {
-    const doc = byName.docs[0];
-    return {uid: doc.id, profile: doc.data() || {}};
-  }
-  return {
-    uid: CANONICAL_FOUNDER_UID,
-    profile: {
-      uid: CANONICAL_FOUNDER_UID,
-      firstName: "Peter",
-      lastName: "Swai",
-      fullName: "Peter Swai",
-      homeCountry: "Tanzania",
-      homeCountryCode: "TZ",
-      hostCountry: "United States",
-      hostCountryCode: "US",
-    },
-  };
 }
 
-function buildFounderInAppWelcomeText(profile = {}) {
-  const firstName = String(profile.firstName || "").trim();
-  const enPrefix = firstName ? `Welcome ${firstName}` : "Welcome";
-  return `${enPrefix}, my name is Peter Swai, Founder of this platform. If you have any questions at all, please feel free to ask anytime. Welcome!`;
-}
+async function ensureAiAgentWelcomeChatForUser(userId, profileOverride = null) {
+  if (!validId(userId) || userId === DIASPORA_AI_AGENT_UID) return null;
 
-async function ensureFounderWelcomeChatForUser(userId, profileOverride = null) {
-  if (!validId(userId)) return null;
-  const founder = await resolveFounderAccount();
-  const founderUid = founder.uid;
-  if (!founderUid || founderUid === userId) return null;
+  await Promise.all([
+    ensureAiAgentProfile(),
+    archiveLegacyFounderWelcomeChatForUser(userId),
+  ]);
 
-  const candidateChatRef = await findDirectChatCandidate(userId, founderUid);
-  const pairRef = directPairRef(userId, founderUid);
+  const agentUid = DIASPORA_AI_AGENT_UID;
+  const candidateChatRef = await findDirectChatCandidate(userId, agentUid);
+  const pairRef = directPairRef(userId, agentUid);
   let resultChatId = null;
 
   await db.runTransaction(async (transaction) => {
@@ -675,17 +669,17 @@ async function ensureFounderWelcomeChatForUser(userId, profileOverride = null) {
 
     const chatRef = pairSnapshot.exists && validId(pairSnapshot.data().chatId) ?
       db.collection("chats").doc(pairSnapshot.data().chatId) : candidateChatRef;
-    const welcomeMsgRef = chatRef.collection("messages").doc("welcome_from_founder");
+    const welcomeMsgRef = chatRef.collection("messages").doc("welcome_from_ai_agent");
     const userChatRef = db.collection("users").doc(userId).collection("userChats").doc(chatRef.id);
-    const founderChatRef = db.collection("users").doc(founderUid).collection("userChats").doc(chatRef.id);
-    const [chatSnapshot, welcomeMsgSnap, userChatSnap, founderChatSnap] = await Promise.all([
+    const agentChatRef = db.collection("users").doc(agentUid).collection("userChats").doc(chatRef.id);
+    const [chatSnapshot, welcomeMsgSnap, userChatSnap, agentChatSnap] = await Promise.all([
       transaction.get(chatRef),
       transaction.get(welcomeMsgRef),
       transaction.get(userChatRef),
-      transaction.get(founderChatRef),
+      transaction.get(agentChatRef),
     ]);
 
-    const users = [userId, founderUid].sort();
+    const users = [userId, agentUid].sort();
     transaction.set(pairRef, {
       chatId: chatRef.id,
       users,
@@ -698,13 +692,15 @@ async function ensureFounderWelcomeChatForUser(userId, profileOverride = null) {
         transaction.set(userChatRef, {
           chatId: chatRef.id,
           type: "direct",
+          name: DIASPORA_AI_AGENT_NAME,
+          photoUrl: DIASPORA_AI_AGENT_AVATAR,
           lastMessage: existingChatData.lastMessage,
           updatedAt: typeof existingChatData.updatedAt === "number" ? existingChatData.updatedAt : Date.now(),
           isDeleted: false,
         }, {merge: true});
       }
-      if (!founderChatSnap.exists || founderChatSnap.data().isDeleted) {
-        transaction.set(founderChatRef, {
+      if (!agentChatSnap.exists || agentChatSnap.data().isDeleted) {
+        transaction.set(agentChatRef, {
           chatId: chatRef.id,
           type: "direct",
           lastMessage: existingChatData.lastMessage,
@@ -716,49 +712,56 @@ async function ensureFounderWelcomeChatForUser(userId, profileOverride = null) {
       return;
     }
 
-    writeDirectChat(transaction, chatRef, users, founderUid, chatSnapshot.exists);
+    writeDirectChat(transaction, chatRef, users, agentUid, chatSnapshot.exists);
 
     if (!welcomeMsgSnap.exists) {
       const nowMs = Date.now() + 1000;
-      const welcomeContent = buildFounderInAppWelcomeText(memberProfile);
-      const founderPhoto = profilePhoto(founder.profile);
+      const welcomeContent = buildAiAgentWelcomeText(memberProfile);
+      const welcomeActions = buildWelcomeAiActions();
       const messageData = {
-        id: "welcome_from_founder",
+        id: "welcome_from_ai_agent",
         chatId: chatRef.id,
-        senderId: founderUid,
-        senderName: "Peter Swai",
-        senderHomeCountryCode: founder.profile.homeCountryCode || "TZ",
-        senderHostCountryCode: founder.profile.hostCountryCode || "US",
-        ...(founderPhoto ? {senderImage: founderPhoto} : {}),
+        senderId: agentUid,
+        senderName: DIASPORA_AI_AGENT_NAME,
+        senderImage: DIASPORA_AI_AGENT_AVATAR,
         content: welcomeContent,
         type: "text",
         timestamp: nowMs,
         status: "sent",
+        metadata: {
+          isAiAgent: true,
+          aiActions: welcomeActions,
+        },
       };
       const lastMessageData = {
-        id: "welcome_from_founder",
+        id: "welcome_from_ai_agent",
         content: welcomeContent,
         timestamp: nowMs,
-        senderId: founderUid,
-        senderName: "Peter Swai",
+        senderId: agentUid,
+        senderName: DIASPORA_AI_AGENT_NAME,
         type: "text",
         status: "sent",
+        metadata: {
+          isAiAgent: true,
+          aiActions: welcomeActions,
+        },
       };
       transaction.set(welcomeMsgRef, messageData);
       transaction.set(chatRef, {
         lastMessage: lastMessageData,
         updatedAt: nowMs,
+        metadata: {isAiAgent: true},
       }, {merge: true});
       transaction.set(
           userChatRef,
           {
             chatId: chatRef.id,
             type: "direct",
-            name: null,
-            photoUrl: null,
-            subtype: null,
+            name: DIASPORA_AI_AGENT_NAME,
+            photoUrl: DIASPORA_AI_AGENT_AVATAR,
+            subtype: "ai_agent",
             lastMessage: lastMessageData,
-            lastDeliveredMessageId: "welcome_from_founder",
+            lastDeliveredMessageId: "welcome_from_ai_agent",
             updatedAt: nowMs,
             unreadCount: 1,
             unreadNotificationLines: [welcomeContent.slice(0, 500)],
@@ -767,15 +770,15 @@ async function ensureFounderWelcomeChatForUser(userId, profileOverride = null) {
           {merge: true},
       );
       transaction.set(
-          founderChatRef,
+          agentChatRef,
           {
             chatId: chatRef.id,
             type: "direct",
             name: null,
             photoUrl: null,
-            subtype: null,
+            subtype: "ai_agent",
             lastMessage: lastMessageData,
-            lastDeliveredMessageId: "welcome_from_founder",
+            lastDeliveredMessageId: "welcome_from_ai_agent",
             updatedAt: nowMs,
             unreadCount: 0,
             unreadNotificationLines: [],
@@ -792,6 +795,9 @@ async function ensureFounderWelcomeChatForUser(userId, profileOverride = null) {
   return resultChatId;
 }
 
+const ensureFounderWelcomeChatForUser = ensureAiAgentWelcomeChatForUser;
+
+exports.ensureAiAgentWelcomeChatForUser = ensureAiAgentWelcomeChatForUser;
 exports.ensureFounderWelcomeChatForUser = ensureFounderWelcomeChatForUser;
 
 exports.ensureDirectChat = functions.https.onCall(async (data, context) => {
@@ -800,14 +806,21 @@ exports.ensureDirectChat = functions.https.onCall(async (data, context) => {
   await consumeRateLimit("direct-chat-create", userId, 100, 60 * 60 * 1000);
   const otherUserId = data && data.otherUserId;
   const isFounderWelcome = Boolean(data && data.isFounderWelcome === true);
+  const isAiAgentWelcome = Boolean(data && data.isAiAgentWelcome === true);
   const create = !data || data.create !== false;
   if (!validId(otherUserId) || otherUserId === userId) {
     throw new functions.https.HttpsError("invalid-argument", "Invalid chat participant.");
   }
-  if ((otherUserId === CANONICAL_FOUNDER_UID || otherUserId === CANONICAL_FOUNDER_ALIAS || isFounderWelcome) && create) {
-    const founderChatId = await ensureFounderWelcomeChatForUser(userId);
-    if (founderChatId) {
-      return {success: true, exists: true, chatId: founderChatId};
+  if ((
+    otherUserId === DIASPORA_AI_AGENT_UID ||
+    otherUserId === CANONICAL_FOUNDER_UID ||
+    otherUserId === CANONICAL_FOUNDER_ALIAS ||
+    isFounderWelcome ||
+    isAiAgentWelcome
+  ) && create) {
+    const aiChatId = await ensureAiAgentWelcomeChatForUser(userId);
+    if (aiChatId) {
+      return {success: true, exists: true, chatId: aiChatId};
     }
   }
   const candidateChatRef = await findDirectChatCandidate(userId, otherUserId);

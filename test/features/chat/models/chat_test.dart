@@ -177,4 +177,86 @@ void main() {
       },
     );
   });
+
+  group('LastMessage status resolution & withUserPreferences', () {
+    test(
+      'withUserPreferences preserves delivered/read status from chat doc when userChats has stale sent status',
+      () {
+        final chat = Chat(
+          id: 'direct_u1_u2',
+          type: 'direct',
+          name: 'Teddy Prosper',
+          participants: const ['u1', 'u2'],
+          createdAt: 1000,
+          updatedAt: 5000,
+          lastMessage: const LastMessage(
+            id: 'msg-10',
+            content: 'Mkumbushe mama, irene na tarimo',
+            timestamp: 5000,
+            senderId: 'u1',
+            senderName: 'Peter',
+            type: 'text',
+            status: 'read',
+            forwarded: true,
+            metadata: {'isShared': true},
+          ),
+        );
+
+        final hydrated = chat.withUserPreferences({
+          'lastMessage': {
+            'id': 'msg-10',
+            'content': 'Mkumbushe mama, irene na tarimo',
+            'timestamp': 5000,
+            'senderId': 'u1',
+            'senderName': 'Peter',
+            'type': 'text',
+            'status': 'sent',
+          },
+          'updatedAt': 5000,
+        });
+
+        expect(hydrated.lastMessage?.status, 'read');
+        expect(hydrated.lastMessage?.forwarded, isTrue);
+        expect(hydrated.lastMessage?.metadata?['isShared'], isTrue);
+      },
+    );
+
+    test(
+      'withUserPreferences upgrades status when userChats has higher status than chat doc',
+      () {
+        final chat = Chat(
+          id: 'direct_u1_u2',
+          type: 'direct',
+          name: 'Lisa Beall',
+          participants: const ['u1', 'u2'],
+          createdAt: 1000,
+          updatedAt: 5000,
+          lastMessage: const LastMessage(
+            id: 'msg-11',
+            content: 'Hey Lisa',
+            timestamp: 5000,
+            senderId: 'u1',
+            senderName: 'Peter',
+            type: 'text',
+            status: 'sent',
+          ),
+        );
+
+        final hydrated = chat.withUserPreferences({
+          'lastMessage': {
+            'id': 'msg-11',
+            'content': 'Hey Lisa',
+            'timestamp': 5000,
+            'senderId': 'u1',
+            'senderName': 'Peter',
+            'type': 'text',
+            'status': 'delivered',
+          },
+          'updatedAt': 5000,
+        });
+
+        expect(hydrated.lastMessage?.status, 'delivered');
+      },
+    );
+  });
 }

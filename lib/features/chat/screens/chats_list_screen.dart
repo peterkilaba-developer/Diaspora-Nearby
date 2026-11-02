@@ -16,6 +16,8 @@ import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/shared/widgets/confetti_overlay.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 import 'package:diaspora_nearby/core/providers/global_feature_provider.dart';
+import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
+import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 
 final userChatsStreamProvider = StreamProvider<List<Chat>>((ref) {
   final authState = ref.watch(authStateProvider);
@@ -45,34 +47,200 @@ class ChatsListScreen extends ConsumerStatefulWidget {
 }
 
 class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
-  static const String _founderUid = 'yJ2REewPGWZQyS3zhisK1KziJJD3';
-  static final Set<String> _ensuredFounderChatForUids = <String>{};
+  static const String diasporaAiAgentUid = 'diaspora_ai_agent';
+  static const String _legacyFounderUid = 'yJ2REewPGWZQyS3zhisK1KziJJD3';
+  static final Set<String> _ensuredAiAgentChatForUids = <String>{};
+  static final Map<String, String> _resolvedAiAgentChatIdByUid =
+      <String, String>{};
 
-  void _ensureFounderDirectChatIfMissing(String? currentUid, List<Chat> chats) {
+  static String _resolveNativeGreeting(ProfileData? profile) {
+    final code = (profile?.homeCountryCode ?? '').trim().toUpperCase();
+    switch (code) {
+      case 'TZ':
+      case 'KE':
+        return 'Karibu sana';
+      case 'UG':
+        return 'Karibu / Tukusanyukidde';
+      case 'RW':
+        return 'Murakaza neza';
+      case 'NG':
+        return 'Nnọọ • E kaabo • Barka da zuwa';
+      case 'GH':
+        return 'Akwaaba';
+      case 'ET':
+        return 'እንኳን ደህና መጡ (Enkwan dehan metahu)';
+      case 'ZA':
+      case 'ZW':
+        return 'Siyakwamukela';
+      case 'FR':
+      case 'SN':
+      case 'CI':
+      case 'CD':
+      case 'CM':
+      case 'HT':
+        return 'Bienvenue';
+      case 'EG':
+      case 'MA':
+      case 'DZ':
+      case 'SA':
+      case 'AE':
+      case 'SD':
+        return 'مرحباً بك (Marhaban)';
+      case 'CN':
+      case 'TW':
+        return '欢迎 (Huānyíng)';
+      case 'IN':
+        return 'नमस्ते (Namaste)';
+      case 'ES':
+      case 'MX':
+      case 'CO':
+      case 'AR':
+        return '¡Bienvenido/a';
+      case 'BR':
+      case 'PT':
+      case 'AO':
+      case 'MZ':
+        return 'Bem-vindo(a)';
+      case 'DE':
+        return 'Herzlich willkommen';
+      default:
+        return 'Karibu • Welcome • Bienvenue';
+    }
+  }
+
+  static String buildLocalAiAgentWelcomeText(ProfileData? profile) {
+    final firstName = (profile?.firstName ?? '').trim();
+    final greeting = _resolveNativeGreeting(profile);
+    final namePart = firstName.isNotEmpty ? ', $firstName' : '';
+    return '$greeting$namePart!\n\n'
+        'I am Diaspora AI Agent, your 24/7 personal concierge on Diaspora Nearby.\n\n'
+        'Any Language: Speak to me in English, Kiswahili, Français, العربية, Español, 中文, हिन्दी, Yoruba, Igbo, Hausa, Amharic, or any language you prefer.\n\n'
+        'Here is what I can do for you right here in chat:\n'
+        '• Flights, Hotels & Car Rentals: Search live flights, hotels, stays & peer car rentals or list your own car/stay.\n'
+        '• Jobs & Marketplace: Find jobs, products, services & real estate — or tell me the details and I\'ll generate an instant Publish button right in chat.\n'
+        '• Diaspora Utilities: Ask me anything about Nearby Discovery, Live Homeland Radio, Ubuntu Emergency Fund, DDI Loans, or \$DIASPORA.\n\n'
+        'What can I help you find or post today?';
+  }
+
+  static List<Map<String, dynamic>> buildLocalWelcomeAiActions() {
+    return <Map<String, dynamic>>[
+      <String, dynamic>{
+        'id': 'welcome_flights',
+        'type': 'navigate',
+        'label': 'Search Flights',
+        'route': '/dsp/travel/flights',
+        'icon': 'flight',
+      },
+      <String, dynamic>{
+        'id': 'welcome_hotels',
+        'type': 'navigate',
+        'label': 'Find Hotels',
+        'route': '/dsp/travel/hotels',
+        'icon': 'hotel',
+      },
+      <String, dynamic>{
+        'id': 'welcome_cars',
+        'type': 'navigate',
+        'label': 'Car Rentals',
+        'route': '/dsp/travel/car-rental',
+        'icon': 'car',
+      },
+      <String, dynamic>{
+        'id': 'welcome_jobs',
+        'type': 'navigate',
+        'label': 'Browse Jobs',
+        'route': '/marketplace?type=job',
+        'icon': 'briefcase',
+      },
+      <String, dynamic>{
+        'id': 'welcome_post_job',
+        'type': 'prompt',
+        'label': 'Post a Job in Chat',
+        'prompt': 'I want to post a job listing.',
+        'icon': 'plus',
+      },
+      <String, dynamic>{
+        'id': 'welcome_nearby',
+        'type': 'navigate',
+        'label': 'Explore Nearby',
+        'route': '/nearby',
+        'icon': 'compass',
+      },
+    ];
+  }
+
+  Chat _buildSyntheticAiAgentChat(String currentUid, ProfileData? profile) {
+    final resolvedChatId =
+        _resolvedAiAgentChatIdByUid[currentUid] ?? 'ai_agent_$currentUid';
+    final welcomeText = buildLocalAiAgentWelcomeText(profile);
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    return Chat(
+      id: resolvedChatId,
+      type: 'direct',
+      name: 'Diaspora AI Agent',
+      photoUrl: 'https://diasporanearby.com/icons/Icon-512.png',
+      participants: <String>[currentUid, diasporaAiAgentUid],
+      createdAt: nowMs,
+      updatedAt: nowMs,
+      unreadCount: 1,
+      metadata: const <String, dynamic>{'isAiAgent': true},
+      lastMessage: LastMessage(
+        id: 'welcome_from_ai_agent',
+        content: welcomeText,
+        timestamp: nowMs,
+        senderId: diasporaAiAgentUid,
+        senderName: 'Diaspora AI Agent',
+        type: 'text',
+        status: 'sent',
+        metadata: <String, dynamic>{
+          'isAiAgent': true,
+          'aiActions': buildLocalWelcomeAiActions(),
+        },
+      ),
+    );
+  }
+
+  void _ensureAiAgentDirectChatIfMissing(String? currentUid, List<Chat> chats) {
     if (currentUid == null ||
         currentUid.isEmpty ||
-        currentUid == _founderUid ||
-        _ensuredFounderChatForUids.contains(currentUid)) {
+        currentUid == diasporaAiAgentUid ||
+        _ensuredAiAgentChatForUids.contains(currentUid)) {
       return;
     }
-    final hasFounderChat = chats.any(
+    final existingAiChat = chats.cast<Chat?>().firstWhere(
       (chat) =>
+          chat != null &&
           chat.isDirect &&
-          (chat.participants.contains(_founderUid) ||
-              chat.getOtherParticipantId(currentUid) == _founderUid),
+          (chat.participants.contains(diasporaAiAgentUid) ||
+              chat.getOtherParticipantId(currentUid) == diasporaAiAgentUid ||
+              chat.metadata?['isAiAgent'] == true),
+      orElse: () => null,
     );
-    if (hasFounderChat) {
-      _ensuredFounderChatForUids.add(currentUid);
+    if (existingAiChat != null) {
+      _ensuredAiAgentChatForUids.add(currentUid);
+      _resolvedAiAgentChatIdByUid[currentUid] = existingAiChat.id;
       return;
     }
-    _ensuredFounderChatForUids.add(currentUid);
+    _ensuredAiAgentChatForUids.add(currentUid);
     FirebaseFunctions.instance
         .httpsCallable('ensureDirectChat')
         .call<Map<String, dynamic>>({
-          'otherUserId': _founderUid,
-          'isFounderWelcome': true,
+          'otherUserId': diasporaAiAgentUid,
+          'isAiAgentWelcome': true,
         })
-        .ignore();
+        .then((res) {
+          final chatId = res.data['chatId']?.toString();
+          if (chatId != null && chatId.isNotEmpty) {
+            _resolvedAiAgentChatIdByUid[currentUid] = chatId;
+            if (mounted) {
+              ref
+                  .read(chatRepositoryProvider)
+                  .removeChatFromCache('ai_agent_$currentUid');
+              setState(() {});
+            }
+          }
+        })
+        .catchError((Object _) {});
   }
 
   Future<void> _syncCommunities() async {
@@ -249,12 +417,62 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
     String searchQuery,
   ) {
     final currentUid = ref.read(authRepositoryProvider).currentUser?.uid;
-    _ensureFounderDirectChatIfMissing(currentUid, chats);
+    final currentUserProfile = ref.watch(userProfileProvider).value;
+    _ensureAiAgentDirectChatIfMissing(currentUid, chats);
+    final visibleChats = chats.where((chat) {
+      if (chat.isDirect &&
+          chat.lastMessage?.id == 'welcome_from_founder' &&
+          (chat.participants.contains(_legacyFounderUid) ||
+              (currentUid != null &&
+                  chat.getOtherParticipantId(currentUid) ==
+                      _legacyFounderUid))) {
+        return false;
+      }
+      return true;
+    }).toList();
+    if (currentUid != null && currentUid.isNotEmpty) {
+      bool isAiChat(Chat chat) =>
+          chat.isDirect &&
+          (chat.id.startsWith('ai_agent_') ||
+              chat.participants.contains(diasporaAiAgentUid) ||
+              chat.getOtherParticipantId(currentUid) == diasporaAiAgentUid ||
+              chat.metadata?['isAiAgent'] == true);
+
+      final aiChats = visibleChats.where(isAiChat).toList();
+      if (aiChats.isEmpty) {
+        final syntheticAiChat = _buildSyntheticAiAgentChat(
+          currentUid,
+          currentUserProfile,
+        );
+        ref
+            .read(chatRepositoryProvider)
+            .upsertChatInCache(syntheticAiChat, notify: false);
+        visibleChats.insert(0, syntheticAiChat);
+      } else if (aiChats.length > 1) {
+        // Keep the canonical Firestore chat (non-synthetic) or the newest one, and drop duplicates
+        final canonicalAiChat = aiChats.firstWhere(
+          (c) => !c.id.startsWith('ai_agent_'),
+          orElse: () => aiChats.first,
+        );
+        for (final dup in aiChats) {
+          if (dup.id != canonicalAiChat.id) {
+            visibleChats.removeWhere((c) => c.id == dup.id);
+            if (dup.id.startsWith('ai_agent_')) {
+              ref
+                  .read(chatRepositoryProvider)
+                  .removeChatFromCache(dup.id, notify: false);
+            }
+          }
+        }
+      }
+    }
     if (currentUid != null) {
-      for (final chat in chats) {
+      for (final chat in visibleChats) {
         if (chat.isDirect) {
           final otherId = chat.getOtherParticipantId(currentUid);
-          if (otherId != null && otherId.isNotEmpty) {
+          if (otherId != null &&
+              otherId.isNotEmpty &&
+              otherId != diasporaAiAgentUid) {
             ref.read(chatPartnerProvider(otherId));
           }
         }
@@ -263,8 +481,8 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
 
     final isGlobalUnlocked = ref.watch(isGlobalUnlockedSyncProvider);
     final baseChats = isGlobalUnlocked
-        ? chats
-        : chats
+        ? visibleChats
+        : visibleChats
               .where(
                 (chat) =>
                     chat.id != 'global_community' &&

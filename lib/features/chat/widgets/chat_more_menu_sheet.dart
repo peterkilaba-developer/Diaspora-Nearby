@@ -3,6 +3,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:diaspora_nearby/core/data/countries.dart';
+import 'package:diaspora_nearby/core/data/world_languages.dart';
 import 'package:diaspora_nearby/features/chat/models/chat.dart';
 import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 import 'package:diaspora_nearby/features/profile/models/relationship.dart';
@@ -63,6 +65,8 @@ class ChatMoreMenuSheet extends ConsumerWidget {
   final VoidCallback? onChambersOfCommerce;
   final VoidCallback? onQRExchange;
   final VoidCallback? onAcceptRelationshipRequest;
+  final VoidCallback? onStartAiVoiceChat;
+  final ValueChanged<String>? onSendAiPrompt;
 
   const ChatMoreMenuSheet({
     super.key,
@@ -97,6 +101,8 @@ class ChatMoreMenuSheet extends ConsumerWidget {
     this.onChambersOfCommerce,
     this.onQRExchange,
     this.onAcceptRelationshipRequest,
+    this.onStartAiVoiceChat,
+    this.onSendAiPrompt,
   });
 
   /// Returns true if the existing relationship is a family type
@@ -142,12 +148,38 @@ class ChatMoreMenuSheet extends ConsumerWidget {
     return false;
   }
 
+  void _showLanguagePickerModal(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: _AiAgentLanguagePickerSheet(
+              onSelectPrompt: (prompt) {
+                Navigator.pop(sheetCtx);
+                onSendAiPrompt?.call(prompt);
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final repo = ref.read(chatRepositoryProvider);
     final currentUserId = repo.currentUserId ?? '';
-    final isDirect = chat.isDirect;
+    final isAiAgent =
+        chat.metadata?['isAiAgent'] == true ||
+        chat.participants.contains('diaspora_ai_agent') ||
+        chat.id.startsWith('ai_agent_');
+    final isDirect = chat.isDirect && !isAiAgent;
     final isGroup = chat.isGroup;
     final isListingChat = chat.isListingChat;
     final listingId = chat.metadata?['listingId'] as String?;
@@ -157,6 +189,67 @@ class ChatMoreMenuSheet extends ConsumerWidget {
     // distinct "kind" of organization so labels and exit-actions can differ
     // (e.g. they can't be "unfollowed").
     final isChamber = chat.isOrganization && chat.id.startsWith('org_chamber_');
+
+    if (isAiAgent) {
+      return Container(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.onSurfaceVariant.withValues(
+                    alpha: 0.2,
+                  ),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  physics: const BouncingScrollPhysics(),
+                  children: [
+                    AppBottomSheetItem(
+                      icon: LucideIcons.globe,
+                      iconColor: Colors.teal.shade600,
+                      iconBgColor: Colors.teal.withValues(alpha: 0.12),
+                      title: 'Change Language / Badili Lugha',
+                      subtitle:
+                          'Languages spoken in your home & host countries or search all',
+                      onTap: () {
+                        final rootCtx = Navigator.of(
+                          context,
+                          rootNavigator: true,
+                        ).context;
+                        Navigator.pop(context);
+                        _showLanguagePickerModal(rootCtx);
+                      },
+                    ),
+                    AppBottomSheetItem(
+                      icon: LucideIcons.eraser,
+                      iconColor: Colors.orange.shade700,
+                      iconBgColor: Colors.orange.withValues(alpha: 0.12),
+                      title: 'Clear chat',
+                      subtitle: 'Clear conversation history',
+                      onTap: onClearChat,
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     final nameToUse = isDirect ? displayName.split(' ').first : displayName;
 
@@ -877,6 +970,392 @@ class _BlockActionItem extends ConsumerWidget {
       subtitle: isBlocked ? 'Allow them to message you' : 'Block this user',
       isDestructive: !isBlocked,
       onTap: isBlocked ? onUnblock : onBlock,
+    );
+  }
+}
+
+class _AiAgentLanguagePickerSheet extends ConsumerStatefulWidget {
+  final ValueChanged<String> onSelectPrompt;
+
+  const _AiAgentLanguagePickerSheet({required this.onSelectPrompt});
+
+  @override
+  ConsumerState<_AiAgentLanguagePickerSheet> createState() =>
+      _AiAgentLanguagePickerSheetState();
+}
+
+class _AiAgentLanguagePickerSheetState
+    extends ConsumerState<_AiAgentLanguagePickerSheet> {
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  String _resolveCountryCode({
+    required String? code,
+    required String? countryName,
+  }) {
+    final trimmedCode = code?.trim().toUpperCase() ?? '';
+    if (trimmedCode.isNotEmpty) return trimmedCode;
+    final trimmedName = countryName?.trim().toLowerCase() ?? '';
+    if (trimmedName.isEmpty) return '';
+    for (final c in countries) {
+      if (c.name.toLowerCase() == trimmedName ||
+          c.code.toLowerCase() == trimmedName) {
+        return c.code.toUpperCase();
+      }
+    }
+    return '';
+  }
+
+  String _promptForLanguage(WorldLanguage lang) {
+    switch (lang.code.toLowerCase()) {
+      case 'sw':
+        return 'Tafadhali ongea nami kwa Kiswahili kuanzia sasa.';
+      case 'en':
+        return 'Please communicate with me in English.';
+      case 'fr':
+        return 'Veuillez communiquer avec moi en français.';
+      case 'ar':
+        return 'يرجى التحدث معي باللغة العربية.';
+      case 'es':
+        return 'Por favor comunícate conmigo en español.';
+      case 'pt':
+        return 'Por favor, comunique-se comigo em português.';
+      default:
+        return 'Please communicate with me in ${lang.name} (${lang.nativeName}).';
+    }
+  }
+
+  String _subtitleForLanguage(
+    WorldLanguage lang, {
+    required String homeCode,
+    required String hostCode,
+    Country? homeCountry,
+    Country? hostCountry,
+  }) {
+    final upperCodes = lang.countryCodes.map((c) => c.toUpperCase()).toSet();
+    final inHome = homeCode.isNotEmpty && upperCodes.contains(homeCode);
+    final inHost = hostCode.isNotEmpty && upperCodes.contains(hostCode);
+    if (inHome && inHost) {
+      final homeName = homeCountry?.name ?? homeCode;
+      final hostName = hostCountry?.name ?? hostCode;
+      return homeName == hostName
+          ? 'Spoken in $homeName'
+          : 'Spoken in $homeName & $hostName';
+    }
+    if (inHome) {
+      return 'Home country • ${homeCountry?.name ?? homeCode}';
+    }
+    if (inHost) {
+      return 'Host country • ${hostCountry?.name ?? hostCode}';
+    }
+    final langCountries = getCountriesForLanguage(lang);
+    if (langCountries.isEmpty) return 'Communicate in ${lang.name}';
+    final sample = langCountries.take(3).map((c) => c.name).join(', ');
+    final extra = langCountries.length > 3 ? ' +${langCountries.length - 3}' : '';
+    return '$sample$extra';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final profile = ref.watch(userProfileProvider).value;
+
+    final homeCode = _resolveCountryCode(
+      code: profile?.homeCountryCode,
+      countryName: profile?.homeCountry,
+    );
+    final hostCode = _resolveCountryCode(
+      code: profile?.hostCountryCode ?? profile?.currentLocation?.countryCode,
+      countryName: profile?.hostCountry,
+    );
+
+    final Country? homeCountry = homeCode.isNotEmpty
+        ? getCountryByCode(homeCode)
+        : null;
+    final Country? hostCountry = hostCode.isNotEmpty
+        ? getCountryByCode(hostCode)
+        : null;
+
+    final List<WorldLanguage> corridorLanguages = [];
+    final Set<String> seenCorridorCodes = {};
+
+    for (final code in [homeCode, hostCode]) {
+      if (code.isEmpty) continue;
+      for (final lang in getOfficialLanguagesForCountry(code)) {
+        if (seenCorridorCodes.add(lang.code)) {
+          corridorLanguages.add(lang);
+        }
+      }
+    }
+
+    // Also include any spoken languages listed on the user's profile
+    if (profile?.languages != null) {
+      for (final spoken in profile!.languages!) {
+        final norm = spoken.trim().toLowerCase();
+        if (norm.isEmpty) continue;
+        for (final lang in worldLanguages) {
+          if (lang.name.toLowerCase() == norm ||
+              lang.nativeName.toLowerCase() == norm) {
+            if (seenCorridorCodes.add(lang.code)) {
+              corridorLanguages.add(lang);
+            }
+          }
+        }
+      }
+    }
+
+    // Fallback if profile countries aren't loaded yet
+    if (corridorLanguages.isEmpty) {
+      for (final code in ['TZ', 'US']) {
+        for (final lang in getOfficialLanguagesForCountry(code)) {
+          if (seenCorridorCodes.add(lang.code)) {
+            corridorLanguages.add(lang);
+          }
+        }
+      }
+    }
+
+    final q = _query.trim().toLowerCase();
+    final List<WorldLanguage> searchResults = q.isEmpty
+        ? const <WorldLanguage>[]
+        : worldLanguages.where((lang) {
+            if (lang.name.toLowerCase().contains(q) ||
+                lang.nativeName.toLowerCase().contains(q) ||
+                lang.code.toLowerCase().contains(q)) {
+              return true;
+            }
+            for (final c in getCountriesForLanguage(lang)) {
+              if (c.name.toLowerCase().contains(q) ||
+                  c.code.toLowerCase() == q) {
+                return true;
+              }
+            }
+            return false;
+          }).toList();
+
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.72,
+      minChildSize: 0.45,
+      maxChildSize: 0.92,
+      builder: (context, scrollController) {
+        return Container(
+          padding: EdgeInsets.only(bottom: bottomInset),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(vertical: 12),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.onSurfaceVariant.withValues(
+                        alpha: 0.2,
+                      ),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 2, 12, 8),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        LucideIcons.globe,
+                        color: AppTheme.accent,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Select AI Agent Language / Chagua Lugha',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(LucideIcons.x, size: 18),
+                        onPressed: () => Navigator.of(context).pop(),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (value) => setState(() => _query = value),
+                    decoration: InputDecoration(
+                      hintText: 'Search other languages or countries...',
+                      prefixIcon: const Icon(LucideIcons.search, size: 18),
+                      suffixIcon: _query.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(LucideIcons.x, size: 16),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => _query = '');
+                              },
+                            )
+                          : null,
+                      isDense: true,
+                      filled: true,
+                      fillColor: AppTheme.elevationColor(context, 3),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Expanded(
+                  child: ListView(
+                    controller: scrollController,
+                    padding: const EdgeInsets.only(bottom: 16),
+                    children: [
+                      if (q.isEmpty) ...[
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 4, 20, 6),
+                          child: Text(
+                            'YOUR HOME & HOST COUNTRY LANGUAGES',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.8,
+                              color: theme.hintColor,
+                            ),
+                          ),
+                        ),
+                        ...corridorLanguages.map(
+                          (lang) => AppBottomSheetItem(
+                            icon: LucideIcons.languages,
+                            iconColor: AppTheme.accent,
+                            iconBgColor: AppTheme.accent.withValues(
+                              alpha: 0.12,
+                            ),
+                            title:
+                                '${lang.primaryFlag}  ${lang.displayLabel}',
+                            subtitle: _subtitleForLanguage(
+                              lang,
+                              homeCode: homeCode,
+                              hostCode: hostCode,
+                              homeCountry: homeCountry,
+                              hostCountry: hostCountry,
+                            ),
+                            onTap: () => widget.onSelectPrompt(
+                              _promptForLanguage(lang),
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
+                          child: Text(
+                            'OTHER LANGUAGES',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.8,
+                              color: theme.hintColor,
+                            ),
+                          ),
+                        ),
+                        ...worldLanguages
+                            .where(
+                              (lang) => !seenCorridorCodes.contains(lang.code),
+                            )
+                            .map(
+                              (lang) => AppBottomSheetItem(
+                                icon: LucideIcons.languages,
+                                iconColor: AppTheme.accent,
+                                iconBgColor: AppTheme.accent.withValues(
+                                  alpha: 0.12,
+                                ),
+                                title:
+                                    '${lang.primaryFlag}  ${lang.displayLabel}',
+                                subtitle: _subtitleForLanguage(
+                                  lang,
+                                  homeCode: homeCode,
+                                  hostCode: hostCode,
+                                  homeCountry: homeCountry,
+                                  hostCountry: hostCountry,
+                                ),
+                                onTap: () => widget.onSelectPrompt(
+                                  _promptForLanguage(lang),
+                                ),
+                              ),
+                            ),
+                      ] else if (searchResults.isEmpty) ...[
+                        Padding(
+                          padding: const EdgeInsets.all(28),
+                          child: Center(
+                            child: Text(
+                              'No matching languages found.',
+                              style: TextStyle(color: theme.hintColor),
+                            ),
+                          ),
+                        ),
+                      ] else ...[
+                        ...searchResults.map(
+                          (lang) => AppBottomSheetItem(
+                            icon: LucideIcons.languages,
+                            iconColor: AppTheme.accent,
+                            iconBgColor: AppTheme.accent.withValues(
+                              alpha: 0.12,
+                            ),
+                            title:
+                                '${lang.primaryFlag}  ${lang.displayLabel}',
+                            subtitle: _subtitleForLanguage(
+                              lang,
+                              homeCode: homeCode,
+                              hostCode: hostCode,
+                              homeCountry: homeCountry,
+                              hostCountry: hostCountry,
+                            ),
+                            onTap: () => widget.onSelectPrompt(
+                              _promptForLanguage(lang),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

@@ -349,6 +349,7 @@ class ChatMessagingService {
         'senderName': senderNameOverride ?? '$firstName $lastName'.trim(),
         'type': originalMessage.type,
         'status': 'sent',
+        'forwarded': true,
       };
 
       final batch = _firestore.batch();
@@ -386,6 +387,8 @@ class ChatMessagingService {
         return 'Voice message';
       case 'audio_file':
         return 'Audio';
+      case 'voice_call':
+        return 'Voice call';
       case 'location':
         return 'Location';
       case 'document':

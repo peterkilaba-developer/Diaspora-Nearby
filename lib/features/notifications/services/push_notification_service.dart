@@ -621,6 +621,9 @@ class PushNotificationService {
         case 'audio_file':
           body = 'Sent an audio file';
           break;
+        case 'voice_call':
+          body = 'Voice call';
+          break;
         case 'image':
           body = 'Photo message';
           if (!kIsWeb) resolvedImageUrl ??= data['imageUrl']?.toString();
@@ -652,6 +655,7 @@ class PushNotificationService {
         : (body?.trim().isNotEmpty == true ? body!.trim() : 'Sent a message');
     if (msgType == 'audio' ||
         msgType == 'audio_file' ||
+        msgType == 'voice_call' ||
         msgType == 'image' ||
         msgType == 'video' ||
         msgType == 'location' ||
@@ -698,6 +702,7 @@ class PushNotificationService {
       'video',
       'audio',
       'audio_file',
+      'voice_call',
       'location',
       'document',
       'money-transfer',
@@ -901,6 +906,16 @@ class PushNotificationService {
     } else if (type == 'money_transfer' ||
         type == 'money-transfer' ||
         type == 'points_update') {
+      return '/dsp/points';
+    } else if (type == 'proximity_reward') {
+      if (data['userId'] != null && data['userId'].toString().isNotEmpty) {
+        return '/profile/${data['userId']}';
+      }
+      return '/dsp/points';
+    } else if (type == 'grassroots_gathering_reward') {
+      if (data['eventId'] != null && data['eventId'].toString().isNotEmpty) {
+        return '/events/${data['eventId']}';
+      }
       return '/dsp/points';
     } else if (type == 'nearby_compatriot' && data['userId'] != null) {
       return '/profile/${data['userId']}';

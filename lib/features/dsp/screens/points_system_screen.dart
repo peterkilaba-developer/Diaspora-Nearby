@@ -463,25 +463,20 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
 
             _buildActivityCard(
               context,
-              title: 'Welcome Bonus (DSP Points)',
-              subtitle: '10,000 DSP points awarded upon joining',
-              amount: '10,000 DSP',
-              earned: lifetimeEarnings['welcome_bonus'] ?? 0,
-            ),
-            _buildActivityCard(
-              context,
-              title: 'Location Transparency',
+              title: 'Location Transparency (Welcome Bonus)',
               subtitle:
-                  'Keep live location active to participate in token distributions',
-              amount: '10,000 DSP',
-              earned: lifetimeEarnings['location_transparency'] ?? 0,
+                  'Allow live location for transparency to earn 10,000 DSP + 10 PCT, immediately converted at 100% into 10,000 \$DIASPORA (locked until 10 QR exchanges)',
+              amount: '10,000 DSP → 10,000 \$DIASPORA',
+              earned:
+                  (lifetimeEarnings['location_transparency'] ?? 0) +
+                  (lifetimeEarnings['welcome_bonus'] ?? 0),
             ),
             _buildActivityCard(
               context,
               title: 'Complete Your Profile',
               subtitle:
-                  'Fill all ${userProfileAsync.value?.totalMilestoneFields ?? 12} profile fields to unlock the genesis bonus',
-              amount: '10,000 DSP',
+                  'First 10 fields award 1,000 DSP + 1 PCT each (immediately converted to 1,000 \$DIASPORA). Additional fields award 1,000 DSP each (converts at TDE per PCT)',
+              amount: '1,000 DSP / field',
               earned: lifetimeEarnings['profile_completion'] ?? 0,
             ),
 
@@ -505,23 +500,28 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             _buildActivityCard(
               context,
               title: 'Family Connection',
-              subtitle: 'Send or accept a family relationship request',
+              subtitle:
+                  'First 10 award 1,000 DSP + 1 PCT each (immediately converted to \$DIASPORA). 11+ award 1,000 DSP each (converts at TDE)',
               amount: '1,000 DSP',
               earned: lifetimeEarnings['family_connection'] ?? 0,
             ),
             _buildActivityCard(
               context,
               title: 'Friend Connection',
-              subtitle: 'Send or accept a friend relationship request',
+              subtitle:
+                  'First 10 award 1,000 DSP + 1 PCT each (immediately converted to \$DIASPORA). 11+ award 1,000 DSP each (converts at TDE)',
               amount: '1,000 DSP',
               earned: lifetimeEarnings['friend_connection'] ?? 0,
             ),
             _buildActivityCard(
               context,
-              title: 'QR Connect',
-              subtitle: 'Scan someone\'s QR code in person',
+              title: 'QR Connect (10 Unlocks All \$DIASPORA)',
+              subtitle:
+                  'First 10 in-person QR scans award 1,000 DSP + 1 PCT each (immediately converted to \$DIASPORA) and unlock all minted \$DIASPORA for transfer/sell. 11+ award 1,000 DSP each',
               amount: '1,000 DSP',
-              earned: lifetimeEarnings['identity_qr_exchange'] ?? 0,
+              earned:
+                  (lifetimeEarnings['identity_qr_exchange'] ?? 0) +
+                  (lifetimeEarnings['identity_qr_exchange_continuous'] ?? 0),
             ),
 
             const SizedBox(height: 24),
@@ -540,7 +540,8 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             _buildActivityCard(
               context,
               title: 'Verified by Peer',
-              subtitle: 'Someone verifies your identity',
+              subtitle:
+                  'First 10 peer verifications award 1,000 DSP + 1 PCT each (immediately converted to \$DIASPORA). 11+ award 1,000 DSP each (converts at TDE)',
               amount: '1,000 DSP',
               earned: lifetimeEarnings['verified_by_peer'] ?? 0,
             ),
@@ -641,6 +642,24 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
 
             _buildActivityCard(
               context,
+              title: 'Proximity Connection',
+              subtitle:
+                  'Automatically earned when within 100 ft of another member for 10+ minutes',
+              amount: '1,000 DSP each',
+              earned: lifetimeEarnings['proximity_dwell_reward'] ?? 0,
+            ),
+            _buildActivityCard(
+              context,
+              title: 'Grassroots Gathering',
+              subtitle:
+                  'Host or attend a gathering within 100 ft for 60+ minutes',
+              amount: '1,000 DSP each',
+              earned:
+                  (lifetimeEarnings['peer_visit_visitor_reward'] ?? 0) +
+                  (lifetimeEarnings['peer_visit_host_reward'] ?? 0),
+            ),
+            _buildActivityCard(
+              context,
               title: 'Event QR Check-in',
               subtitle: 'Attend a community event (QR verified)',
               amount: '1,000 DSP',
@@ -737,7 +756,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             ),
             const SizedBox(height: 16),
             Text(
-              'DSP is earned instantly for all activities (with 10,000 DSP welcome and profile completion payouts). PCT is earned through verifiable interactions. For core connection milestones (Family, Friend, QR Connect, and Verified/Vouched), reaching 10 connections awards 10,000 DSP + 10 PCT, with progressive tiers at 100, 1K, etc.',
+              'Location Transparency awards 10,000 DSP + 10 PCT and immediately converts at 100% into 10,000 \$DIASPORA. For Profile Fields, QR Exchanges, Family, Friends, and Peer Verifications, the first 10 steps award 1,000 DSP + 1 PCT each (immediately converted to 1,000 \$DIASPORA), while 11+ award 1,000 DSP each to convert at TDE per PCT (+1 PCT per 10 events). Completing all 10 QR exchanges unlocks all minted \$DIASPORA for transfer/sell.',
               style: TextStyle(
                 color: Theme.of(context).hintColor,
                 fontSize: 12,
@@ -751,8 +770,8 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               context,
               title: 'Complete Your Profile',
               subtitle:
-                  'Fill ${userProfileAsync.value?.totalMilestoneFields ?? 12} profile fields to fully complete your profile and earn your genesis bonus.',
-              amount: '+10 PCT  •  10,000 DSP',
+                  'First 10 profile fields award +1 PCT & 1,000 DSP each (immediately converted at 100% to 1,000 \$DIASPORA). Additional fields award 1,000 DSP each for TDE conversion.',
+              amount: '+1 PCT & 1,000 \$DIASPORA / field (first 10)',
               standing:
                   '${userProfileAsync.value?.completedMilestoneFieldCount ?? 0}/${userProfileAsync.value?.totalMilestoneFields ?? 12} Fields',
             ),
@@ -767,6 +786,39 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               standing: 'Dual Identity Active',
             ),
 
+            // --- Proximity & Gatherings ---
+            _buildSubHeader('Proximity & Gatherings (+1 PCT per 10)'),
+            const SizedBox(height: 8),
+            _buildTrustCard(
+              context,
+              title: 'Automatic Proximity Connection',
+              subtitle:
+                  '1,000 DSP awarded to both members when within 100 ft for 10+ minutes in 24h. Every 10 proximity events awards +1 PCT.',
+              amount: '+1 PCT per 10 events',
+              standing:
+                  '${trustData?.proximityConnectionsCount ?? 0} Connections',
+            ),
+            _buildTrustCard(
+              context,
+              title: 'Grassroots Gathering',
+              subtitle:
+                  '1,000 DSP awarded to host & guest when within 100 ft for 60+ minutes at an invited gathering. Every 10 gatherings awards +1 PCT.',
+              amount: '+1 PCT per 10 events',
+              standing:
+                  '${trustData?.grassrootsGatheringsCount ?? 0} Gatherings',
+            ),
+            _buildTrustCard(
+              context,
+              title: 'Event Attendance & Hosting',
+              subtitle:
+                  '1,000 DSP per event check-in or hosted attendee. Every 10 events attended or 10 attendees hosted awards +1 PCT.',
+              amount: '+1 PCT per 10 events',
+              standing:
+                  '${trustData?.verifiedCheckInCount ?? 0} Attended  •  ${trustData?.hostedEventAttendeesCount ?? 0} Hosted',
+            ),
+
+            const SizedBox(height: 16),
+
             // --- Verification ---
             _buildSubHeader('Verification'),
             const SizedBox(height: 8),
@@ -774,17 +826,17 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               context,
               title: 'Verified by Peer',
               subtitle:
-                  '1,000 DSP earned per connection. +10 PCT awarded at 10, 100, 1K... unique verifications.',
-              amount: '+10 PCT per 10× milestone',
+                  'First 10 unique peer verifications award +1 PCT & 1,000 DSP each (immediately converted to 1,000 \$DIASPORA). 11+ award 1,000 DSP each (for TDE) and +1 PCT per 10.',
+              amount: '+1 PCT each (first 10)  •  +1 PCT per 10 after',
               standing: '${trustData?.uniqueVerificationCount ?? 0} Received',
             ),
             _buildTrustCard(
               context,
               title: 'Verify Peer',
               subtitle:
-                  'You verifying someone else. Earn 1,000 DSP instantly. Does not award PCT (action builds trust for them, not you).',
-              amount: '0 PCT',
-              standing: '-- Given',
+                  'You verifying someone else\'s profile fields. Earn 1,000 DSP per verified peer and +1 PCT for every 10 verifications given.',
+              amount: '+1 PCT per 10 given',
+              standing: '${trustData?.verificationsGivenCount ?? 0} Given',
             ),
 
             const SizedBox(height: 16),
@@ -794,18 +846,18 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             const SizedBox(height: 8),
             _buildTrustCard(
               context,
-              title: 'Vouched by Peer',
+              title: 'Vouched by Peer (Trust Slider >90)',
               subtitle:
-                  '1,000 DSP earned per connection. +10 PCT awarded at 10, 100, 1K... unique vouches.',
-              amount: '+10 PCT per 10× milestone',
+                  'Earn +1 PCT for every 10 net full-trust (>90) peer vouches outside your Circle of Trust.',
+              amount: '+1 PCT per 10 vouches',
               standing: '${trustData?.uniqueVouchCount ?? 0} Received',
             ),
             _buildTrustCard(
               context,
               title: 'Vouch for Peer',
               subtitle:
-                  'You vouching for someone else. Earn 1,000 DSP + 1,000 DSP staked. Does not award PCT (action builds trust for them, not you).',
-              amount: '0 PCT',
+                  'You vouching for someone else via the Trust Slider.',
+              amount: 'Peer Trust Signal',
               standing: '-- Given',
             ),
 
@@ -814,25 +866,36 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               context,
               title: 'Family Connection',
               subtitle:
-                  '1,000 DSP earned per connection. +10 PCT & 10,000 DSP milestone at 10 unique family connections.',
-              amount: '+10 PCT per 10× milestone',
+                  'First 10 unique family connections award +1 PCT & 1,000 DSP each (immediately converted to 1,000 \$DIASPORA). 11+ award 1,000 DSP each (for TDE) and +1 PCT per 10.',
+              amount: '+1 PCT each (first 10)  •  +1 PCT per 10 after',
               standing: '${trustData?.uniqueFamilyCount ?? 0} Connected',
             ),
             _buildTrustCard(
               context,
               title: 'Friend Connection',
               subtitle:
-                  '1,000 DSP earned per connection. +10 PCT & 10,000 DSP milestone at 10 unique friend connections.',
-              amount: '+10 PCT per 10× milestone',
+                  'First 10 unique friend connections award +1 PCT & 1,000 DSP each (immediately converted to 1,000 \$DIASPORA). 11+ award 1,000 DSP each (for TDE) and +1 PCT per 10.',
+              amount: '+1 PCT each (first 10)  •  +1 PCT per 10 after',
               standing: '${trustData?.uniqueFriendCount ?? 0} Connected',
             ),
             _buildTrustCard(
               context,
-              title: 'QR Connect',
+              title: 'QR Connect (10 Unlocks All \$DIASPORA)',
               subtitle:
-                  '1,000 DSP earned per connection. +10 PCT & 10,000 DSP milestone at 10 unique in-person QR scans.',
-              amount: '+10 PCT per 10× milestone',
+                  'First 10 unique in-person QR scans award +1 PCT & 1,000 DSP each (immediately converted to 1,000 \$DIASPORA) and unlock all minted \$DIASPORA for transfer/sell. 11+ award +1,000 DSP each and +1 PCT per 10.',
+              amount: '+1 PCT each (first 10)  •  Unlocks \$DIASPORA at 10',
               standing: '${trustData?.uniqueQrCount ?? 0} Scanned',
+            ),
+
+            // --- Community & Economic Trust ---
+            _buildTrustCard(
+              context,
+              title: 'Solutions, Referrals, Stays & Governance',
+              subtitle:
+                  'Every 10 verified chat solutions, 10 referrals, 10 completed economic/peer stay transactions, or 10 governance votes awards +1 PCT.',
+              amount: '+1 PCT per 10 events',
+              standing:
+                  '${(trustData?.verifiedSolutionsCount ?? 0) + (trustData?.referralCount ?? 0) + (trustData?.economicTxCount ?? 0) + (trustData?.governanceVotesCount ?? 0)} Total Events',
             ),
 
             // --- Seniority & Ubuntu Fund ---
@@ -1095,7 +1158,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
   ) {
     final epochService = ref.read(epochServiceProvider);
     final double efficiency = epochService.calculateEfficiency(trustScore);
-    final String efficiencyStatus = '${(efficiency * 100).toInt()}%';
+    final String efficiencyStatus = '${(efficiency * 100).round()}%';
     final Color efficiencyColor = EpochService.getEfficiencyColor(trustScore);
 
     final int totalPoints = points.availablePoints;
@@ -1944,7 +2007,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                                           style: TextStyle(fontSize: 10),
                                         ),
                                         Text(
-                                          '${(efficiency * 100).toInt()}%',
+                                          '${(efficiency * 100).round()}%',
                                           style: TextStyle(
                                             fontSize: 10,
                                             fontWeight: FontWeight.bold,
@@ -2593,6 +2656,17 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
         )
         .toList();
 
+    final bool hasHomeState = homePool.any(
+      (c) =>
+          CommunityChatUtils.inferCommunityType(type: c.type, id: c.id) ==
+          'state',
+    );
+    final bool hasHostState = hostPool.any(
+      (c) =>
+          CommunityChatUtils.inferCommunityType(type: c.type, id: c.id) ==
+          'state',
+    );
+
     // Sort by canonical community type (Continent > Country > State > City)
     int getTypeWeight(String? type, String id) {
       final effectiveType = CommunityChatUtils.inferCommunityType(
@@ -2718,7 +2792,15 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             ),
             const SizedBox(height: 8),
             ...homePool.map((community) {
-              const percentage = "10%";
+              final effectiveType = CommunityChatUtils.inferCommunityType(
+                type: community.type,
+                id: community.id,
+              );
+              final percentage =
+                  (hasHomeState &&
+                      (effectiveType == 'country' || effectiveType == 'state'))
+                  ? "5%"
+                  : "10%";
               final cardTitle = CommunityChatUtils.generateTreasuryTitle(
                 name: community.name,
                 type: community.type,
@@ -2767,7 +2849,15 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             ),
             const SizedBox(height: 8),
             ...hostPool.map((community) {
-              const percentage = "10%";
+              final effectiveType = CommunityChatUtils.inferCommunityType(
+                type: community.type,
+                id: community.id,
+              );
+              final percentage =
+                  (hasHostState &&
+                      (effectiveType == 'country' || effectiveType == 'state'))
+                  ? "5%"
+                  : "10%";
               final cardTitle = CommunityChatUtils.generateTreasuryTitle(
                 name: community.name,
                 type: community.type,
@@ -3108,7 +3198,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                         if (trustScore != null) ...[
                           const TextSpan(text: 'Efficiency: '),
                           TextSpan(
-                            text: '${(eff * 100).toInt()}%',
+                            text: '${(eff * 100).round()}%',
                             style: TextStyle(
                               color: EpochService.getEfficiencyColor(
                                 trustScore,
@@ -3145,7 +3235,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                     children: [
                       if (trustScore != null)
                         TextSpan(
-                          text: '${(eff * 100).toInt()}%',
+                          text: '${(eff * 100).round()}%',
                           style: TextStyle(
                             color: EpochService.getEfficiencyColor(trustScore),
                           ),
@@ -3260,11 +3350,9 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
         (userProfile?.homeCountryCode != null &&
             userProfile!.homeCountryCode!.isNotEmpty);
 
+    final completedProfileFields = userProfile?.completedMilestoneFieldCount ?? 0;
     final isProfileComplete =
-        userProfile?.isComplete == true ||
-        (userProfile != null &&
-            userProfile.completedMilestoneFieldCount >=
-                userProfile.totalMilestoneFields);
+        userProfile?.isComplete == true || completedProfileFields >= 10;
 
     final qrCount = trustData?.uniqueQrCount ?? displayPoints.qrConnectionCount;
     final hasTenQr = qrCount >= 10;
@@ -3295,18 +3383,19 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
     if (hasTenVerifications) completedCount++;
     if (hasEmergencyFund) completedCount++;
 
-    // User qualifies by completing the 6 core milestones (Profile, Location, 10 QR, 10 Family, 10 Friends, 10 Verifications).
-    // Emergency Fund contribution is the 7th milestone (voluntary +10 PCT once members have tokens).
-    final bool isAllComplete =
-        hasLocation &&
-        isProfileComplete &&
-        hasTenQr &&
-        hasTenFamily &&
-        hasTenFriends &&
-        hasTenVerifications;
+    final int pohMintedTokens =
+        (hasLocation ? 10000 : 0) +
+        (completedProfileFields.clamp(0, 10) * 1000) +
+        (familyCount.clamp(0, 10) * 1000) +
+        (friendCount.clamp(0, 10) * 1000) +
+        (qrCount.clamp(0, 10) * 1000) +
+        (verificationCount.clamp(0, 10) * 1000) +
+        (hasEmergencyFund ? 10000 : 0);
+
+    final bool isAllComplete = hasTenQr;
 
     return Card(
-      elevation: 2,
+      elevation: 0,
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Container(
@@ -3337,7 +3426,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '7,000 \$DIASPORA Proof of Humanity Distribution',
+                        '${NumberFormat('#,###').format(pohMintedTokens)} / 70,000 \$DIASPORA Minted (PoH)',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
@@ -3346,7 +3435,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Auto-credited to smart wallet upon completing the 6 core PoH milestones (Emergency Fund adds +10 PCT bonus)',
+                        'Each PoH step converts DSP at 100% into \$DIASPORA immediately. Complete 10 QR exchanges to unlock all minted \$DIASPORA for transfer/sell.',
                         style: TextStyle(
                           fontSize: 12,
                           color: isAllComplete
@@ -3362,63 +3451,66 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             const Divider(height: 24),
             _buildMilestoneCheckRow(
               context,
-              title: 'Location Transparency (10 PCT)',
+              title: 'Location Transparency (+10 PCT • 10,000 \$DIASPORA)',
               isComplete: hasLocation,
               subtitle: hasLocation
-                  ? 'Location enabled'
-                  : 'Enable location or set current city',
+                  ? '10,000 DSP converted at 100% to 10,000 \$DIASPORA'
+                  : 'Enable location transparency for 10,000 \$DIASPORA welcome bonus',
               textColor: isAllComplete ? Colors.white : null,
             ),
             const SizedBox(height: 8),
             _buildMilestoneCheckRow(
               context,
-              title: 'Complete Profile (10 PCT)',
+              title: 'Profile Fields (+1 PCT & 1,000 \$DIASPORA / field)',
               isComplete: isProfileComplete,
-              subtitle: isProfileComplete
-                  ? 'Profile fields completed'
-                  : 'Fill all profile fields',
+              subtitle:
+                  '${completedProfileFields.clamp(0, 10)} / 10 fields converted (${NumberFormat('#,###').format(completedProfileFields.clamp(0, 10) * 1000)} \$DIASPORA); 11+ earn 1,000 DSP for TDE',
               textColor: isAllComplete ? Colors.white : null,
             ),
             const SizedBox(height: 8),
             _buildMilestoneCheckRow(
               context,
-              title: '10 QR Identity Exchanges (10 PCT)',
+              title: '10 QR Identity Exchanges (Unlocks All \$DIASPORA)',
               isComplete: hasTenQr,
-              subtitle: '$qrCount / 10 physical in-person QR exchanges',
+              subtitle:
+                  '${qrCount.clamp(0, 10)} / 10 in-person QR scans (${NumberFormat('#,###').format(qrCount.clamp(0, 10) * 1000)} \$DIASPORA)',
               textColor: isAllComplete ? Colors.white : null,
             ),
             const SizedBox(height: 8),
             _buildMilestoneCheckRow(
               context,
-              title: 'Family Circle (10 PCT)',
+              title: 'Family Circle (+1 PCT & 1,000 \$DIASPORA each)',
               isComplete: hasTenFamily,
-              subtitle: '$familyCount / 10 verified family connections',
+              subtitle:
+                  '${familyCount.clamp(0, 10)} / 10 family connections (${NumberFormat('#,###').format(familyCount.clamp(0, 10) * 1000)} \$DIASPORA)',
               textColor: isAllComplete ? Colors.white : null,
             ),
             const SizedBox(height: 8),
             _buildMilestoneCheckRow(
               context,
-              title: 'Friend Circle (10 PCT)',
+              title: 'Friend Circle (+1 PCT & 1,000 \$DIASPORA each)',
               isComplete: hasTenFriends,
-              subtitle: '$friendCount / 10 verified friend connections',
+              subtitle:
+                  '${friendCount.clamp(0, 10)} / 10 friend connections (${NumberFormat('#,###').format(friendCount.clamp(0, 10) * 1000)} \$DIASPORA)',
               textColor: isAllComplete ? Colors.white : null,
             ),
             const SizedBox(height: 8),
             _buildMilestoneCheckRow(
               context,
-              title: 'Peer Profile Verifications (10 PCT)',
+              title: 'Peer Verifications (+1 PCT & 1,000 \$DIASPORA each)',
               isComplete: hasTenVerifications,
-              subtitle: '$verificationCount / 10 peer profile claims verified',
+              subtitle:
+                  '${verificationCount.clamp(0, 10)} / 10 peer verifications (${NumberFormat('#,###').format(verificationCount.clamp(0, 10) * 1000)} \$DIASPORA)',
               textColor: isAllComplete ? Colors.white : null,
             ),
             const SizedBox(height: 8),
             _buildMilestoneCheckRow(
               context,
-              title: 'Ubuntu Emergency Fund (10 PCT)',
+              title: 'Ubuntu Emergency Fund (+10 PCT • 10,000 \$DIASPORA)',
               isComplete: hasEmergencyFund,
               subtitle: hasEmergencyFund
-                  ? 'Emergency fund active'
-                  : 'Contribute to catastrophe protection pool (voluntary +10 PCT)',
+                  ? '10,000 DSP converted at 100% to 10,000 \$DIASPORA'
+                  : 'Contribute to catastrophe protection pool (+10 PCT & 10,000 \$DIASPORA)',
               textColor: isAllComplete ? Colors.white : null,
             ),
             const SizedBox(height: 16),
@@ -3434,8 +3526,8 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                 children: [
                   Icon(
                     isAllComplete
-                        ? Icons.check_circle_rounded
-                        : Icons.hourglass_top_rounded,
+                        ? Icons.lock_open_rounded
+                        : Icons.lock_outline_rounded,
                     color: isAllComplete
                         ? Colors.amber
                         : const Color(0xFF2D5A47),
@@ -3445,8 +3537,8 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                   Expanded(
                     child: Text(
                       isAllComplete
-                          ? '✅ All 7 Milestones Met — 7,000 \$DIASPORA Auto-Credited on Base blockchain!'
-                          : 'Status: Pending Milestones ($completedCount/7 Complete)',
+                          ? '🔓 10 QR Exchanges Complete — All Minted \$DIASPORA Unlocked for Transfer/Sell!'
+                          : '🔒 Minted \$DIASPORA Locked — Complete ${10 - qrCount.clamp(0, 10)} more QR exchange(s) to unlock transfer/sell ($completedCount/7 PoH Pillars)',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,

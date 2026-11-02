@@ -9,6 +9,7 @@ const {
   consumeRateLimit,
   stableHash,
 } = require("./security");
+const { syncProfileMilestoneAndTrust } = require("./dsp");
 
 const VALID_ROLES = new Set([
   "president",
@@ -252,6 +253,18 @@ exports.castGovernanceVote = functions.https.onCall(async (data, context) => {
       verdict,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
     });
+    const nowTs = admin.firestore.FieldValue.serverTimestamp();
+    await Promise.all([
+      db.collection("trust_data").doc(voterId).set({
+        governanceVotesCount: admin.firestore.FieldValue.increment(1),
+        lastUpdated: nowTs,
+      }, {merge: true}),
+      db.collection("trust_scores").doc(voterId).set({
+        governanceVotesCount: admin.firestore.FieldValue.increment(1),
+        lastUpdated: nowTs,
+      }, {merge: true}),
+    ]);
+    await syncProfileMilestoneAndTrust(voterId).catch(() => null);
   } catch (error) {
     if (error && (error.code === 6 || error.code === "already-exists")) {
       throw new functions.https.HttpsError("already-exists", "You already voted.");

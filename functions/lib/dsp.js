@@ -154,32 +154,11 @@ async function isPohQualified(userId, userDocData, pointsDocData) {
     (completedFields >= totalFields && totalFields > 0)
   );
 
-  // 3. 10 QR Exchanges Milestone
+  // 3. 10 QR Exchanges Milestone (Unlocks all minted $DIASPORA & qualifies for TDE conversions)
   const qrCount = Number(trustData.uniqueQrCount || pointsData.qrConnectionCount || 0);
   const hasTenQr = milestones.includes("QR") || qrCount >= 10;
 
-  // 4. Family Circle (10 Family Connections)
-  const familyCount = Number(trustData.uniqueFamilyCount || 0);
-  const hasTenFamily = milestones.includes("Family") || familyCount >= 10;
-
-  // 5. Friend Circle (10 Friend Connections)
-  const friendCount = Number(trustData.uniqueFriendCount || 0);
-  const hasTenFriends = milestones.includes("Friend") || friendCount >= 10;
-
-  // 6. Peer Verifications (10 Peer Profile Field Verifications)
-  const verificationCount = Number(trustData.uniqueVerificationCount || 0);
-  const hasTenVerifications = milestones.includes("Verified") || verificationCount >= 10;
-
-  // 7. Ubuntu Emergency Fund Contribution (voluntary +10 PCT once members have tokens)
-  // Excluded from the required completion gate to avoid token-requirement deadlock.
-  return (
-    hasLocation &&
-    isProfileComplete &&
-    hasTenQr &&
-    hasTenFamily &&
-    hasTenFriends &&
-    hasTenVerifications
-  );
+  return hasTenQr;
 }
 
 async function performTGE(triggerSource) {
@@ -268,9 +247,32 @@ async function performTGE(triggerSource) {
   //   eligible community treasury (treasuryBalance > 0) is missing a
   //   required field. The healing path is to populate the field in
   //   Firestore and re-run.
-  const govSnap = await db.collection("governance")
-    .where("treasuryBalance", ">", 0)
-    .get();
+  const [govSnap, commSnap, treasuryStatsDoc, supplyStatsDoc] = await Promise.all([
+    db.collection("governance").where("treasuryBalance", ">", 0).get(),
+    db.collection("communities").get(),
+    db.collection("system_stats").doc("treasury").get(),
+    db.collection("system_stats").doc("dsp_supply").get(),
+  ]);
+
+  const treasuryStats = treasuryStatsDoc.exists ? (treasuryStatsDoc.data() || {}) : {};
+  const currentTotalSupply = supplyStatsDoc.exists ? Number(supplyStatsDoc.data()?.totalMinted || 0) : 0;
+  const exactFivePercentCap = currentTotalSupply > 0 ? Math.round(currentTotalSupply * 0.05) : 0;
+
+  const commAwardedMap = {};
+  commSnap.forEach((cDoc) => {
+    const cData = cDoc.data() || {};
+    commAwardedMap[cDoc.id] = Math.floor(Number(cData.awardedBalance || cData.points || 0));
+  });
+  if (exactFivePercentCap > 0) {
+    commAwardedMap["global_community"] = exactFivePercentCap;
+  }
+
+  const provider = new ethers.JsonRpcProvider(process.env.RPC_URL || "https://mainnet.base.org");
+  const tokenContract = new ethers.Contract(
+    tokenAddress,
+    ["function balanceOf(address account) external view returns (uint256)"],
+    provider
+  );
 
   let treasuriesIncluded = 0;
   const treasuryConfigErrors = [];
@@ -278,13 +280,13 @@ async function performTGE(triggerSource) {
   for (const doc of govSnap.docs) {
     const d = doc.data();
     const walletAddress = d.walletAddress;
-    const treasuryDsp = d.treasuryBalance || 0;
+    const rawTreasuryDsp = Math.floor(Number(d.treasuryBalance || 0));
 
-    if (treasuryDsp <= 0) continue; // legitimate: no funds to release
+    if (rawTreasuryDsp <= 0) continue; // legitimate: no funds to release
 
     if (!walletAddress || walletAddress.length < 10) {
       treasuryConfigErrors.push(
-        `governance/${doc.id} (treasuryBalance=${treasuryDsp}) is missing walletAddress`
+        `governance/${doc.id} (treasuryBalance=${rawTreasuryDsp}) is missing walletAddress`
       );
       continue;
     }
@@ -298,6 +300,21 @@ async function performTGE(triggerSource) {
     // 2026-06-04 investors→liquidity migration.
     const SYSTEM_DOC_IDS = new Set(["founders", "liquidity", "investors", "burn"]);
     if (SYSTEM_DOC_IDS.has(doc.id)) continue;
+
+    const commId = d.communityId || (doc.id === "global_community" ? "global_community" : null);
+    let treasuryDsp = rawTreasuryDsp;
+    const cumulativeAwarded = commId ? Number(commAwardedMap[commId] || 0) : 0;
+    if (cumulativeAwarded > 0) {
+      try {
+        const onChainWei = await tokenContract.balanceOf(walletAddress);
+        const onChainTokens = Math.floor(Number(ethers.formatUnits(onChainWei, 18)));
+        treasuryDsp = Math.max(0, Math.min(rawTreasuryDsp, cumulativeAwarded - onChainTokens));
+      } catch (balErr) {
+        console.warn(`[TGE Oracle] Could not read on-chain balance for ${doc.id}, using treasuryBalance: ${balErr.message}`);
+      }
+    }
+
+    if (treasuryDsp <= 0) continue; // already reconciled on-chain
 
     // Community, State Reserve, and Sovereign Bond Treasuries are public multi-sig
     // reserves governed by elected Full-Trust leaders (91+ PCT) and convert at 100%
@@ -313,10 +330,11 @@ async function performTGE(triggerSource) {
 
     snapshotDetails.push({
       unitId: doc.id,
-      communityId: d.communityId || (doc.id === "global_community" ? "global_community" : null),
+      communityId: commId,
       unitName: d.name || doc.id,
       wallet: walletAddress,
       dsp: Math.floor(treasuryDsp),
+      rawTreasuryDsp,
       efficiency: treasuryEfficiency,
       averagePct: avgTrustScore,
       averagePoCT: avgTrustScore,
@@ -359,22 +377,8 @@ async function performTGE(triggerSource) {
     { id: "burn",      sysField: "burnedPoints",    envWallet: null,                     label: "Deflationary Burn" },
   ];
 
-  const [treasuryStatsDoc, supplyStatsDoc] = await Promise.all([
-    db.collection("system_stats").doc("treasury").get(),
-    db.collection("system_stats").doc("dsp_supply").get(),
-  ]);
-  const treasuryStats = treasuryStatsDoc.exists ? (treasuryStatsDoc.data() || {}) : {};
-  const currentTotalSupply = supplyStatsDoc.exists ? Number(supplyStatsDoc.data()?.totalMinted || 0) : 0;
-  const exactFivePercentCap = currentTotalSupply > 0 ? Math.round(currentTotalSupply * 0.05) : 0;
-
-  const provider = new ethers.JsonRpcProvider(process.env.RPC_URL || "https://mainnet.base.org");
-  const tokenContract = new ethers.Contract(
-    tokenAddress,
-    ["function balanceOf(address account) external view returns (uint256)"],
-    provider
-  );
-
   let systemSlotsIncluded = 0;
+  let maxSystemConvertedOnChain = 0;
   for (const slot of systemSlotSpecs) {
     const govDoc = await db.collection("governance").doc(slot.id).get();
     if (!govDoc.exists) {
@@ -395,8 +399,9 @@ async function performTGE(triggerSource) {
       continue;
     }
 
-    // Reconcile against on-chain $DIASPORA so Founders/Liquidity never exceed exact 5% of total supply
-    let bal = Math.floor(Number(data.treasuryBalance || 0));
+    // Reconcile against on-chain $DIASPORA so Founders/Liquidity/Burn never exceed exact 5% of total supply
+    const rawTreasuryDsp = Math.floor(Number(data.treasuryBalance || 0));
+    let bal = rawTreasuryDsp;
     const cumulativeTarget = exactFivePercentCap > 0
       ? exactFivePercentCap
       : Math.floor(Number(treasuryStats[slot.sysField] || 0));
@@ -404,10 +409,13 @@ async function performTGE(triggerSource) {
       try {
         const onChainWei = await tokenContract.balanceOf(wallet);
         const onChainTokens = Math.floor(Number(ethers.formatUnits(onChainWei, 18)));
+        maxSystemConvertedOnChain = Math.max(maxSystemConvertedOnChain, onChainTokens);
         bal = Math.max(0, cumulativeTarget - onChainTokens);
       } catch (balErr) {
         console.warn(`[TGE Oracle] Could not read on-chain balance for ${slot.id}, using treasuryBalance: ${balErr.message}`);
       }
+    } else if (cumulativeTarget > 0 && slot.id === "burn" && maxSystemConvertedOnChain > 0) {
+      bal = Math.max(0, Math.min(rawTreasuryDsp, cumulativeTarget - maxSystemConvertedOnChain));
     }
 
     if (bal <= 0) {
@@ -425,6 +433,7 @@ async function performTGE(triggerSource) {
       unitName: slot.label,
       wallet,
       dsp: Math.floor(bal),
+      rawTreasuryDsp,
       efficiency: 100,
       systemSlot: true,
     });
@@ -628,7 +637,8 @@ async function performTGE(triggerSource) {
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       };
       if (snap.deductedDsp > 0) {
-        govPatch.treasuryBalance = admin.firestore.FieldValue.increment(-snap.deductedDsp);
+        const baseDsp = typeof snap.rawTreasuryDsp === "number" ? snap.rawTreasuryDsp : snap.dsp;
+        govPatch.treasuryBalance = Math.max(0, baseDsp - snap.deductedDsp);
       }
       operations.push({
         ref: govRef,
@@ -710,9 +720,28 @@ exports.onGlobalDspMilestone = functions
     console.log(`  Total Supply: ${oldSupply} → ${newSupply}`);
     console.log(`  Epoch ${oldState.epoch} Event ${oldState.completedEvents} → Epoch ${newState.epoch} Event ${newState.completedEvents}`);
 
-    // Prevent duplicate triggers with a lock document
+    // Prevent duplicate or overlapping triggers with a lock + inFlight mutex document
     const lockRef = db.collection("system_stats").doc("tge_lock");
     const lockKey = `epoch_${newState.epoch}_event_${newState.completedEvents}`;
+    const STALE_INFLIGHT_MS = 240 * 1000;
+
+    // Wait if a previous milestone TGE is still in-flight so its on-chain TX
+    // and Step 5 Firestore balance deductions complete before we snapshot.
+    for (let waitAttempt = 0; waitAttempt < 36; waitAttempt++) {
+      const preCheck = await lockRef.get();
+      const preData = preCheck.exists ? (preCheck.data() || {}) : {};
+      if (preData[lockKey]) {
+        console.log(`[TGE Oracle] Already processed ${lockKey}. Skipping.`);
+        return null;
+      }
+      const inFlightAtMs = preData.inFlightAt && typeof preData.inFlightAt.toMillis === "function"
+        ? preData.inFlightAt.toMillis()
+        : 0;
+      const isFreshInFlight = preData.inFlight === true && (Date.now() - inFlightAtMs < STALE_INFLIGHT_MS);
+      if (!isFreshInFlight) break;
+      console.log(`[TGE Oracle] Waiting for in-flight TGE (${preData.inFlightMilestone || "unknown"}) to finish before ${lockKey}...`);
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+    }
 
     try {
       await db.runTransaction(async (transaction) => {
@@ -724,9 +753,12 @@ exports.onGlobalDspMilestone = functions
           throw new Error("DUPLICATE"); // Abort transaction
         }
 
-        // Set lock BEFORE executing TGE
+        // Set lock + inFlight mutex BEFORE executing TGE
         transaction.set(lockRef, {
           [lockKey]: true,
+          inFlight: true,
+          inFlightMilestone: lockKey,
+          inFlightAt: admin.firestore.FieldValue.serverTimestamp(),
           lastTriggered: admin.firestore.FieldValue.serverTimestamp(),
           lastMilestone: lockKey,
         }, { merge: true });
@@ -747,6 +779,8 @@ exports.onGlobalDspMilestone = functions
       console.error(`[TGE Oracle] ❌ Auto-TGE failed:`, error.message);
       // Clear the lock so it can retry
       await lockRef.set({ [lockKey]: false }, { merge: true });
+    } finally {
+      await lockRef.set({ inFlight: false }, { merge: true }).catch(() => {});
     }
   });
 
@@ -927,6 +961,7 @@ exports.awardPoints = functions
     'flight_booking', 'car_rental', 'bereavement_contribution',
     'profile_completion', 'daily_streak',
     'host_location_moved', 'also_lived_in_added',
+    'proximity_dwell_reward', 'peer_visit_host_reward', 'peer_visit_visitor_reward',
   ];
 
   // For cross-user awards (e.g. referral rewards, connection milestones),
@@ -942,7 +977,8 @@ exports.awardPoints = functions
     'vouched_by_peer',
     'verified_solution_milestone', 'verified_solution_verifier_reward',
     'host_traveler_host_reward', 'host_traveler_guest_reward',
-    'peer_visit_visitor_reward',
+    'peer_visit_host_reward', 'peer_visit_visitor_reward',
+    'proximity_dwell_reward',
     'economy_transaction_seller',
     'referral_reward', 'referral_bonus', 'referral_reward_referrer',
     'event_hosting_per_attendee', 'event_attendance',
@@ -1132,6 +1168,38 @@ exports.awardPoints = functions
     }
 
     await batch.commit();
+
+    const TRUST_SYNC_ACTIONS = new Set([
+      "proximity_dwell_reward",
+      "peer_visit_host_reward",
+      "peer_visit_visitor_reward",
+      "event_attendance",
+      "event_hosting_per_attendee",
+      "identity_qr_exchange",
+      "identity_qr_exchange_continuous",
+      "verified_by_peer",
+      "verifier_reward",
+      "vouched_by_peer",
+      "trust_vouch_reward",
+      "vouch_reward",
+      "verified_solution_milestone",
+      "verified_solution_verifier_reward",
+      "host_traveler_host_reward",
+      "host_traveler_guest_reward",
+      "economy_transaction_seller",
+      "economy_transaction_buyer",
+      "referral_reward",
+      "referral_bonus",
+      "referral_reward_referrer",
+      "family_connection",
+      "friend_connection",
+      "profile_completion",
+    ]);
+    if (TRUST_SYNC_ACTIONS.has(action)) {
+      await syncProfileMilestoneAndTrust(userId).catch((syncErr) => {
+        console.warn(`[awardPoints] syncProfileMilestoneAndTrust warning for ${userId}: ${syncErr.message}`);
+      });
+    }
 
     return { success: true, points, action };
   } catch (error) {
@@ -1390,21 +1458,20 @@ async function distributeUbuntuMatchingSupply(batch, userId, userPointsAmount, n
 }
 
 /**
- * initializeUserPoints — Sets up a new user's points document with a 10,000 DSP
- * welcome bonus and distributes the 1:1 Ubuntu Protocol matching supply to
- * community and system treasuries.
- * Called once during signup after communities are provisioned.
- * Bots/unverified accounts with 0–10 PCT have 0% conversion efficiency at TGE
- * (100% of their DSP is burned), protecting token value while giving real
- * new members immediate personal & community DSP visibility.
+ * initializeUserPoints — Sets up a new user's points document at 0 DSP
+ * (Location Transparency replaces the signup welcome bonus) and triggers
+ * syncProfileMilestoneAndTrust so if the user enabled Location Transparency
+ * during signup, they immediately earn 10,000 DSP + 10 PCT and convert at
+ * 100% efficiency into 10,000 $DIASPORA (locked until 10 QR exchanges).
  */
-exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
+exports.initializeUserPoints = functions
+  .runWith({ secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
+  .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Must be authenticated.");
   }
 
   const userId = context.auth.uid;
-  const WELCOME_BONUS = 10000;
 
   try {
     const userPointsRef = db.collection("user_points").doc(userId);
@@ -1413,26 +1480,27 @@ exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
       db.collection("users").doc(userId).get(),
     ]);
     const docData = doc.exists ? doc.data() : null;
+    const userData = userDoc.exists ? userDoc.data() : null;
 
-    // Already fully initialized with welcome bonus
-    if (doc.exists && docData && docData.signupDate && docData.userId && docData.lifetimeEarnings?.welcome_bonus) {
-      const existingCode = await ensureUserReferralCode(userId, userDoc.exists ? userDoc.data() : null);
+    if (doc.exists && docData && docData.signupDate && docData.userId) {
+      const [existingCode] = await Promise.all([
+        ensureUserReferralCode(userId, userData),
+        syncProfileMilestoneAndTrust(userId).catch((syncErr) => {
+          console.warn(`[initializeUserPoints] syncProfileMilestoneAndTrust warning: ${syncErr.message}`);
+        }),
+      ]);
       return { success: true, alreadyInitialized: true, referralCode: existingCode };
     }
 
-    // Fetch home country code from users collection
-    const userData = userDoc.exists ? userDoc.data() : null;
     const countryCode = userData ? (userData.homeCountryCode || null) : null;
-
     const batch = db.batch();
     const now = admin.firestore.FieldValue.serverTimestamp();
 
     if (!doc.exists) {
-      // Fresh user — full initialization with 10,000 DSP welcome bonus
       batch.set(userPointsRef, {
         userId,
-        totalPoints: WELCOME_BONUS,
-        availablePoints: WELCOME_BONUS,
+        totalPoints: 0,
+        availablePoints: 0,
         currentStreak: 0,
         dailyMessageCount: 0,
         dailyShareCount: 0,
@@ -1446,15 +1514,10 @@ exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
         trustScore: 0,
         tdeHistory: [],
         tgeHistory: [],
-        lifetimeEarnings: { welcome_bonus: WELCOME_BONUS },
+        lifetimeEarnings: {},
         ...(countryCode ? { homeCountryCode: countryCode } : {}),
       });
     } else {
-      // Partial doc — backfill missing fields + award welcome bonus if missing
-      const existingLifetime = docData.lifetimeEarnings || {};
-      const welcomeBonusMissing = !existingLifetime.welcome_bonus;
-      const bonusToAdd = welcomeBonusMissing ? WELCOME_BONUS : 0;
-
       const updates = {
         userId,
         signupDate: docData.signupDate || now,
@@ -1471,37 +1534,8 @@ exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
         qrConnectionCount: docData.qrConnectionCount || 0,
         lastUpdated: now,
       };
-
       if (countryCode) updates.homeCountryCode = countryCode;
-
-      if (bonusToAdd > 0) {
-        updates.totalPoints = (docData.totalPoints || 0) + bonusToAdd;
-        updates.availablePoints = (docData.availablePoints || 0) + bonusToAdd;
-        updates.lifetimeEarnings = {
-          ...existingLifetime,
-          welcome_bonus: bonusToAdd,
-        };
-      }
-
       batch.set(userPointsRef, updates, { merge: true });
-    }
-
-    // Record welcome bonus transaction & 1:1 Ubuntu matching supply if not yet awarded
-    const existingLifetime = docData ? (docData.lifetimeEarnings || {}) : {};
-    const shouldAwardBonus = !doc.exists || !existingLifetime.welcome_bonus;
-
-    if (shouldAwardBonus) {
-      const txRef = db.collection("points_transactions").doc();
-      batch.set(txRef, {
-        userId,
-        type: "earn",
-        action: "welcome_bonus",
-        points: WELCOME_BONUS,
-        timestamp: now,
-        metadata: { description: "Welcome to Diaspora!" },
-      });
-
-      await distributeUbuntuMatchingSupply(batch, userId, WELCOME_BONUS, now, "welcome_bonus_match", userData);
     }
 
     const [, referralCode] = await Promise.all([
@@ -1509,7 +1543,11 @@ exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
       ensureUserReferralCode(userId, userData),
     ]);
 
-    return { success: true, welcomeBonusAwarded: shouldAwardBonus, referralCode };
+    await syncProfileMilestoneAndTrust(userId).catch((syncErr) => {
+      console.warn(`[initializeUserPoints] syncProfileMilestoneAndTrust warning: ${syncErr.message}`);
+    });
+
+    return { success: true, welcomeBonusAwarded: false, referralCode };
   } catch (error) {
     console.error(`[initializeUserPoints] Error:`, error.message);
     throw new functions.https.HttpsError("internal", `Failed to initialize: ${error.message}`);
@@ -1522,22 +1560,36 @@ exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
  */
 async function ensureUserReferralCode(userId, preloadedUserData = null, firstNameOverride = null, countryCodeOverride = null) {
   const [existingSnap, userDoc] = await Promise.all([
-    db.collection("referral_codes").where("userId", "==", userId).limit(1).get(),
+    db.collection("referral_codes").where("userId", "==", userId).limit(10).get(),
     preloadedUserData ? Promise.resolve(null) : db.collection("users").doc(userId).get(),
   ]);
 
   const userData = preloadedUserData || (userDoc && userDoc.exists ? userDoc.data() : {});
+  const isCanonicalCode = (c) => typeof c === "string" && c.trim().includes("-");
 
   if (!existingSnap.empty) {
-    const existingData = existingSnap.docs[0].data();
-    const existingCode = existingData.code || existingSnap.docs[0].id;
-    if (userData.referralCode !== existingCode) {
-      await db.collection("users").doc(userId).set({ referralCode: existingCode }, { merge: true });
+    const canonicalDocs = existingSnap.docs.filter((d) => isCanonicalCode(d.data().code || d.id));
+    if (canonicalDocs.length > 0) {
+      canonicalDocs.sort((a, b) => (b.data().usedCount || 0) - (a.data().usedCount || 0));
+      const chosenDoc = canonicalDocs[0];
+      const existingCode = chosenDoc.data().code || chosenDoc.id;
+      const cleanupPromises = existingSnap.docs
+        .filter((d) => d.id !== chosenDoc.id)
+        .map((d) => d.ref.delete().catch(() => null));
+      if (userData.referralCode !== existingCode) {
+        cleanupPromises.push(
+          db.collection("users").doc(userId).set({ referralCode: existingCode }, { merge: true }),
+        );
+      }
+      if (cleanupPromises.length > 0) {
+        await Promise.all(cleanupPromises);
+      }
+      return existingCode;
     }
-    return existingCode;
+    await Promise.all(existingSnap.docs.map((d) => d.ref.delete().catch(() => null)));
   }
 
-  if (userData.referralCode && typeof userData.referralCode === "string" && userData.referralCode.trim()) {
+  if (isCanonicalCode(userData.referralCode)) {
     const existingUserCode = userData.referralCode.trim().toUpperCase();
     const codeRef = db.collection("referral_codes").doc(existingUserCode);
     const codeDoc = await codeRef.get();
@@ -1734,7 +1786,17 @@ exports.redeemReferralCode = functions.https.onCall(async (data, context) => {
       "referral_reward_referrer_match"
     );
 
+    for (const col of ["trust_data", "trust_scores"]) {
+      batch.set(db.collection(col).doc(referrerId), {
+        referralCount: admin.firestore.FieldValue.increment(1),
+        lastUpdated: now,
+      }, { merge: true });
+    }
+
     await batch.commit();
+    await syncProfileMilestoneAndTrust(referrerId).catch((syncErr) => {
+      console.warn(`[redeemReferralCode] syncProfileMilestoneAndTrust warning: ${syncErr.message}`);
+    });
 
     return {
       success: true,
@@ -2604,6 +2666,138 @@ exports.syncTreasuryBalances = functions
  * client to run periodically (e.g. every 10 minutes). For now it's an
  * admin-only callable so the operator decides when to run it.
  */
+/**
+ * Helper to execute an on-chain 100% PoH $DIASPORA token distribution
+ * (plus 1:1 Ubuntu matching supply to Founders, Liquidity, Burn, and Community Treasuries)
+ * for incremental PoH rewards (up to 70,000 $DIASPORA across the 7 PoH pillars).
+ */
+async function executeImmediatePohTokenMint(userId, userData, amountDsp) {
+  const walletAddress = userData && userData.walletAddress;
+  if (!walletAddress || walletAddress.length < 10) {
+    throw new Error("no_wallet_address");
+  }
+  const { backendSignerKey, tgeControllerAddress, walletFactoryAddress } = assertOnChainConfig(
+    "executeImmediatePohTokenMint",
+    ["backendSignerKey", "tgeControllerAddress", "walletFactoryAddress"]
+  );
+
+  const RPC_URL = process.env.RPC_URL || "https://mainnet.base.org";
+  const provider = new ethers.JsonRpcProvider(RPC_URL);
+  const signer = new ethers.Wallet(backendSignerKey, provider);
+  const tge = new ethers.Contract(tgeControllerAddress, TGE_CONTROLLER_ABI, signer);
+  const factory = new ethers.Contract(
+    walletFactoryAddress,
+    ["function computeAddress(bytes32 phoneHash) view returns (address)"],
+    provider
+  );
+
+  const userAmount = ethers.parseUnits(String(Math.floor(amountDsp)), 18);
+  const unitDsp = Math.round(amountDsp * 0.10);
+  const unitAmount = ethers.parseUnits(String(unitDsp), 18);
+  const BURN = "0x000000000000000000000000000000000000dEaD";
+  const DEPLOYER_FALLBACK = signer.address;
+
+  const [foundersGov, liquidityGov] = await Promise.all([
+    db.collection("governance").doc("founders").get(),
+    db.collection("governance").doc("liquidity").get(),
+  ]);
+  const foundersWallet = (foundersGov.exists && foundersGov.data().walletAddress) || DEPLOYER_FALLBACK;
+  const liquidityWallet = (liquidityGov.exists && liquidityGov.data().walletAddress) || DEPLOYER_FALLBACK;
+
+  const treasuryRecipients = [BURN, foundersWallet, liquidityWallet];
+  const treasuryAmounts = [unitAmount, unitAmount, unitAmount];
+
+  const memberships = (userData && userData.communityMemberships) || [];
+  const find = (prefix) => memberships.find((id) => String(id).startsWith(prefix)) || "";
+  const hcont = find("home_continent_");
+  const hcountry = find("home_country_");
+  const hstate = find("home_state_");
+  const hcity = find("home_city_");
+  const xcont = find("host_continent_");
+  const xcountry = find("host_country_");
+  const xstate = find("host_state_");
+  const xcity = find("host_city_");
+
+  const slots = {};
+  const addSlot = (id, frac) => {
+    const targetId = id || "global_community";
+    slots[targetId] = (slots[targetId] || 0) + frac;
+  };
+  addSlot("global_community", 1);
+  addSlot(hcont, 1);
+  if (hstate) { addSlot(hcountry, 0.5); addSlot(hstate, 0.5); } else { addSlot(hcountry, 1); }
+  addSlot(hcity, 1);
+  addSlot(xcont, 1);
+  if (xstate) { addSlot(xcountry, 0.5); addSlot(xstate, 0.5); } else { addSlot(xcountry, 1); }
+  addSlot(xcity, 1);
+
+  for (const [commId, frac] of Object.entries(slots)) {
+    const slotAmount = Math.round(unitDsp * frac);
+    if (slotAmount <= 0) continue;
+    const salt = ethers.keccak256(ethers.toUtf8Bytes("community:" + commId));
+    const wallet = await factory.computeAddress(salt).catch(() => DEPLOYER_FALLBACK);
+    treasuryRecipients.push(wallet);
+    treasuryAmounts.push(ethers.parseUnits(slotAmount.toString(), 18));
+  }
+
+  const merkleRoot = ethers.solidityPackedKeccak256(
+    ["address", "uint256", "address[]", "uint256[]"],
+    [walletAddress, userAmount, treasuryRecipients, treasuryAmounts]
+  );
+
+  let tx;
+  try {
+    tx = await tge.distributeGenesisTokens(
+      walletAddress,
+      userAmount,
+      treasuryRecipients,
+      treasuryAmounts,
+      merkleRoot
+    );
+  } catch (genesisErr) {
+    try {
+      tx = await tge.distributeWelcomeBonus(
+        walletAddress,
+        userAmount,
+        treasuryRecipients,
+        treasuryAmounts,
+        merkleRoot
+      );
+    } catch (wbErr) {
+      // Fallback for un-upgraded proxy where maxWelcomeBonusPerRecipient < 70,000:
+      // executeTGE at 100% efficiency with reconciled treasury recipients.
+      const { MerkleTree } = require("merkletreejs");
+      const stats = await tge.getStats();
+      const epochBefore = Number(stats[0]);
+      const eventBefore = Number(stats[1]);
+      const allRecipients = [walletAddress, ...treasuryRecipients];
+      const allAmounts = [userAmount, ...treasuryAmounts];
+      const allEfficiencies = allRecipients.map(() => 100);
+      const totalNeeded = allAmounts.reduce((a, b) => a + b, 0n);
+      const locked = await tge.getLockedBalance();
+      if (locked < totalNeeded) {
+        const epochEntry = EPOCH_SCHEDULE.find(e => e.level === epochBefore) || EPOCH_SCHEDULE[0];
+        const epochSupplyTokens = epochEntry.dspTarget;
+        const mintTx = await tge.mintEpochSupply(ethers.parseUnits(epochSupplyTokens.toString(), 18));
+        await mintTx.wait();
+      }
+      const leaves = allRecipients.map((r, i) =>
+        ethers.keccak256(
+          ethers.AbiCoder.defaultAbiCoder().encode(
+            ["address", "uint256", "uint256", "uint256", "uint8"],
+            [r, epochBefore, eventBefore, allAmounts[i], 100]
+          )
+        )
+      );
+      const tree = new MerkleTree(leaves, ethers.keccak256, { sortPairs: true });
+      const root = tree.getHexRoot();
+      tx = await tge.executeTGE(allRecipients, allAmounts, allEfficiencies, root);
+    }
+  }
+  const receipt = await tx.wait();
+  return receipt.hash;
+}
+
 exports.retryPendingWelcomeBonuses = functions
   .runWith({ timeoutSeconds: 540, memory: "512MB", secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
   .https.onCall(async (data, context) => {
@@ -2615,8 +2809,7 @@ exports.retryPendingWelcomeBonuses = functions
       throw new functions.https.HttpsError("permission-denied", "Admin only.");
     }
 
-    // Fail-loud config check BEFORE doing any work
-    const { backendSignerKey, tgeControllerAddress, walletFactoryAddress } = assertOnChainConfig(
+    assertOnChainConfig(
       "retryPendingWelcomeBonuses",
       ["backendSignerKey", "tgeControllerAddress", "walletFactoryAddress"]
     );
@@ -2638,29 +2831,29 @@ exports.retryPendingWelcomeBonuses = functions
 
     if (dryRun) {
       for (const d of pendingSnap.docs) {
-        results.items.push({ uid: d.id, walletAddress: d.data().walletAddress || null, error: d.data().tokenWelcomeBonusError || null });
+        const u = d.data() || {};
+        results.items.push({
+          uid: d.id,
+          walletAddress: u.walletAddress || null,
+          pendingAmount: Number(u.pohTokensPending || 0),
+          error: u.tokenWelcomeBonusError || null,
+        });
       }
       return results;
     }
 
-    const RPC_URL = process.env.RPC_URL || "https://mainnet.base.org";
-    const provider = new ethers.JsonRpcProvider(RPC_URL);
-    const signer = new ethers.Wallet(backendSignerKey, provider);
-    const tge = new ethers.Contract(tgeControllerAddress, TGE_CONTROLLER_ABI, signer);
-    const factory = new ethers.Contract(
-      walletFactoryAddress,
-      ["function computeAddress(bytes32 phoneHash) view returns (address)"],
-      provider
-    );
-
     for (const doc of pendingSnap.docs) {
       const userId = doc.id;
-      const u = doc.data();
+      const u = doc.data() || {};
       try {
-        // Double-check we're not about to double-pay
-        if (u.tokenWelcomeBonusSent === true) {
+        const target = Number(u.pohTokensTarget || 0);
+        const minted = Number(u.pohTokensMintedOnChain || 0);
+        const pendingAmount = Math.max(0, Number(u.pohTokensPending || (target - minted)));
+
+        if (pendingAmount <= 0) {
           await db.collection("users").doc(userId).set({
             tokenWelcomeBonusPending: false,
+            pohTokensPending: 0,
             tokenWelcomeBonusError: admin.firestore.FieldValue.delete(),
           }, { merge: true });
           results.skipped++;
@@ -2673,86 +2866,14 @@ exports.retryPendingWelcomeBonuses = functions
           continue;
         }
 
-        // Build the distribution exactly like initializeUserPoints does
-        const userAmount = ethers.parseUnits("1000", 18);
-        const BURN = "0x000000000000000000000000000000000000dEaD";
-        const DEPLOYER_FALLBACK = signer.address;
-
-        // Read live treasury wallets from Firestore. Post-2026-06-04 these
-        // are Safe addresses, NOT factory-computed smart wallets. Computing
-        // from CREATE2 salts here would target the abandoned pre-migration
-        // wallets and lose tokens. See [[project-treasury-safe-addresses]].
-        const [foundersGov, liquidityGov] = await Promise.all([
-          db.collection("governance").doc("founders").get(),
-          db.collection("governance").doc("liquidity").get(),
-        ]);
-        const foundersWallet = (foundersGov.exists && foundersGov.data().walletAddress) || DEPLOYER_FALLBACK;
-        const liquidityWallet = (liquidityGov.exists && liquidityGov.data().walletAddress) || DEPLOYER_FALLBACK;
-        if (!foundersGov.exists || !foundersGov.data().walletAddress) {
-          console.warn("[Token Welcome Bonus retry] Founders wallet not found in Firestore, using deployer fallback");
-        }
-        if (!liquidityGov.exists || !liquidityGov.data().walletAddress) {
-          console.warn("[Token Welcome Bonus retry] Liquidity wallet not found in Firestore, using deployer fallback");
-        }
-
-        const treasuryRecipients = [BURN, foundersWallet, liquidityWallet];
-        const treasuryAmounts = [
-          ethers.parseUnits("100", 18),
-          ethers.parseUnits("100", 18),
-          ethers.parseUnits("100", 18),
-        ];
-
-        // Community slots — same fraction math as the original path
-        const memberships = u.communityMemberships || [];
-        const find = (prefix) => memberships.find((id) => id.startsWith(prefix)) || "";
-        const hcont = find("home_continent_");
-        const hcountry = find("home_country_");
-        const hstate = find("home_state_");
-        const hcity = find("home_city_");
-        const xcont = find("host_continent_");
-        const xcountry = find("host_country_");
-        const xstate = find("host_state_");
-        const xcity = find("host_city_");
-
-        const slots = {};
-        const addSlot = (id, frac) => {
-          const targetId = id || "global_community";
-          slots[targetId] = (slots[targetId] || 0) + frac;
-        };
-        addSlot("global_community", 1);
-        addSlot(hcont, 1);
-        if (hstate) { addSlot(hcountry, 0.5); addSlot(hstate, 0.5); } else { addSlot(hcountry, 1); }
-        addSlot(hcity, 1);
-        addSlot(xcont, 1);
-        if (xstate) { addSlot(xcountry, 0.5); addSlot(xstate, 0.5); } else { addSlot(xcountry, 1); }
-        addSlot(xcity, 1);
-
-        for (const [commId, frac] of Object.entries(slots)) {
-          const slotAmount = Math.round(100 * frac);
-          if (slotAmount <= 0) continue;
-          const salt = ethers.keccak256(ethers.toUtf8Bytes("community:" + commId));
-          const wallet = await factory.computeAddress(salt).catch(() => DEPLOYER_FALLBACK);
-          treasuryRecipients.push(wallet);
-          treasuryAmounts.push(ethers.parseUnits(slotAmount.toString(), 18));
-        }
-
-        const merkleRoot = ethers.solidityPackedKeccak256(
-          ["address", "uint256", "address[]", "uint256[]"],
-          [u.walletAddress, userAmount, treasuryRecipients, treasuryAmounts]
-        );
-
-        const tx = await tge.distributeWelcomeBonus(
-          u.walletAddress,
-          userAmount,
-          treasuryRecipients,
-          treasuryAmounts,
-          merkleRoot
-        );
-        const receipt = await tx.wait();
+        const txHash = await executeImmediatePohTokenMint(userId, u, pendingAmount);
 
         await db.collection("users").doc(userId).set({
           tokenWelcomeBonusSent: true,
-          tokenWelcomeBonusTx: receipt.hash,
+          tokenGenesisDistributionSent: true,
+          tokenWelcomeBonusTx: txHash,
+          pohTokensMintedOnChain: minted + pendingAmount,
+          pohTokensPending: 0,
           tokenWelcomeBonusPending: false,
           tokenWelcomeBonusError: admin.firestore.FieldValue.delete(),
           tokenWelcomeBonusErrorAt: admin.firestore.FieldValue.delete(),
@@ -2760,7 +2881,7 @@ exports.retryPendingWelcomeBonuses = functions
 
         results.retried++;
         results.succeeded++;
-        results.items.push({ uid: userId, status: "success", txHash: receipt.hash });
+        results.items.push({ uid: userId, status: "success", amount: pendingAmount, txHash });
       } catch (e) {
         results.retried++;
         results.failed++;
@@ -3280,10 +3401,12 @@ exports.onVouchWrite = functions.firestore
   });
 
 /**
- * evaluatePoHGenesisStatus — Evaluates PoH 6 base milestones and Genesis 7,000 $DIASPORA claim status.
- * Milestone 7 (Ubuntu Emergency Fund) is deferred post-genesis.
+ * evaluatePoHGenesisStatus — Evaluates PoH milestones, immediate 100% $DIASPORA
+ * conversions, and the 10 QR Exchanges unlock gate.
  */
-exports.evaluatePoHGenesisStatus = functions.https.onCall(async (data, context) => {
+exports.evaluatePoHGenesisStatus = functions
+  .runWith({ secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
+  .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "User must be authenticated.");
   }
@@ -3333,7 +3456,7 @@ exports.evaluatePoHGenesisStatus = functions.https.onCall(async (data, context) 
     milestones.includes("Profile") ||
     userData.isProfileComplete ||
     userData.isComplete ||
-    completedFields >= PROFILE_MILESTONE_FIELDS.length ||
+    completedFields >= 10 ||
     poh.profileComplete
   );
 
@@ -3356,6 +3479,7 @@ exports.evaluatePoHGenesisStatus = functions.https.onCall(async (data, context) 
     poh.emergencyFundContributed
   );
 
+  const tokensUnlocked = milestones.includes("QR") || qrCount >= 10;
   const baseMilestonesComplete = (
     locationEnabled &&
     profileComplete &&
@@ -3365,14 +3489,27 @@ exports.evaluatePoHGenesisStatus = functions.https.onCall(async (data, context) 
     peerVerificationsCount >= 10
   );
 
+  const pohTokensTarget =
+    (locationEnabled ? 10000 : 0) +
+    Math.min(10, completedFields) * 1000 +
+    Math.min(10, familyCount) * 1000 +
+    Math.min(10, friendCount) * 1000 +
+    Math.min(10, qrCount) * 1000 +
+    Math.min(10, peerVerificationsCount) * 1000 +
+    (emergencyFundContributed ? 10000 : 0);
+
   const genesisClaimed = !!userData.tokenGenesisDistributionSent || !!userData.tokenWelcomeBonusSent;
 
   return {
     baseMilestonesComplete,
+    tokensUnlocked,
     genesisClaimed,
+    pohTokensTarget,
+    pohTokensMintedOnChain: Number(userData.pohTokensMintedOnChain || 0),
     milestones: {
       locationEnabled,
       profileComplete,
+      completedFields,
       qrCount,
       familyCount,
       friendCount,
@@ -3380,7 +3517,7 @@ exports.evaluatePoHGenesisStatus = functions.https.onCall(async (data, context) 
       emergencyFundDeferred: true,
       emergencyFundContributed,
     },
-    genesisAmount: 7000,
+    genesisAmount: 70000,
   };
 });
 
@@ -3965,8 +4102,10 @@ async function syncProfileMilestoneAndTrust(userId) {
   let awardedProfileDsp = false;
   const newExplorationActions = [];
 
+  let awardedMilestoneDspThisSync = 0;
   async function awardMilestoneDsp(action, amount, description, extraMeta = {}) {
     anyDspChanged = true;
+    awardedMilestoneDspThisSync += amount;
     batch.set(
       userPointsRef,
       {
@@ -4005,121 +4144,123 @@ async function syncProfileMilestoneAndTrust(userId) {
     );
   }
 
-  // ── Milestone 1: Profile Completion (12 fields -> 10,000 DSP + 10 PCT) ──
-  const alreadyAwardedProfileDsp =
-    Number(lifetimeEarnings.profile_completion || 0) >= 10000 ||
-    Number(ledger.Profile_dsp_count || 0) >= totalFields ||
-    completedExplorationActions.has("milestone_10_profile_fields");
-
-  if (isProfileComplete) {
+  // ── Milestone 1: Profile Completion (First 10 fields -> 1,000 DSP + 1 PCT + immediate 100% $DIASPORA each; 11+ -> 1,000 DSP each for TDE) ──
+  const prevProfileFromLifetime = Math.floor(Number(lifetimeEarnings.profile_completion || 0) / 1000);
+  let prevProfileDspCount = Math.max(
+    Number(ledger.Profile_dsp_count || 0),
+    prevProfileFromLifetime,
+    completedExplorationActions.has("milestone_10_profile_fields") ? 10 : 0
+  );
+  if (completedFields >= 10) {
     milestones.add("Profile");
-    ledger.Profile_dsp_count = totalFields;
-    newExplorationActions.push("milestone_10_profile_fields", "complete_profile");
-
-    if (!alreadyAwardedProfileDsp) {
-      awardedProfileDsp = true;
-      await awardMilestoneDsp(
-        "profile_completion",
-        10000,
-        `Completed all ${totalFields} profile milestone fields`,
-        { completedFields, totalFields }
-      );
-    }
+    newExplorationActions.push("milestone_10_profile_fields");
+  }
+  if (isProfileComplete) {
+    newExplorationActions.push("complete_profile");
+  }
+  if (completedFields > prevProfileDspCount) {
+    const newFieldsCount = completedFields - prevProfileDspCount;
+    const newFirst10Fields = Math.max(0, Math.min(10, completedFields) - Math.min(10, prevProfileDspCount));
+    const newExtraFields = Math.max(0, completedFields - Math.max(10, prevProfileDspCount));
+    awardedProfileDsp = true;
+    ledger.Profile_dsp_count = completedFields;
+    await awardMilestoneDsp(
+      "profile_completion",
+      1000 * newFieldsCount,
+      `Completed ${newFieldsCount} profile field(s) (${completedFields}/${totalFields} total)`,
+      {
+        completedFields,
+        totalFields,
+        newFieldsCount,
+        immediateConvertFields: newFirst10Fields,
+        tdeFields: newExtraFields,
+      }
+    );
+  } else {
+    ledger.Profile_dsp_count = Math.max(prevProfileDspCount, completedFields);
   }
 
-  // ── Milestone 2: Family Circle (10 Family -> 10,000 DSP + 10 PCT) ──
+  // ── Milestone 2: Family Circle (First 10 -> 1,000 DSP + 1 PCT + immediate 100% $DIASPORA each; 11+ -> 1,000 DSP each for TDE) ──
+  const prevFamilyFromLifetime = Math.floor(Number(lifetimeEarnings.family_connection || 0) / 1000);
+  const prevFamilyDspCount = Math.max(Number(ledger.Family_dsp_count || 0), prevFamilyFromLifetime);
   if (uniqueFamilyCount >= 10) {
     milestones.add("Family");
     newExplorationActions.push("milestone_10_family");
-    const alreadyAwardedFamilyMilestone =
-      Number(ledger.Family_dsp_count || 0) >= 10 ||
-      completedExplorationActions.has("milestone_10_family");
-    if (!alreadyAwardedFamilyMilestone) {
-      ledger.Family_dsp_count = 10;
-      await awardMilestoneDsp(
-        "family_connection",
-        10000,
-        "Completed 10 Family Circle connections milestone",
-        { uniqueFamilyCount }
-      );
-    } else {
-      ledger.Family_dsp_count = Math.max(Number(ledger.Family_dsp_count || 0), 10);
-    }
+  }
+  if (uniqueFamilyCount > prevFamilyDspCount) {
+    const deltaFamily = uniqueFamilyCount - prevFamilyDspCount;
+    ledger.Family_dsp_count = uniqueFamilyCount;
+    await awardMilestoneDsp(
+      "family_connection",
+      1000 * deltaFamily,
+      `Completed ${deltaFamily} Family Circle connection(s) (${uniqueFamilyCount} total)`,
+      { uniqueFamilyCount, deltaFamily }
+    );
+  } else {
+    ledger.Family_dsp_count = Math.max(prevFamilyDspCount, uniqueFamilyCount);
   }
 
-  // ── Milestone 3: Friend Circle (10 Friends -> 10,000 DSP + 10 PCT) ──
+  // ── Milestone 3: Friend Circle (First 10 -> 1,000 DSP + 1 PCT + immediate 100% $DIASPORA each; 11+ -> 1,000 DSP each for TDE) ──
+  const prevFriendFromLifetime = Math.floor(Number(lifetimeEarnings.friend_connection || 0) / 1000);
+  const prevFriendDspCount = Math.max(Number(ledger.Friend_dsp_count || 0), prevFriendFromLifetime);
   if (uniqueFriendCount >= 10) {
     milestones.add("Friend");
     newExplorationActions.push("milestone_10_friend");
-    const alreadyAwardedFriendMilestone =
-      Number(ledger.Friend_dsp_count || 0) >= 10 ||
-      completedExplorationActions.has("milestone_10_friend");
-    if (!alreadyAwardedFriendMilestone) {
-      ledger.Friend_dsp_count = 10;
-      await awardMilestoneDsp(
-        "friend_connection",
-        10000,
-        "Completed 10 Friend Circle connections milestone",
-        { uniqueFriendCount }
-      );
-    } else {
-      ledger.Friend_dsp_count = Math.max(Number(ledger.Friend_dsp_count || 0), 10);
-    }
+  }
+  if (uniqueFriendCount > prevFriendDspCount) {
+    const deltaFriend = uniqueFriendCount - prevFriendDspCount;
+    ledger.Friend_dsp_count = uniqueFriendCount;
+    await awardMilestoneDsp(
+      "friend_connection",
+      1000 * deltaFriend,
+      `Completed ${deltaFriend} Friend Circle connection(s) (${uniqueFriendCount} total)`,
+      { uniqueFriendCount, deltaFriend }
+    );
+  } else {
+    ledger.Friend_dsp_count = Math.max(prevFriendDspCount, uniqueFriendCount);
   }
 
-  // ── Milestone 4: Identity QR Exchanges (10 QR -> 10,000 DSP + 10 PCT; 11+ -> 1,000 DSP each) ──
-  let prevQrDspCount = Number(ledger.QR_dsp_count || 0);
+  // ── Milestone 4: Identity QR Exchanges (First 10 -> 1,000 DSP + 1 PCT + immediate 100% $DIASPORA each; 11+ -> 1,000 DSP each for TDE) ──
+  const prevQrFromLifetime = Math.floor(
+    (Number(lifetimeEarnings.identity_qr_exchange || 0) +
+      Number(lifetimeEarnings.identity_qr_exchange_continuous || 0)) / 1000
+  );
+  const prevQrDspCount = Math.max(Number(ledger.QR_dsp_count || 0), prevQrFromLifetime);
   if (uniqueQrCount >= 10) {
     milestones.add("QR");
     newExplorationActions.push("milestone_10_qr");
-    const alreadyAwardedQrMilestone =
-      prevQrDspCount >= 10 ||
-      completedExplorationActions.has("milestone_10_qr");
-    if (!alreadyAwardedQrMilestone) {
-      prevQrDspCount = 10;
-      ledger.QR_dsp_count = 10;
-      await awardMilestoneDsp(
-        "identity_qr_exchange",
-        10000,
-        "Completed 10 Identity QR Exchanges milestone",
-        { uniqueQrCount }
-      );
-    } else if (prevQrDspCount < 10) {
-      prevQrDspCount = 10;
-      ledger.QR_dsp_count = 10;
-    }
-    if (uniqueQrCount > 10 && uniqueQrCount > prevQrDspCount) {
-      const extraScans = uniqueQrCount - prevQrDspCount;
-      if (extraScans > 0) {
-        ledger.QR_dsp_count = uniqueQrCount;
-        await awardMilestoneDsp(
-          "identity_qr_exchange_continuous",
-          1000 * extraScans,
-          `Completed ${extraScans} additional Identity QR Exchange(s)`,
-          { extraScans, uniqueQrCount }
-        );
-      }
-    }
+  }
+  if (uniqueQrCount > prevQrDspCount) {
+    const deltaQr = uniqueQrCount - prevQrDspCount;
+    ledger.QR_dsp_count = uniqueQrCount;
+    await awardMilestoneDsp(
+      uniqueQrCount > 10 ? "identity_qr_exchange_continuous" : "identity_qr_exchange",
+      1000 * deltaQr,
+      `Completed ${deltaQr} Identity QR Exchange(s) (${uniqueQrCount} total)`,
+      { uniqueQrCount, deltaQr }
+    );
+  } else {
+    ledger.QR_dsp_count = Math.max(prevQrDspCount, uniqueQrCount);
   }
 
-  // ── Milestone 5: Peer Verifications (10 Verifications -> 10,000 DSP + 10 PCT) ──
+  // ── Milestone 5: Peer Verifications (First 10 -> 1,000 DSP + 1 PCT + immediate 100% $DIASPORA each; 11+ -> 1,000 DSP each for TDE) ──
+  const prevVerifiedFromLifetime = Math.floor(Number(lifetimeEarnings.verified_by_peer || 0) / 1000);
+  const prevVerifiedDspCount = Math.max(Number(ledger.Verified_dsp_count || 0), prevVerifiedFromLifetime);
   if (uniqueVerificationCount >= 10) {
     milestones.add("Verified");
     newExplorationActions.push("milestone_10_verified");
-    const alreadyAwardedVerifiedMilestone =
-      Number(ledger.Verified_dsp_count || 0) >= 10 ||
-      completedExplorationActions.has("milestone_10_verified");
-    if (!alreadyAwardedVerifiedMilestone) {
-      ledger.Verified_dsp_count = 10;
-      await awardMilestoneDsp(
-        "verified_by_peer",
-        10000,
-        "Completed 10 Peer Profile Verifications milestone",
-        { uniqueVerificationCount }
-      );
-    } else {
-      ledger.Verified_dsp_count = Math.max(Number(ledger.Verified_dsp_count || 0), 10);
-    }
+  }
+  if (uniqueVerificationCount > prevVerifiedDspCount) {
+    const deltaVerified = uniqueVerificationCount - prevVerifiedDspCount;
+    ledger.Verified_dsp_count = uniqueVerificationCount;
+    await awardMilestoneDsp(
+      "verified_by_peer",
+      1000 * deltaVerified,
+      `Completed ${deltaVerified} Peer Profile Verification(s) (${uniqueVerificationCount} total)`,
+      { uniqueVerificationCount, deltaVerified }
+    );
+  } else {
+    ledger.Verified_dsp_count = Math.max(prevVerifiedDspCount, uniqueVerificationCount);
   }
 
   // ── Milestone 6: Location Transparency (10,000 DSP + 10 PCT; burned & forfeited if turned off) ──
@@ -4230,23 +4371,115 @@ async function syncProfileMilestoneAndTrust(userId) {
   }
 
   // ── Calculate Authoritative PCT Score ──
+  // 1. 7 Proof of Humanity (PoH) Genesis Milestones (+1 PCT per step for first 10 of Profile/Family/Friend/QR/Verified, +10 PCT for Location & Emergency Fund = 70 PCT base)
   let milestonePoCT = 0;
-  if (isProfileComplete || milestones.has("Profile")) milestonePoCT += 10;
-  if (uniqueFamilyCount >= 10 || milestones.has("Family")) milestonePoCT += 10;
-  if (uniqueFriendCount >= 10 || milestones.has("Friend")) milestonePoCT += 10;
-  if (uniqueQrCount >= 10 || milestones.has("QR")) milestonePoCT += 10;
-  if (uniqueVerificationCount >= 10 || milestones.has("Verified")) milestonePoCT += 10;
+  milestonePoCT += milestones.has("Profile") ? 10 : Math.min(10, completedFields);
+  milestonePoCT += milestones.has("Family") ? 10 : Math.min(10, uniqueFamilyCount);
+  milestonePoCT += milestones.has("Friend") ? 10 : Math.min(10, uniqueFriendCount);
+  milestonePoCT += milestones.has("QR") ? 10 : Math.min(10, uniqueQrCount);
+  milestonePoCT += milestones.has("Verified") ? 10 : Math.min(10, uniqueVerificationCount);
 
-  const verifiedCheckInCount = Number(trustData.verifiedCheckInCount || 0);
-  const eventAttendancePoCT = verifiedCheckInCount >= 10 ? 10 : 0;
+  // 2. Recurring Positive Trust-Building Events (+1 PCT per 10 occurrences; +10 PCT per 10 is deprecated)
+  const proximityConnectionsCount = Math.max(
+    Number(trustData.proximityConnectionsCount || 0),
+    Math.floor(Number(lifetimeEarnings.proximity_dwell_reward || 0) / 1000)
+  );
+  const grassrootsGatheringsCount = Math.max(
+    Number(trustData.grassrootsGatheringsCount || 0),
+    Number(trustData.verifiedGatheringVisitsCount || 0),
+    Math.floor(
+      (Number(lifetimeEarnings.peer_visit_host_reward || 0) +
+        Number(lifetimeEarnings.peer_visit_visitor_reward || 0)) / 1000
+    )
+  );
+  const verifiedGatheringVisitsCount = grassrootsGatheringsCount;
+  const verifiedCheckInCount = Math.max(
+    Number(trustData.verifiedCheckInCount || 0),
+    Number(trustData.attendedEventsCount || 0),
+    Math.floor(Number(lifetimeEarnings.event_attendance || 0) / 1000)
+  );
+  const attendedEventsCount = Math.max(
+    Number(trustData.attendedEventsCount || 0),
+    verifiedCheckInCount
+  );
+  const hostedEventAttendeesCount = Math.max(
+    Number(trustData.hostedEventAttendeesCount || 0),
+    Math.floor(Number(lifetimeEarnings.event_hosting_per_attendee || 0) / 1000)
+  );
+  const verificationsGivenCount = Math.max(
+    Number(trustData.verificationsGivenCount || 0),
+    Math.floor(Number(lifetimeEarnings.verifier_reward || 0) / 1000)
+  );
+  const verifiedSolutionsCount = Math.max(
+    Number(trustData.verifiedSolutionsCount || 0),
+    Math.floor(
+      (Number(lifetimeEarnings.verified_solution_milestone || 0) +
+        Number(lifetimeEarnings.verified_solution_author_reward || 0) +
+        Number(lifetimeEarnings.verified_solution_verifier_reward || 0)) / 1000
+    )
+  );
+  const referralCount = Math.max(
+    Number(trustData.referralCount || 0),
+    Math.floor(
+      (Number(lifetimeEarnings.referral_reward_referrer || 0) +
+        Number(lifetimeEarnings.referral_reward || 0) +
+        Number(lifetimeEarnings.referral_bonus || 0)) / 1000
+    )
+  );
+  const completedHostingCount = Math.max(
+    Number(trustData.completedHostingCount || 0),
+    Math.floor(
+      (Number(lifetimeEarnings.host_traveler_host_reward || 0) +
+        Number(lifetimeEarnings.host_traveler_guest_reward || 0)) / 1000
+    )
+  );
+  const economicTxCount = Math.max(
+    Number(trustData.economicTxCount || 0),
+    completedHostingCount +
+      Math.floor(
+        (Number(lifetimeEarnings.economy_transaction_seller || 0) +
+          Number(lifetimeEarnings.economy_transaction_buyer || 0)) / 100
+      )
+  );
+  const governanceVotesCount = Number(trustData.governanceVotesCount || 0);
 
-  // Continuous HTS Deltas
+  // Continuous HTS Deltas (+1 PCT per 10 of each positive trust-building activity)
   let htsPoctDelta = 0;
+  // Proximity Connections (10+ min within 100 ft): +1 PCT per 10
+  htsPoctDelta += Math.floor(proximityConnectionsCount / 10);
+  // Grassroots Gatherings (60+ min within 100 ft, host or guest): +1 PCT per 10
+  htsPoctDelta += Math.floor(grassrootsGatheringsCount / 10);
+  // Events Attended (QR / venue check-in): +1 PCT per 10
+  htsPoctDelta += Math.floor(verifiedCheckInCount / 10);
+  // Event Hosting Attendees: +1 PCT per 10
+  htsPoctDelta += Math.floor(hostedEventAttendeesCount / 10);
+  // Identity QR Exchanges beyond Genesis milestone (11+): +1 PCT per 10
   if (uniqueQrCount > 10) {
     htsPoctDelta += Math.floor((uniqueQrCount - 10) / 10);
   }
+  // Peer Profile Verifications received beyond Genesis milestone (11+) & given: +1 PCT per 10
+  if (uniqueVerificationCount > 10) {
+    htsPoctDelta += Math.floor((uniqueVerificationCount - 10) / 10);
+  }
+  htsPoctDelta += Math.floor(verificationsGivenCount / 10);
+  // Family & Friend Connections beyond Genesis milestones (11+): +1 PCT per 10
+  if (uniqueFamilyCount > 10) {
+    htsPoctDelta += Math.floor((uniqueFamilyCount - 10) / 10);
+  }
+  if (uniqueFriendCount > 10) {
+    htsPoctDelta += Math.floor((uniqueFriendCount - 10) / 10);
+  }
+  // Trust Slider Net Positive Vouches (outside Circle of Trust): +1 PCT per 10
   const netVouches = uniqueVouchCount - noTrustVouchCount;
   htsPoctDelta += Math.trunc(netVouches / 10);
+  // Verified Chat Solutions: +1 PCT per 10
+  htsPoctDelta += Math.floor(verifiedSolutionsCount / 10);
+  // Member Referrals: +1 PCT per 10
+  htsPoctDelta += Math.floor(referralCount / 10);
+  // Completed Economic & Peer Stay / Hosting Transactions: +1 PCT per 10
+  htsPoctDelta += Math.floor(economicTxCount / 10);
+  // Governance Votes Cast: +1 PCT per 10
+  htsPoctDelta += Math.floor(governanceVotesCount / 10);
 
   const flaggedMessagesCount = Number(trustData.flaggedMessagesCount || 0);
   const blockedByCount = Number(userData.blockedByCount ?? trustData.blockedByCount ?? 0);
@@ -4255,7 +4488,7 @@ async function syncProfileMilestoneAndTrust(userId) {
   const eventNoShowCount = Number(trustData.eventNoShowCount || 0);
   const rejectedFamilyConnectionsCount = Number(trustData.rejectedFamilyConnectionsCount || 0);
 
-  htsPoctDelta -= Math.floor(flaggedMessagesCount / 10) * 10;
+  htsPoctDelta -= Math.floor(flaggedMessagesCount / 10);
   htsPoctDelta -= Math.floor(blockedByCount / 10);
   htsPoctDelta -= Math.floor(reportedFraudCount / 10);
   htsPoctDelta -= Math.floor(fakeVerificationsCount / 10);
@@ -4265,14 +4498,21 @@ async function syncProfileMilestoneAndTrust(userId) {
   // Seniority (+1 PCT per 100 days active)
   let daysActive = 0;
   let createdAtDate = null;
-  const rawCreatedAt = userData.createdAt || pointsData.signupDate;
-  if (rawCreatedAt) {
-    if (typeof rawCreatedAt.toDate === "function") {
-      createdAtDate = rawCreatedAt.toDate();
-    } else if (typeof rawCreatedAt === "string" || typeof rawCreatedAt === "number") {
-      const parsed = new Date(rawCreatedAt);
-      if (!isNaN(parsed.getTime())) createdAtDate = parsed;
+  const parseDateVal = (raw) => {
+    if (!raw) return null;
+    if (typeof raw.toDate === "function") return raw.toDate();
+    if (typeof raw === "string" || typeof raw === "number") {
+      const parsed = new Date(raw);
+      if (!isNaN(parsed.getTime())) return parsed;
     }
+    return null;
+  };
+  const d1 = parseDateVal(userData.createdAt);
+  const d2 = parseDateVal(pointsData.signupDate);
+  if (d1 && d2) {
+    createdAtDate = d1.getTime() <= d2.getTime() ? d1 : d2;
+  } else {
+    createdAtDate = d1 || d2;
   }
   if (createdAtDate) {
     daysActive = Math.max(0, Math.floor((Date.now() - createdAtDate.getTime()) / (1000 * 60 * 60 * 24)));
@@ -4283,7 +4523,6 @@ async function syncProfileMilestoneAndTrust(userId) {
     milestonePoCT +
     cityVisibilityPoCT +
     emergencyFundPoCT +
-    eventAttendancePoCT +
     htsPoctDelta +
     seniorityScore;
 
@@ -4302,6 +4541,89 @@ async function syncProfileMilestoneAndTrust(userId) {
 
   const isDdiEligible = isPoHComplete && daysActive >= 100 && finalTrustScore >= 91;
   const isCouncilEligible = Boolean(trustData.isCouncilEligible) || (isDdiEligible && Boolean(userData.isAdminOfLargeGroup));
+
+  // ── Immediate 100% PoH $DIASPORA Conversion (Locked until 10 QR Exchanges) ──
+  // First 10 steps of Profile/Family/Friend/QR/Verified (1,000 DSP each) + Location Transparency (10,000 DSP)
+  // + Ubuntu Emergency Fund (10,000 DSP) convert immediately at 100% efficiency into $DIASPORA.
+  const pohTargetDsp =
+    (cityVisibilityPoCT >= 10 ? 10000 : 0) +
+    Math.min(10, completedFields) * 1000 +
+    Math.min(10, uniqueFamilyCount) * 1000 +
+    Math.min(10, uniqueFriendCount) * 1000 +
+    Math.min(10, uniqueQrCount) * 1000 +
+    Math.min(10, uniqueVerificationCount) * 1000 +
+    (emergencyFundPoCT >= 10 ? 10000 : 0);
+
+  const prevPohConvertedDsp = Math.max(
+    Number(ledger.Poh_converted_dsp || 0),
+    Number(pointsData.pohConvertedDsp || 0)
+  );
+  const pohConvertDelta = Math.max(0, pohTargetDsp - prevPohConvertedDsp);
+  const currentAvailPlusNew = Math.max(
+    0,
+    Number(pointsData.availablePoints || 0) + awardedMilestoneDspThisSync
+  );
+  const effectivePohDeduction = Math.min(pohConvertDelta, currentAvailPlusNew);
+  if (pohConvertDelta > 0) {
+    ledger.Poh_converted_dsp = pohTargetDsp;
+    anyDspChanged = true;
+    if (effectivePohDeduction > 0) {
+      batch.set(
+        userPointsRef,
+        {
+          availablePoints: admin.firestore.FieldValue.increment(-effectivePohDeduction),
+          pohConvertedDsp: pohTargetDsp,
+          pohLockedUntilTenQr: uniqueQrCount < 10,
+          lastUpdated: now,
+        },
+        { merge: true }
+      );
+      batch.set(db.collection("points_transactions").doc(), {
+        userId,
+        type: "tge_conversion",
+        action: "poh_immediate_token_conversion",
+        points: -effectivePohDeduction,
+        amount: effectivePohDeduction,
+        timestamp: now,
+        metadata: {
+          description: `Converted ${pohConvertDelta.toLocaleString()} PoH DSP at 100% efficiency into ${pohConvertDelta.toLocaleString()} $DIASPORA (unlocks at 10 QR exchanges)`,
+          pohTargetDsp,
+          tokensUnlocked: uniqueQrCount >= 10,
+        },
+      });
+    } else {
+      batch.set(
+        userPointsRef,
+        {
+          pohConvertedDsp: pohTargetDsp,
+          pohLockedUntilTenQr: uniqueQrCount < 10,
+          lastUpdated: now,
+        },
+        { merge: true }
+      );
+    }
+  }
+
+  const prevMintedOnChain = Number(
+    userData.pohTokensMintedOnChain ??
+      (userData.tokenWelcomeBonusSent ? 1000 : 0)
+  );
+  const pendingMintAmount = Math.max(0, pohTargetDsp - prevMintedOnChain);
+  batch.set(
+    db.collection("users").doc(userId),
+    {
+      trustScore: finalTrustScore,
+      pohTokensTarget: pohTargetDsp,
+      pohTokensUnlocked: uniqueQrCount >= 10,
+      ...(pendingMintAmount > 0
+        ? {
+            pohTokensPending: pendingMintAmount,
+            tokenWelcomeBonusPending: true,
+          }
+        : {}),
+    },
+    { merge: true }
+  );
 
   const uniqueTrustIds = Array.from(new Set([...fullTrustVoterIdsSet, ...verificationIdsSet]));
 
@@ -4333,6 +4655,18 @@ async function syncProfileMilestoneAndTrust(userId) {
     verifiedByCount: verificationsSnap.size,
     verifiedFieldsCount: verifiedFieldsTotal,
     flaggedFieldsCount: flaggedFieldsTotal,
+    proximityConnectionsCount,
+    grassrootsGatheringsCount,
+    verifiedGatheringVisitsCount,
+    verifiedCheckInCount,
+    attendedEventsCount,
+    hostedEventAttendeesCount,
+    verificationsGivenCount,
+    verifiedSolutionsCount,
+    referralCount,
+    completedHostingCount,
+    economicTxCount,
+    governanceVotesCount,
     genesisFamilyIds: Array.from(familyIdsSet).slice(0, 10),
     genesisFriendIds: Array.from(friendIdsSet).slice(0, 10),
     genesisQrIds: Array.from(qrIdsSet).slice(0, 10),
@@ -4340,6 +4674,8 @@ async function syncProfileMilestoneAndTrust(userId) {
     genesisVerificationIds: Array.from(verificationIdsSet).slice(0, 10),
     genesisVouchIds: Array.from(fullTrustVoterIdsSet).slice(0, 10),
     blockedByCount,
+    pohTokensTarget: pohTargetDsp,
+    pohTokensUnlocked: uniqueQrCount >= 10,
     awardedQualificationMilestones: Array.from(milestones),
     awardedHtsTracking: ledger,
     lastUpdated: now,
@@ -4354,6 +4690,8 @@ async function syncProfileMilestoneAndTrust(userId) {
       qrConnectionCount: uniqueQrCount,
       familyConnectionCount: uniqueFamilyCount,
       verifiedCount: uniqueVerificationCount,
+      pohConvertedDsp: pohTargetDsp,
+      pohLockedUntilTenQr: uniqueQrCount < 10,
       lastUpdated: now,
     },
     { merge: true }
@@ -4384,6 +4722,39 @@ async function syncProfileMilestoneAndTrust(userId) {
 
   await batch.commit();
 
+  // Attempt immediate on-chain $DIASPORA minting if backend signer is mounted and user has a walletAddress
+  let pohTxHash = null;
+  if (pendingMintAmount > 0 && userData.walletAddress && process.env.BACKEND_SIGNER_PRIVATE_KEY) {
+    try {
+      pohTxHash = await executeImmediatePohTokenMint(userId, userData, pendingMintAmount);
+      await db.collection("users").doc(userId).set(
+        {
+          tokenWelcomeBonusSent: true,
+          tokenGenesisDistributionSent: true,
+          tokenWelcomeBonusTx: pohTxHash,
+          pohTokensMintedOnChain: prevMintedOnChain + pendingMintAmount,
+          pohTokensPending: 0,
+          tokenWelcomeBonusPending: false,
+          tokenWelcomeBonusError: admin.firestore.FieldValue.delete(),
+          tokenWelcomeBonusErrorAt: admin.firestore.FieldValue.delete(),
+        },
+        { merge: true }
+      );
+    } catch (mintErr) {
+      const msg = (mintErr.message || "unknown").slice(0, 500);
+      console.warn(`[syncProfileMilestoneAndTrust] On-chain PoH token mint queued for ${userId} (${pendingMintAmount} $DIASPORA): ${msg}`);
+      await db.collection("users").doc(userId).set(
+        {
+          tokenWelcomeBonusPending: true,
+          pohTokensPending: pendingMintAmount,
+          tokenWelcomeBonusError: msg,
+          tokenWelcomeBonusErrorAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+    }
+  }
+
   return {
     success: true,
     completedFields,
@@ -4392,6 +4763,10 @@ async function syncProfileMilestoneAndTrust(userId) {
     isPoHComplete,
     awardedProfileDsp,
     anyDspChanged,
+    pohTargetDsp,
+    pohConvertDelta,
+    tokensUnlocked: uniqueQrCount >= 10,
+    pohTxHash,
     trustScore: finalTrustScore,
     isVerified,
   };
@@ -4402,10 +4777,12 @@ exports.distributeUbuntuMatchingSupply = distributeUbuntuMatchingSupply;
 
 /**
  * evaluateProfileMilestone — Client-callable endpoint triggered after profile updates
- * or trust refreshes to ensure profile completion rewards (+10,000 DSP and +10 PCT)
- * are evaluated and synced by the server.
+ * or trust refreshes to ensure profile completion rewards (+1,000 DSP and +1 PCT per field for first 10, +1,000 DSP for 11+)
+ * and immediate 100% PoH $DIASPORA conversions are evaluated and synced by the server.
  */
-exports.evaluateProfileMilestone = functions.https.onCall(async (data, context) => {
+exports.evaluateProfileMilestone = functions
+  .runWith({ secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
+  .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "User must be authenticated.");
   }

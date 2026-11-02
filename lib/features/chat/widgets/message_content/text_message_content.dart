@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart'; // [NEW]
 import 'package:diaspora_nearby/features/chat/models/message.dart';
 import 'package:diaspora_nearby/features/chat/widgets/message_content/chat_link_preview.dart';
+import 'package:diaspora_nearby/features/chat/widgets/message_content/ai_agent_actions_section.dart';
 
 class TextMessageContent extends StatefulWidget {
   final Message message;
@@ -185,6 +186,8 @@ class _TextMessageContentState extends State<TextMessageContent> {
                 }
               },
             ),
+          if (!widget.isOwn && widget.message.metadata?['aiActions'] is List)
+            AiAgentActionsSection(message: widget.message),
         ],
       ),
     );

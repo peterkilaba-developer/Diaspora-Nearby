@@ -3,6 +3,7 @@
 import 'dart:convert';
 import 'dart:ui' show AppLifecycleState;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:diaspora_nearby/core/services/background_location_service.dart';
 import 'package:diaspora_nearby/core/services/proximity_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -776,6 +777,24 @@ void main() {
             '/profile/$stakerId',
           );
         }
+      },
+    );
+  });
+
+  group('BackgroundLocationService Silent Notification Channel Tests', () {
+    test(
+      'background location service channel is silent with low importance and no sound or vibration',
+      () {
+        const channel = BackgroundLocationService.backgroundServiceChannel;
+        expect(channel.id, BackgroundLocationService.silentChannelId);
+        expect(
+          channel.id,
+          isNot(equals(BackgroundLocationService.legacyChannelId)),
+        );
+        expect(channel.importance, Importance.low);
+        expect(channel.playSound, isFalse);
+        expect(channel.enableVibration, isFalse);
+        expect(channel.showBadge, isFalse);
       },
     );
   });

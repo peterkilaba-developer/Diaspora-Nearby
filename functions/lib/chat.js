@@ -113,6 +113,7 @@ function formatMessageNotificationBody(message) {
   if (message.type === "video") body = "🎥 sent a video";
   if (message.type === "audio") body = "🎤 sent a voice message";
   if (message.type === "audio_file") body = "🎵 sent an audio file";
+  if (message.type === "voice_call") body = "📞 Voice call";
   if (message.type === "location") body = "📍 sent a location";
   if (message.type === "document") body = "📄 sent a document";
   if (message.type === "dsp_transfer") {
@@ -125,12 +126,36 @@ function formatMessageNotificationBody(message) {
   return String(body).trim().slice(0, 500);
 }
 
+function messageStatusRank(status) {
+  switch (status) {
+    case "read":
+      return 4;
+    case "delivered":
+      return 3;
+    case "sent":
+      return 2;
+    case "sending":
+      return 1;
+    case "error":
+      return 0;
+    default:
+      return 2;
+  }
+}
+
+function resolveHigherMessageStatus(a, b) {
+  if (!a) return b || "sent";
+  if (!b) return a || "sent";
+  return messageStatusRank(b) > messageStatusRank(a) ? b : a;
+}
+
 async function deliverMessageIndex(chatId, messageId, message, participants) {
   const typeLabels = {
     image: "Photo",
     video: "Video",
     audio: "Voice message",
     audio_file: "Audio",
+    voice_call: "Voice call",
     document: "Document",
     location: "Location",
     dsp_transfer: "Sent $DIASPORA",
@@ -189,19 +214,42 @@ async function deliverMessageIndex(chatId, messageId, message, participants) {
           unreadNotificationLines: nextLines,
         };
       }
+      const msgTs = message.timestamp || Date.now();
+      const existingLast = existing.lastMessage || null;
+      const isSameAsExisting = existingLast && (
+        existingLast.id === messageId ||
+        (typeof existingLast.timestamp === "number" && existingLast.timestamp === msgTs)
+      );
+      const effectiveStatus = isSameAsExisting
+        ? resolveHigherMessageStatus(existingLast.status, message.status || "sent")
+        : (message.status || "sent");
+      const nextLastMessage = {
+        id: messageId,
+        content: preview,
+        timestamp: msgTs,
+        senderId: message.senderId,
+        senderName: String(message.senderName || "").slice(0, 200),
+        type: message.type || "text",
+        status: effectiveStatus,
+        ...(message.forwarded === true || (isSameAsExisting && existingLast.forwarded === true)
+          ? { forwarded: true }
+          : {}),
+        ...(Array.isArray(message.mentions) && message.mentions.length > 0
+          ? { mentions: message.mentions }
+          : (isSameAsExisting && Array.isArray(existingLast.mentions)
+              ? { mentions: existingLast.mentions }
+              : {})),
+        ...(message.metadata && typeof message.metadata === "object"
+          ? { metadata: message.metadata }
+          : (isSameAsExisting && existingLast.metadata && typeof existingLast.metadata === "object"
+              ? { metadata: existingLast.metadata }
+              : {})),
+      };
       transaction.set(ref, {
         chatId,
-        lastMessage: {
-          id: messageId,
-          content: preview,
-          timestamp: message.timestamp || Date.now(),
-          senderId: message.senderId,
-          senderName: String(message.senderName || "").slice(0, 200),
-          type: message.type || "text",
-          status: message.status || "sent",
-        },
+        lastMessage: nextLastMessage,
         lastDeliveredMessageId: messageId,
-        updatedAt: message.timestamp || Date.now(),
+        updatedAt: msgTs,
         isDeleted: false,
         ...(!isSender && {
           unreadCount: nextUnread,
@@ -228,7 +276,20 @@ exports.onChatWritten = functions.firestore
     const projectionChanged = !change.before.exists || !after ||
       ["name", "type", "subtype", "photoUrl"].some((field) =>
         JSON.stringify(before[field] ?? null) !== JSON.stringify(after[field] ?? null));
-    const indexTargets = projectionChanged ? [...current] : added;
+    const lastMessageChanged = Boolean(
+      after &&
+      after.lastMessage &&
+      JSON.stringify(before.lastMessage ?? null) !== JSON.stringify(after.lastMessage ?? null)
+    );
+    const targetSet = new Set(projectionChanged ? [...current] : added);
+    if (lastMessageChanged && after && after.lastMessage) {
+      if (current.size <= 50) {
+        for (const uid of current) targetSet.add(uid);
+      } else if (after.lastMessage.senderId && current.has(after.lastMessage.senderId)) {
+        targetSet.add(after.lastMessage.senderId);
+      }
+    }
+    const indexTargets = [...targetSet];
     const lastMsgTs = (after && after.lastMessage && typeof after.lastMessage.timestamp === "number")
       ? after.lastMessage.timestamp
       : 0;
@@ -1185,6 +1246,16 @@ exports.completeEventCheckIn = functions.https.onCall(async (data, context) => {
       attendedEventsCount: admin.firestore.FieldValue.increment(1),
       lastUpdated: now,
     }, { merge: true });
+    if (hostUid && validUid(hostUid) && hostUid !== uid) {
+      transaction.set(db.collection("trust_data").doc(hostUid), {
+        hostedEventAttendeesCount: admin.firestore.FieldValue.increment(1),
+        lastUpdated: now,
+      }, { merge: true });
+      transaction.set(db.collection("trust_scores").doc(hostUid), {
+        hostedEventAttendeesCount: admin.firestore.FieldValue.increment(1),
+        lastUpdated: now,
+      }, { merge: true });
+    }
   });
 
   // Award 1,000 DSP to attendee (event_attendance) and 1,000 DSP to host (event_hosting_per_attendee)
@@ -1228,6 +1299,11 @@ exports.completeEventCheckIn = functions.https.onCall(async (data, context) => {
       syncProfileMilestoneAndTrust(uid).catch((syncErr) => {
         console.warn(`[completeEventCheckIn] syncProfileMilestoneAndTrust warning: ${syncErr.message}`);
       }),
+      ...(hostUid && validUid(hostUid) && hostUid !== uid ? [
+        syncProfileMilestoneAndTrust(hostUid).catch((syncErr) => {
+          console.warn(`[completeEventCheckIn] syncProfileMilestoneAndTrust host warning: ${syncErr.message}`);
+        }),
+      ] : []),
     ]);
   } catch (rewardErr) {
     console.warn(`[completeEventCheckIn] Reward warning: ${rewardErr.message}`);
@@ -1531,22 +1607,34 @@ exports.onDirectMessageCreated = functions.firestore
     );
 
     // Ensure canonical chats/{chatId} also has lastMessage & updatedAt so any
-    // client fetching chats/{chatId} immediately sees the latest message.
-    const existingLastTs = (chatData.lastMessage && typeof chatData.lastMessage.timestamp === "number")
-      ? chatData.lastMessage.timestamp
+    // client fetching chats/{chatId} immediately sees the latest message,
+    // without downgrading an already-delivered/read status back to 'sent'.
+    const existingLast = chatData.lastMessage || null;
+    const existingLastTs = (existingLast && typeof existingLast.timestamp === "number")
+      ? existingLast.timestamp
       : 0;
     const msgTs = typeof message.timestamp === "number" ? message.timestamp : Date.now();
-    if (!chatData.lastMessage || msgTs >= existingLastTs) {
+    if (!existingLast || msgTs >= existingLastTs) {
       const typeLabels = {
         image: "Photo",
         video: "Video",
         audio: "Voice message",
         audio_file: "Audio",
+        voice_call: "Voice call",
         document: "Document",
         location: "Location",
         dsp_transfer: "Sent $DIASPORA",
         "money-transfer": "Remittance",
       };
+      const isSameAsExisting = Boolean(
+        existingLast && (
+          existingLast.id === context.params.messageId ||
+          existingLastTs === msgTs
+        )
+      );
+      const effectiveStatus = isSameAsExisting
+        ? resolveHigherMessageStatus(existingLast.status, message.status || "sent")
+        : (message.status || "sent");
       const preview = String(message.content || typeLabels[message.type] || "Message").slice(0, 2000);
       await db.collection("chats").doc(chatId).set({
         lastMessage: {
@@ -1556,7 +1644,20 @@ exports.onDirectMessageCreated = functions.firestore
           senderId: message.senderId,
           senderName: String(message.senderName || "").slice(0, 200),
           type: message.type || "text",
-          status: message.status || "sent",
+          status: effectiveStatus,
+          ...(message.forwarded === true || (isSameAsExisting && existingLast.forwarded === true)
+            ? { forwarded: true }
+            : {}),
+          ...(Array.isArray(message.mentions) && message.mentions.length > 0
+            ? { mentions: message.mentions }
+            : (isSameAsExisting && Array.isArray(existingLast.mentions)
+                ? { mentions: existingLast.mentions }
+                : {})),
+          ...(message.metadata && typeof message.metadata === "object"
+            ? { metadata: message.metadata }
+            : (isSameAsExisting && existingLast.metadata && typeof existingLast.metadata === "object"
+                ? { metadata: existingLast.metadata }
+                : {})),
         },
         updatedAt: msgTs,
       }, { merge: true }).catch((err) => {
@@ -1570,6 +1671,21 @@ exports.onDirectMessageCreated = functions.firestore
 
     console.log(`[Chat] MsgID: ${context.params.messageId} | Sender: ${senderId} | Recipients: ${recipients.join(', ')}`);
 
+    // If the user sent a message to Diaspora AI Agent, generate and post the AI reply
+    const {DIASPORA_AI_AGENT_UID, handleUserMessageToAiAgent} = require("./ai_agent");
+    if (
+      recipients.includes(DIASPORA_AI_AGENT_UID) &&
+      String(senderId) !== DIASPORA_AI_AGENT_UID &&
+      context.params.messageId !== "welcome_from_ai_agent"
+    ) {
+      await handleUserMessageToAiAgent({
+        chatId,
+        messageId: context.params.messageId,
+        message,
+        userId: senderId,
+      });
+    }
+
     // Community detection using all chatId patterns (matches Flutter client)
     const isCommunity = chatData.type === 'community' ||
       chatId.startsWith('chat_') ||
@@ -1582,6 +1698,9 @@ exports.onDirectMessageCreated = functions.firestore
     const chatTag = `chat_${chatId}`;
 
     const promises = recipients.map(async (recipientId) => {
+      if (recipientId === DIASPORA_AI_AGENT_UID) {
+        return null;
+      }
       const mentions = Array.isArray(message.mentions) ? message.mentions : [];
       const isMentioned = mentions.includes(recipientId);
 

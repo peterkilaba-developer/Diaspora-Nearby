@@ -25,156 +25,169 @@ const EXPAT_NATIVE_PACKS = {
   en: {
     langName: "English",
     welcome: (code, cityLabel) =>
-      `🌍 *Welcome to Diaspora Nearby — Tanzania International & Expat Hub (${cityLabel})!*\n\n` +
-      `Living in Tanzania (Dar es Salaam, Arusha, Zanzibar, or beyond) from abroad? Diaspora Nearby connects you with:\n` +
-      `1️⃣ *Nearby Compatriots*: Discover verified people from your home country right in your neighborhood.\n` +
-      `2️⃣ *High-Trust Network*: Build portable Proof of Community Trust (PCT) on Base Blockchain.\n` +
-      `3️⃣ *Nationality & City Chambers*: Organize and lead your country's local community hub in Tanzania.\n` +
-      `4️⃣ *1:1 Ubuntu Wealth Match*: Earn *$DIASPORA* on Base Blockchain in Epoch 1 while minting matching treasury reserves for both your host city in Tanzania and your home country.\n\n` +
-      `🎁 *Your Genesis Invite Code:* \`${code}\`\n` +
-      `📲 *1-Tap Download (Android & iOS):*\nhttps://diasporanearby.com/invite?code=${code}\n\n` +
-      `_Sign in using this WhatsApp number inside the app to automatically claim your Epoch 1 Welcome Bonus!_`,
+      `🌍 *Welcome to Diaspora Nearby — ${cityLabel} Community Hub!*\n\n` +
+      `Everything you need to connect and thrive in one app:\n` +
+      `1️⃣ *Nearby Discovery*: Instantly see compatriots from your home country around you in ${cityLabel}.\n` +
+      `2️⃣ *Nearby Notifications*: Real-time proximity alerts the moment someone from home is nearby.\n` +
+      `3️⃣ *Live Homeland Radio*: Stream live radio stations from back home & Tanzania 24/7.\n` +
+      `4️⃣ *Ubuntu Emergency Fund*: Transparent, verified community emergency & mutual-aid support.\n` +
+      `5️⃣ *DDI Community Loans*: Community-backed Diaspora Direct Investment loans to fund projects & businesses.\n\n` +
+      `📲 *1-Tap Download (Android & iOS):*\nhttps://diasporanearby.com/invite?code=${code}\n` +
+      `🎁 *Invite Code:* \`${code}\`\n\n` +
+      `_Sign in with this WhatsApp number inside the app to join your ${cityLabel} hub immediately!_`,
     forwardCard: (code) =>
       `🌍 *Expats & International Community in Tanzania (Dar · Arusha · Zanzibar)* 🇹🇿\n\n` +
-      `We are organizing our nationality & city chapters on *Diaspora Nearby* so we can easily discover compatriots from home living nearby in Tanzania, connect safely, and earn *$DIASPORA* on Base Blockchain (with a 1:1 Ubuntu Community Match).\n\n` +
-      `Join our Tanzania hub here & claim your Genesis bonus:\n` +
+      `Join our community on *Diaspora Nearby* for:\n` +
+      `📍 *Nearby Discovery & Instant Proximity Alerts* when compatriots are around you\n` +
+      `📻 *Live Homeland Radio* streaming 24/7\n` +
+      `🤝 *Ubuntu Emergency Fund* & *DDI Community Loans*\n\n` +
+      `Download & check who is near you right now:\n` +
       `👉 https://diasporanearby.com/invite?code=${code}`,
     followUp: (code) =>
-      `👋 Quick reminder from *Diaspora Nearby*! Your Founding Member spot and Epoch 1 *$DIASPORA* welcome allocation (\`${code}\`) for the Tanzania International Hub are still reserved.\n\n` +
-      `Tap below to install on Android or iOS and verify with this WhatsApp number:\n` +
+      `👋 Quick reminder from *Diaspora Nearby*! People from your corridor are checking in on the Nearby Radar.\n\n` +
+      `Tap below to turn on *Nearby Discovery & Notifications*, listen to *Live Radio*, and access the *Ubuntu Emergency Fund & DDI Loans* (\`${code}\`):\n` +
       `👉 https://diasporanearby.com/invite?code=${code}`,
-    commentReply: "Welcome! 🌍 We just sent your Founding Member invite link to your DM inbox 📩",
+    commentReply: "Welcome! 🌍 We just sent your direct invite link to your DM inbox 📩",
   },
   fr: {
     langName: "Français",
     welcome: (code, cityLabel) =>
-      `🌍 *Bienvenue sur Diaspora Nearby — Hub International en Tanzanie (${cityLabel}) !*\n\n` +
-      `Vous vivez en Tanzanie (Dar es Salaam, Arusha, Zanzibar) ? Diaspora Nearby vous permet de :\n` +
-      `1️⃣ *Trouver vos compatriotes à proximité* dans votre ville ou quartier.\n` +
-      `2️⃣ *Bâtir un réseau de confiance* (Proof of Community Trust sur Base Blockchain).\n` +
-      `3️⃣ *Organiser votre communauté* locale et nationale en Tanzanie.\n` +
-      `4️⃣ *Créer une richesse collective (1:1 Ubuntu Match)* : Gagnez des jetons *$DIASPORA* sur Base Blockchain tout en abondant la trésorerie de votre communauté à parité 1:1.\n\n` +
-      `🎁 *Votre Code d'Invitation Genesis :* \`${code}\`\n` +
-      `📲 *Téléchargement direct (Android & iOS) :*\nhttps://diasporanearby.com/invite?code=${code}\n\n` +
-      `_Connectez-vous avec ce numéro WhatsApp dans l'application pour activer votre bonus Epoch 1 !_`,
+      `🌍 *Bienvenue sur Diaspora Nearby — Hub Communautaire (${cityLabel}) !*\n\n` +
+      `Retrouvez les 5 outils essentiels de votre communauté :\n` +
+      `1️⃣ *Découverte à Proximité (Nearby Discovery)* : Voyez vos compatriotes autour de vous à ${cityLabel}.\n` +
+      `2️⃣ *Alertes de Proximité (Nearby Notifications)* : Notification instantanée dès qu'un compatriote est proche.\n` +
+      `3️⃣ *Radio en Direct* : Écoutez les radios du pays en direct 24h/24.\n` +
+      `4️⃣ *Fonds d'Urgence Ubuntu* : Entraide communautaire transparente en cas d'urgence.\n` +
+      `5️⃣ *Prêts Communautaires DDI* : Financement participatif pour vos projets et entreprises.\n\n` +
+      `📲 *Téléchargement direct (Android & iOS) :*\nhttps://diasporanearby.com/invite?code=${code}\n` +
+      `🎁 *Code :* \`${code}\``,
     forwardCard: (code) =>
       `🌍 *Communauté Francophone & Expatriés en Tanzanie (Dar · Arusha · Zanzibar)* 🇹🇿\n\n` +
-      `Rejoignez notre communauté sur *Diaspora Nearby* pour retrouver nos compatriotes à proximité en Tanzanie, organiser notre chambre locale et gagner des *$DIASPORA* sur Base Blockchain :\n` +
+      `Rejoignez-nous sur *Diaspora Nearby* : Découverte & Alertes de proximité, Radio du pays en direct, Fonds d'urgence Ubuntu et Prêts DDI :\n` +
       `👉 https://diasporanearby.com/invite?code=${code}`,
     followUp: (code) =>
-      `👋 Rappel de *Diaspora Nearby* ! Votre code d'invitation Genesis (\`${code}\`) et votre bonus Epoch 1 *$DIASPORA* en Tanzanie vous attendent :\n` +
+      `👋 Rappel de *Diaspora Nearby* ! Activez vos alertes de proximité et retrouvez vos compatriotes dès maintenant (\`${code}\`) :\n` +
       `👉 https://diasporanearby.com/invite?code=${code}`,
     commentReply: "Bienvenue ! 🌍 Nous venons de vous envoyer votre lien d'invitation en message privé (DM) 📩",
   },
   zh: {
     langName: "中文 (Mandarin)",
     welcome: (code, cityLabel) =>
-      `🌍 *欢迎加入 Diaspora Nearby — 坦桑尼亚华人与国际侨民社区 (${cityLabel})！*\n\n` +
-      `无论您在达累斯萨拉姆 (Dar es Salaam)、阿鲁沙 (Arusha) 还是桑给巴尔 (Zanzibar)：\n` +
-      `1️⃣ *发现附近的同胞*：实时发现并连接您身边的华人与同胞。\n` +
-      `2️⃣ *高信任互助网络*：基于 Base Blockchain 建立社区信任证明 (PCT)。\n` +
-      `3️⃣ *组织本地商会与社区*：共建坦桑尼亚本地与祖国双地理身份社区。\n` +
-      `4️⃣ *1:1 Ubuntu 财富配捐*：在 Epoch 1 赚取 Base Blockchain 上的 *$DIASPORA* 代币，同时为您的坦桑尼亚本地社区和家乡金库 1:1 铸造储备。\n\n` +
-      `🎁 *您的创世邀请码：* \`${code}\`\n` +
-      `📲 *一键下载应用 (Android & iOS)：*\nhttps://diasporanearby.com/invite?code=${code}\n\n` +
-      `_请使用此 WhatsApp 号码登录应用以自动领取您的 Epoch 1 创世奖励！_`,
+      `🌍 *欢迎加入 Diaspora Nearby — 坦桑尼亚与全球侨民社区 (${cityLabel})！*\n\n` +
+      `五大核心功能为您服务：\n` +
+      `1️⃣ *附近同胞发现 (Nearby Discovery)*：实时查看您身边的华人与同胞。\n` +
+      `2️⃣ *附近实时提醒 (Nearby Notification)*：当同胞在附近时立即收到通知。\n` +
+      `3️⃣ *家乡在线广播 (Live Radio)*：24小时收听家乡与本地电台。\n` +
+      `4️⃣ *Ubuntu 紧急互助基金*：透明可靠的社区紧急与互助保障。\n` +
+      `5️⃣ *DDI 社区投资贷款*：社区金库支持的创业与项目贷款。\n\n` +
+      `📲 *一键下载应用 (Android & iOS)：*\nhttps://diasporanearby.com/invite?code=${code}\n` +
+      `🎁 *邀请码：* \`${code}\``,
     forwardCard: (code) =>
       `🌍 *坦桑尼亚华人与国际侨民社区 (达累斯萨拉姆 · 阿鲁沙 · 桑给巴尔)* 🇹🇿\n\n` +
-      `我们正在 *Diaspora Nearby* 组建坦桑尼亚同胞社区！发现身边的同胞、加入本地商会，并在 Base Blockchain 上赚取 *$DIASPORA* 创世代币：\n` +
+      `加入 *Diaspora Nearby*：开启附近同胞雷达提醒、收听家乡电台、加入 Ubuntu 互助基金与 DDI 社区贷款：\n` +
       `👉 https://diasporanearby.com/invite?code=${code}`,
     followUp: (code) =>
-      `👋 *Diaspora Nearby* 温馨提醒：您的坦桑尼亚创世会员邀请码 (\`${code}\`) 与 *$DIASPORA* 奖励已为您保留，点击即可下载加入：\n` +
+      `👋 *Diaspora Nearby* 温馨提醒：点击下方链接即可开启附近同胞发现与提醒 (\`${code}\`)：\n` +
       `👉 https://diasporanearby.com/invite?code=${code}`,
-    commentReply: "欢迎！🌍 我们已将您的专属创世邀请链接发送至您的私信 (DM) 📩",
+    commentReply: "欢迎！🌍 我们已将您的专属邀请链接发送至您的私信 (DM) 📩",
   },
   hi: {
     langName: "हिन्दी (Hindi)",
     welcome: (code, cityLabel) =>
-      `🌍 *नमस्ते! Diaspora Nearby में आपका स्वागत है — तंजानिया प्रवासी और अंतर्राष्ट्रीय समुदाय (${cityLabel})!*\n\n` +
-      `क्या आप दार एस सलाम (Dar es Salaam), अरुशा (Arusha), या ज़ांज़ीबार (Zanzibar) में रहते हैं? Diaspora Nearby के माध्यम से:\n` +
-      `1️⃣ *आस-पास के देशवासियों से जुड़ें*: अपने शहर में अपने देश के लोगों को तुरंत खोजें।\n` +
-      `2️⃣ *विश्वसनीय समुदाय*: Base Blockchain पर Proof of Community Trust (PCT) बनाएं।\n` +
-      `3️⃣ *स्थानीय चैंबर और संगठन*: तंजानिया में अपने समुदाय को संगठित करें।\n` +
-      `4️⃣ *1:1 Ubuntu वेल्थ मैच*: Epoch 1 में Base Blockchain पर *$DIASPORA* टोकन कमाएं।\n\n` +
-      `🎁 *आपका आमंत्रण कोड:* \`${code}\`\n` +
-      `📲 *ऐप डाउनलोड करें (Android & iOS):*\nhttps://diasporanearby.com/invite?code=${code}`,
+      `🌍 *नमस्ते! Diaspora Nearby में आपका स्वागत है (${cityLabel})!*\n\n` +
+      `5 मुख्य सुविधाएँ आपके लिए:\n` +
+      `1️⃣ *Nearby Discovery*: अपने आस-पास के देशवासियों को तुरंत खोजें।\n` +
+      `2️⃣ *Nearby Notifications*: जब कोई देशवासी पास हो तो तुरंत अलर्ट पाएं।\n` +
+      `3️⃣ *Live Radio*: देश और स्थानीय रेडियो स्टेशन 24/7 लाइव सुनें।\n` +
+      `4️⃣ *Ubuntu Emergency Fund*: आपातकालीन स्थिति में पारदर्शी सामुदायिक सहायता।\n` +
+      `5️⃣ *DDI Loans*: व्यापार और प्रोजेक्ट्स के लिए सामुदायिक ऋण।\n\n` +
+      `📲 *ऐप डाउनलोड करें (Android & iOS):*\nhttps://diasporanearby.com/invite?code=${code}\n` +
+      `🎁 *कोड:* \`${code}\``,
     forwardCard: (code) =>
       `🌍 *तंजानिया में भारतीय और अंतर्राष्ट्रीय समुदाय (Dar · Arusha · Zanzibar)* 🇹🇿\n\n` +
-      `अपने आस-पास के देशवासियों से जुड़ने और Base Blockchain पर *$DIASPORA* कमाने के लिए *Diaspora Nearby* से जुड़ें:\n` +
+      `अपने आस-पास के देशवासियों को खोजने, लाइव रेडियो सुनने और Ubuntu Emergency Fund व DDI Loans से जुड़ने के लिए *Diaspora Nearby* डाउनलोड करें:\n` +
       `👉 https://diasporanearby.com/invite?code=${code}`,
     followUp: (code) =>
-      `👋 *Diaspora Nearby* रिमाइंडर! आपका आमंत्रण कोड (\`${code}\`) और Epoch 1 *$DIASPORA* बोनस तैयार है। अभी डाउनलोड करें:\n` +
+      `👋 *Diaspora Nearby* रिमाइंडर! अपने आस-पास के देशवासियों से जुड़ने के लिए अभी डाउनलोड करें (\`${code}\`):\n` +
       `👉 https://diasporanearby.com/invite?code=${code}`,
     commentReply: "नमस्ते! 🌍 हमने आपका आमंत्रण लिंक आपके इनबॉक्स (DM) में भेज दिया है 📩",
   },
   ar: {
     langName: "العربية (Arabic)",
     welcome: (code, cityLabel) =>
-      `🌍 *مرحباً بك في Diaspora Nearby — ملتقى الجاليات والمغتربين في تنزانيا (${cityLabel})!*\n\n` +
-      `هل تقيم في دار السلام أو أروشا أو زنجبار؟ يتيح لك تطبيق Diaspora Nearby:\n` +
-      `1️⃣ *اكتشاف أبناء بلدك بالقرب منك* في مدينتك الحالية.\n` +
-      `2️⃣ *بناء شبكة ثقة موثقة* على Base Blockchain.\n` +
-      `3️⃣ *تنظيم غرف ومجتمعات الجالية* في تنزانيا.\n` +
-      `4️⃣ *مضاعفة الثروة المجتمعية (1:1 Ubuntu Match)* عبر عملة *$DIASPORA* على Base Blockchain.\n\n` +
-      `🎁 *رمز الدعوة الخاص بك:* \`${code}\`\n` +
-      `📲 *تحميل التطبيق (Android & iOS):*\nhttps://diasporanearby.com/invite?code=${code}`,
+      `🌍 *مرحباً بك في Diaspora Nearby — ملتقى الجاليات (${cityLabel})!*\n\n` +
+      `5 خدمات أساسية في تطبيق واحد:\n` +
+      `1️⃣ *اكتشاف القريبين (Nearby Discovery)*: تعرّف على أبناء بلدك بالقرب منك.\n` +
+      `2️⃣ *إشعارات القرب الفورية (Nearby Notification)*: تنبيه فوري عند وجود شخص من بلدك بجوارك.\n` +
+      `3️⃣ *راديو الوطن مباشر (Live Radio)*: استمع إلى إذاعات الوطن مباشرة على مدار الساعة.\n` +
+      `4️⃣ *صندوق طوارئ أوبونتو (Ubuntu Emergency Fund)*: تكافل مجتمعي شفاف في حالات الطوارئ.\n` +
+      `5️⃣ *قروض المجتمع (DDI Loans)*: تمويل مجتمعي لدعم المشاريع والأعمال.\n\n` +
+      `📲 *تحميل التطبيق (Android & iOS):*\nhttps://diasporanearby.com/invite?code=${code}\n` +
+      `🎁 *رمز الدعوة:* \`${code}\``,
     forwardCard: (code) =>
       `🌍 *الجاليات العربية والدولية في تنزانيا (دار السلام · أروشا · زنجبار)* 🇹🇿\n\n` +
-      `انضم إلينا على تطبيق *Diaspora Nearby* للتواصل مع أبناء الجالية بالقرب منك وكسب عملات *$DIASPORA* على Base Blockchain:\n` +
+      `انضم إلينا على *Diaspora Nearby* لاكتشاف أبناء الجالية بالقرب منك، والاستماع لراديو الوطن، وصندوق الطوارئ وقروض DDI:\n` +
       `👉 https://diasporanearby.com/invite?code=${code}`,
     followUp: (code) =>
-      `👋 تذكير من *Diaspora Nearby*! رمز الدعوة الخاص بك (\`${code}\`) ومكافأة *$DIASPORA* بانتظارك:\n` +
+      `👋 تذكير من *Diaspora Nearby*! حمّل التطبيق الآن وفعّل تنبيهات القرب (\`${code}\`):\n` +
       `👉 https://diasporanearby.com/invite?code=${code}`,
     commentReply: "أهلاً بك! 🌍 لقد أرسلنا رابط الدعوة الخاص بك إلى رسائلك الخاصة (DM) 📩",
   },
   de: {
     langName: "Deutsch",
     welcome: (code, cityLabel) =>
-      `🌍 *Willkommen bei Diaspora Nearby — Expat & Internationale Community in Tansania (${cityLabel})!*\n\n` +
-      `Leben Sie in Dar es Salaam, Arusha oder Sansibar? Mit Diaspora Nearby können Sie:\n` +
-      `1️⃣ *Landsleute in Ihrer Nähe entdecken* und sich direkt vernetzen.\n` +
-      `2️⃣ *Vertrauensnetzwerke aufbauen* (Proof of Community Trust auf der Base Blockchain).\n` +
-      `3️⃣ *Lokale Community-Chambers organisieren*.\n` +
-      `4️⃣ *1:1 Ubuntu Match*: Verdienen Sie *$DIASPORA* auf der Base Blockchain für Ihre Heimat- und Gast-Community.\n\n` +
-      `🎁 *Ihr Genesis-Einladungscode:* \`${code}\`\n` +
-      `📲 *Direkt-Download (Android & iOS):*\nhttps://diasporanearby.com/invite?code=${code}`,
+      `🌍 *Willkommen bei Diaspora Nearby — Community Hub (${cityLabel})!*\n\n` +
+      `5 Kernfunktionen für Ihre Community:\n` +
+      `1️⃣ *Nearby Discovery*: Landsleute in Ihrer direkten Umgebung entdecken.\n` +
+      `2️⃣ *Nearby Notifications*: Echtzeit-Benachrichtigung, sobald Landsleute in der Nähe sind.\n` +
+      `3️⃣ *Live Radio*: Heimat- und Lokalradio 24/7 live hören.\n` +
+      `4️⃣ *Ubuntu Emergency Fund*: Transparente Notfall- und Gemeinschaftshilfe.\n` +
+      `5️⃣ *DDI Loans*: Gemeinschaftsfinanzierte Kredite für Projekte & Unternehmen.\n\n` +
+      `📲 *Direkt-Download (Android & iOS):*\nhttps://diasporanearby.com/invite?code=${code}\n` +
+      `🎁 *Einladungscode:* \`${code}\``,
     forwardCard: (code) =>
       `🌍 *Deutschsprachige & Internationale Community in Tansania (Dar · Arusha · Sansibar)* 🇹🇿\n\n` +
-      `Vernetzt euch mit Landsleuten in der Nähe auf *Diaspora Nearby* und sichert euch euren Genesis *$DIASPORA* Bonus auf der Base Blockchain:\n` +
+      `Vernetzt euch auf *Diaspora Nearby*: Nearby Discovery & Alerts, Live Radio, Ubuntu Notfallfonds & DDI Kredite:\n` +
       `👉 https://diasporanearby.com/invite?code=${code}`,
     followUp: (code) =>
-      `👋 Kurze Erinnerung von *Diaspora Nearby*! Ihr Genesis-Einladungscode (\`${code}\`) ist noch für Sie reserviert:\n` +
+      `👋 Kurze Erinnerung von *Diaspora Nearby*! Jetzt App laden und Landsleute in der Nähe entdecken (\`${code}\`):\n` +
       `👉 https://diasporanearby.com/invite?code=${code}`,
     commentReply: "Willkommen! 🌍 Wir haben Ihnen Ihren Einladungslink gerade per DM geschickt 📩",
   },
 };
 
-// ── Cohort A Pack: Mostly Kiswahili for Tanzanians Outside Tanzania ──
+// ── Cohort A Pack: Kiswahili for Tanzanians (Abroad & Homeland Corridors) ──
 const KISWAHILI_DIASPORA_PACK = {
   welcome: (code, cityLabel) =>
-    `🇹🇿 *Karibu Sana Diaspora Nearby — Mtandao wa Watanzania Waishio Nje ya Nchi (${cityLabel})!*\n\n` +
-    `Popote ulipo ughaibuni (Marekani, UK, Dubai/UAE, Afrika Kusini, Kenya, Canada, Ulaya au China), *Diaspora Nearby* imejengwa maalum kwa ajili yetu:\n\n` +
-    `1️⃣ *Gundua Watanzania Karibu Nawe (Discovery)*: Fahamu na uwasiliane na Watanzania wenzako walio mji mmoja, chuo kimoja au mtaa mmoja na wewe.\n` +
-    `2️⃣ *Ungana kwa Uaminifu (Connection)*: Jenga mtandao wa kuaminiana (Proof of Community Trust) uliothibitishwa.\n` +
-    `3️⃣ *Jenga Jumuiya na Chemba Imara (Organization)*: Jiunge na chemba ya Watanzania katika mji unaoishi ughaibuni pamoja na mkoa/mji uliotoka nyumbani Tanzania.\n` +
-    `4️⃣ *Jenga Utajiri wa Pamoja (1:1 Ubuntu Match)*: Kila unapoungana na kushiriki kwenye Epoch 1 unapata tokeni za *$DIASPORA* kwenye *Base Blockchain*, na hazina ya mji wako wa ughaibuni pamoja na hazina ya nyumbani Tanzania zinapata kiasi sawa (1:1 Match)!\n\n` +
-    `🎁 *Kodi Yako ya Mwaliko (Genesis Code):* \`${code}\`\n` +
-    `📲 *Bonyeza Hapa Kupakua App (Android & iPhone):*\nhttps://diasporanearby.com/invite?code=${code}\n\n` +
-    `_Ukishaingia kwenye app, jisajili kwa namba hii ya WhatsApp ili kupata zawadi yako ya Epoch 1 Welcome Bonus moja kwa moja!_`,
+    `🇹🇿 *Karibu Sana Diaspora Nearby — Jumuiya ya Watanzania (${cityLabel})!* 🌍\n\n` +
+    `Huduma 5 muhimu ndani ya app moja kwa kila Mtanzania (ughaibuni na nyumbani):\n\n` +
+    `1️⃣ *Nearby Discovery (Watanzania Karibu Nawe)*: Ona na ufahamiane na Watanzania wenzako walio mji, chuo, au mtaa mmoja na wewe.\n` +
+    `2️⃣ *Nearby Notification (Taarifa za Papo Hapo)*: Pata ujumbe (alert) kwenye simu yako punde tu Mtanzania mwenzako anapokuwa karibu nawe.\n` +
+    `3️⃣ *Redio za Nyumbani Live (Radio)*: Sikiliza redio za Tanzania live saa 24 popote ulipo duniani.\n` +
+    `4️⃣ *Ubuntu Emergency Fund (Mfuko wa Dharura na Msiba)*: Kusaidiana kwenye dharura na msiba kwa uwazi na uaminifu.\n` +
+    `5️⃣ *DDI Loans (Mikopo ya Uwekezaji ya Jumuiya)*: Mikopo inayotokana na hazina ya jumuiya yetu kukuza biashara na miradi nyumbani na ughaibuni.\n\n` +
+    `📲 *Bonyeza Hapa Kupakua App (Android & iPhone):*\nhttps://diasporanearby.com/invite?code=${code}\n` +
+    `🎁 *Kodi ya Mwaliko:* \`${code}\`\n\n` +
+    `_Jisajili ndani ya app kwa namba hii ya WhatsApp ili uunganishwe moja kwa moja na Watanzania wa ${cityLabel}!_`,
 
   forwardCard: (code) =>
-    `🇹🇿 *Watanzania Wenzangu Waishio Nje ya Tanzania (Diaspora / Ughaibuni)!* 🌍\n\n` +
-    `Tunajenga mtandao rasmi wa Watanzania kila mji duniani kupitia *Diaspora Nearby* — programu inayokuwezesha kuwafahamu Watanzania walio karibu nawe mji uliopo, kuimarisha jumuiya zetu, na kujenga hazina ya pamoja kati ya ughaibuni na nyumbani Tanzania kupitia *$DIASPORA* kwenye *Base Blockchain* (1:1 Ubuntu Match).\n\n` +
-    `Jiunge na chemba ya mji wako hapa na upate zawadi ya waanzilishi (Epoch 1):\n` +
+    `🇹🇿 *Watanzania Wenzangu — Tupo Wangapi Kwenye Mji Huu?* 🌍\n\n` +
+    `Pakua app ya *Diaspora Nearby* upate huduma hizi 5:\n` +
+    `📍 *Nearby Discovery*: Ona Watanzania walio karibu nawe mji uliopo\n` +
+    `🔔 *Nearby Notification*: Pata taarifa papo hapo Mtanzania anapokuwa jirani\n` +
+    `📻 *Live Radio*: Sikiliza redio zote za nyumbani Tanzania live\n` +
+    `🤝 *Ubuntu Emergency Fund*: Mfuko rasmi wa kusaidiana kwenye dharura na msiba\n` +
+    `🏦 *DDI Loans*: Mikopo ya jumuiya kwa ajili ya biashara na uwekezaji\n\n` +
+    `Bonyeza hapa kuangalia Watanzania walio karibu nawe sasa hivi:\n` +
     `👉 https://diasporanearby.com/invite?code=${code}`,
 
   followUp: (code) =>
-    `🇹🇿 *Habari ndugu yangu!* Huu ni ukumbusho mfupi kutoka *Diaspora Nearby*. Nafasi yako ya Mwanzilishi (Genesis Member) na zawadi yako ya Epoch 1 *$DIASPORA* kwa kutumia kodi \`${code}\` bado imehifadhiwa.\n\n` +
-    `Bonyeza link hii kupakua kwenye simu yako (Android au iPhone) na uingie kwa namba hii ya WhatsApp:\n` +
+    `🇹🇿 *Habari ndugu yangu!* Watanzania wenzako wanaendelea kujiunga kwenye *Diaspora Nearby*.\n\n` +
+    `Bonyeza link hii kupakua app (Android au iPhone) ili uwashe *Nearby Discovery & Notification*, usikilize *Redio za Nyumbani Live*, na ujiunge na *Ubuntu Emergency Fund & DDI Loans* (Kodi: \`${code}\`):\n` +
     `👉 https://diasporanearby.com/invite?code=${code}`,
 
   commentReply:
-    "Karibu sana ndugu yetu! 🇹🇿 Tumekutumia link yako ya kujiunga na kodi ya zawadi kwenye inbox yako (DM) sasa hivi 📩",
+    "Karibu sana ndugu yetu! 🇹🇿 Tumekutumia link ya kupakua app kwenye inbox yako (DM) sasa hivi 📩",
 };
 
 const FOUNDER_INVITE_CODE = "PETER-TZ-CC57";
@@ -195,10 +208,16 @@ function classifyOutreachIntent(rawText = "", senderPhone = "") {
   const lower = text.toLowerCase();
 
   // 1. Explicit button / payload IDs
-  if (lower.includes("corridor_tz_abroad") || lower.includes("mtanzania nje")) {
+  if (
+    lower.includes("corridor_tz_abroad") ||
+    lower.includes("corridor_tz_home") ||
+    lower.includes("nje ya tanzania") ||
+    lower.includes("nipo tanzania") ||
+    lower.includes("mtanzania nje")
+  ) {
     return { corridor: "tz_abroad", lang: "sw", city: extractCityLabel(text, "tz_abroad") };
   }
-  if (lower.includes("corridor_in_tz") || lower.includes("expat living in tz")) {
+  if (lower.includes("corridor_in_tz") || lower.includes("expat in tz") || lower.includes("expat living in tz")) {
     const lang = detectExpatLanguage(text);
     return { corridor: "expat_in_tz", lang, city: extractCityLabel(text, "expat_in_tz") };
   }
@@ -212,6 +231,7 @@ function classifyOutreachIntent(rawText = "", senderPhone = "") {
     "living in tanzania",
     "expat in",
     "expats in",
+    "expat",
     "in dar",
     "in arusha",
     "in zanzibar",
@@ -243,16 +263,24 @@ function classifyOutreachIntent(rawText = "", senderPhone = "") {
     };
   }
 
-  // 4. Keywords for Cohort A (Tanzanians living outside Tanzania — Kiswahili)
+  // 4. Keywords for Cohort A & Homeland TZ (Kiswahili + all 31 TZ regions, towns & global cities)
   const tzAbroadKeywords = [
     "habari",
     "mambo",
+    "jambo",
+    "hujambo",
     "shikamoo",
     "niaje",
     "safi",
+    "salama",
     "karibu",
+    "asante",
+    "ahsante",
+    "ndio",
+    "ndiyo",
     "mtanzania",
     "watanzania",
+    "tanzania",
     "ughaibuni",
     "nje ya tanzania",
     "nje ya nchi",
@@ -260,25 +288,111 @@ function classifyOutreachIntent(rawText = "", senderPhone = "") {
     "tz diaspora",
     "nipo",
     "naishi",
-    "kutoka tanzania",
+    "natoka",
+    "kutoka",
+    "nyumbani",
+    "kijiji",
+    "wilaya",
+    "mkoa",
+    "mtaa",
     "tz",
+    // All Tanzania regions & major towns
+    "dar es salaam",
+    "dar",
+    "arusha",
+    "zanzibar",
+    "unguja",
+    "pemba",
+    "mwanza",
+    "dodoma",
+    "moshi",
+    "kilimanjaro",
+    "iringa",
+    "ilula",
+    "mbeya",
+    "tanga",
+    "morogoro",
+    "bukoba",
+    "kagera",
+    "songea",
+    "ruvuma",
+    "mtwara",
+    "lindi",
+    "tabora",
+    "kigoma",
+    "shinyanga",
+    "geita",
+    "simiyu",
+    "bariadi",
+    "mara",
+    "musoma",
+    "singida",
+    "njombe",
+    "rukwa",
+    "sumbawanga",
+    "katavi",
+    "mpanda",
+    "manyara",
+    "babati",
+    "pwani",
+    "kibaha",
+    "bagamoyo",
+    "songwe",
+    "vwawa",
+    "tunduma",
+    "makambako",
+    "ifakara",
+    "kahama",
+    "korogwe",
+    "lushoto",
+    // Global diaspora hubs
     "houston",
     "dallas",
     "washington",
     "dmv",
+    "atlanta",
+    "new york",
+    "phoenix",
+    "columbus",
+    "chicago",
+    "seattle",
+    "california",
     "london",
     "birmingham",
     "reading",
+    "manchester",
+    "slough",
     "dubai",
     "abu dhabi",
+    "sharjah",
     "oman",
     "muscat",
+    "doha",
+    "qatar",
     "johannesburg",
     "pretoria",
+    "cape town",
+    "durban",
     "nairobi",
     "mombasa",
+    "kampala",
+    "kigali",
+    "lubumbashi",
+    "lusaka",
     "toronto",
     "ottawa",
+    "montreal",
+    "calgary",
+    "berlin",
+    "frankfurt",
+    "stockholm",
+    "istanbul",
+    "guangzhou",
+    "beijing",
+    "wuhan",
+    "mumbai",
+    "delhi",
+    "bangalore",
   ];
   if (tzAbroadKeywords.some((kw) => lower.includes(kw))) {
     return {
@@ -288,12 +402,19 @@ function classifyOutreachIntent(rawText = "", senderPhone = "") {
     };
   }
 
-  // 5. Phone country code heuristic when message is a short greeting ("Hi", "Hello", "Start"):
-  // If phone is NOT +255 (e.g. +1 US/CA, +44 UK, +971 UAE, +27 SA), check if we should prompt both buttons
-  // or default cleanly. Returning "unknown" triggers the 2-button interactive selector on WhatsApp!
+  // 5. If sender has a +255 Tanzanian phone number and sends a greeting or media, default to Kiswahili pack!
+  if (String(senderPhone || "").startsWith("+255")) {
+    return {
+      corridor: "tz_abroad",
+      lang: "sw",
+      city: extractCityLabel(text, "tz_abroad"),
+    };
+  }
+
+  // 6. Otherwise return "unknown" so the interactive 3-button selector is sent (with the direct link included!)
   return {
     corridor: "unknown",
-    lang: senderPhone.startsWith("+255") ? "en" : "sw",
+    lang: "sw",
     city: null,
   };
 }
@@ -334,9 +455,11 @@ function extractCityLabel(text = "", corridor = "tz_abroad") {
   const lower = String(text || "").toLowerCase();
   const knownCities = [
     ["dar es salaam", "Dar es Salaam"],
-    ["dar", "Dar es Salaam"],
     ["masaki", "Masaki · Dar es Salaam"],
     ["oysterbay", "Oysterbay · Dar es Salaam"],
+    ["mikocheni", "Mikocheni · Dar es Salaam"],
+    ["upanga", "Upanga · Dar es Salaam"],
+    ["dar", "Dar es Salaam"],
     ["arusha", "Arusha"],
     ["zanzibar", "Zanzibar"],
     ["paje", "Paje · Zanzibar"],
@@ -344,25 +467,72 @@ function extractCityLabel(text = "", corridor = "tz_abroad") {
     ["dodoma", "Dodoma"],
     ["mwanza", "Mwanza"],
     ["moshi", "Moshi · Kilimanjaro"],
+    ["kilimanjaro", "Kilimanjaro"],
+    ["iringa", "Iringa"],
+    ["ilula", "Ilula · Iringa"],
+    ["mbeya", "Mbeya"],
+    ["tanga", "Tanga"],
+    ["morogoro", "Morogoro"],
+    ["bukoba", "Bukoba · Kagera"],
+    ["kagera", "Kagera"],
+    ["songea", "Songea · Ruvuma"],
+    ["ruvuma", "Ruvuma"],
+    ["mtwara", "Mtwara"],
+    ["lindi", "Lindi"],
+    ["tabora", "Tabora"],
+    ["kigoma", "Kigoma"],
+    ["shinyanga", "Shinyanga"],
+    ["geita", "Geita"],
+    ["simiyu", "Simiyu"],
+    ["mara", "Mara"],
+    ["musoma", "Musoma · Mara"],
+    ["singida", "Singida"],
+    ["njombe", "Njombe"],
+    ["sumbawanga", "Sumbawanga · Rukwa"],
+    ["rukwa", "Rukwa"],
+    ["katavi", "Katavi"],
+    ["mpanda", "Mpanda · Katavi"],
+    ["manyara", "Manyara"],
+    ["babati", "Babati · Manyara"],
+    ["pwani", "Pwani"],
+    ["kibaha", "Kibaha · Pwani"],
+    ["bagamoyo", "Bagamoyo · Pwani"],
+    ["songwe", "Songwe"],
     ["houston", "Houston, USA"],
     ["dallas", "Dallas, USA"],
     ["washington", "Washington D.C. / DMV"],
     ["dmv", "DMV (DC · MD · VA)"],
+    ["atlanta", "Atlanta, USA"],
+    ["new york", "New York, USA"],
+    ["phoenix", "Phoenix, USA"],
+    ["columbus", "Columbus, USA"],
+    ["chicago", "Chicago, USA"],
+    ["seattle", "Seattle, USA"],
     ["london", "London, UK"],
     ["birmingham", "Birmingham, UK"],
     ["reading", "Reading, UK"],
+    ["manchester", "Manchester, UK"],
+    ["slough", "Slough, UK"],
     ["dubai", "Dubai, UAE"],
     ["abu dhabi", "Abu Dhabi, UAE"],
     ["muscat", "Muscat, Oman"],
     ["johannesburg", "Johannesburg, SA"],
+    ["pretoria", "Pretoria, SA"],
     ["cape town", "Cape Town, SA"],
     ["nairobi", "Nairobi, Kenya"],
+    ["mombasa", "Mombasa, Kenya"],
+    ["kampala", "Kampala, Uganda"],
+    ["kigali", "Kigali, Rwanda"],
     ["toronto", "Toronto, Canada"],
+    ["ottawa", "Ottawa, Canada"],
+    ["berlin", "Berlin, Germany"],
+    ["guangzhou", "Guangzhou, China"],
+    ["beijing", "Beijing, China"],
   ];
   for (const [needle, label] of knownCities) {
     if (lower.includes(needle)) return label;
   }
-  return corridor === "tz_abroad" ? "Diaspora Global" : "Dar · Arusha · Zanzibar";
+  return corridor === "tz_abroad" ? "Tanzania & Diaspora" : "Dar · Arusha · Zanzibar";
 }
 
 /**
@@ -401,6 +571,18 @@ function parseHomeAndHostFromComment(rawText = "") {
     ["morogoro", "Morogoro"],
     ["bukoba", "Bukoba"],
     ["iringa", "Iringa"],
+    ["ilula", "Ilula, Iringa"],
+    ["songea", "Songea"],
+    ["mtwara", "Mtwara"],
+    ["lindi", "Lindi"],
+    ["tabora", "Tabora"],
+    ["kigoma", "Kigoma"],
+    ["shinyanga", "Shinyanga"],
+    ["geita", "Geita"],
+    ["musoma", "Musoma"],
+    ["singida", "Singida"],
+    ["njombe", "Njombe"],
+    ["sumbawanga", "Sumbawanga"],
   ];
   const globalCities = [
     ["houston", "Houston, USA"],
@@ -470,7 +652,7 @@ function buildFacebookCommentOnboarding({
   const inviteUrl = `https://diasporanearby.com/invite?code=${code}`;
 
   const effectiveHome = homeCity || (isExpat ? "your home country" : "Tanzania");
-  const effectiveHost = hostCity || intent.city || (isExpat ? "Tanzania" : "mji wako wa ughaibuni");
+  const effectiveHost = hostCity || intent.city || (isExpat ? "Tanzania" : "mji wako");
 
   let publicReplyText;
   if (!isExpat) {
@@ -482,8 +664,8 @@ function buildFacebookCommentOnboarding({
         : `kutoka *${effectiveHome}*`;
     publicReplyText =
       `Karibu sana${nameGreet}! 🇹🇿🌍 Ungana na Watanzania wenzako ${corridorPhrase} ndani ya *Diaspora Nearby* ` +
-      `(utapata zawadi ya Mwanzilishi ya Epoch 1 *$DIASPORA* na ujumbe wa moja kwa moja ndani ya app kutoka kwa Mwanzilishi Peter Swai).\n` +
-      `📲 Tafuta "Diaspora Nearby" kwenye Google Play / App Store (Kodi ya Mwaliko: ${code}) au tuma ujumbe WhatsApp: +1 641-302-0012 (diasporanearby [dot] com)`;
+      `(Nearby Discovery & Notification, Redio za Nyumbani Live, Ubuntu Emergency Fund, na DDI Loans).\n` +
+      `📲 Pakua "Diaspora Nearby" kwenye Google Play / App Store (Kodi: ${code}) au tuma ujumbe WhatsApp: +1 641-302-0012 (diasporanearby [dot] com)`;
   } else {
     const nameGreet = firstName ? `, ${firstName}` : "";
     const corridorPhrase = homeCity && hostCity
@@ -491,7 +673,7 @@ function buildFacebookCommentOnboarding({
       : `in *${effectiveHost}*`;
     publicReplyText =
       `Welcome${nameGreet}! 🌍 Connect with fellow compatriots ${corridorPhrase} on *Diaspora Nearby* ` +
-      `(claim your Epoch 1 *$DIASPORA* Welcome Bonus & chat 1-on-1 in-app with Founder Peter Swai).\n` +
+      `(Nearby Discovery & Notifications, Live Homeland Radio, Ubuntu Emergency Fund, and DDI Loans).\n` +
       `📲 Search "Diaspora Nearby" on Google Play / App Store (Invite Code: ${code}) or WhatsApp: +1 641-302-0012 (diasporanearby [dot] com)`;
   }
 
@@ -566,13 +748,26 @@ async function sendWhatsAppCloudMessage({
 }
 
 /**
- * Sends the 2-button bilingual corridor selector when a user sends a generic greeting
+ * Sends the 3-button bilingual corridor selector when a user sends a generic greeting.
+ * IMPORTANT:
+ *   1. All button titles MUST be <= 20 characters (Meta Cloud API hard limit #131009).
+ *   2. ALWAYS includes the direct invite link right inside the body so the user never
+ *      leaves without a clickable download link!
  */
 async function sendCorridorSelectorPrompt({ phoneNumberId, accessToken, recipientPhone }) {
+  const code = FOUNDER_INVITE_CODE;
+  const inviteUrl = `https://diasporanearby.com/invite?code=${code}`;
   const bodyText =
-    "🇹🇿 *Karibu Diaspora Nearby!* / *Welcome to Diaspora Nearby!* 🌍\n\n" +
-    "Chagua kundi lako hapa chini ili tukutumie link yako maalum ya kujiunga:\n" +
-    "_Please select which describes you below to receive your instant invite link:_";
+    `🇹🇿 *Karibu Diaspora Nearby!* / *Welcome!* 🌍\n\n` +
+    `Huduma 5 ndani ya app moja:\n` +
+    `📍 *Nearby Discovery* (Wenzako Karibu Nawe)\n` +
+    `🔔 *Nearby Notification* (Taarifa za Papo Hapo)\n` +
+    `📻 *Live Radio* (Redio za Nyumbani Live)\n` +
+    `🤝 *Ubuntu Emergency Fund* (Mfuko wa Dharura)\n` +
+    `🏦 *DDI Loans* (Mikopo ya Jumuiya)\n\n` +
+    `📲 *Pakua App Sasa (Android & iPhone):*\n${inviteUrl}\n` +
+    `🎁 *Kodi:* \`${code}\`\n\n` +
+    `Chagua kundi lako hapa chini / _Select your group below:_`;
 
   const interactive = {
     type: "button",
@@ -583,14 +778,21 @@ async function sendCorridorSelectorPrompt({ phoneNumberId, accessToken, recipien
           type: "reply",
           reply: {
             id: "corridor_tz_abroad",
-            title: "🇹🇿 Mtanzania Nje ya TZ",
+            title: "🇹🇿 Nje ya Tanzania", // 18 chars (<= 20 limit)
+          },
+        },
+        {
+          type: "reply",
+          reply: {
+            id: "corridor_tz_home",
+            title: "🇹🇿 Nipo Tanzania", // 16 chars (<= 20 limit)
           },
         },
         {
           type: "reply",
           reply: {
             id: "corridor_in_tz",
-            title: "🌍 Expat Living in TZ",
+            title: "🌍 Expat in TZ", // 14 chars (<= 20 limit)
           },
         },
       ],
@@ -614,8 +816,8 @@ async function sendCorridorSelectorPrompt({ phoneNumberId, accessToken, recipien
       type: "text",
       textBody:
         `${bodyText}\n\n` +
-        `1️⃣ Jibu *TZ* kama wewe ni Mtanzania unayeishi nje ya Tanzania 🇹🇿\n` +
-        `2️⃣ Reply *EXPAT* (or your home country) if you are living in Tanzania from abroad 🌍`,
+        `1️⃣ Jibu *TZ* kama wewe ni Mtanzania (nje au ndani ya Tanzania) 🇹🇿\n` +
+        `2️⃣ Reply *EXPAT* if you are living in Tanzania from abroad 🌍`,
     });
   }
 }
@@ -646,8 +848,9 @@ async function handleIncomingWhatsAppMessages(webhookValue) {
     const parsed = parsePhoneNumberFromString(e164Phone);
     const normalizedPhone = parsed && parsed.isValid() ? parsed.number : e164Phone;
 
-    // Extract text from regular message or interactive button reply
+    // Extract text from regular message, media caption, or interactive button reply
     let incomingText = "";
+    let isMediaWithoutCaption = false;
     if (msg.type === "text" && msg.text?.body) {
       incomingText = msg.text.body;
     } else if (msg.type === "interactive") {
@@ -659,9 +862,36 @@ async function handleIncomingWhatsAppMessages(webhookValue) {
         "";
     } else if (msg.type === "button" && msg.button?.text) {
       incomingText = msg.button.text;
+    } else if (msg.image?.caption || msg.video?.caption || msg.document?.caption) {
+      incomingText = msg.image?.caption || msg.video?.caption || msg.document?.caption || "";
+    } else if (["image", "video", "audio", "document", "sticker", "location"].includes(msg.type)) {
+      isMediaWithoutCaption = true;
+      incomingText = `[${msg.type}]`;
     }
 
     if (!incomingText) continue;
+
+    const leadId = stableHash(`lead:${normalizedPhone}`);
+    const leadRef = db.collection("outreach_leads").doc(leadId);
+
+    // If user sent media without caption (e.g. a multi-photo album), debounce so we only greet once
+    if (isMediaWithoutCaption) {
+      const existingSnap = await leadRef.get();
+      if (existingSnap.exists) {
+        const existingData = existingSnap.data() || {};
+        const lastInboundMs =
+          existingData.lastInboundAt && typeof existingData.lastInboundAt.toMillis === "function"
+            ? existingData.lastInboundAt.toMillis()
+            : 0;
+        if (
+          existingData.status === "link_sent" ||
+          existingData.status === "converted" ||
+          Date.now() - lastInboundMs < 5 * 60 * 1000
+        ) {
+          continue;
+        }
+      }
+    }
 
     const lowerIncoming = incomingText.toLowerCase();
     const isFounder1on1 =
@@ -675,8 +905,6 @@ async function handleIncomingWhatsAppMessages(webhookValue) {
       incomingText.includes("1-إلى-1");
 
     const intent = classifyOutreachIntent(incomingText, normalizedPhone);
-    const leadId = stableHash(`lead:${normalizedPhone}`);
-    const leadRef = db.collection("outreach_leads").doc(leadId);
 
     if (isFounder1on1) {
       const isSwahili =
@@ -720,9 +948,11 @@ async function handleIncomingWhatsAppMessages(webhookValue) {
       const founderReply = isSwahili
         ? "🇹🇿 *Ahsante sana kwa kuwasiliana nami!* Mimi ni *Peter Swai*, Mwanzilishi wa Diaspora Nearby.\n\n" +
           "Nimepokea ujumbe wako wa msaada wa 1-kwa-1. Unaweza kunipigia simu ya WhatsApp moja kwa moja hapa sasa hivi (bonyeza kitufe cha Simu / Call juu kulia), au nitakupigia na kukujibu punde tu!\n\n" +
+          `📲 Pakua app hapa: https://diasporanearby.com/invite?code=${FOUNDER_INVITE_CODE}\n` +
           "Karibu sana nyumbani kwenye Diaspora Nearby 🙏"
         : "🌍 *Thank you for reaching out!* This is *Peter Swai*, Founder of Diaspora Nearby.\n\n" +
           "I just received your 1-on-1 request. Feel free to tap the WhatsApp Call icon at the top right to call me right now, or I will call/message you right back shortly!\n\n" +
+          `📲 Download the app here: https://diasporanearby.com/invite?code=${FOUNDER_INVITE_CODE}\n` +
           "Welcome to Diaspora Nearby 🙏";
 
       await sendWhatsAppCloudMessage({
@@ -740,7 +970,11 @@ async function handleIncomingWhatsAppMessages(webhookValue) {
         {
           phoneNumber: normalizedPhone,
           profileName,
-          corridor: "pending_selection",
+          corridor: "tz_abroad",
+          lang: "sw",
+          referralCode: FOUNDER_INVITE_CODE,
+          status: "link_sent",
+          followUpSent: false,
           lastMessage: incomingText.slice(0, 280),
           lastInboundAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1230,6 +1464,179 @@ exports.dispatchGroupOutreachBatch = functions
     }
   });
 
+/**
+ * Helper to normalize user-entered phone numbers from the web Roll-Call check-in
+ */
+function normalizeWebPhone(rawPhone = "", homeLocation = "", hostLocation = "") {
+  const cleaned = String(rawPhone || "").replace(/[^\d+]/g, "").trim();
+  if (!cleaned || cleaned.length < 7) return null;
+
+  let candidate = cleaned;
+  const combinedLoc = `${homeLocation} ${hostLocation}`.toLowerCase();
+  if (!candidate.startsWith("+")) {
+    if (candidate.startsWith("0") && candidate.length === 10) {
+      // Local 07xx / 06xx format (default to +255 Tanzania or +254 Kenya if mentioned)
+      const cc = combinedLoc.includes("kenya") || combinedLoc.includes("nairobi") ? "+254" : "+255";
+      candidate = cc + candidate.slice(1);
+    } else if (candidate.length === 10 && (combinedLoc.includes("usa") || combinedLoc.includes("houston") || combinedLoc.includes("dallas") || combinedLoc.includes("canada") || combinedLoc.includes("dmv"))) {
+      candidate = "+1" + candidate;
+    } else {
+      candidate = "+" + candidate;
+    }
+  }
+
+  const parsed = parsePhoneNumberFromString(candidate);
+  if (parsed && parsed.isValid()) return parsed.number;
+  return /^\+\d{8,15}$/.test(candidate) ? candidate : null;
+}
+
+/**
+ * HTTPS: Web Roll-Call Check-In & Instant WhatsApp Pass Dispatcher
+ * GET  /submitWebRollCallLead -> Returns live roll-call social proof stats
+ * POST /submitWebRollCallLead -> Records home/host check-in, sends instant WhatsApp app link & forward card
+ */
+exports.submitWebRollCallLead = functions
+  .runWith({
+    timeoutSeconds: 60,
+    memory: "256MB",
+    secrets: ["WHATSAPP_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID"],
+  })
+  .https.onRequest(async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+    if (req.method === "OPTIONS") {
+      return res.status(204).send("");
+    }
+
+    if (req.method === "GET") {
+      try {
+        const [usersSnap, leadsSnap] = await Promise.all([
+          db.collection("users").limit(200).get(),
+          db.collection("outreach_leads").limit(200).get(),
+        ]);
+        return res.status(200).json({
+          success: true,
+          activeMembers: Math.max(31, usersSnap.size + leadsSnap.size),
+          activeChambers: 64,
+        });
+      } catch (_e) {
+        return res.status(200).json({
+          success: true,
+          activeMembers: 42,
+          activeChambers: 64,
+        });
+      }
+    }
+
+    if (req.method !== "POST") {
+      return res.status(405).json({ error: "Method Not Allowed." });
+    }
+
+    try {
+      const body = req.body || {};
+      const homeLocation = String(body.homeLocation || "Tanzania").trim().slice(0, 60);
+      const hostLocation = String(body.hostLocation || "Diaspora").trim().slice(0, 60);
+      const profileName = String(body.name || "").trim().slice(0, 60);
+      const rawPhone = String(body.phone || "").trim();
+      const code = String(body.code || FOUNDER_INVITE_CODE).trim().slice(0, 32) || FOUNDER_INVITE_CODE;
+
+      const normalizedPhone = normalizeWebPhone(rawPhone, homeLocation, hostLocation);
+      const intent = classifyOutreachIntent(`${homeLocation} -> ${hostLocation}`, normalizedPhone || "");
+      const isExpat =
+        body.corridor === "expat_in_tz" ||
+        (intent.corridor === "expat_in_tz" && !homeLocation.toLowerCase().includes("tanzania"));
+      const corridor = isExpat ? "expat_in_tz" : "tz_abroad";
+      const lang = body.lang || (corridor === "tz_abroad" ? "sw" : intent.lang || "en");
+      const corridorLabel = `${homeLocation} ✈️ ${hostLocation}`;
+
+      const docKey = normalizedPhone
+        ? stableHash(`lead:${normalizedPhone}`)
+        : stableHash(`web:${homeLocation}:${hostLocation}:${Date.now()}`);
+
+      let whatsappDelivered = false;
+      const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+      const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+      if (normalizedPhone && accessToken && phoneNumberId) {
+        const welcomeText =
+          corridor === "tz_abroad"
+            ? KISWAHILI_DIASPORA_PACK.welcome(code, corridorLabel)
+            : (EXPAT_NATIVE_PACKS[lang] || EXPAT_NATIVE_PACKS.en).welcome(code, corridorLabel);
+
+        const delivery = await sendWhatsAppCloudMessage({
+          phoneNumberId,
+          accessToken,
+          to: normalizedPhone,
+          type: "text",
+          textBody: welcomeText,
+        });
+        whatsappDelivered = !!delivery.ok;
+
+        if (whatsappDelivered) {
+          const forwardText =
+            corridor === "tz_abroad"
+              ? KISWAHILI_DIASPORA_PACK.forwardCard(code)
+              : (EXPAT_NATIVE_PACKS[lang] || EXPAT_NATIVE_PACKS.en).forwardCard(code);
+          await sendWhatsAppCloudMessage({
+            phoneNumberId,
+            accessToken,
+            to: normalizedPhone,
+            type: "text",
+            textBody: forwardText,
+          }).catch(() => undefined);
+        }
+      }
+
+      await db
+        .collection("outreach_leads")
+        .doc(docKey)
+        .set(
+          {
+            ...(normalizedPhone ? { phoneNumber: normalizedPhone } : {}),
+            ...(profileName ? { profileName } : {}),
+            homeCity: homeLocation,
+            hostCity: hostLocation,
+            city: corridorLabel,
+            corridor,
+            lang,
+            referralCode: code,
+            source: "web_rollcall",
+            status: whatsappDelivered ? "link_sent" : "web_checked_in",
+            followUpSent: false,
+            lastInboundAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+
+      const inviteUrl = `https://diasporanearby.com/invite?code=${encodeURIComponent(code)}`;
+      const shareText =
+        corridor === "tz_abroad"
+          ? `🇹🇿 Nimejiunga kwenye Roll-Call ya *${homeLocation} ✈️ ${hostLocation}* ndani ya *Diaspora Nearby*!\n\n` +
+            `Washia *Nearby Discovery & Notification* uone Watanzania walio karibu nawe mji huu, sikiliza *Redio za Nyumbani Live*, na ujiunge na *Ubuntu Emergency Fund & DDI Loans*:\n` +
+            `👉 ${inviteUrl}`
+          : `🌍 Just checked into the *${homeLocation} ✈️ ${hostLocation}* corridor on *Diaspora Nearby*!\n\n` +
+            `Turn on *Nearby Discovery & Notifications* to see compatriots around you, stream *Live Homeland Radio*, and access the *Ubuntu Emergency Fund & DDI Loans*:\n` +
+            `👉 ${inviteUrl}`;
+
+      return res.status(200).json({
+        success: true,
+        corridor,
+        lang,
+        corridorLabel,
+        whatsappDelivered,
+        referralCode: code,
+        inviteUrl,
+        shareText,
+      });
+    } catch (err) {
+      console.error("[submitWebRollCallLead] Error:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
 module.exports = {
   EXPAT_NATIVE_PACKS,
   KISWAHILI_DIASPORA_PACK,
@@ -1243,4 +1650,5 @@ module.exports = {
   outreachFollowUpCron: exports.outreachFollowUpCron,
   metaOutreachWebhook: exports.metaOutreachWebhook,
   dispatchGroupOutreachBatch: exports.dispatchGroupOutreachBatch,
+  submitWebRollCallLead: exports.submitWebRollCallLead,
 };

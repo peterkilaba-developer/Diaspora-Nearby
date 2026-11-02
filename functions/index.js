@@ -221,6 +221,9 @@ exports.forceDiasporaSocialCron = socialMedia.forceDiasporaSocialCron;
 exports.outreachFollowUpCron = outreachBot.outreachFollowUpCron;
 exports.metaOutreachWebhook = outreachBot.metaOutreachWebhook;
 exports.dispatchGroupOutreachBatch = outreachBot.dispatchGroupOutreachBatch;
+exports.executeAiAgentAction = require("./lib/ai_agent").executeAiAgentAction;
+exports.converseAiAgentVoice = require("./lib/ai_agent").converseAiAgentVoice;
+exports.submitWebRollCallLead = outreachBot.submitWebRollCallLead;
 
 // YouTube Automation (1)
 const youtube = require("./lib/youtube_automation");

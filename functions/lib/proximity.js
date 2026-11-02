@@ -16,7 +16,16 @@
  *   7. Android collapse key + APNs thread-id so the tray groups them.
  */
 const { functions, admin, db, sendPushToUser } = require("./shared");
-const { requireAuth, requireAppCheck, consumeRateLimit } = require("./security");
+const {
+    requireAuth,
+    requireAppCheck,
+    consumeRateLimit,
+    stableHash,
+} = require("./security");
+const {
+    distributeUbuntuMatchingSupply,
+    syncProfileMilestoneAndTrust,
+} = require("./dsp");
 const { geohashQueryBounds } = require("geofire-common");
 
 // ─── Tunables ────────────────────────────────────────────────────────────────
@@ -29,8 +38,19 @@ const TOP_N = 3;                     // max pushes fanned out per event
 const QUIET_HOUR_START = 22;         // 10pm local
 const QUIET_HOUR_END = 8;            // 8am local
 
+// ─── Dwell Proximity & Grassroots Gathering Tunables ─────────────────────────
+const DWELL_RADIUS_FEET = 100;                        // 100 ft (~30.48 meters)
+const DWELL_QUERY_RADIUS_METERS = 100;                // Geohash query bound buffer
+const AUTO_PROXIMITY_REQUIRED_MS = 10 * 60 * 1000;    // >10 minutes within 100 ft
+const GRASSROOTS_GATHERING_REQUIRED_MS = 60 * 60 * 1000; // >60 minutes within 100 ft
+const REWARD_COOLDOWN_24H_MS = 24 * 60 * 60 * 1000;   // 24-hour rolling window
+const DWELL_EVAL_COOLDOWN_MS = 30 * 1000;             // 30s debounce per user
+const PEER_LOCATION_FRESHNESS_MS = 24 * 60 * 60 * 1000; // Max age of peer GPS fix
+const REWARD_DSP_AMOUNT = 1000;                       // 1,000 DSP each
+
 // In-memory cooldown is a hot-path cache; Firestore is the source of truth.
 const _proximityCooldowns = new Map();
+const _dwellEvalCooldowns = new Map();
 
 function calculateDistanceInMiles(lat1, lon1, lat2, lon2) {
     const R = 3958.8;
@@ -458,24 +478,42 @@ exports.checkProximity = functions.firestore
         const before = change.before.data();
         const after = change.after.data();
 
-        // Don't loop on our own cooldown writes.
-        const beforeStamp = before.lastProximityCheckAt && before.lastProximityCheckAt.toMillis
-            ? before.lastProximityCheckAt.toMillis() : 0;
-        const afterStamp = after.lastProximityCheckAt && after.lastProximityCheckAt.toMillis
-            ? after.lastProximityCheckAt.toMillis() : 0;
-        if (afterStamp !== beforeStamp &&
-            JSON.stringify(before.currentLocation) === JSON.stringify(after.currentLocation)) {
+        // Don't loop on our own cooldown or non-location writes.
+        const beforeLoc = before.currentLocation || {};
+        const afterLoc = after.currentLocation || {};
+        const beforeLat = beforeLoc.geometry && beforeLoc.geometry.location
+            ? beforeLoc.geometry.location.lat : null;
+        const beforeLng = beforeLoc.geometry && beforeLoc.geometry.location
+            ? beforeLoc.geometry.location.lng : null;
+        const afterLat = afterLoc.geometry && afterLoc.geometry.location
+            ? afterLoc.geometry.location.lat : null;
+        const afterLng = afterLoc.geometry && afterLoc.geometry.location
+            ? afterLoc.geometry.location.lng : null;
+        const locationWriteOccurred =
+            beforeLat !== afterLat ||
+            beforeLng !== afterLng ||
+            beforeLoc.timestamp !== afterLoc.timestamp ||
+            beforeLoc.lastUpdated !== afterLoc.lastUpdated;
+        if (!locationWriteOccurred) {
             return null;
         }
 
         const profile = await db.collection("users").doc(userId).get();
         if (!profile.exists) return null;
-        return runProximityCheck(
-            userId,
-            {...profile.data(), ...after},
-            before.currentLocation,
-            false,
-        );
+        const mergedUserData = {...profile.data(), ...after};
+
+        await Promise.all([
+            evaluateProximityDwellAndGatherings(userId, mergedUserData).catch((err) => {
+                console.error(`[ProximityDwell] Error for ${userId}:`, err);
+            }),
+            runProximityCheck(
+                userId,
+                mergedUserData,
+                before.currentLocation,
+                false,
+            ),
+        ]);
+        return null;
     });
 
 exports.checkProximityOnCreate = functions.firestore
@@ -487,8 +525,863 @@ exports.checkProximityOnCreate = functions.firestore
         if (!profile.exists) return null;
         const userData = {...profile.data(), ...snap.data()};
         // Onboarding-incomplete docs are gated inside runProximityCheck.
-        return runProximityCheck(userId, userData, null, true);
+        await Promise.all([
+            evaluateProximityDwellAndGatherings(userId, userData).catch((err) => {
+                console.error(`[ProximityDwell] onCreate error for ${userId}:`, err);
+            }),
+            runProximityCheck(userId, userData, null, true),
+        ]);
+        return null;
     });
+
+function extractLocationMillis(privateData, locObj) {
+    if (locObj && typeof locObj.timestamp === "number" && locObj.timestamp > 0) {
+        return locObj.timestamp;
+    }
+    if (locObj && typeof locObj.lastUpdated === "string") {
+        const parsed = Date.parse(locObj.lastUpdated);
+        if (!Number.isNaN(parsed)) return parsed;
+    }
+    if (privateData && privateData.locationUpdatedAt &&
+        typeof privateData.locationUpdatedAt.toMillis === "function") {
+        return privateData.locationUpdatedAt.toMillis();
+    }
+    return 0;
+}
+
+function decodePlusCode(code) {
+    if (!code || typeof code !== "string") return null;
+    const alphabet = "23456789CFGHJMPQRVWX";
+    const clean = code.trim().toUpperCase();
+    if (!clean.includes("+")) return null;
+    const parts = clean.split("+");
+    if (parts.length !== 2) return null;
+    const [head, tail] = parts;
+    if (!head || head.length > 8 || head.length % 2 !== 0) return null;
+    for (let i = 0; i < head.length; i++) {
+        if (head[i] !== "0" && !alphabet.includes(head[i])) return null;
+    }
+    for (let i = 0; i < tail.length; i++) {
+        if (!alphabet.includes(tail[i])) return null;
+    }
+    const fullString = head + tail;
+    if (fullString.length < 2) return null;
+
+    let latVal = 0.0;
+    let lngVal = 0.0;
+    let latResolution = 20.0;
+    let lngResolution = 20.0;
+
+    for (let i = 0; i < fullString.length; i += 2) {
+        const latChar = fullString[i];
+        const lngChar = i + 1 < fullString.length ? fullString[i + 1] : "2";
+        const latIdx = Math.max(0, alphabet.indexOf(latChar));
+        const lngIdx = Math.max(0, alphabet.indexOf(lngChar));
+        latVal += latIdx * latResolution;
+        lngVal += lngIdx * lngResolution;
+        if (i + 2 < fullString.length) {
+            latResolution /= 20.0;
+            lngResolution /= 20.0;
+        }
+    }
+
+    const lat = Math.min(90, Math.max(-90, latVal - 90.0 + latResolution / 2.0));
+    const lng = lngVal - 180.0 + lngResolution / 2.0;
+    return { lat, lng };
+}
+
+/**
+ * Evaluates both:
+ *   1. Automatic Proximity Detection (100 ft, >10 min in 24h, any member, per unique pair -> 1,000 DSP each + push)
+ *   2. Grassroots Gatherings (100 ft of host/venue, >60 min in 24h, RSVP'd/invited event members -> 1,000 DSP each + push + PCT)
+ */
+async function evaluateProximityDwellAndGatherings(userId, userData) {
+    const newLoc = userData.currentLocation;
+    if (!newLoc || !newLoc.geometry || !newLoc.geometry.location) return null;
+    if (newLoc.isLiveGps === false) return null;
+
+    const currentLat = Number(newLoc.geometry.location.lat);
+    const currentLng = Number(newLoc.geometry.location.lng);
+    if (!Number.isFinite(currentLat) || !Number.isFinite(currentLng) ||
+        (currentLat === 0 && currentLng === 0)) {
+        return null;
+    }
+
+    if (!hasUsableName(userData) || userData.isBanned === true) return null;
+    if (userData.cityVisibilityForfeited === true || userData.showCurrentLocationName === false) {
+        return null;
+    }
+
+    const now = Date.now();
+    const lastEval = _dwellEvalCooldowns.get(userId);
+    if (lastEval && (now - lastEval) < DWELL_EVAL_COOLDOWN_MS) {
+        return null;
+    }
+    _dwellEvalCooldowns.set(userId, now);
+
+    const currentCity = locationDisplayName(newLoc);
+    const moverName = String(userData.firstName || "A member").trim();
+    const blockedByMover = new Set(userData.blockedUsers || []);
+
+    // 1. Query all users within 100-meter geohash bounds and filter to exact <= 100 ft
+    const bounds = geohashQueryBounds(
+        [currentLat, currentLng],
+        DWELL_QUERY_RADIUS_METERS,
+    );
+    const [boundSnapshots, activeSessionsSnap] = await Promise.all([
+        Promise.all(bounds.map((bound) =>
+            db.collection("user_private")
+                .orderBy("geo.geohash")
+                .startAt(bound[0])
+                .endAt(bound[1])
+                .limit(100)
+                .get())),
+        db.collection("proximity_dwell_sessions")
+            .where("users", "array-contains", userId)
+            .where("status", "==", "active")
+            .get(),
+    ]);
+
+    const privateDocuments = new Map();
+    for (const snapshot of boundSnapshots) {
+        for (const doc of snapshot.docs) {
+            if (doc.id !== userId) {
+                privateDocuments.set(doc.id, doc);
+            }
+        }
+    }
+
+    const publicSnapshots = privateDocuments.size === 0 ? [] : await db.getAll(
+        ...[...privateDocuments.keys()].map((id) => db.collection("users").doc(id)),
+    );
+    const publicById = new Map(publicSnapshots.map((doc) => [doc.id, doc]));
+
+    const nearbyWithin100Ft = new Map();
+    for (const privDoc of privateDocuments.values()) {
+        const pubDoc = publicById.get(privDoc.id);
+        if (!pubDoc || !pubDoc.exists) continue;
+        const privData = privDoc.data() || {};
+        const pubData = pubDoc.data() || {};
+        const other = { ...pubData, ...privData };
+
+        if (other.isBanned === true || !hasUsableName(other)) continue;
+        if (blockedByMover.has(privDoc.id)) continue;
+        if ((other.blockedUsers || []).includes(userId)) continue;
+        if (other.cityVisibilityForfeited === true || other.showCurrentLocationName === false) {
+            continue;
+        }
+
+        const oLoc = privData.currentLocation || pubData.currentLocation;
+        if (!oLoc || !oLoc.geometry || !oLoc.geometry.location) continue;
+        if (oLoc.isLiveGps === false) continue;
+
+        const oLat = Number(oLoc.geometry.location.lat);
+        const oLng = Number(oLoc.geometry.location.lng);
+        if (!Number.isFinite(oLat) || !Number.isFinite(oLng) || (oLat === 0 && oLng === 0)) {
+            continue;
+        }
+
+        const otherLocMs = extractLocationMillis(privData, oLoc);
+        if (otherLocMs > 0 && (now - otherLocMs) > PEER_LOCATION_FRESHNESS_MS) {
+            continue;
+        }
+
+        const distanceMiles = calculateDistanceInMiles(currentLat, currentLng, oLat, oLng);
+        const distanceFeet = distanceMiles * 5280;
+        if (distanceFeet <= DWELL_RADIUS_FEET) {
+            nearbyWithin100Ft.set(privDoc.id, {
+                id: privDoc.id,
+                data: other,
+                distanceMiles,
+                distanceFeet,
+                lat: oLat,
+                lng: oLng,
+                city: locationDisplayName(oLoc, currentCity),
+            });
+        }
+    }
+
+    // 2. Reset any active dwell sessions where the user separated (> 100 ft)
+    const separationUpdates = [];
+    for (const sessionDoc of activeSessionsSnap.docs) {
+        const sData = sessionDoc.data() || {};
+        const users = Array.isArray(sData.users) ? sData.users : [];
+        const peerId = users.find((u) => u !== userId);
+        if (peerId && !nearbyWithin100Ft.has(peerId)) {
+            separationUpdates.push(
+                sessionDoc.ref.set({
+                    status: "separated",
+                    sessionStartMs: null,
+                    lastSeparatedAtMs: now,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                }, { merge: true }).catch(() => undefined),
+            );
+        }
+    }
+    if (separationUpdates.length > 0) {
+        await Promise.all(separationUpdates);
+    }
+
+    // 3. Evaluate Automatic Proximity Detection (100 ft, >10 min in 24h, any member, per unique pair)
+    if (nearbyWithin100Ft.size > 0) {
+        await Promise.all(
+            [...nearbyWithin100Ft.values()].map((peer) =>
+                processAutomaticProximityPair({
+                    moverId: userId,
+                    moverName,
+                    moverCity: currentCity,
+                    moverLat: currentLat,
+                    moverLng: currentLng,
+                    peer,
+                }),
+            ),
+        );
+    }
+
+    // 4. Evaluate Grassroots Gatherings (100 ft of host/venue, >60 min in 24h, RSVP'd/invited event members)
+    await evaluateGrassrootsGatheringsForUser({
+        userId,
+        userData,
+        currentLat,
+        currentLng,
+        currentCity,
+        nearbyWithin100Ft,
+    });
+
+    return null;
+}
+
+async function processAutomaticProximityPair({
+    moverId,
+    moverName,
+    moverCity,
+    moverLat,
+    moverLng,
+    peer,
+}) {
+    const [id1, id2] = [moverId, peer.id].sort();
+    const sessionRef = db.collection("proximity_dwell_sessions").doc(`${id1}_${id2}`);
+    const now = Date.now();
+
+    const txResult = await db.runTransaction(async (t) => {
+        const doc = await t.get(sessionRef);
+        const d = doc.exists ? (doc.data() || {}) : {};
+
+        const lastRewardedAtMs = Number(d.lastRewardedAtMs || 0);
+        if (lastRewardedAtMs > 0 && (now - lastRewardedAtMs) < REWARD_COOLDOWN_24H_MS) {
+            t.set(sessionRef, {
+                lastSeenMs: now,
+                lastDistanceFeet: Math.round(peer.distanceFeet * 10) / 10,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+            return { shouldAward: false };
+        }
+
+        const sessionStartMs = Number(d.sessionStartMs || 0);
+        const isSessionActive =
+            d.status === "active" &&
+            sessionStartMs > 0 &&
+            (now - sessionStartMs) <= REWARD_COOLDOWN_24H_MS;
+
+        if (!isSessionActive) {
+            t.set(sessionRef, {
+                users: [id1, id2],
+                status: "active",
+                sessionStartMs: now,
+                lastSeenMs: now,
+                dwellDurationMs: 0,
+                lastDistanceFeet: Math.round(peer.distanceFeet * 10) / 10,
+                startLat: moverLat,
+                startLng: moverLng,
+                city: moverCity,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+            return { shouldAward: false };
+        }
+
+        const dwellMs = now - sessionStartMs;
+        if (dwellMs < AUTO_PROXIMITY_REQUIRED_MS) {
+            t.set(sessionRef, {
+                lastSeenMs: now,
+                dwellDurationMs: dwellMs,
+                lastDistanceFeet: Math.round(peer.distanceFeet * 10) / 10,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+            return { shouldAward: false };
+        }
+
+        // >= 10 minutes within 100 feet during a 24-hour window -> Award both!
+        const serverNow = admin.firestore.FieldValue.serverTimestamp();
+        t.set(sessionRef, {
+            users: [id1, id2],
+            status: "rewarded",
+            sessionStartMs: null,
+            lastSeenMs: now,
+            lastRewardedAtMs: now,
+            lastDwellDurationMs: dwellMs,
+            lastDistanceFeet: Math.round(peer.distanceFeet * 10) / 10,
+            rewardCount: admin.firestore.FieldValue.increment(1),
+            city: moverCity,
+            updatedAt: serverNow,
+        }, { merge: true });
+
+        for (const col of ["trust_data", "trust_scores"]) {
+            for (const uid of [id1, id2]) {
+                t.set(db.collection(col).doc(uid), {
+                    proximityConnectionsCount: admin.firestore.FieldValue.increment(1),
+                    lastUpdated: serverNow,
+                }, { merge: true });
+            }
+        }
+        return { shouldAward: true, dwellMs };
+    }).catch((err) => {
+        console.error(`[ProximityDwell] Transaction failed for ${id1}_${id2}:`, err);
+        return { shouldAward: false };
+    });
+
+    if (!txResult || !txResult.shouldAward) return;
+
+    const peerName = String(peer.data.firstName || "a member").trim();
+    const dwellMinutes = Math.max(10, Math.round((txResult.dwellMs || AUTO_PROXIMITY_REQUIRED_MS) / 60000));
+    console.log(
+        `🎉 [ProximityDwell] Awarding ${REWARD_DSP_AMOUNT} DSP each to ${moverId} & ${peer.id} (${dwellMinutes}m within ${peer.distanceFeet.toFixed(1)}ft)`,
+    );
+
+    try {
+        const rewardBatch = db.batch();
+        const serverNow = admin.firestore.FieldValue.serverTimestamp();
+        const pairs = [
+            [moverId, peer.id, peerName],
+            [peer.id, moverId, moverName],
+        ];
+
+        await Promise.all(
+            pairs.map(async ([uid, otherUid, otherDisplayName]) => {
+                rewardBatch.set(
+                    db.collection("user_points").doc(uid),
+                    {
+                        userId: uid,
+                        totalPoints: admin.firestore.FieldValue.increment(REWARD_DSP_AMOUNT),
+                        availablePoints: admin.firestore.FieldValue.increment(REWARD_DSP_AMOUNT),
+                        lastUpdated: serverNow,
+                        lifetimeEarnings: {
+                            proximity_dwell_reward: admin.firestore.FieldValue.increment(REWARD_DSP_AMOUNT),
+                        },
+                    },
+                    { merge: true },
+                );
+
+                rewardBatch.set(db.collection("points_transactions").doc(), {
+                    userId: uid,
+                    type: "earn",
+                    action: "proximity_dwell_reward",
+                    points: REWARD_DSP_AMOUNT,
+                    amount: REWARD_DSP_AMOUNT,
+                    timestamp: serverNow,
+                    metadata: {
+                        peerUid: otherUid,
+                        peerName: otherDisplayName,
+                        city: moverCity,
+                        distanceFeet: Math.round(peer.distanceFeet),
+                        dwellMinutes,
+                        description: `Proximity Connection with ${otherDisplayName} (10+ mins)`,
+                    },
+                });
+
+                await distributeUbuntuMatchingSupply(
+                    rewardBatch,
+                    uid,
+                    REWARD_DSP_AMOUNT,
+                    serverNow,
+                    "proximity_dwell_reward_match",
+                );
+            }),
+        );
+
+        await Promise.all([
+            rewardBatch.commit(),
+            syncProfileMilestoneAndTrust(moverId).catch((err) => {
+                console.warn(`[ProximityDwell] syncProfileMilestoneAndTrust mover warning: ${err.message}`);
+            }),
+            syncProfileMilestoneAndTrust(peer.id).catch((err) => {
+                console.warn(`[ProximityDwell] syncProfileMilestoneAndTrust peer warning: ${err.message}`);
+            }),
+        ]);
+    } catch (rewardErr) {
+        console.error(`[ProximityDwell] Failed to commit DSP reward for ${id1}_${id2}:`, rewardErr);
+        return;
+    }
+
+    // Send push notifications to BOTH users after points are awarded
+    await Promise.all([
+        sendPushToUser(moverId, {
+            title: "🎉 +1,000 DSP Earned!",
+            body: `You and ${peerName} connected in person for ${dwellMinutes}+ minutes in ${moverCity}. 1,000 DSP has been added to your wallet!`,
+            type: "proximity_reward",
+            targetUserId: peer.id,
+            city: moverCity,
+            androidCollapseKey: `proximity_reward_${peer.id}`,
+            androidTag: `proximity_reward_${peer.id}`,
+            apnsThreadId: "proximity_reward",
+        }),
+        sendPushToUser(peer.id, {
+            title: "🎉 +1,000 DSP Earned!",
+            body: `You and ${moverName} connected in person for ${dwellMinutes}+ minutes in ${moverCity}. 1,000 DSP has been added to your wallet!`,
+            type: "proximity_reward",
+            targetUserId: moverId,
+            city: moverCity,
+            androidCollapseKey: `proximity_reward_${moverId}`,
+            androidTag: `proximity_reward_${moverId}`,
+            apnsThreadId: "proximity_reward",
+        }),
+    ]);
+}
+
+function parseEventWindow(eventData, nowMs) {
+    const startDateStr = String(eventData.startDate || "").trim();
+    const startTimeStr = String(eventData.startTime || "00:00").trim();
+    const endDateStr = String(eventData.endDate || startDateStr).trim();
+    const endTimeStr = String(eventData.endTime || "23:59").trim();
+
+    let startMs = Number.NaN;
+    if (startDateStr) {
+        startMs = Date.parse(`${startDateStr}T${startTimeStr}:00Z`);
+        if (Number.isNaN(startMs)) startMs = Date.parse(startDateStr);
+    }
+    let endMs = Number.NaN;
+    if (endDateStr) {
+        endMs = Date.parse(`${endDateStr}T${endTimeStr}:00Z`);
+        if (Number.isNaN(endMs)) endMs = Date.parse(endDateStr);
+    }
+
+    if (Number.isNaN(startMs)) startMs = nowMs;
+    if (Number.isNaN(endMs) || endMs <= startMs) endMs = startMs + 24 * 60 * 60 * 1000;
+
+    // Allow a generous 24h buffer around start/end to handle local timezones
+    const windowStartMs = startMs - 24 * 60 * 60 * 1000;
+    const windowEndMs = endMs + 24 * 60 * 60 * 1000;
+    return { isActiveWindow: nowMs >= windowStartMs && nowMs <= windowEndMs };
+}
+
+/**
+ * Evaluates Grassroots Gatherings & Event Geofencing:
+ *   - Dynamic geofence around the event host's location (or static venue/Plus Code)
+ *   - RSVP'd (`attendees`) or invited (`invitedUserIds`) members within 100 ft for >60 min in 24h
+ *   - Automatically confirms attendance, awards 1,000 DSP to both host and guest,
+ *     increments verifiedGatheringVisitsCount (+1 PCT per 10 for host) and verifiedCheckInCount (+10 PCT at 10 for guest),
+ *     and sends push notifications to both host and guest.
+ */
+async function evaluateGrassrootsGatheringsForUser({
+    userId,
+    userData,
+    currentLat,
+    currentLng,
+    currentCity,
+    nearbyWithin100Ft,
+}) {
+    const now = Date.now();
+    const [attendingSnap, invitedSnap, hostedSnap] = await Promise.all([
+        db.collection("events")
+            .where("attendees", "array-contains", userId)
+            .where("status", "==", "published")
+            .limit(50)
+            .get(),
+        db.collection("events")
+            .where("invitedUserIds", "array-contains", userId)
+            .where("status", "==", "published")
+            .limit(50)
+            .get(),
+        db.collection("events")
+            .where("creatorId", "==", userId)
+            .where("status", "==", "published")
+            .limit(50)
+            .get(),
+    ]);
+
+    const eventsById = new Map();
+    for (const snap of [attendingSnap, invitedSnap, hostedSnap]) {
+        for (const doc of snap.docs) {
+            eventsById.set(doc.id, doc);
+        }
+    }
+    if (eventsById.size === 0) return;
+
+    for (const eventDoc of eventsById.values()) {
+        const eventData = eventDoc.data() || {};
+        const eventId = eventDoc.id;
+        const { isActiveWindow } = parseEventWindow(eventData, now);
+        if (!isActiveWindow) continue;
+
+        const hostUid = String(eventData.creatorId || eventData.createdBy || "").trim();
+        if (!validUid(hostUid)) continue;
+
+        const attendees = Array.isArray(eventData.attendees) ? eventData.attendees : [];
+        const invited = Array.isArray(eventData.invitedUserIds) ? eventData.invitedUserIds : [];
+        const allGuests = [...new Set([...attendees, ...invited].filter((u) => validUid(u) && u !== hostUid))];
+        if (allGuests.length === 0) continue;
+
+        // Resolve venue coordinates (if provided via lat/lng or Plus Code)
+        let venueLat = typeof eventData.latitude === "number" ? eventData.latitude : null;
+        let venueLng = typeof eventData.longitude === "number" ? eventData.longitude : null;
+        if ((venueLat === null || venueLng === null) && eventData.plusCode) {
+            const decoded = decodePlusCode(eventData.plusCode);
+            if (decoded) {
+                venueLat = decoded.lat;
+                venueLng = decoded.lng;
+            }
+        }
+
+        // Resolve host dynamic coordinates
+        let hostLat = null;
+        let hostLng = null;
+        let hostName = String(eventData.creatorName || "Host").trim();
+        if (userId === hostUid) {
+            hostLat = currentLat;
+            hostLng = currentLng;
+            hostName = String(userData.firstName || hostName).trim();
+        } else if (nearbyWithin100Ft.has(hostUid)) {
+            const hostPeer = nearbyWithin100Ft.get(hostUid);
+            hostLat = hostPeer.lat;
+            hostLng = hostPeer.lng;
+            hostName = String(hostPeer.data.firstName || hostName).trim();
+        } else {
+            const [hostPrivSnap, hostPubSnap] = await Promise.all([
+                db.collection("user_private").doc(hostUid).get(),
+                db.collection("users").doc(hostUid).get(),
+            ]);
+            if (hostPubSnap.exists && hostPubSnap.data().firstName) {
+                hostName = String(hostPubSnap.data().firstName).trim();
+            }
+            if (hostPrivSnap.exists) {
+                const hLoc = hostPrivSnap.data().currentLocation;
+                if (hLoc && hLoc.geometry && hLoc.geometry.location && hLoc.isLiveGps !== false) {
+                    const hLat = Number(hLoc.geometry.location.lat);
+                    const hLng = Number(hLoc.geometry.location.lng);
+                    const hMs = extractLocationMillis(hostPrivSnap.data(), hLoc);
+                    if (Number.isFinite(hLat) && Number.isFinite(hLng) &&
+                        (hMs === 0 || (now - hMs) <= PEER_LOCATION_FRESHNESS_MS)) {
+                        hostLat = hLat;
+                        hostLng = hLng;
+                    }
+                }
+            }
+        }
+
+        const candidateGuests = userId === hostUid
+            ? allGuests
+            : (allGuests.includes(userId) ? [userId] : []);
+
+        for (const guestUid of candidateGuests) {
+            let guestLat = null;
+            let guestLng = null;
+            let guestName = "Guest";
+
+            if (guestUid === userId) {
+                guestLat = currentLat;
+                guestLng = currentLng;
+                guestName = String(userData.firstName || "Guest").trim();
+            } else if (nearbyWithin100Ft.has(guestUid)) {
+                const gPeer = nearbyWithin100Ft.get(guestUid);
+                guestLat = gPeer.lat;
+                guestLng = gPeer.lng;
+                guestName = String(gPeer.data.firstName || "Guest").trim();
+            } else {
+                const [gPrivSnap, gPubSnap] = await Promise.all([
+                    db.collection("user_private").doc(guestUid).get(),
+                    db.collection("users").doc(guestUid).get(),
+                ]);
+                if (gPubSnap.exists && gPubSnap.data().firstName) {
+                    guestName = String(gPubSnap.data().firstName).trim();
+                }
+                if (gPrivSnap.exists) {
+                    const gLoc = gPrivSnap.data().currentLocation;
+                    if (gLoc && gLoc.geometry && gLoc.geometry.location && gLoc.isLiveGps !== false) {
+                        const gLat = Number(gLoc.geometry.location.lat);
+                        const gLng = Number(gLoc.geometry.location.lng);
+                        const gMs = extractLocationMillis(gPrivSnap.data(), gLoc);
+                        if (Number.isFinite(gLat) && Number.isFinite(gLng) &&
+                            (gMs === 0 || (now - gMs) <= PEER_LOCATION_FRESHNESS_MS)) {
+                            guestLat = gLat;
+                            guestLng = gLng;
+                        }
+                    }
+                }
+            }
+
+            if (guestLat === null || guestLng === null) continue;
+
+            // Compute distance to dynamic host location and/or static venue location
+            let distToHostFeet = Number.POSITIVE_INFINITY;
+            if (hostLat !== null && hostLng !== null) {
+                distToHostFeet = calculateDistanceInMiles(guestLat, guestLng, hostLat, hostLng) * 5280;
+            }
+            let distToVenueFeet = Number.POSITIVE_INFINITY;
+            if (venueLat !== null && venueLng !== null) {
+                distToVenueFeet = calculateDistanceInMiles(guestLat, guestLng, venueLat, venueLng) * 5280;
+            }
+            const effectiveDistanceFeet = Math.min(distToHostFeet, distToVenueFeet);
+
+            await processGrassrootsGatheringGuest({
+                eventId,
+                eventTitle: String(eventData.title || "Grassroots Gathering").trim(),
+                hostUid,
+                hostName,
+                guestUid,
+                guestName,
+                effectiveDistanceFeet,
+                city: currentCity,
+                now,
+            });
+        }
+    }
+}
+
+async function processGrassrootsGatheringGuest({
+    eventId,
+    eventTitle,
+    hostUid,
+    hostName,
+    guestUid,
+    guestName,
+    effectiveDistanceFeet,
+    city,
+    now,
+}) {
+    const gatheringSessionRef = db.collection("grassroots_gathering_sessions")
+        .doc(`${eventId}_${guestUid}`);
+    const pairVisitRef = db.collection("peer_visits").doc(`${hostUid}_${guestUid}`);
+    const reversePairVisitRef = db.collection("peer_visits").doc(`${guestUid}_${hostUid}`);
+
+    if (effectiveDistanceFeet > DWELL_RADIUS_FEET) {
+        const snap = await gatheringSessionRef.get();
+        if (snap.exists && snap.data().status === "active") {
+            await gatheringSessionRef.set({
+                status: "separated",
+                sessionStartMs: null,
+                lastSeparatedAtMs: now,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+        }
+        return;
+    }
+
+    const txResult = await db.runTransaction(async (t) => {
+        const [sessionDoc, visitDoc, reverseVisitDoc, eventDoc] = await Promise.all([
+            t.get(gatheringSessionRef),
+            t.get(pairVisitRef),
+            t.get(reversePairVisitRef),
+            t.get(db.collection("events").doc(eventId)),
+        ]);
+
+        if (!eventDoc.exists) return { shouldAward: false };
+        const sData = sessionDoc.exists ? (sessionDoc.data() || {}) : {};
+        if (sData.status === "rewarded") {
+            return { shouldAward: false };
+        }
+
+        // Check 24-hour pair cooldown in peer_visits
+        for (const vSnap of [visitDoc, reverseVisitDoc]) {
+            if (vSnap.exists && vSnap.data()) {
+                const lastVisitMs = Number(vSnap.data().lastVisitTimestampMs || 0);
+                if (lastVisitMs > 0 && (now - lastVisitMs) < REWARD_COOLDOWN_24H_MS) {
+                    return { shouldAward: false };
+                }
+            }
+        }
+
+        const sessionStartMs = Number(sData.sessionStartMs || 0);
+        const isSessionActive =
+            sData.status === "active" &&
+            sessionStartMs > 0 &&
+            (now - sessionStartMs) <= REWARD_COOLDOWN_24H_MS;
+
+        if (!isSessionActive) {
+            t.set(gatheringSessionRef, {
+                eventId,
+                hostUid,
+                guestUid,
+                status: "active",
+                sessionStartMs: now,
+                lastSeenMs: now,
+                dwellDurationMs: 0,
+                lastDistanceFeet: Math.round(effectiveDistanceFeet * 10) / 10,
+                city,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+            return { shouldAward: false };
+        }
+
+        const dwellMs = now - sessionStartMs;
+        if (dwellMs < GRASSROOTS_GATHERING_REQUIRED_MS) {
+            t.set(gatheringSessionRef, {
+                lastSeenMs: now,
+                dwellDurationMs: dwellMs,
+                lastDistanceFeet: Math.round(effectiveDistanceFeet * 10) / 10,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+            return { shouldAward: false };
+        }
+
+        // >= 60 minutes within 100 feet -> Confirm Grassroots Gathering!
+        const serverNow = admin.firestore.FieldValue.serverTimestamp();
+        t.set(gatheringSessionRef, {
+            eventId,
+            hostUid,
+            guestUid,
+            status: "rewarded",
+            sessionStartMs: null,
+            lastSeenMs: now,
+            rewardedAtMs: now,
+            dwellDurationMs: dwellMs,
+            lastDistanceFeet: Math.round(effectiveDistanceFeet * 10) / 10,
+            city,
+            updatedAt: serverNow,
+        }, { merge: true });
+
+        t.update(db.collection("events").doc(eventId), {
+            confirmedAttendees: admin.firestore.FieldValue.arrayUnion(guestUid),
+            updatedAt: serverNow,
+        });
+
+        t.set(db.collection("check_ins").doc(stableHash(`${eventId}:${guestUid}`)), {
+            userId: guestUid,
+            entityId: eventId,
+            hostUserId: hostUid,
+            type: "event",
+            verification: "grassroots_geofence_60m",
+            timestamp: serverNow,
+        }, { merge: true });
+
+        t.set(pairVisitRef, {
+            hostUserId: hostUid,
+            visitorUserId: guestUid,
+            eventId,
+            locationAddress: city,
+            lastVisitTimestamp: new Date(now).toISOString(),
+            lastVisitTimestampMs: now,
+            visitCount: admin.firestore.FieldValue.increment(1),
+            updatedAt: serverNow,
+        }, { merge: true });
+
+        // Increment guest and host Grassroots Gathering counters (+1 PCT per 10 gatherings)
+        for (const col of ["trust_data", "trust_scores"]) {
+            t.set(db.collection(col).doc(guestUid), {
+                grassrootsGatheringsCount: admin.firestore.FieldValue.increment(1),
+                verifiedGatheringVisitsCount: admin.firestore.FieldValue.increment(1),
+                attendedEventsCount: admin.firestore.FieldValue.increment(1),
+                lastUpdated: serverNow,
+            }, { merge: true });
+            t.set(db.collection(col).doc(hostUid), {
+                grassrootsGatheringsCount: admin.firestore.FieldValue.increment(1),
+                verifiedGatheringVisitsCount: admin.firestore.FieldValue.increment(1),
+                lastUpdated: serverNow,
+            }, { merge: true });
+        }
+
+        return { shouldAward: true, dwellMs };
+    }).catch((err) => {
+        console.error(`[GrassrootsGathering] Transaction failed for ${eventId}_${guestUid}:`, err);
+        return { shouldAward: false };
+    });
+
+    if (!txResult || !txResult.shouldAward) return;
+
+    const dwellMinutes = Math.max(60, Math.round((txResult.dwellMs || GRASSROOTS_GATHERING_REQUIRED_MS) / 60000));
+    console.log(
+        `🏠 [GrassrootsGathering] Confirmed 60+ min gathering for event ${eventId}: Host=${hostUid}, Guest=${guestUid} (${dwellMinutes}m)`,
+    );
+
+    try {
+        const rewardBatch = db.batch();
+        const serverNow = admin.firestore.FieldValue.serverTimestamp();
+        const targets = [
+            [guestUid, "peer_visit_visitor_reward", `Grassroots Gathering: ${eventTitle}`],
+            [hostUid, "peer_visit_host_reward", `Hosted Grassroots Gathering: ${eventTitle} (${guestName})`],
+        ];
+
+        await Promise.all(
+            targets.map(async ([targetUid, primaryAction, description]) => {
+                rewardBatch.set(
+                    db.collection("user_points").doc(targetUid),
+                    {
+                        userId: targetUid,
+                        totalPoints: admin.firestore.FieldValue.increment(REWARD_DSP_AMOUNT),
+                        availablePoints: admin.firestore.FieldValue.increment(REWARD_DSP_AMOUNT),
+                        lastUpdated: serverNow,
+                        lifetimeEarnings: {
+                            [primaryAction]: admin.firestore.FieldValue.increment(REWARD_DSP_AMOUNT),
+                        },
+                    },
+                    { merge: true },
+                );
+
+                rewardBatch.set(db.collection("points_transactions").doc(), {
+                    userId: targetUid,
+                    type: "earn",
+                    action: primaryAction,
+                    points: REWARD_DSP_AMOUNT,
+                    amount: REWARD_DSP_AMOUNT,
+                    timestamp: serverNow,
+                    metadata: {
+                        eventId,
+                        eventName: eventTitle,
+                        hostUid,
+                        guestUid,
+                        city,
+                        dwellMinutes,
+                        description,
+                    },
+                });
+
+                await distributeUbuntuMatchingSupply(
+                    rewardBatch,
+                    targetUid,
+                    REWARD_DSP_AMOUNT,
+                    serverNow,
+                    `${primaryAction}_match`,
+                );
+            }),
+        );
+
+        await Promise.all([
+            rewardBatch.commit(),
+            syncProfileMilestoneAndTrust(guestUid).catch((err) => {
+                console.warn(`[GrassrootsGathering] syncProfileMilestoneAndTrust guest warning: ${err.message}`);
+            }),
+            syncProfileMilestoneAndTrust(hostUid).catch((err) => {
+                console.warn(`[GrassrootsGathering] syncProfileMilestoneAndTrust host warning: ${err.message}`);
+            }),
+        ]);
+    } catch (rewardErr) {
+        console.error(`[GrassrootsGathering] Reward error for ${eventId}_${guestUid}:`, rewardErr);
+        return;
+    }
+
+    await Promise.all([
+        sendPushToUser(guestUid, {
+            title: "🎉 +1,000 DSP Grassroots Gathering!",
+            body: `Your ${dwellMinutes}+ minute gathering with ${hostName} at "${eventTitle}" was verified! 1,000 DSP added to your wallet.`,
+            type: "grassroots_gathering_reward",
+            targetUserId: hostUid,
+            city,
+            additionalData: { eventId },
+            androidCollapseKey: `gathering_reward_${eventId}`,
+            androidTag: `gathering_reward_${eventId}`,
+            apnsThreadId: "grassroots_gathering_reward",
+        }),
+        sendPushToUser(hostUid, {
+            title: "🎉 +1,000 DSP Host Reward!",
+            body: `${guestName} attended "${eventTitle}" with you for ${dwellMinutes}+ minutes! 1,000 DSP added to your wallet.`,
+            type: "grassroots_gathering_reward",
+            targetUserId: guestUid,
+            city,
+            additionalData: { eventId },
+            androidCollapseKey: `gathering_host_${eventId}_${guestUid}`,
+            androidTag: `gathering_host_${eventId}_${guestUid}`,
+            apnsThreadId: "grassroots_gathering_reward",
+        }),
+    ]);
+}
 
 function formatDistance(distance) {
     if (distance < 0.1) return "right next to you";

@@ -279,7 +279,7 @@ service cloud.firestore {
         // Any participant can update status (read receipts) or delete-for-me (deletedFor).
         allow update: if isChatParticipant(chatId) && (
           (
-            resource.data.senderId == request.auth.uid &&
+            (resource.data.senderId == request.auth.uid || stringOrDefault(resource.data, 'adminId', '') == request.auth.uid) &&
             request.resource.data.diff(resource.data).affectedKeys().hasOnly([
               'content', 'text', 'type', 'isEdited', 'editedAt', 'isDeleted',
               'deletedAt', 'deletedFor', 'deletedForEveryone', 'status'

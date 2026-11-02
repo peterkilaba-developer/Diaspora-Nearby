@@ -73,12 +73,12 @@ new users at `0x55d7e7d0...`.
 
 ## What's currently in flight at Basescan
 
-Submitted 2026-06-01 (typically 3-5 business days to review):
+Resubmitted 2026-10-29 via `https://basescan.org/tokenupdate` (Ticket `#875253` / Ref `875253:1902190`, typically 3-5 business days to review):
 
-1. Token Info Update for `0x55d7e7d0...87735` (logo + name + website + description)
+1. Token Info Update for `0x55d7e7d006938A15082752225ED44Fd130B87735` (pure-vector 32x32 SVG logo + website + whitepaper + GitHub + LinkedIn + X + Facebook + migration context)
 2. Name tag for `0xeef49...4dE6` → "Diaspora Nearby: Deployer"
 3. Name tag for `0xc479...4c73` → "Diaspora Nearby: Old Deployer (Deprecated)"
 4. Name tag for `0x453f81D3...1b25c` → "Diaspora: Old DIASPORA Token (Deprecated)"
 5. Name tag for `0x22e37662...Bb30B` → "Diaspora: Test DIASPORA Token (Deprecated)"
 
-Watch `peterkilaba@diasporanearby.com` for approval/follow-up emails.
+Watch `peterkilaba@diasporanearby.com` for approval/follow-up emails on Ticket `#875253`.

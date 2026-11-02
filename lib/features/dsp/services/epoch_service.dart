@@ -99,10 +99,11 @@ class EpochService {
   /// [NEW] Public Helper for Efficiency Calculation
   /// Supports both int and double inputs for Trust Score
   double calculateEfficiency(num trustScore) {
-    if (trustScore < 11) return 0.0;
-    if (trustScore >= 91) return 1.0;
+    final roundedScore = trustScore.round();
+    if (roundedScore < 11) return 0.0;
+    if (roundedScore >= 91) return 1.0;
 
-    final cappedScore = trustScore.clamp(0, 100);
+    final cappedScore = roundedScore.clamp(0, 100);
     return cappedScore / 100.0;
   }
 

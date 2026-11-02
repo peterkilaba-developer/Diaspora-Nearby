@@ -46,10 +46,14 @@ exports.transferDiaspora = functions
 
       const senderUserRef = db.collection('users').doc(fromUserId);
       const recipientUserRef = db.collection('users').doc(toUserId);
-      const [existingRequest, senderUserSnap, recipientUserSnap] = await db.getAll(
+      const senderTrustRef = db.collection('trust_data').doc(fromUserId);
+      const senderPointsRef = db.collection('user_points').doc(fromUserId);
+      const [existingRequest, senderUserSnap, recipientUserSnap, senderTrustSnap, senderPointsSnap] = await db.getAll(
         requestRef,
         senderUserRef,
         recipientUserRef,
+        senderTrustRef,
+        senderPointsRef,
       );
       if (existingRequest.exists) {
         if (existingRequest.data().status === 'succeeded') {
@@ -63,6 +67,24 @@ exports.transferDiaspora = functions
 
       if (!senderUserSnap.exists) {
         throw new functions.https.HttpsError('not-found', 'Sender user not found.');
+      }
+
+      // Enforce 10 Identity QR Exchanges milestone gate to unlock minted $DIASPORA transfers/sells
+      const senderTrust = senderTrustSnap.exists ? (senderTrustSnap.data() || {}) : {};
+      const senderPoints = senderPointsSnap.exists ? (senderPointsSnap.data() || {}) : {};
+      const uniqueQrCount = Math.max(
+        Number(senderTrust.uniqueQrCount || 0),
+        Number(senderPoints.qrConnectionCount || 0)
+      );
+      const milestones = Array.isArray(senderTrust.awardedQualificationMilestones)
+        ? senderTrust.awardedQualificationMilestones
+        : [];
+      const isQrMilestoneMet = uniqueQrCount >= 10 || milestones.includes('QR');
+      if (!isQrMilestoneMet) {
+        throw new functions.https.HttpsError(
+          'failed-precondition',
+          `Your $DIASPORA tokens are locked until you complete 10 in-person QR exchanges (${uniqueQrCount}/10 completed).`
+        );
       }
 
       const senderData = senderUserSnap.data();

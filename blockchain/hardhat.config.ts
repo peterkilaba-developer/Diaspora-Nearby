@@ -17,7 +17,15 @@ export default defineConfig({
     hardhatVerify,
     hardhatUpgrades,
   ],
-  solidity: "0.8.22",
+  solidity: {
+    version: "0.8.22",
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 200,
+      },
+    },
+  },
   networks: {
     hardhatMainnet: {
       type: "edr-simulated",

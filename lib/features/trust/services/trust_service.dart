@@ -185,7 +185,6 @@ class TrustService {
     final relRepo = _ref.read(relationshipRepositoryProvider);
     final emergencyFundService = _ref.read(emergencyFundServiceProvider);
     final chatRepo = _ref.read(chatRepositoryProvider);
-    final pointsService = _ref.read(pointsServiceProvider);
     final pointsRepo = _ref.read(pointsRepositoryProvider);
 
     // 1. Fetch Existing Data in Parallel
@@ -280,12 +279,25 @@ class TrustService {
         .where((id) => !uniqueVouchIds.contains(id))
         .toSet();
 
-    // Counts for Milestones
-    final uniqueFamilyCount = familyIds.length;
-    final uniqueFriendCount = friendIds.length;
-    final uniqueQrCount = uniqueQrIds.length;
+    // Counts for Milestones (preserve server-authoritative counts if local subcollection query is partial/empty)
+    int maxInt(int a, int b) => a > b ? a : b;
+    final uniqueFamilyCount = maxInt(
+      familyIds.length,
+      trustDataOld?.uniqueFamilyCount ?? 0,
+    );
+    final uniqueFriendCount = maxInt(
+      friendIds.length,
+      trustDataOld?.uniqueFriendCount ?? 0,
+    );
+    final uniqueQrCount = maxInt(
+      maxInt(uniqueQrIds.length, trustDataOld?.uniqueQrCount ?? 0),
+      points.qrConnectionCount,
+    );
     final uniqueVouchCount = uniqueVouchIds.length;
-    final uniqueVerifiedCount = uniqueVerificationIds.length;
+    final uniqueVerifiedCount = maxInt(
+      uniqueVerificationIds.length,
+      trustDataOld?.uniqueVerificationCount ?? 0,
+    );
     final uniqueTrustIds = uniqueVouchIds.union(uniqueVerificationIds);
     final isProfileComplete = profile.isComplete;
 
@@ -317,101 +329,18 @@ class TrustService {
         'count=$count, previouslyAwarded=$previouslyAwardedDspCount',
       );
 
-      final threshold = milestone == 'Profile'
-          ? profile.totalMilestoneFields
-          : 10;
-
-      if (milestone == 'Profile') {
-        // 1. Profile Milestone: Pays 10,000 DSP only when ALL fields complete
-        if (count >= threshold && previouslyAwardedDspCount < threshold) {
-          pointsService.awardManualPoints(userId, 10000, 'profile_completion');
-          ledger['${milestone}_dsp_count'] = threshold;
-
-          if (!milestones.contains(milestone)) {
-            milestones.add(milestone);
-            await Future.wait([
-              pointsRepo.markExplorationActionCompleted(
-                userId,
-                'milestone_10_profile_fields',
-              ),
-              pointsRepo.markExplorationActionCompleted(
-                userId,
-                'complete_profile',
-              ),
-            ]);
-          }
-        }
-      } else if (milestone == 'QR') {
-        // 2. Identity QR: 10,000 DSP lump sum at 10 scans; +1,000 DSP per unique scan for scan 11+
-        if (count >= 10 && previouslyAwardedDspCount < 10) {
-          pointsService.awardManualPoints(
-            userId,
-            10000,
-            'identity_qr_exchange',
-          );
-          ledger['${milestone}_dsp_count'] = 10;
-          previouslyAwardedDspCount = 10;
-
-          if (!milestones.contains(milestone)) {
-            milestones.add(milestone);
-            await pointsRepo.markExplorationActionCompleted(
-              userId,
-              'milestone_10_qr',
-            );
-          }
-        }
-        if (count > 10 && count > previouslyAwardedDspCount) {
-          final extraScans =
-              count -
-              (previouslyAwardedDspCount < 10 ? 10 : previouslyAwardedDspCount);
-          if (extraScans > 0) {
-            pointsService.awardManualPoints(
-              userId,
-              1000 * extraScans,
-              'identity_qr_exchange_continuous',
-            );
-            ledger['${milestone}_dsp_count'] = count;
-          }
-        }
-      } else {
-        // 3. Family, Friend, Verified: Lump sum 10,000 DSP only when reaching 10 (0 incremental)
-        if (count >= 10 && previouslyAwardedDspCount < 10) {
-          String dspAction = 'Activity Reward: $milestone';
-          if (milestone == 'Verified') dspAction = 'verified_by_peer';
-          if (milestone == 'Family') dspAction = 'family_connection';
-          if (milestone == 'Friend') dspAction = 'friend_connection';
-
-          debugPrint('🎯 [Trust] AWARDING $userId: 10000 DSP for $dspAction');
-
-          pointsService.awardManualPoints(userId, 10000, dspAction);
-
-          ledger['${milestone}_dsp_count'] = 10;
-
-          if (!milestones.contains(milestone)) {
-            milestones.add(milestone);
-            String? actionId;
-            switch (milestone) {
-              case 'Family':
-                actionId = 'milestone_10_family';
-                break;
-              case 'Verified':
-                actionId = 'milestone_10_verified';
-                break;
-              case 'Friend':
-                actionId = 'milestone_10_friend';
-                break;
-            }
-            if (actionId != null) {
-              await pointsRepo.markExplorationActionCompleted(userId, actionId);
-            }
-          }
-        }
+      // Server-authoritative PoH rewards are synced via evaluateProfileMilestone / syncProfileMilestoneAndTrust.
+      // First 10 steps of Profile/Family/Friend/QR/Verified grant +1 PCT and 1,000 DSP (immediately converted at 100% into $DIASPORA).
+      // Steps 11+ grant 1,000 DSP each (remaining as DSP for TDE conversion).
+      if (count > previouslyAwardedDspCount) {
+        ledger['${milestone}_dsp_count'] = count;
+      }
+      if (count >= 10 && !milestones.contains(milestone)) {
+        milestones.add(milestone);
       }
 
-      // PCT: One-time +10 PCT award when count reaches required threshold.
-      if (count >= threshold) {
-        milestonePoCT += 10;
-      }
+      // PCT: +1 PCT per step for the first 10 steps (up to +10 PCT per pillar)
+      milestonePoCT += count >= 10 ? 10 : (count > 0 ? count : 0);
     }
 
     // Check 5 count-based PoH milestones in parallel
@@ -424,14 +353,24 @@ class TrustService {
     ]);
 
     // --- Programmatic HTS Engine (The Ledger) ---
-    // Continuous dynamic PCT earners (excluding Circle of Trust):
-    // 1. Trust Slider: +1 PCT per 10 unique full-trust voters (>90)
-    // 2. Economic Transactions: +1 PCT per 10 completed unique txns
-    // Penalties: -10 PCT per 10 occurrences
+    // Continuous dynamic PCT earners (+1 PCT per 10 events across all positive trust-building actions):
+    // 1. Trust Slider Net Vouches (>90 minus 1-10, excluding Circle of Trust): +1 PCT per 10
+    // 2. Automatic Proximity Connections (10+ min within 100 ft): +1 PCT per 10
+    // 3. Grassroots Gatherings (60+ min within 100 ft, host or guest): +1 PCT per 10
+    // 4. Event Attendance (QR / Venue check-ins): +1 PCT per 10
+    // 5. Event Hosting (verified event attendees): +1 PCT per 10
+    // 6. Additional Identity QR Exchanges beyond Genesis milestone (11+): +1 PCT per 10
+    // 7. Additional Peer Verifications received (11+) & given: +1 PCT per 10
+    // 8. Additional Family & Friend Connections beyond Genesis milestones (11+): +1 PCT per 10
+    // 9. Verified Chat Solutions (authored or verified): +1 PCT per 10
+    // 10. Member Referrals: +1 PCT per 10
+    // 11. Completed Economic & Peer Stay / Hosting Transactions: +1 PCT per 10
+    // 12. Governance Votes Cast: +1 PCT per 10
+    // Penalties: -1 PCT per 10 occurrences (-10 PCT per 10 flagged messages)
 
     int htsPoctDelta = 0;
 
-    // GAINS/LOSSES: Trust Slider Net Vouches (+1 PCT per 10 net full-trust voters, non-Circle of Trust)
+    // 1. Trust Slider Net Vouches (+1 PCT per 10 net full-trust voters, non-Circle of Trust)
     final fullTrustVoterIds = ratingDetails
         .where((r) => (r['score'] as num) > 90)
         .map((r) => r['fromUserId'] as String)
@@ -451,20 +390,136 @@ class TrustService {
     final netVouches = fullTrustVouchCount - noTrustVouchCount;
     htsPoctDelta += netVouches ~/ 10;
 
-    // GAINS: Economic Transactions (+1 PCT per 10 completed unique transactions)
-    htsPoctDelta += economicTxCount ~/ 10;
+    final lifetimeEarnings = points.lifetimeEarnings;
 
-    // LOSSES: -10 PCT for every 10 occurrences
-    htsPoctDelta -= ((trustDataOld?.flaggedMessagesCount ?? 0) ~/ 10) * 10;
+    int maxCount(int a, int b) => a > b ? a : b;
+
+    // 2. Automatic Proximity Connections (+1 PCT per 10)
+    final proximityConnectionsCount = maxCount(
+      trustDataOld?.proximityConnectionsCount ?? 0,
+      ((lifetimeEarnings['proximity_dwell_reward'] ?? 0) +
+              (lifetimeEarnings['proximity_connection'] ?? 0)) ~/
+          1000,
+    );
+    htsPoctDelta += proximityConnectionsCount ~/ 10;
+
+    // 3. Grassroots Gatherings (+1 PCT per 10)
+    final grassrootsGatheringsCount = maxCount(
+      maxCount(
+        trustDataOld?.grassrootsGatheringsCount ?? 0,
+        trustDataOld?.verifiedGatheringVisitsCount ?? 0,
+      ),
+      ((lifetimeEarnings['peer_visit_host_reward'] ?? 0) +
+              (lifetimeEarnings['peer_visit_visitor_reward'] ?? 0) +
+              (lifetimeEarnings['verified_gathering_visit'] ?? 0) +
+              (lifetimeEarnings['grassroots_gathering'] ?? 0)) ~/
+          1000,
+    );
+    htsPoctDelta += grassrootsGatheringsCount ~/ 10;
+
+    // 4. Event Attendance (QR / Venue check-ins: +1 PCT per 10)
+    final checkInCount = maxCount(
+      maxCount(
+        trustDataOld?.verifiedCheckInCount ?? 0,
+        trustDataOld?.attendedEventsCount ?? 0,
+      ),
+      ((lifetimeEarnings['event_attendance'] ?? 0) +
+              (lifetimeEarnings['event_check_in'] ?? 0)) ~/
+          1000,
+    );
+    htsPoctDelta += checkInCount ~/ 10;
+
+    // 5. Event Hosting Attendees (+1 PCT per 10)
+    final hostedEventAttendeesCount = maxCount(
+      trustDataOld?.hostedEventAttendeesCount ?? 0,
+      ((lifetimeEarnings['event_hosting_per_attendee'] ?? 0) +
+              (lifetimeEarnings['event_hosting'] ?? 0)) ~/
+          1000,
+    );
+    htsPoctDelta += hostedEventAttendeesCount ~/ 10;
+
+    // 6. Additional Identity QR Exchanges beyond Genesis milestone (11+: +1 PCT per 10)
+    final extraQrCount = uniqueQrCount > 10 ? uniqueQrCount - 10 : 0;
+    htsPoctDelta += extraQrCount ~/ 10;
+
+    // 7. Additional Peer Verifications received (11+) & Peer Verifications given (+1 PCT per 10)
+    final extraVerifiedCount = uniqueVerifiedCount > 10
+        ? uniqueVerifiedCount - 10
+        : 0;
+    htsPoctDelta += extraVerifiedCount ~/ 10;
+
+    final verificationsGivenCount = maxCount(
+      trustDataOld?.verificationsGivenCount ?? 0,
+      ((lifetimeEarnings['verifier_reward'] ?? 0) +
+              (lifetimeEarnings['verify_peer'] ?? 0)) ~/
+          1000,
+    );
+    htsPoctDelta += verificationsGivenCount ~/ 10;
+
+    // 8. Additional Family & Friend Connections beyond Genesis milestones (11+: +1 PCT per 10)
+    final extraFamilyCount = uniqueFamilyCount > 10
+        ? uniqueFamilyCount - 10
+        : 0;
+    htsPoctDelta += extraFamilyCount ~/ 10;
+
+    final extraFriendCount = uniqueFriendCount > 10
+        ? uniqueFriendCount - 10
+        : 0;
+    htsPoctDelta += extraFriendCount ~/ 10;
+
+    // 9. Verified Chat Solutions (+1 PCT per 10)
+    final verifiedSolutionsCount = maxCount(
+      trustDataOld?.verifiedSolutionsCount ?? 0,
+      ((lifetimeEarnings['verified_solution_milestone'] ?? 0) +
+              (lifetimeEarnings['verified_solution_author_reward'] ?? 0) +
+              (lifetimeEarnings['verified_solution_verifier_reward'] ?? 0) +
+              (lifetimeEarnings['chat_solution'] ?? 0)) ~/
+          1000,
+    );
+    htsPoctDelta += verifiedSolutionsCount ~/ 10;
+
+    // 10. Member Referrals (+1 PCT per 10)
+    final referralCount = maxCount(
+      trustDataOld?.referralCount ?? 0,
+      ((lifetimeEarnings['referral_reward_referrer'] ?? 0) +
+              (lifetimeEarnings['referral_reward'] ?? 0) +
+              (lifetimeEarnings['referral_bonus'] ?? 0) +
+              (lifetimeEarnings['referral'] ?? 0)) ~/
+          1000,
+    );
+    htsPoctDelta += referralCount ~/ 10;
+
+    // 11. Completed Economic & Peer Stay / Hosting Transactions (+1 PCT per 10)
+    final completedHostingCount = maxCount(
+      trustDataOld?.completedHostingCount ?? 0,
+      ((lifetimeEarnings['host_traveler_host_reward'] ?? 0) +
+              (lifetimeEarnings['host_traveler_guest_reward'] ?? 0) +
+              (lifetimeEarnings['hosting_settled'] ?? 0)) ~/
+          1000,
+    );
+    final effectiveEconomicTxCount = maxCount(
+      maxCount(economicTxCount, trustDataOld?.economicTxCount ?? 0),
+      completedHostingCount,
+    );
+    htsPoctDelta += effectiveEconomicTxCount ~/ 10;
+
+    // 12. Governance Votes Cast (+1 PCT per 10)
+    final governanceVotesCount = maxCount(
+      trustDataOld?.governanceVotesCount ?? 0,
+      (lifetimeEarnings['governance_vote'] ?? 0) ~/ 100,
+    );
+    htsPoctDelta += governanceVotesCount ~/ 10;
+
+    // LOSSES: Penalties per 10 occurrences (-1 PCT per 10)
+    htsPoctDelta -= (trustDataOld?.flaggedMessagesCount ?? 0) ~/ 10;
     htsPoctDelta -= (profile.blockedByCount ?? 0) ~/ 10;
     htsPoctDelta -= (trustDataOld?.reportedFraudCount ?? 0) ~/ 10;
     htsPoctDelta -= (trustDataOld?.fakeVerificationsCount ?? 0) ~/ 10;
     htsPoctDelta -= (trustDataOld?.eventNoShowCount ?? 0) ~/ 10;
     htsPoctDelta -= (trustDataOld?.rejectedFamilyConnectionsCount ?? 0) ~/ 10;
 
-    // --- Pillar 1: Location Transparency (10,000 DSP + 10 PCT) ---
-    // Awarded when location transparency is active. If toggled off:
-    // +10 PCT is permanently forfeited AND awarded 10,000 DSP is burned!
+    // --- Pillar 1: Location Transparency (10,000 DSP -> 10,000 $DIASPORA + 10 PCT) ---
+    // Server-synced via evaluateProfileMilestone / syncProfileMilestoneAndTrust.
     double cityVisibilityPoCT = 0;
     final cityForfeited = profile.cityVisibilityForfeited == true;
     final hasCurrentLocation = profile.currentLocation != null;
@@ -475,51 +530,24 @@ class TrustService {
     if (!cityForfeited && hasCurrentLocation && visibilityOn) {
       cityVisibilityPoCT = 10;
       if (!locationMilestoneAwarded) {
-        pointsService.awardManualPoints(userId, 10000, 'location_transparency');
         ledger['LocationTransparency_dsp_awarded'] = 1;
         if (!milestones.contains('LocationTransparency')) {
           milestones.add('LocationTransparency');
-          await pointsRepo.markExplorationActionCompleted(
-            userId,
-            'location_transparency',
-          );
         }
       }
     } else if (locationMilestoneAwarded && (cityForfeited || !visibilityOn)) {
-      // User toggled off location: burn 10,000 DSP & permanently forfeit
-      pointsService.deductPoints(
-        userId: userId,
-        amount: 10000,
-        reason: 'location_transparency_burned',
-      );
       ledger['LocationTransparency_dsp_awarded'] = -1; // marked as burned
     }
 
-    // --- Community Participation: Event Attendance (+10 PCT at 10 check-ins) ---
-    double eventAttendancePoCT = 0;
-    final checkInCount = trustDataOld?.verifiedCheckInCount ?? 0;
-    if (checkInCount >= 10) {
-      eventAttendancePoCT = 10;
-    }
-
-    // --- Pillar 4: Ubuntu Emergency Fund Contribution (10,000 DSP + 10 PCT) ---
+    // --- Pillar 4: Ubuntu Emergency Fund Contribution (10,000 DSP -> 10,000 $DIASPORA + 10 PCT) ---
     double emergencyFundPoCT = 0;
     final emergencyFundAwarded = ledger['EmergencyFund_dsp_awarded'] == 1;
     if (hasStaked) {
       emergencyFundPoCT = 10;
       if (!emergencyFundAwarded) {
-        pointsService.awardManualPoints(
-          userId,
-          10000,
-          'emergency_fund_contribution',
-        );
         ledger['EmergencyFund_dsp_awarded'] = 1;
         if (!milestones.contains('EmergencyFund')) {
           milestones.add('EmergencyFund');
-          await pointsRepo.markExplorationActionCompleted(
-            userId,
-            'milestone_emergency_fund',
-          );
         }
       }
     } else {
@@ -538,12 +566,11 @@ class TrustService {
 
     // --- Final Score Calculation ---
     // PoH Base (70: 5 count milestones + Location + Ubuntu Emergency Fund)
-    // + Participation (20) + Ongoing HTS delta.
+    // + Ongoing HTS delta (+1 PCT per 10 events across all positive trust-building actions) + Seniority.
     double finalScore =
         milestonePoCT +
         cityVisibilityPoCT +
         emergencyFundPoCT +
-        eventAttendancePoCT +
         htsPoctDelta +
         seniorityScore;
 
@@ -561,7 +588,7 @@ class TrustService {
         (trustDataOld?.isVerified ?? false) ||
         isProfileCompleteMilestone;
 
-    // --- Proof of Humanity (PoH) Genesis On-Chain Token Distribution (7,000 $DIASPORA) ---
+    // --- Proof of Humanity (PoH) Completion & Unlock Status (10 QR Exchanges unlocks all $DIASPORA) ---
     final isPoHComplete =
         uniqueFamilyCount >= 10 &&
         uniqueFriendCount >= 10 &&
@@ -571,21 +598,12 @@ class TrustService {
         isProfileComplete;
 
     bool hasReceivedPohTokenDistribution =
-        trustDataOld?.hasReceivedPohTokenDistribution ??
+        uniqueQrCount >= 10 ||
+        (trustDataOld?.hasReceivedPohTokenDistribution ?? false) ||
         (ledger['PohTokenDistribution_dsp_awarded'] == 1);
 
-    if (isPoHComplete && !hasReceivedPohTokenDistribution) {
-      // 7,000 DSP Genesis conversion to real on-chain $DIASPORA on Base blockchain
-      pointsService.deductPoints(
-        userId: userId,
-        amount: 7000,
-        reason: 'poh_genesis_token_distribution',
-      );
+    if (uniqueQrCount >= 10) {
       ledger['PohTokenDistribution_dsp_awarded'] = 1;
-      hasReceivedPohTokenDistribution = true;
-      debugPrint(
-        '🌟 [PoH] User $userId completed all 7 PoH milestones! 7,000 DSP converted to on-chain \$DIASPORA on Base blockchain.',
-      );
     }
 
     // --- Save & Sync ---
@@ -611,26 +629,46 @@ class TrustService {
                     .reduce((a, b) => a + b) /
                 ratingDetails.length,
       reportCount: profile.advertReportCount ?? 0,
-      attendedEventsCount: trustDataOld?.attendedEventsCount ?? 0,
+      attendedEventsCount: checkInCount,
       joinedEventsCount: trustDataOld?.joinedEventsCount ?? 0,
-      verifiedSolutionsCount: trustDataOld?.verifiedSolutionsCount ?? 0,
+      verifiedSolutionsCount: verifiedSolutionsCount,
       identityQRExchange: uniqueQrCount > 0,
-      verifiedCheckInCount: trustDataOld?.verifiedCheckInCount ?? 0,
+      verifiedCheckInCount: checkInCount,
+      proximityConnectionsCount: proximityConnectionsCount,
+      grassrootsGatheringsCount: grassrootsGatheringsCount,
+      verifiedGatheringVisitsCount: grassrootsGatheringsCount,
+      hostedEventAttendeesCount: hostedEventAttendeesCount,
+      verificationsGivenCount: verificationsGivenCount,
+      completedHostingCount: completedHostingCount,
+      economicTxCount: effectiveEconomicTxCount,
+      governanceVotesCount: governanceVotesCount,
       reliabilityScore: trustDataOld?.reliabilityScore ?? 0,
       helpfulnessScore: trustDataOld?.helpfulnessScore ?? 0,
       uniqueFamilyCount: uniqueFamilyCount,
       uniqueFriendCount: uniqueFriendCount,
       uniqueVouchCount: uniqueVouchIds.length,
-      uniqueVerificationCount: uniqueVerificationIds.length,
+      uniqueVerificationCount: uniqueVerifiedCount,
       uniqueQrCount: uniqueQrCount,
       vouchedByCount: fullTrustVouchCount,
       verifiedByCount: allVerifications.length,
-      genesisFamilyIds: familyIds.take(10).toList(),
-      genesisFriendIds: friendIds.take(10).toList(),
-      genesisQrIds: uniqueQrIds.take(10).toList(),
-      genesisTrustIds: uniqueTrustIds.take(10).toList(),
-      genesisVerificationIds: uniqueVerificationIds.take(10).toList(),
-      genesisVouchIds: uniqueVouchIds.take(10).toList(),
+      genesisFamilyIds: familyIds.isNotEmpty
+          ? familyIds.take(10).toList()
+          : (trustDataOld?.genesisFamilyIds ?? []),
+      genesisFriendIds: friendIds.isNotEmpty
+          ? friendIds.take(10).toList()
+          : (trustDataOld?.genesisFriendIds ?? []),
+      genesisQrIds: uniqueQrIds.isNotEmpty
+          ? uniqueQrIds.take(10).toList()
+          : (trustDataOld?.genesisQrIds ?? []),
+      genesisTrustIds: uniqueTrustIds.isNotEmpty
+          ? uniqueTrustIds.take(10).toList()
+          : (trustDataOld?.genesisTrustIds ?? []),
+      genesisVerificationIds: uniqueVerificationIds.isNotEmpty
+          ? uniqueVerificationIds.take(10).toList()
+          : (trustDataOld?.genesisVerificationIds ?? []),
+      genesisVouchIds: uniqueVouchIds.isNotEmpty
+          ? uniqueVouchIds.take(10).toList()
+          : (trustDataOld?.genesisVouchIds ?? []),
       isCouncilEligible:
           (isPoHComplete && daysActive >= 100) &&
           isAdminOfLargeGroup &&
@@ -639,7 +677,7 @@ class TrustService {
       hasReceivedPohTokenDistribution: hasReceivedPohTokenDistribution,
       awardedQualificationMilestones: milestones,
       awardedHtsTracking: ledger,
-      referralCount: trustDataOld?.referralCount ?? 0,
+      referralCount: referralCount,
       blockedByCount: profile.blockedByCount ?? 0,
       flaggedMessagesCount: trustDataOld?.flaggedMessagesCount ?? 0,
       reportedFraudCount: trustDataOld?.reportedFraudCount ?? 0,

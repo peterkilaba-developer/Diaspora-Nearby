@@ -97,10 +97,16 @@ class PointsRepository {
     _userPointsCache[userId] = points;
   }
 
-  String? getCachedReferralCode(String userId) => _referralCodeCache[userId];
+  static bool _isCanonicalSignupCode(String? code) =>
+      code != null && code.trim().contains('-');
+
+  String? getCachedReferralCode(String userId) {
+    final code = _referralCodeCache[userId];
+    return _isCanonicalSignupCode(code) ? code : null;
+  }
 
   void cacheReferralCode(String userId, String code) {
-    if (code.isNotEmpty) {
+    if (_isCanonicalSignupCode(code)) {
       _referralCodeCache[userId] = code;
     }
   }
@@ -726,22 +732,23 @@ class PointsRepository {
 
   // Get user's single referral code created at signup
   Future<String?> getReferralCode(String userId) async {
-    final cached = _referralCodeCache[userId];
+    final cached = getCachedReferralCode(userId);
     if (cached != null && cached.isNotEmpty) return cached;
 
     try {
-      // Check local Firestore cache first for 0-latency resolution before hitting server.
+      // Check local Firestore cache first for 0-latency resolution before hitting server,
+      // but only accept canonical signup codes (FIRSTNAME-CC-XXXX).
       try {
         final cacheSnap = await _firestore
             .collection('referral_codes')
             .where('userId', isEqualTo: userId)
-            .limit(1)
+            .limit(5)
             .get(const GetOptions(source: Source.cache))
             .timeout(const Duration(seconds: 1));
-        if (cacheSnap.docs.isNotEmpty) {
-          final data = cacheSnap.docs.first.data();
-          final code = data['code'] as String?;
-          if (code != null && code.isNotEmpty) {
+        for (final doc in cacheSnap.docs) {
+          final data = doc.data();
+          final code = (data['code'] as String?) ?? doc.id;
+          if (_isCanonicalSignupCode(code)) {
             _referralCodeCache[userId] = code;
             _referralStatsCache[userId] = data;
             return code;
@@ -752,19 +759,21 @@ class PointsRepository {
       final snapshot = await _firestore
           .collection('referral_codes')
           .where('userId', isEqualTo: userId)
-          .limit(1)
+          .limit(5)
           .get(const GetOptions(source: Source.server))
           .timeout(
             const Duration(seconds: 5),
             onTimeout: () => throw Exception('Referral code lookup timed out'),
           );
 
-      if (snapshot.docs.isNotEmpty) {
-        final data = snapshot.docs.first.data();
-        final code = data['code'] as String;
-        _referralCodeCache[userId] = code;
-        _referralStatsCache[userId] = data;
-        return code;
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final code = (data['code'] as String?) ?? doc.id;
+        if (_isCanonicalSignupCode(code)) {
+          _referralCodeCache[userId] = code;
+          _referralStatsCache[userId] = data;
+          return code;
+        }
       }
 
       // Ensure the single signup code exists via server if not yet materialized
@@ -799,14 +808,21 @@ class PointsRepository {
       final snapshot = await _firestore
           .collection('referral_codes')
           .where('userId', isEqualTo: userId)
-          .limit(1)
+          .limit(5)
           .get();
 
       if (snapshot.docs.isEmpty) return _referralStatsCache[userId];
-      final data = snapshot.docs.first.data();
+      final canonicalDoc = snapshot.docs.where((d) {
+        final c = (d.data()['code'] as String?) ?? d.id;
+        return _isCanonicalSignupCode(c);
+      });
+      final chosenDoc = canonicalDoc.isNotEmpty
+          ? canonicalDoc.first
+          : snapshot.docs.first;
+      final data = chosenDoc.data();
       _referralStatsCache[userId] = data;
-      final code = data['code'] as String?;
-      if (code != null && code.isNotEmpty) {
+      final code = (data['code'] as String?) ?? chosenDoc.id;
+      if (_isCanonicalSignupCode(code)) {
         _referralCodeCache[userId] = code;
       }
       return data;

@@ -374,25 +374,13 @@ class PointsService {
   }
 
   Future<void> trackCompleteProfile(String userId) async {
-    final points =
-        _safeGetCachedPoints(userId) ??
-        await _repository.getUserPoints(userId);
-    final alreadyEarned =
-        (points?.lifetimeEarnings['profile_completion'] ?? 0) >= 10000;
-    if (points != null &&
-        !alreadyEarned &&
-        !points.completedExplorationActions.contains(
-          'milestone_10_profile_fields',
-        )) {
-      await Future.wait([
-        awardManualPoints(userId, 10000, 'profile_completion'),
-        _repository.markExplorationActionCompleted(
-          userId,
-          'milestone_10_profile_fields',
-        ),
-        _repository.markExplorationActionCompleted(userId, 'complete_profile'),
-      ]);
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('evaluateProfileMilestone')
+          .call<Map<String, dynamic>>({'userId': userId});
       await _trustService.updateTrustForUser(userId);
+    } catch (e) {
+      debugPrint('DSP: evaluateProfileMilestone in trackCompleteProfile error: $e');
     }
   }
 
@@ -747,12 +735,12 @@ class PointsService {
       );
 
       if (lastVisitTime != null) {
-        final daysSinceLastVisit = DateTime.now()
+        final hoursSinceLastVisit = DateTime.now()
             .difference(lastVisitTime)
-            .inDays;
-        if (daysSinceLastVisit < 7) {
+            .inHours;
+        if (hoursSinceLastVisit < 24) {
           debugPrint(
-            '⚠️ [PEER VISIT] Rate limit active: Pair ($hostUserId, $visitorUserId) rewarded $daysSinceLastVisit days ago.',
+            '⚠️ [PEER VISIT] Rate limit active: Pair ($hostUserId, $visitorUserId) rewarded $hoursSinceLastVisit hours ago.',
           );
           return false;
         }

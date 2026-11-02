@@ -19,6 +19,7 @@ import 'message_content/dsp_transfer_message_content.dart'; // [NEW]
 import 'message_content/money_transfer_message_content.dart';
 import 'message_content/hosting_request_message_content.dart'; // [NEW] Hosting
 import 'message_content/hosting_arrangement_message_content.dart'; // [NEW] Hosting DM
+import 'message_content/voice_call_message_content.dart';
 
 /// Message Bubble Widget
 /// Displays a single message in the chat
@@ -462,11 +463,13 @@ class MessageBubble extends ConsumerWidget {
                                                     ),
                                               ),
                                               if (isOwn &&
-                                                  message.status != null) ...[
+                                                  !message.isSystem &&
+                                                  message.type !=
+                                                      'voice_call') ...[
                                                 const SizedBox(width: 4),
                                                 _buildStatusIcon(
                                                   context,
-                                                  message.status!,
+                                                  message.status ?? 'sent',
                                                 ),
                                               ],
                                             ],
@@ -553,18 +556,26 @@ class MessageBubble extends ConsumerWidget {
     ThemeData theme,
     dynamic profile,
   ) {
-    final countryCode =
-        profile?.currentLocation?.countryCode ??
-        profile?.hostCountryCode ??
-        profile?.hostLocation.countryCode;
+    final isAiAgent =
+        message.senderId == 'diaspora_ai_agent' ||
+        message.metadata?['isAiAgent'] == true;
+    final countryCode = isAiAgent
+        ? null
+        : (profile?.currentLocation?.countryCode ??
+              profile?.hostCountryCode ??
+              profile?.hostLocation.countryCode);
 
     final flag = _getCountryFlag(countryCode);
-    final displayName = profile?.fullName ?? senderName ?? 'Unknown';
+    final displayName = isAiAgent
+        ? 'Diaspora AI Agent'
+        : (profile?.fullName ?? senderName ?? 'Unknown');
 
     return GestureDetector(
-      onTap: () {
-        context.push('/profile/${message.senderId}');
-      },
+      onTap: isAiAgent
+          ? null
+          : () {
+              context.push('/profile/${message.senderId}');
+            },
       child: Container(
         // [FIX] Removed width: double.infinity to allow bubble to hug content
         decoration: const BoxDecoration(
@@ -581,7 +592,10 @@ class MessageBubble extends ConsumerWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (flag.isNotEmpty) ...[
+            if (isAiAgent) ...[
+              const Icon(Icons.auto_awesome, size: 14, color: AppTheme.accent),
+              const SizedBox(width: 4),
+            ] else if (flag.isNotEmpty) ...[
               Text(flag, style: const TextStyle(fontSize: 14)),
               const SizedBox(width: 4),
             ],
@@ -641,6 +655,21 @@ class MessageBubble extends ConsumerWidget {
   }
 
   Widget _buildAvatar(BuildContext context, ThemeData theme, dynamic profile) {
+    if (message.senderId == 'diaspora_ai_agent' ||
+        message.metadata?['isAiAgent'] == true) {
+      return SizedBox(
+        width: 32,
+        height: 32,
+        child: Center(
+          child: Image.asset(
+            'assets/icons/logo-transparent-128.png',
+            width: 28,
+            height: 28,
+            fit: BoxFit.contain,
+          ),
+        ),
+      );
+    }
     final imageUrl = profile?.profileImage ?? message.senderImage;
     if (imageUrl == null) return const SizedBox(width: 32, height: 32);
 
@@ -689,6 +718,8 @@ class MessageBubble extends ConsumerWidget {
       case 'audio':
       case 'audio_file':
         return AudioMessageContent(message: message, isOwn: isOwn);
+      case 'voice_call':
+        return VoiceCallMessageContent(message: message, isOwn: isOwn);
       case 'location':
         return LocationMessageContent(message: message, isOwn: isOwn);
       case 'document':
@@ -710,34 +741,43 @@ class MessageBubble extends ConsumerWidget {
 
   Widget _buildStatusIcon(BuildContext context, String status) {
     final theme = Theme.of(context);
-    IconData icon;
-    Color color = isOwn
+    final baseColor = isOwn
         ? theme.colorScheme.onPrimary
         : theme.colorScheme.onSurfaceVariant;
 
     switch (status) {
       case 'sending':
-        icon = LucideIcons.clock;
-        break;
-      case 'sent':
-        icon = LucideIcons.check;
-        break;
+        return Icon(
+          LucideIcons.clock,
+          size: 13,
+          color: baseColor.withValues(alpha: 0.75),
+        );
       case 'delivered':
-        icon = LucideIcons.checkCheck;
-        break;
+        return Icon(
+          LucideIcons.checkCheck,
+          size: 15,
+          color: baseColor.withValues(alpha: 0.85),
+        );
       case 'read':
-        icon = LucideIcons.checkCheck;
-        color = const Color(0xFF40C4FF); // Vibrant light blue for read status
-        break;
+        return const Icon(
+          LucideIcons.checkCheck,
+          size: 15,
+          color: Color(0xFF40C4FF), // Vibrant light blue for read status
+        );
       case 'error':
-        icon = LucideIcons.alertCircle;
-        color = theme.colorScheme.error;
-        break;
+        return Icon(
+          LucideIcons.alertCircle,
+          size: 14,
+          color: theme.colorScheme.error,
+        );
+      case 'sent':
       default:
-        icon = LucideIcons.clock;
+        return Icon(
+          LucideIcons.check,
+          size: 15,
+          color: baseColor.withValues(alpha: 0.85),
+        );
     }
-
-    return Icon(icon, size: 12, color: color.withValues(alpha: 0.8));
   }
 
   Widget _buildDeletedMessage(ThemeData theme) {
@@ -842,6 +882,10 @@ class MessageBubble extends ConsumerWidget {
       case 'audio_file':
         mediaIcon = LucideIcons.mic;
         contentText = 'Voice message';
+        break;
+      case 'voice_call':
+        mediaIcon = LucideIcons.phone;
+        contentText = 'Voice call';
         break;
       case 'location':
         mediaIcon = LucideIcons.mapPin;
