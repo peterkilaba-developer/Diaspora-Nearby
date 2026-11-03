@@ -62,7 +62,7 @@
 | Contract | Address |
 |----------|---------|
 | DiasporaToken ($DIASPORA) — proxy | `0x55d7e7d006938A15082752225ED44Fd130B87735` |
-| DiasporaToken Implementation | `0x0578bBdc97087365bA4D974bb82bB98AddAac0EA` |
+| DiasporaToken Implementation | `0xc6b4ac0816A2D6110De77DD3ED3be322abAd32Cb` |
 | TGEController — proxy | `0xb6C049D47A2FaE5413c331760C22E715D0bF4d45` |
 | WalletFactory | `0x9cF797cf332595c00410fc4ee9FdEe5C59501945` |
 | Deployer wallet | `0xeef49F2a10f0EF143Cd8c710e013285F137F4dE6` |

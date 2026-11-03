@@ -335,8 +335,15 @@ All providers across Diaspora Nearby — including marketplace merchants, freela
 - **PCT Efficiency**: At TDE 10 (The Great Reset), remaining unconverted DSP is burned on-chain to the canonical dead address (`0x000000000000000000000000000000000000dEaD`).
 - **Verified Smart Contracts on Ethereum Base Blockchain (Chain ID: 8453)**:
   - **Token (Proxy)**: `0x55d7e7d006938A15082752225ED44Fd130B87735`
+  - **Token (Active Implementation)**: `0xc6b4ac0816A2D6110De77DD3ED3be322abAd32Cb`
   - **TGE Controller (Proxy)**: `0xb6C049D47A2FaE5413c331760C22E715D0bF4d45`
+  - **TGE Controller (Active Implementation)**: `0x47Fd316e9C914E5e572bF4b8E334840C5ca3A408`
   - **Smart Wallet Factory**: `0x9cF797cf332595c00410fc4ee9FdEe5C59501945`
+  - **Admin Multisig (2-of-3 Gnosis Safe)**: `0xE06F8690e96a8BAAbCBe48664Ff1238F69082244`
+  - **Founders & Development Treasury (Safe)**: `0xc27f74031f63c24c5E29492e23ecE019E698B46c`
+  - **Liquidity Treasury (Safe)**: `0xF0f15Cf38Ef463E0fF46DC0540489F466E222edB`
+  - **Aerodrome DEX Pool ($DIASPORA / USDC)**: `0x6Ca65Cf42c6A0186A4473EA7eF6C925781e5C3D8`
+  - **Contract Creator / Deployer**: `0xeef49F2a10f0EF143Cd8c710e013285F137F4dE6`
 
 ---
 

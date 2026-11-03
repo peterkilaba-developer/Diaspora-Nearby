@@ -85,6 +85,14 @@
                     "destination": "/index_v2.html"
                 },
                 {
+                    "source": "/tz",
+                    "destination": "/index.html"
+                },
+                {
+                    "source": "/tz/**",
+                    "destination": "/index.html"
+                },
+                {
                     "source": "/index_v2",
                     "destination": "/index_v2.html"
                 }

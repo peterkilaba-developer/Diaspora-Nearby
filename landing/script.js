@@ -41,8 +41,8 @@ const detectedPlatform = detectPlatform();
         } catch (e) {}
     }
 
-    // /invite or /download: show interactive Diaspora Roll-Call & 5-Utility Pass modal with 1-tap Store Install
-    if (rawPath === '/invite' || rawPath === '/download') {
+    // /invite, /download, or /tz: show interactive Diaspora Roll-Call & 5-Utility Pass modal with 1-tap Store Install
+    if (rawPath === '/invite' || rawPath === '/download' || rawPath === '/tz' || rawPath.startsWith('/tz/')) {
         const platform = detectedPlatform;
         const effectiveCode = code || 'PETER-TZ-CC57';
         const ua = navigator.userAgent || '';

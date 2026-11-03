@@ -181,7 +181,7 @@
         <div class="wp-section" id="abstract">
             <h2>1. Abstract</h2>
             <p>
-                Diaspora Nearby is the world's first <strong>Trust-to-Asset Engine</strong> — a deployed, live sovereign platform that converts 
+                Diaspora Nearby is a <strong>Trust-to-Asset Engine</strong> — a deployed, live sovereign platform that converts 
                 social capital and community participation into liquid, on-chain assets. Unlike conceptual whitepaper projects, 
                 every smart contract, algorithm, and economic mechanism documented here is <strong>fully implemented, audited, and running in production code</strong> 
                 across the Ethereum Base Blockchain, mobile apps, and global infrastructure.
@@ -476,8 +476,8 @@
                 <div class="contract-row">
                     <span class="contract-label">Token (Implementation)</span>
                     <span class="contract-value">
-                        <a href="https://basescan.org/address/0x0578bBdc97087365bA4D974bb82bB98AddAac0EA#code" target="_blank" rel="noopener">
-                            0x0578bBdc97087365bA4D974bb82bB98AddAac0EA
+                        <a href="https://basescan.org/address/0xc6b4ac0816A2D6110De77DD3ED3be322abAd32Cb#code" target="_blank" rel="noopener">
+                            0xc6b4ac0816A2D6110De77DD3ED3be322abAd32Cb
                         </a>
                     </span>
                 </div>
@@ -492,8 +492,8 @@
                 <div class="contract-row">
                     <span class="contract-label">TGE Controller (Implementation)</span>
                     <span class="contract-value">
-                        <a href="https://basescan.org/address/0xbf97a76983ec824c591874275a175ae3514557a2#code" target="_blank" rel="noopener">
-                            0xbf97a76983ec824c591874275a175ae3514557a2
+                        <a href="https://basescan.org/address/0x47Fd316e9C914E5e572bF4b8E334840C5ca3A408#code" target="_blank" rel="noopener">
+                            0x47Fd316e9C914E5e572bF4b8E334840C5ca3A408
                         </a>
                     </span>
                 </div>
@@ -502,6 +502,38 @@
                     <span class="contract-value">
                         <a href="https://basescan.org/address/0x9cF797cf332595c00410fc4ee9FdEe5C59501945#code" target="_blank" rel="noopener">
                             0x9cF797cf332595c00410fc4ee9FdEe5C59501945
+                        </a>
+                    </span>
+                </div>
+                <div class="contract-row">
+                    <span class="contract-label">Admin Multisig (2-of-3 Gnosis Safe)</span>
+                    <span class="contract-value">
+                        <a href="https://basescan.org/address/0xE06F8690e96a8BAAbCBe48664Ff1238F69082244" target="_blank" rel="noopener">
+                            0xE06F8690e96a8BAAbCBe48664Ff1238F69082244
+                        </a>
+                    </span>
+                </div>
+                <div class="contract-row">
+                    <span class="contract-label">Founders &amp; Development Treasury (Safe)</span>
+                    <span class="contract-value">
+                        <a href="https://basescan.org/address/0xc27f74031f63c24c5E29492e23ecE019E698B46c" target="_blank" rel="noopener">
+                            0xc27f74031f63c24c5E29492e23ecE019E698B46c
+                        </a>
+                    </span>
+                </div>
+                <div class="contract-row">
+                    <span class="contract-label">Liquidity Treasury (Safe)</span>
+                    <span class="contract-value">
+                        <a href="https://basescan.org/address/0xF0f15Cf38Ef463E0fF46DC0540489F466E222edB" target="_blank" rel="noopener">
+                            0xF0f15Cf38Ef463E0fF46DC0540489F466E222edB
+                        </a>
+                    </span>
+                </div>
+                <div class="contract-row">
+                    <span class="contract-label">Aerodrome DEX Pool ($DIASPORA / USDC)</span>
+                    <span class="contract-value">
+                        <a href="https://basescan.org/address/0x6Ca65Cf42c6A0186A4473EA7eF6C925781e5C3D8" target="_blank" rel="noopener">
+                            0x6Ca65Cf42c6A0186A4473EA7eF6C925781e5C3D8
                         </a>
                     </span>
                 </div>
@@ -606,9 +638,11 @@
 
             <h3>How to Verify</h3>
             <ul>
-                <li><a href="https://basescan.org/token/0x55d7e7d006938A15082752225ED44Fd130B87735" target="_blank" rel="noopener" style="color:var(--orange);">View Token on Basescan (0x55d7e7d006938A15082752225ED44Fd130B87735)</a> — verify supply, holders, transfers</li>
-                <li><a href="https://basescan.org/address/0xb6C049D47A2FaE5413c331760C22E715D0bF4d45" target="_blank" rel="noopener" style="color:var(--orange);">View TGE Controller on Basescan (0xb6C049D47A2FaE5413c331760C22E715D0bF4d45)</a> — verify minting and locking events</li>
+                <li><a href="https://basescan.org/token/0x55d7e7d006938A15082752225ED44Fd130B87735" target="_blank" rel="noopener" style="color:var(--orange);">View Token Proxy on Basescan (0x55d7e7d006938A15082752225ED44Fd130B87735)</a> — verify supply (1,000,000 $DIASPORA in Epoch 1), holders, and transfers (Active Implementation: <a href="https://basescan.org/address/0xc6b4ac0816A2D6110De77DD3ED3be322abAd32Cb#code" target="_blank" rel="noopener" style="color:var(--orange);">0xc6b4ac0816A2D6110De77DD3ED3be322abAd32Cb</a>)</li>
+                <li><a href="https://basescan.org/address/0xb6C049D47A2FaE5413c331760C22E715D0bF4d45" target="_blank" rel="noopener" style="color:var(--orange);">View TGE Controller Proxy on Basescan (0xb6C049D47A2FaE5413c331760C22E715D0bF4d45)</a> — verify minting, locking, and epoch distributions (Active Implementation: <a href="https://basescan.org/address/0x47Fd316e9C914E5e572bF4b8E334840C5ca3A408#code" target="_blank" rel="noopener" style="color:var(--orange);">0x47Fd316e9C914E5e572bF4b8E334840C5ca3A408</a>)</li>
                 <li><a href="https://basescan.org/address/0x9cF797cf332595c00410fc4ee9FdEe5C59501945#code" target="_blank" rel="noopener" style="color:var(--orange);">View Smart Wallet Factory on Basescan (0x9cF797cf332595c00410fc4ee9FdEe5C59501945)</a> — verify deterministic smart wallet deployment</li>
+                <li><a href="https://basescan.org/address/0x6Ca65Cf42c6A0186A4473EA7eF6C925781e5C3D8" target="_blank" rel="noopener" style="color:var(--orange);">View Aerodrome DEX Pool ($DIASPORA / USDC) on Basescan (0x6Ca65Cf42c6A0186A4473EA7eF6C925781e5C3D8)</a> — verify active DEX liquidity pair</li>
+                <li><a href="https://basescan.org/address/0xE06F8690e96a8BAAbCBe48664Ff1238F69082244" target="_blank" rel="noopener" style="color:var(--orange);">View Admin Multisig Safe (0xE06F8690e96a8BAAbCBe48664Ff1238F69082244)</a> &amp; <a href="https://basescan.org/address/0xF0f15Cf38Ef463E0fF46DC0540489F466E222edB" target="_blank" rel="noopener" style="color:var(--orange);">Liquidity Treasury Safe (0xF0f15Cf38Ef463E0fF46DC0540489F466E222edB)</a></li>
                 <li>All proxy and implementation contract source code is verified and readable on Basescan</li>
             </ul>
         </div>
@@ -746,7 +780,7 @@
                         <img src="icons/token-logo-transparent.png" alt="Diaspora Nearby" width="28" height="28">
                         Diaspora Nearby
                     </div>
-                    <p>The world's first Trust-to-Asset Engine. Connecting diaspora communities globally with an
+                    <p>A Trust-to-Asset Engine connecting diaspora communities globally with an
                         earn-to-own social economy.</p>
                 </div>
                 <div class="footer-links">

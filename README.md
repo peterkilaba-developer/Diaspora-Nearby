@@ -25,10 +25,14 @@ Diaspora Nearby is a Flutter and Firebase application built for anyone positione
 
 - **Token Name / Symbol / Decimals**: `Diaspora` / `DIASPORA` / `18`
 - **Token Proxy (Canonical ERC-20)**: [`0x55d7e7d006938A15082752225ED44Fd130B87735`](https://basescan.org/token/0x55d7e7d006938A15082752225ED44Fd130B87735)
-- **Token Implementation**: [`0x0578bBdc97087365bA4D974bb82bB98AddAac0EA`](https://basescan.org/address/0x0578bBdc97087365bA4D974bb82bB98AddAac0EA#code)
+- **Token Implementation (Active)**: [`0xc6b4ac0816A2D6110De77DD3ED3be322abAd32Cb`](https://basescan.org/address/0xc6b4ac0816A2D6110De77DD3ED3be322abAd32Cb#code)
 - **TGE Controller Proxy**: [`0xb6C049D47A2FaE5413c331760C22E715D0bF4d45`](https://basescan.org/address/0xb6C049D47A2FaE5413c331760C22E715D0bF4d45)
-- **TGE Controller Implementation**: [`0xbf97a76983ec824c591874275a175ae3514557a2`](https://basescan.org/address/0xbf97a76983ec824c591874275a175ae3514557a2#code)
+- **TGE Controller Implementation (Active)**: [`0x47Fd316e9C914E5e572bF4b8E334840C5ca3A408`](https://basescan.org/address/0x47Fd316e9C914E5e572bF4b8E334840C5ca3A408#code)
 - **Smart Wallet Factory**: [`0x9cF797cf332595c00410fc4ee9FdEe5C59501945`](https://basescan.org/address/0x9cF797cf332595c00410fc4ee9FdEe5C59501945#code)
+- **Admin Multisig (2-of-3 Gnosis Safe)**: [`0xE06F8690e96a8BAAbCBe48664Ff1238F69082244`](https://basescan.org/address/0xE06F8690e96a8BAAbCBe48664Ff1238F69082244)
+- **Founders & Development Treasury (Safe)**: [`0xc27f74031f63c24c5E29492e23ecE019E698B46c`](https://basescan.org/address/0xc27f74031f63c24c5E29492e23ecE019E698B46c)
+- **Liquidity Treasury (Safe)**: [`0xF0f15Cf38Ef463E0fF46DC0540489F466E222edB`](https://basescan.org/address/0xF0f15Cf38Ef463E0fF46DC0540489F466E222edB)
+- **Aerodrome DEX Pool ($DIASPORA / USDC)**: [`0x6Ca65Cf42c6A0186A4473EA7eF6C925781e5C3D8`](https://basescan.org/address/0x6Ca65Cf42c6A0186A4473EA7eF6C925781e5C3D8)
 - **Contract Creator / Deployer**: [`0xeef49F2a10f0EF143Cd8c710e013285F137F4dE6`](https://basescan.org/address/0xeef49F2a10f0EF143Cd8c710e013285F137F4dE6)
 
 ### Official Ecosystem & Team Links

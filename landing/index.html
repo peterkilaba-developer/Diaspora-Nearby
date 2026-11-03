@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Diaspora Nearby — Connect, Earn, Build Community Wealth</title>
     <meta name="description"
-        content="The world's first Trust-to-Asset Engine for the global diaspora. Find your community, earn $DIASPORA tokens through social activity, and build collective wealth across borders.">
+        content="A Trust-to-Asset Engine for the global diaspora. Find your community, earn $DIASPORA tokens through social activity, and build collective wealth across borders.">
     <link rel="canonical" href="https://diasporanearby.com/">
 
     <!-- Open Graph -->
@@ -67,7 +67,7 @@
         (function() {
             try {
                 var rawPath = window.location.pathname.replace(/\/+$/, '') || '/';
-                if (rawPath === '/invite' || rawPath === '/download') {
+                if (rawPath === '/invite' || rawPath === '/download' || rawPath === '/tz' || rawPath.startsWith('/tz/')) {
                     var params = new URLSearchParams(window.location.search);
                     var code = params.get('code') || params.get('ref') || 'PETER-TZ-CC57';
                     if (code) {
@@ -89,7 +89,7 @@
     "name": "Diaspora Nearby",
     "url": "https://diasporanearby.com",
     "logo": "https://diasporanearby.com/icons/Icon-512.png",
-    "description": "The world's first Trust-to-Asset Engine connecting diaspora communities globally with an earn-to-own social economy.",
+    "description": "A Trust-to-Asset Engine connecting diaspora communities globally with an earn-to-own social economy.",
     "founder": {
       "@type": "Person",
       "name": "Peter Swai",
@@ -1067,6 +1067,7 @@
                     <span style="display: inline-flex; gap: 12px; flex-wrap: wrap;">
                         <a href="/whitepaper" style="color: var(--sage); font-weight: 600; text-decoration: none;">Whitepaper</a>
                         <a href="https://basescan.org/token/0x55d7e7d006938A15082752225ED44Fd130B87735" target="_blank" rel="noopener" style="color: var(--orange); font-weight: 600; text-decoration: none;">Basescan Explorer</a>
+                        <a href="https://basescan.org/address/0x6Ca65Cf42c6A0186A4473EA7eF6C925781e5C3D8" target="_blank" rel="noopener" style="color: var(--sage); font-weight: 600; text-decoration: none;">Aerodrome DEX Pool</a>
                     </span>
                 </div>
             </div>
@@ -2057,7 +2058,7 @@
                         <img src="icons/logo-transparent.png" alt="Diaspora Nearby" width="28" height="28">
                         Diaspora Nearby
                     </div>
-                    <p>The world's first Trust-to-Asset Engine. Connecting diaspora communities globally with an
+                    <p>A Trust-to-Asset Engine connecting diaspora communities globally with an
                         earn-to-own social economy.</p>
                 </div>
                 <div class="footer-links">
