@@ -31,6 +31,8 @@ Color conditionColor(String condition) {
   }
 }
 
+bool _hasSpecValue(dynamic v) => v != null && v.toString().trim().isNotEmpty;
+
 /// Category-specific one-liner specs (e.g. "AWD · 3.0L · 45 000 km").
 String getCategorySpecs(MarketplaceListing listing) {
   final parts = <String>[];
@@ -38,50 +40,91 @@ String getCategorySpecs(MarketplaceListing listing) {
   if (listing.category == MarketplaceCategory.vehicles &&
       listing.vehicleDetails != null) {
     final v = listing.vehicleDetails!;
-    if (v['driveType'] != null) parts.add(v['driveType'].toString());
-    if (v['engineLabel'] != null) parts.add(v['engineLabel'].toString());
-    if (v['mileage'] != null) parts.add('${v['mileage']} km');
-    if (v['transmission'] != null) parts.add(v['transmission'].toString());
-    if (v['fuelType'] != null) parts.add(v['fuelType'].toString());
+    if (_hasSpecValue(v['driveType'])) parts.add(v['driveType'].toString().trim());
+    if (_hasSpecValue(v['engineLabel'])) {
+      parts.add(v['engineLabel'].toString().trim());
+    }
+    if (_hasSpecValue(v['mileage'])) {
+      parts.add('${v['mileage'].toString().trim()} km');
+    }
+    if (_hasSpecValue(v['transmission'])) {
+      parts.add(v['transmission'].toString().trim());
+    }
+    if (_hasSpecValue(v['fuelType'])) parts.add(v['fuelType'].toString().trim());
+  } else if (listing.category == MarketplaceCategory.motorcycles &&
+      listing.motorcycleDetails != null) {
+    final m = listing.motorcycleDetails!;
+    if (_hasSpecValue(m['year'])) parts.add(m['year'].toString().trim());
+    if (_hasSpecValue(m['engineSize'])) {
+      parts.add(m['engineSize'].toString().trim());
+    }
+    if (_hasSpecValue(m['mileage'])) {
+      parts.add('${m['mileage'].toString().trim()} km');
+    }
+    if (_hasSpecValue(m['type'])) parts.add(m['type'].toString().trim());
   } else if (listing.category == MarketplaceCategory.carParts &&
       listing.carPartsDetails != null) {
     final cp = listing.carPartsDetails!;
-    if (cp['partNumber'] != null && cp['partNumber'].toString().isNotEmpty) {
-      parts.add('#${cp['partNumber']}');
+    if (_hasSpecValue(cp['partNumber'])) {
+      parts.add('#${cp['partNumber'].toString().trim()}');
     }
-    if (cp['carMake'] != null) parts.add('Fits ${cp['carMake']}');
-    if (cp['vin'] != null && cp['vin'].toString().length >= 8) {
-      parts.add(
-        'VIN …${cp['vin'].toString().substring(cp['vin'].toString().length - 6)}',
-      );
+    if (_hasSpecValue(cp['carMake'])) {
+      parts.add('Fits ${cp['carMake'].toString().trim()}');
+    }
+    final vin = cp['vin']?.toString().trim() ?? '';
+    if (vin.length >= 8) {
+      parts.add('VIN …${vin.substring(vin.length - 6)}');
     }
   } else if (listing.category == MarketplaceCategory.realEstate &&
       listing.realEstateDetails != null) {
     final r = listing.realEstateDetails!;
-    if (r['bedrooms'] != null) parts.add('${r['bedrooms']} bed');
-    if (r['bathrooms'] != null) parts.add('${r['bathrooms']} bath');
+    if (_hasSpecValue(r['bedrooms'])) {
+      parts.add('${r['bedrooms'].toString().trim()} bed');
+    }
+    if (_hasSpecValue(r['bathrooms'])) {
+      parts.add('${r['bathrooms'].toString().trim()} bath');
+    }
     final sqft = r['squareFootage'] ?? r['sqft'];
-    if (sqft != null) parts.add('$sqft sqft');
+    if (_hasSpecValue(sqft)) parts.add('${sqft.toString().trim()} sqft');
   } else if (listing.category == MarketplaceCategory.electronics &&
       listing.electronicsDetails != null) {
     final e = listing.electronicsDetails!;
-    if (e['brand'] != null) parts.add(e['brand'].toString());
-    if (e['storage'] != null) parts.add(e['storage'].toString());
+    if (_hasSpecValue(e['brand'])) parts.add(e['brand'].toString().trim());
+    if (_hasSpecValue(e['storage'])) parts.add(e['storage'].toString().trim());
   } else if (listing.listingType == ListingType.service &&
       listing.serviceDetails != null) {
     final s = listing.serviceDetails!;
     final exp = s['yearsExperience'] ?? s['experience'];
-    if (exp != null) parts.add('$exp yrs experience');
-    if (s['serviceArea'] != null) parts.add(s['serviceArea'].toString());
+    if (_hasSpecValue(exp)) {
+      final expStr = exp.toString().trim();
+      final lower = expStr.toLowerCase();
+      if (lower.contains('yr') || lower.contains('year')) {
+        parts.add('$expStr experience');
+      } else {
+        parts.add('$expStr yrs experience');
+      }
+    }
+    if (_hasSpecValue(s['serviceArea'])) {
+      parts.add(s['serviceArea'].toString().trim());
+    }
   } else if (listing.listingType == ListingType.job &&
       listing.jobDetails != null) {
     final j = listing.jobDetails!;
-    if (j['companyName'] != null) parts.add(j['companyName'].toString());
-    if (j['employmentType'] != null) parts.add(j['employmentType'].toString());
-    if (j['workMode'] != null) parts.add(j['workMode'].toString());
+    if (_hasSpecValue(j['companyName'])) {
+      parts.add(j['companyName'].toString().trim());
+    }
+    if (_hasSpecValue(j['employmentType'])) {
+      parts.add(j['employmentType'].toString().trim());
+    }
+    if (_hasSpecValue(j['workMode'])) {
+      parts.add(j['workMode'].toString().trim());
+    }
   }
 
-  if (listing.condition != null && parts.length < 3) {
+  if (listing.condition != null &&
+      listing.listingType == ListingType.product &&
+      listing.category != MarketplaceCategory.realEstate &&
+      parts.length < 3) {
     parts.add(ItemCondition.displayName(listing.condition!));
   }
 
@@ -164,20 +207,42 @@ class LocalPriceRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sellerCountry = listing.sellerCountryCode;
+    final salaryRange = listing.jobDetails?['salaryRange']?.toString().trim();
+    final useTextPrice =
+        listing.priceAmount <= 0 &&
+        (listing.listingType == ListingType.job ||
+            listing.listingType == ListingType.service ||
+            listing.priceNegotiable);
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Flexible(
-          child: CurrencyPriceDisplay(
-            amount: listing.priceAmount,
-            sellerCountryCode: sellerCountry,
-            viewerCountryCode: viewerCountryCode,
-            primaryColor: marketplaceSageGreen,
-            compact: true,
-            showToggle: false,
-          ),
+          child: useTextPrice
+              ? Text(
+                  (salaryRange != null && salaryRange.isNotEmpty)
+                      ? salaryRange
+                      : 'Negotiable',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: marketplaceSageGreen,
+                  ),
+                )
+              : CurrencyPriceDisplay(
+                  amount: listing.priceAmount,
+                  sellerCountryCode: sellerCountry,
+                  viewerCountryCode: viewerCountryCode,
+                  primaryColor: marketplaceSageGreen,
+                  compact: true,
+                  showToggle: false,
+                ),
         ),
-        if (listing.priceNegotiable) ...[
+        if (listing.priceNegotiable &&
+            (!useTextPrice ||
+                (salaryRange != null && salaryRange.isNotEmpty))) ...[
           const SizedBox(width: 6),
           Icon(
             LucideIcons.tag,
@@ -254,7 +319,9 @@ class MarketplaceCardFooter extends StatelessWidget {
             style: TextStyle(fontSize: 10, color: theme.hintColor),
           ),
         ],
-        if (listing.condition != null) ...[
+        if (listing.condition != null &&
+            listing.listingType == ListingType.product &&
+            listing.category != MarketplaceCategory.realEstate) ...[
           const SizedBox(width: 6),
           Container(
             width: 6,

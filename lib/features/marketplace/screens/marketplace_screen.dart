@@ -816,33 +816,57 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
               .toList();
         }
         if (_filterExperienceLevel != null) {
-          listings = listings
-              .where(
-                (l) =>
-                    l.jobDetails?['experienceLevel']
-                        ?.toString()
-                        .toLowerCase() ==
-                    _filterExperienceLevel!.toLowerCase(),
-              )
-              .toList();
+          final target = _filterExperienceLevel!.toLowerCase();
+          listings = listings.where((l) {
+            final exp =
+                l.jobDetails?['experienceLevel']?.toString().toLowerCase() ??
+                '';
+            if (exp.isEmpty) return false;
+            if (exp == target) return true;
+            if (target.startsWith('entry')) return exp.contains('entry');
+            if (target.startsWith('mid')) {
+              return exp.contains('mid') || exp.contains('junior');
+            }
+            if (target.startsWith('senior')) return exp.contains('senior');
+            if (target.startsWith('lead')) {
+              return exp.contains('lead') || exp.contains('manager');
+            }
+            if (target.startsWith('exec')) {
+              return exp.contains('exec') || exp.contains('director');
+            }
+            return false;
+          }).toList();
         }
         if (_filterBedrooms != null) {
-          listings = listings
-              .where(
-                (l) =>
-                    l.realEstateDetails?['bedrooms']?.toString() ==
-                    _filterBedrooms,
-              )
-              .toList();
+          listings = listings.where((l) {
+            final rawBeds =
+                l.realEstateDetails?['bedrooms']?.toString().trim() ?? '';
+            if (rawBeds.isEmpty) return false;
+            if (_filterBedrooms == '5+') {
+              if (rawBeds == '5+' || rawBeds == '10+') return true;
+              final parsed = int.tryParse(rawBeds.replaceAll('+', ''));
+              return parsed != null && parsed >= 5;
+            }
+            return rawBeds == _filterBedrooms;
+          }).toList();
         }
         if (_filterListingPurpose != null) {
-          listings = listings
-              .where(
-                (l) =>
-                    l.realEstateDetails?['type']?.toString().toLowerCase() ==
-                    _filterListingPurpose!.toLowerCase(),
-              )
-              .toList();
+          final wantRent = _filterListingPurpose!.toLowerCase().contains(
+            'rent',
+          );
+          listings = listings.where((l) {
+            final rawPurpose =
+                (l.realEstateDetails?['listingPurpose'] ??
+                        l.realEstateDetails?['type'] ??
+                        '')
+                    .toString()
+                    .toLowerCase()
+                    .trim();
+            if (rawPurpose.isEmpty) return false;
+            return wantRent
+                ? rawPurpose.contains('rent')
+                : rawPurpose.contains('sale');
+          }).toList();
         }
         if (_filterBrand != null) {
           listings = listings
@@ -860,7 +884,12 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                 l.description.toLowerCase().contains(q) ||
                 l.category.toLowerCase().contains(q) ||
                 (l.subcategory?.toLowerCase().contains(q) ?? false) ||
-                (l.sellerCity?.toLowerCase().contains(q) ?? false);
+                (l.sellerCity?.toLowerCase().contains(q) ?? false) ||
+                (l.tags?.any((t) => t.toLowerCase().contains(q)) ?? false) ||
+                (l.jobDetails?['companyName']?.toString().toLowerCase().contains(
+                      q,
+                    ) ??
+                    false);
           }).toList();
         }
 
@@ -1174,35 +1203,40 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                     spacing: 12,
                     runSpacing: 6,
                     children: [
-                      if (v['year'] != null)
+                      if (v['year'] != null &&
+                          v['year'].toString().trim().isNotEmpty)
                         _vehicleInfoChip(
                           theme,
                           LucideIcons.calendar,
-                          v['year'].toString(),
+                          v['year'].toString().trim(),
                         ),
-                      if (v['transmission'] != null)
+                      if (v['transmission'] != null &&
+                          v['transmission'].toString().trim().isNotEmpty)
                         _vehicleInfoChip(
                           theme,
                           LucideIcons.settings,
-                          v['transmission'].toString(),
+                          v['transmission'].toString().trim(),
                         ),
-                      if (v['fuelType'] != null)
+                      if (v['fuelType'] != null &&
+                          v['fuelType'].toString().trim().isNotEmpty)
                         _vehicleInfoChip(
                           theme,
                           LucideIcons.fuel,
-                          v['fuelType'].toString(),
+                          v['fuelType'].toString().trim(),
                         ),
-                      if (v['driveType'] != null)
+                      if (v['driveType'] != null &&
+                          v['driveType'].toString().trim().isNotEmpty)
                         _vehicleInfoChip(
                           theme,
                           LucideIcons.gauge,
-                          v['driveType'].toString(),
+                          v['driveType'].toString().trim(),
                         ),
-                      if (v['mileage'] != null)
+                      if (v['mileage'] != null &&
+                          v['mileage'].toString().trim().isNotEmpty)
                         _vehicleInfoChip(
                           theme,
                           LucideIcons.gauge,
-                          '${v['mileage']} km',
+                          '${v['mileage'].toString().trim()} km',
                         ),
                     ],
                   ),

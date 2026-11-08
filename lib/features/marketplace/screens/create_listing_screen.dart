@@ -132,7 +132,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
   // Step 3 — Images & Contact
   List<String> _existingImageUrls = [];
   final List<XFile> _selectedImages = [];
-  final List<String> _deliveryOptions = ['pickup'];
+  final List<String> _deliveryOptions = [];
   String _contactMethod = ContactMethod.chat;
   final _tagsController = TextEditingController();
 
@@ -140,8 +140,17 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
   void initState() {
     super.initState();
     _listingType = widget.defaultListingType ?? ListingType.product;
+    if (_listingType == ListingType.product) {
+      _deliveryOptions.add(DeliveryOption.pickup);
+    }
     _vehicleVinController.addListener(() => setState(() {}));
     _prefillIfEditing();
+  }
+
+  String? _nonEmptyString(dynamic value) {
+    if (value == null) return null;
+    final trimmed = value.toString().trim();
+    return trimmed.isEmpty ? null : trimmed;
   }
 
   void _prefillIfEditing() {
@@ -150,116 +159,125 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
 
     _listingType = listing.listingType;
     _selectedCategory = listing.category;
-    _selectedSubcategory = listing.subcategory;
+    _selectedSubcategory = _nonEmptyString(listing.subcategory);
     _scope = listing.scope;
     _titleController.text = listing.title;
     _descriptionController.text = listing.description;
-    _priceController.text = listing.priceAmount.toStringAsFixed(
-      listing.priceAmount == listing.priceAmount.roundToDouble() ? 0 : 2,
-    );
+    if (listing.priceAmount > 0 || listing.listingType != ListingType.job) {
+      _priceController.text = listing.priceAmount.toStringAsFixed(
+        listing.priceAmount == listing.priceAmount.roundToDouble() ? 0 : 2,
+      );
+    } else {
+      _priceController.text = '';
+    }
     _priceNegotiable = listing.priceNegotiable;
-    _condition = listing.condition;
+    _condition = _nonEmptyString(listing.condition);
     _contactMethod = listing.contactMethod;
     _existingImageUrls = List<String>.from(listing.images);
 
     // Vehicle details
     if (listing.vehicleDetails != null) {
-      _vehicleMake = listing.vehicleDetails!['make'] as String?;
-      _vehicleModel = listing.vehicleDetails!['model'] as String?;
-      _vehicleYear = listing.vehicleDetails!['year'] as String?;
-      _vehicleMileageController.text =
-          listing.vehicleDetails!['mileage']?.toString() ?? '';
-      _vehicleVinController.text =
-          listing.vehicleDetails!['vin']?.toString() ?? '';
-      _vehicleTransmission = listing.vehicleDetails!['transmission'] as String?;
-      _vehicleFuelType = listing.vehicleDetails!['fuelType'] as String?;
-      _vehicleBodyType = listing.vehicleDetails!['bodyType'] as String?;
-      _vehicleDriveType = listing.vehicleDetails!['driveType'] as String?;
-      _vehicleEngineSize = listing.vehicleDetails!['engineSize'] as String?;
-      _vehicleHP = listing.vehicleDetails!['horsepower'] as String?;
-      _vehicleEngineLabel = listing.vehicleDetails!['engineLabel'] as String?;
-      _vehicleDoors = listing.vehicleDetails!['doors'] as String?;
-      _vehiclePlantCountry = listing.vehicleDetails!['plantCountry'] as String?;
-      _vehiclePlantCity = listing.vehicleDetails!['plantCity'] as String?;
-      _vehicleTrim = listing.vehicleDetails!['trim'] as String?;
-      _vehicleSeries = listing.vehicleDetails!['series'] as String?;
-      _vehicleAbs = listing.vehicleDetails!['abs'] as String?;
-      _vehicleAirbagLocations =
-          listing.vehicleDetails!['airbagLocations'] as String?;
-      _vehicleGvwr = listing.vehicleDetails!['gvwr'] as String?;
-      _vehicleType = listing.vehicleDetails!['vehicleType'] as String?;
-      _vehicleElectrificationType =
-          listing.vehicleDetails!['electrificationType'] as String?;
-      _vehicleBatteryKWh = listing.vehicleDetails!['batteryKWh'] as String?;
+      final v = listing.vehicleDetails!;
+      _vehicleMake = _nonEmptyString(v['make']);
+      _vehicleModel = _nonEmptyString(v['model']);
+      _vehicleYear = _nonEmptyString(v['year']);
+      _vehicleMileageController.text = _nonEmptyString(v['mileage']) ?? '';
+      _vehicleVinController.text = _nonEmptyString(v['vin']) ?? '';
+      _vehicleTransmission = _nonEmptyString(v['transmission']);
+      _vehicleFuelType = _nonEmptyString(v['fuelType']);
+      _vehicleBodyType = _nonEmptyString(v['bodyType']);
+      _vehicleDriveType = _nonEmptyString(v['driveType']);
+      _vehicleEngineSize = _nonEmptyString(v['engineSize']);
+      _vehicleHP = _nonEmptyString(v['horsepower']);
+      _vehicleEngineLabel = _nonEmptyString(v['engineLabel']);
+      _vehicleDoors = _nonEmptyString(v['doors']);
+      _vehiclePlantCountry = _nonEmptyString(v['plantCountry']);
+      _vehiclePlantCity = _nonEmptyString(v['plantCity']);
+      _vehicleTrim = _nonEmptyString(v['trim']);
+      _vehicleSeries = _nonEmptyString(v['series']);
+      _vehicleAbs = _nonEmptyString(v['abs']);
+      _vehicleAirbagLocations = _nonEmptyString(v['airbagLocations']);
+      _vehicleGvwr = _nonEmptyString(v['gvwr']);
+      _vehicleType = _nonEmptyString(v['vehicleType']);
+      _vehicleElectrificationType = _nonEmptyString(v['electrificationType']);
+      _vehicleBatteryKWh = _nonEmptyString(v['batteryKWh']);
     }
 
     // Motorcycle details
     if (listing.motorcycleDetails != null) {
-      _motorcycleMake = listing.motorcycleDetails!['make'] as String?;
-      _motorcycleModel = listing.motorcycleDetails!['model'] as String?;
-      _motorcycleYear = listing.motorcycleDetails!['year'] as String?;
-      _motorcycleMileageController.text =
-          listing.motorcycleDetails!['mileage']?.toString() ?? '';
-      _motorcycleEngineSize =
-          listing.motorcycleDetails!['engineSize'] as String?;
-      _motorcycleType = listing.motorcycleDetails!['type'] as String?;
+      final m = listing.motorcycleDetails!;
+      _motorcycleMake = _nonEmptyString(m['make']);
+      _motorcycleModel = _nonEmptyString(m['model']);
+      _motorcycleYear = _nonEmptyString(m['year']);
+      _motorcycleMileageController.text = _nonEmptyString(m['mileage']) ?? '';
+      _motorcycleEngineSize = _nonEmptyString(m['engineSize']);
+      _motorcycleType = _nonEmptyString(m['type']);
     }
 
     // Car parts details
     if (listing.carPartsDetails != null) {
-      _partNumberController.text =
-          listing.carPartsDetails!['partNumber']?.toString() ?? '';
-      _partVinController.text =
-          listing.carPartsDetails!['vin']?.toString() ?? '';
-      _partCarMake = listing.carPartsDetails!['carMake'] as String?;
-      _partCarModel = listing.carPartsDetails!['carModel'] as String?;
-      _partCarYear = listing.carPartsDetails!['carYear'] as String?;
-      final compat = listing.carPartsDetails!['compatibleModels'];
+      final cp = listing.carPartsDetails!;
+      _partNumberController.text = _nonEmptyString(cp['partNumber']) ?? '';
+      _partVinController.text = _nonEmptyString(cp['vin']) ?? '';
+      _partCarMake = _nonEmptyString(cp['carMake']);
+      _partCarModel = _nonEmptyString(cp['carModel']);
+      _partCarYear = _nonEmptyString(cp['carYear']);
+      final compat = cp['compatibleModels'];
       if (compat is List) {
-        _compatibleModels = compat.cast<String>().toList();
+        _compatibleModels = compat
+            .map((e) => e.toString().trim())
+            .where((e) => e.isNotEmpty)
+            .toList();
       }
     }
 
     // Real estate details
     if (listing.realEstateDetails != null) {
-      _realEstateBedrooms = listing.realEstateDetails!['bedrooms'] as String?;
-      _realEstateBathrooms = listing.realEstateDetails!['bathrooms'] as String?;
+      final r = listing.realEstateDetails!;
+      _realEstateBedrooms = _nonEmptyString(r['bedrooms']);
+      _realEstateBathrooms = _nonEmptyString(r['bathrooms']);
       _realEstateSqftController.text =
-          listing.realEstateDetails!['sqft']?.toString() ?? '';
-      _realEstateType = listing.realEstateDetails!['type'] as String?;
-      _realEstateLocationDisplay =
-          listing.realEstateDetails!['propertyAddress'] as String?;
-      _realEstateLocationPlaceId =
-          listing.realEstateDetails!['propertyPlaceId'] as String?;
+          _nonEmptyString(r['sqft'] ?? r['squareFootage']) ?? '';
+      final rawPurpose = _nonEmptyString(r['type'] ?? r['listingPurpose']);
+      if (rawPurpose != null) {
+        final lower = rawPurpose.toLowerCase();
+        _realEstateType = lower.contains('rent') ? 'rent' : 'sale';
+      }
+      _realEstateLocationDisplay = _nonEmptyString(
+        r['propertyAddress'] ?? r['address'],
+      );
+      _realEstateLocationPlaceId = _nonEmptyString(r['propertyPlaceId']);
     }
 
     // Electronics details
     if (listing.electronicsDetails != null) {
-      _electronicsBrand = listing.electronicsDetails!['brand'] as String?;
-      _electronicsModel = listing.electronicsDetails!['model'] as String?;
-      _electronicsStorage = listing.electronicsDetails!['storage'] as String?;
+      final e = listing.electronicsDetails!;
+      _electronicsBrand = _nonEmptyString(e['brand']);
+      _electronicsModel = _nonEmptyString(e['model']);
+      _electronicsStorage = _nonEmptyString(e['storage']);
     }
 
     // Service details
     if (listing.serviceDetails != null) {
-      _serviceExperience = listing.serviceDetails!['experience'] as String?;
-      _serviceAvailability = listing.serviceDetails!['availability'] as String?;
-      _serviceAreaDisplay = listing.serviceDetails!['serviceArea'] as String?;
-      _serviceAreaPlaceId =
-          listing.serviceDetails!['serviceAreaPlaceId'] as String?;
+      final s = listing.serviceDetails!;
+      _serviceExperience = _nonEmptyString(
+        s['experience'] ?? s['yearsExperience'],
+      );
+      _serviceAvailability = _nonEmptyString(s['availability']);
+      _serviceAreaDisplay = _nonEmptyString(s['serviceArea']);
+      _serviceAreaPlaceId = _nonEmptyString(s['serviceAreaPlaceId']);
     }
 
     // Job details
     if (listing.jobDetails != null) {
-      _jobCompanyController.text =
-          listing.jobDetails!['companyName']?.toString() ?? '';
-      _jobEmploymentType = listing.jobDetails!['employmentType'] as String?;
-      _jobSalaryController.text =
-          listing.jobDetails!['salaryRange']?.toString() ?? '';
-      _jobExperienceLevel = listing.jobDetails!['experienceLevel'] as String?;
-      _jobWorkMode = listing.jobDetails!['workMode'] as String?;
-      final deadlineStr = listing.jobDetails!['applicationDeadline'] as String?;
-      if (deadlineStr != null && deadlineStr.isNotEmpty) {
+      final j = listing.jobDetails!;
+      _jobCompanyController.text = _nonEmptyString(j['companyName']) ?? '';
+      _jobEmploymentType = _nonEmptyString(j['employmentType']);
+      _jobSalaryController.text = _nonEmptyString(j['salaryRange']) ?? '';
+      _jobExperienceLevel = _nonEmptyString(j['experienceLevel']);
+      _jobWorkMode = _nonEmptyString(j['workMode']);
+      final deadlineStr = _nonEmptyString(j['applicationDeadline']);
+      if (deadlineStr != null) {
         _jobDeadline = DateTime.tryParse(deadlineStr);
       }
     }
@@ -269,11 +287,16 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       _tagsController.text = listing.tags!.join(', ');
     }
 
-    // Delivery options
-    if (listing.deliveryOptions != null) {
-      _deliveryOptions
-        ..clear()
-        ..addAll(listing.deliveryOptions!);
+    // Delivery options — only applicable to deliverable products
+    _deliveryOptions.clear();
+    if (_listingType == ListingType.product &&
+        _selectedCategory != MarketplaceCategory.realEstate &&
+        listing.deliveryOptions != null) {
+      _deliveryOptions.addAll(
+        listing.deliveryOptions!
+            .map((d) => d.trim().toLowerCase())
+            .where((d) => d.isNotEmpty),
+      );
     }
   }
 
@@ -447,6 +470,9 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                     _listingType = ListingType.product;
                     _selectedCategory = null;
                     _selectedSubcategory = null;
+                    if (_deliveryOptions.isEmpty) {
+                      _deliveryOptions.add(DeliveryOption.pickup);
+                    }
                   }),
                   theme: theme,
                   isDark: isDark,
@@ -463,6 +489,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                     _selectedCategory = null;
                     _selectedSubcategory = null;
                     _condition = null;
+                    _deliveryOptions.clear();
                   }),
                   theme: theme,
                   isDark: isDark,
@@ -479,6 +506,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                     _selectedCategory = null;
                     _selectedSubcategory = null;
                     _condition = null;
+                    _deliveryOptions.clear();
                   }),
                   theme: theme,
                   isDark: isDark,
@@ -510,6 +538,13 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
               onTap: () => setState(() {
                 _selectedCategory = cat;
                 _selectedSubcategory = null;
+                if (cat == MarketplaceCategory.realEstate) {
+                  _condition = null;
+                  _deliveryOptions.clear();
+                } else if (_listingType == ListingType.product &&
+                    _deliveryOptions.isEmpty) {
+                  _deliveryOptions.add(DeliveryOption.pickup);
+                }
               }),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
@@ -648,6 +683,14 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
     );
   }
 
+  bool get _usesAutoGeneratedTitle =>
+      _listingType == ListingType.product &&
+      (_selectedCategory == MarketplaceCategory.vehicles ||
+          _selectedCategory == MarketplaceCategory.motorcycles ||
+          _selectedCategory == MarketplaceCategory.carParts ||
+          _selectedCategory == MarketplaceCategory.realEstate ||
+          _selectedCategory == MarketplaceCategory.electronics);
+
   // ─── STEP 2: Details (Contextual) ─────────────────────────────────────
   Widget _buildStep2Details(ThemeData theme, bool isDark) {
     final profile = ref.watch(userProfileProvider).value;
@@ -658,7 +701,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         _buildContextualFields(theme, isDark),
 
         // Auto-generated title preview
-        if (_generateTitle().isNotEmpty) ...[
+        if (_usesAutoGeneratedTitle && _generateTitle().isNotEmpty) ...[
           const SizedBox(height: 16),
           Container(
             width: double.infinity,
@@ -746,13 +789,25 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                   ),
                 ),
                 validator: (v) {
+                  final trimmed = v?.trim() ?? '';
+                  if (_listingType == ListingType.job &&
+                      trimmed.isEmpty &&
+                      (_jobSalaryController.text.trim().isNotEmpty ||
+                          _priceNegotiable)) {
+                    return null;
+                  }
+                  if (_listingType == ListingType.service &&
+                      trimmed.isEmpty &&
+                      _priceNegotiable) {
+                    return null;
+                  }
                   final label = _listingType == ListingType.job
                       ? 'Salary'
                       : _listingType == ListingType.service
                       ? 'Rate'
                       : 'Price';
-                  if (v == null || v.isEmpty) return '$label is required';
-                  if (double.tryParse(v) == null) return 'Invalid amount';
+                  if (trimmed.isEmpty) return '$label is required';
+                  if (double.tryParse(trimmed) == null) return 'Invalid amount';
                   return null;
                 },
               ),
@@ -803,8 +858,9 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           ],
         ),
 
-        // Condition (Products only)
-        if (_listingType == ListingType.product) ...[
+        // Condition (Physical Products only — exclude Real Estate)
+        if (_listingType == ListingType.product &&
+            _selectedCategory != MarketplaceCategory.realEstate) ...[
           const SizedBox(height: 20),
           _buildSectionLabel('Condition', theme),
           const SizedBox(height: 8),
@@ -2894,8 +2950,9 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
 
         const SizedBox(height: 24),
 
-        // Delivery options
-        if (_listingType == ListingType.product) ...[
+        // Delivery options (Physical Products only — exclude Real Estate)
+        if (_listingType == ListingType.product &&
+            _selectedCategory != MarketplaceCategory.realEstate) ...[
           _buildSectionLabel('Delivery Options', theme),
           const SizedBox(height: 8),
           Wrap(
@@ -3186,8 +3243,10 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       if (_formKey.currentState?.validate() != true) return;
       setState(() => _currentStep = 2);
     } else {
-      // Validate at least 1 image for new listings
-      if (!_isEditing && _selectedImages.isEmpty) {
+      // Validate at least 1 image for new product/service listings (jobs allow optional logo)
+      if (!_isEditing &&
+          _listingType != ListingType.job &&
+          _selectedImages.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Please add at least 1 photo')),
         );
@@ -3195,6 +3254,26 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       }
       _submitListing();
     }
+  }
+
+  Map<String, dynamic>? _cleanDetailMap(Map<String, dynamic> raw) {
+    final cleaned = <String, dynamic>{};
+    raw.forEach((key, value) {
+      if (value == null) return;
+      if (value is String) {
+        final trimmed = value.trim();
+        if (trimmed.isNotEmpty) {
+          cleaned[key] = trimmed;
+        }
+      } else if (value is List) {
+        if (value.isNotEmpty) {
+          cleaned[key] = value;
+        }
+      } else {
+        cleaned[key] = value;
+      }
+    });
+    return cleaned.isEmpty ? null : cleaned;
   }
 
   Future<void> _submitListing() async {
@@ -3233,7 +3312,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           .where((t) => t.isNotEmpty)
           .toList();
 
-      // Build contextual details
+      // Build contextual details (stripping empty strings so blank cards never render)
       Map<String, dynamic>? vehicleDetails;
       Map<String, dynamic>? motorcycleDetails;
       Map<String, dynamic>? carPartsDetails;
@@ -3242,11 +3321,13 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       Map<String, dynamic>? serviceDetails;
 
       if (_selectedCategory == MarketplaceCategory.vehicles) {
-        vehicleDetails = {
-          'make': _vehicleMake ?? '',
-          'model': _vehicleModel ?? '',
-          'year': _vehicleYear ?? '',
-          'mileage': _vehicleMileageController.text,
+        vehicleDetails = _cleanDetailMap({
+          if (widget.existingListing?.vehicleDetails != null)
+            ...widget.existingListing!.vehicleDetails!,
+          'make': _vehicleMake,
+          'model': _vehicleModel,
+          'year': _vehicleYear,
+          'mileage': _vehicleMileageController.text.trim(),
           'vin': _vehicleVinController.text.trim(),
           'transmission': _vehicleTransmission,
           'fuelType': _vehicleFuelType,
@@ -3266,64 +3347,88 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           'vehicleType': _vehicleType,
           'electrificationType': _vehicleElectrificationType,
           'batteryKWh': _vehicleBatteryKWh,
-        };
+        });
       } else if (_selectedCategory == MarketplaceCategory.motorcycles) {
-        motorcycleDetails = {
-          'make': _motorcycleMake ?? '',
-          'model': _motorcycleModel ?? '',
-          'year': _motorcycleYear ?? '',
-          'mileage': _motorcycleMileageController.text,
-          'engineSize': _motorcycleEngineSize ?? '',
-          'type': _motorcycleType ?? '',
-        };
+        motorcycleDetails = _cleanDetailMap({
+          if (widget.existingListing?.motorcycleDetails != null)
+            ...widget.existingListing!.motorcycleDetails!,
+          'make': _motorcycleMake,
+          'model': _motorcycleModel,
+          'year': _motorcycleYear,
+          'mileage': _motorcycleMileageController.text.trim(),
+          'engineSize': _motorcycleEngineSize,
+          'type': _motorcycleType,
+        });
       } else if (_selectedCategory == MarketplaceCategory.carParts) {
         final compatibleList = _compatibleModels;
 
-        carPartsDetails = {
+        carPartsDetails = _cleanDetailMap({
+          if (widget.existingListing?.carPartsDetails != null)
+            ...widget.existingListing!.carPartsDetails!,
           'partNumber': _partNumberController.text.trim(),
-          'carMake': _partCarMake ?? '',
-          'carModel': _partCarModel ?? '',
-          'carYear': _partCarYear ?? '',
+          'carMake': _partCarMake,
+          'carModel': _partCarModel,
+          'carYear': _partCarYear,
           'vin': _partVinController.text.trim(),
           'compatibleModels': compatibleList,
-        };
+        });
       } else if (_selectedCategory == MarketplaceCategory.realEstate) {
-        realEstateDetails = {
+        realEstateDetails = _cleanDetailMap({
+          if (widget.existingListing?.realEstateDetails != null)
+            ...widget.existingListing!.realEstateDetails!,
           'type': _realEstateType,
-          'bedrooms': _realEstateBedrooms ?? '',
-          'bathrooms': _realEstateBathrooms ?? '',
-          'sqft': _realEstateSqftController.text,
-          'propertyAddress': _realEstateLocationDisplay ?? '',
-          'propertyPlaceId': _realEstateLocationPlaceId ?? '',
-        };
+          'bedrooms': _realEstateBedrooms,
+          'bathrooms': _realEstateBathrooms,
+          'sqft': _realEstateSqftController.text.trim(),
+          'propertyAddress': _realEstateLocationDisplay,
+          'propertyPlaceId': _realEstateLocationPlaceId,
+        });
       } else if (_selectedCategory == MarketplaceCategory.electronics) {
-        electronicsDetails = {
-          'brand': _electronicsBrand ?? '',
-          'model': _electronicsModel ?? '',
-          'storage': _electronicsStorage ?? '',
-        };
+        electronicsDetails = _cleanDetailMap({
+          if (widget.existingListing?.electronicsDetails != null)
+            ...widget.existingListing!.electronicsDetails!,
+          'brand': _electronicsBrand,
+          'model': _electronicsModel,
+          'storage': _electronicsStorage,
+        });
       }
 
       if (_listingType == ListingType.service) {
-        serviceDetails = {
-          'experience': _serviceExperience ?? '',
-          'serviceArea': _serviceAreaDisplay ?? '',
-          'serviceAreaPlaceId': _serviceAreaPlaceId ?? '',
+        serviceDetails = _cleanDetailMap({
+          if (widget.existingListing?.serviceDetails != null)
+            ...widget.existingListing!.serviceDetails!,
+          'experience': _serviceExperience,
+          'serviceArea': _serviceAreaDisplay,
+          'serviceAreaPlaceId': _serviceAreaPlaceId,
           'availability': _serviceAvailability,
-        };
+        });
       }
+
+      final parsedPrice = double.tryParse(_priceController.text.trim()) ?? 0;
 
       Map<String, dynamic>? jobDetails;
       if (_listingType == ListingType.job) {
-        jobDetails = {
-          'companyName': _jobCompanyController.text,
+        final rawSalaryRange = _jobSalaryController.text.trim();
+        final resolvedSalaryRange = rawSalaryRange.isNotEmpty
+            ? rawSalaryRange
+            : (parsedPrice > 0
+                  ? '${CurrencyHelper.currencySymbol(profile.hostCountryCode)}${_priceController.text.trim()}'
+                  : null);
+        jobDetails = _cleanDetailMap({
+          if (widget.existingListing?.jobDetails != null)
+            ...widget.existingListing!.jobDetails!,
+          'companyName': _jobCompanyController.text.trim(),
           'employmentType': _jobEmploymentType,
-          'salaryRange': _jobSalaryController.text,
-          'experienceLevel': _jobExperienceLevel ?? '',
+          'salaryRange': resolvedSalaryRange,
+          'experienceLevel': _jobExperienceLevel,
           'workMode': _jobWorkMode,
-          'applicationDeadline': _jobDeadline?.toIso8601String() ?? '',
-        };
+          'applicationDeadline': _jobDeadline?.toIso8601String(),
+        });
       }
+
+      final isPhysicalProduct =
+          _listingType == ListingType.product &&
+          _selectedCategory != MarketplaceCategory.realEstate;
 
       final repo = ref.read(marketplaceRepositoryProvider);
       final chatRepo = ref.read(chatRepositoryProvider);
@@ -3354,9 +3459,9 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         subcategory: _selectedSubcategory,
         listingType: _listingType,
         scope: _scope,
-        priceAmount: double.parse(_priceController.text),
+        priceAmount: parsedPrice,
         priceNegotiable: _priceNegotiable,
-        condition: _condition,
+        condition: isPhysicalProduct ? _condition : null,
         vehicleDetails: vehicleDetails,
         motorcycleDetails: motorcycleDetails,
         carPartsDetails: carPartsDetails,
@@ -3371,9 +3476,9 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           country: profile.hostCountry,
           countryCode: profile.hostCountryCode,
         ),
-        deliveryOptions: _deliveryOptions.isEmpty
-            ? null
-            : List<String>.from(_deliveryOptions),
+        deliveryOptions: isPhysicalProduct && _deliveryOptions.isNotEmpty
+            ? List<String>.from(_deliveryOptions)
+            : null,
         contactMethod: _contactMethod,
         status: widget.existingListing?.status ?? ListingStatus.active,
         viewCount: widget.existingListing?.viewCount ?? 0,

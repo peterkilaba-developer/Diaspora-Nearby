@@ -324,141 +324,164 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                 // Status badge (if not active)
                 if (listing.status != ListingStatus.active)
                   _buildStatusBadge(listing, theme),
-                // Seller's local currency price
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Flexible(
-                      child: CurrencyPriceDisplay(
-                        amount: listing.priceAmount,
-                        sellerCountryCode: listing.sellerCountryCode,
-                        viewerCountryCode: _viewerCountryCode,
-                        showToggle: false,
-                        primaryColor: marketplaceSageGreen,
-                        primaryStyle: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: marketplaceSageGreen,
-                        ),
-                      ),
-                    ),
-                    if (listing.priceNegotiable) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: marketplaceSageGreen.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              LucideIcons.tag,
-                              size: 10,
-                              color: marketplaceSageGreen,
-                            ),
-                            SizedBox(width: 4),
-                            Text(
-                              'Negotiable',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w500,
-                                color: marketplaceSageGreen,
+                // Seller's local currency price (or Job salary range / Negotiable when priceAmount is 0)
+                if (listing.priceAmount > 0 ||
+                    (listing.listingType == ListingType.product &&
+                        !listing.priceNegotiable) ||
+                    _hasValue(listing.jobDetails?['salaryRange']) ||
+                    listing.priceNegotiable)
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Flexible(
+                        child: listing.priceAmount > 0
+                            ? CurrencyPriceDisplay(
+                                amount: listing.priceAmount,
+                                sellerCountryCode: listing.sellerCountryCode,
+                                viewerCountryCode: _viewerCountryCode,
+                                showToggle: false,
+                                primaryColor: marketplaceSageGreen,
+                                primaryStyle: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: marketplaceSageGreen,
+                                ),
+                              )
+                            : Text(
+                                _hasValue(listing.jobDetails?['salaryRange'])
+                                    ? listing.jobDetails!['salaryRange']
+                                          .toString()
+                                          .trim()
+                                    : listing.listingType == ListingType.job
+                                    ? 'Salary Negotiable'
+                                    : listing.listingType == ListingType.service
+                                    ? 'Rate Negotiable'
+                                    : 'Negotiable',
+                                style: const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: marketplaceSageGreen,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
                       ),
-                    ],
-                    const Spacer(),
-                    // "Find Parts" button for vehicles & motorcycles
-                    if (((listing.category == MarketplaceCategory.vehicles &&
-                            listing.vehicleDetails?['make'] != null &&
-                            listing.vehicleDetails!['make']
-                                .toString()
-                                .isNotEmpty) ||
-                        (listing.category == MarketplaceCategory.motorcycles &&
-                            listing.motorcycleDetails?['make'] != null &&
-                            listing.motorcycleDetails!['make']
-                                .toString()
-                                .isNotEmpty))) ...[
-                      GestureDetector(
-                        onTap: () {
-                          final make =
-                              listing.category ==
-                                  MarketplaceCategory.motorcycles
-                              ? (listing.motorcycleDetails?['make'] ??
-                                        listing.vehicleDetails?['make'] ??
-                                        '')
-                                    .toString()
-                              : listing.vehicleDetails!['make'].toString();
-                          final model =
-                              listing.category ==
-                                  MarketplaceCategory.motorcycles
-                              ? (listing.motorcycleDetails?['model'] ??
-                                        listing.vehicleDetails?['model'] ??
-                                        '')
-                                    .toString()
-                              : (listing.vehicleDetails?['model'] ?? '')
-                                    .toString();
-                          final year =
-                              listing.category ==
-                                  MarketplaceCategory.motorcycles
-                              ? (listing.motorcycleDetails?['year'] ??
-                                        listing.vehicleDetails?['year'] ??
-                                        '')
-                                    .toString()
-                              : (listing.vehicleDetails?['year'] ?? '')
-                                    .toString();
-
-                          final encodedMake = Uri.encodeComponent(make);
-                          var path = '/marketplace/parts/$encodedMake';
-                          final queryParams = <String, String>{};
-                          if (model.isNotEmpty) queryParams['model'] = model;
-                          if (year.isNotEmpty) queryParams['year'] = year;
-                          if (queryParams.isNotEmpty) {
-                            path +=
-                                '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}';
-                          }
-                          context.push(path);
-                        },
-                        child: Container(
+                      if (listing.priceNegotiable &&
+                          (listing.priceAmount > 0 ||
+                              _hasValue(
+                                listing.jobDetails?['salaryRange'],
+                              ))) ...[
+                        const SizedBox(width: 8),
+                        Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
+                            horizontal: 8,
+                            vertical: 3,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.orange.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(10),
+                            color: marketplaceSageGreen.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
                           ),
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
-                                LucideIcons.wrench,
-                                size: 12,
-                                color: Colors.orange,
+                                LucideIcons.tag,
+                                size: 10,
+                                color: marketplaceSageGreen,
                               ),
-                              SizedBox(width: 5),
+                              SizedBox(width: 4),
                               Text(
-                                'Find Parts',
+                                'Negotiable',
                                 style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.orange,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w500,
+                                  color: marketplaceSageGreen,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                      ),
+                      ],
+                      const Spacer(),
+                      // "Find Parts" button for vehicles & motorcycles
+                      if (((listing.category == MarketplaceCategory.vehicles &&
+                              _hasValue(listing.vehicleDetails?['make'])) ||
+                          (listing.category ==
+                                  MarketplaceCategory.motorcycles &&
+                              _hasValue(
+                                listing.motorcycleDetails?['make'],
+                              )))) ...[
+                        GestureDetector(
+                          onTap: () {
+                            final make =
+                                listing.category ==
+                                    MarketplaceCategory.motorcycles
+                                ? (listing.motorcycleDetails?['make'] ??
+                                          listing.vehicleDetails?['make'] ??
+                                          '')
+                                      .toString()
+                                : listing.vehicleDetails!['make'].toString();
+                            final model =
+                                listing.category ==
+                                    MarketplaceCategory.motorcycles
+                                ? (listing.motorcycleDetails?['model'] ??
+                                          listing.vehicleDetails?['model'] ??
+                                          '')
+                                      .toString()
+                                : (listing.vehicleDetails?['model'] ?? '')
+                                      .toString();
+                            final year =
+                                listing.category ==
+                                    MarketplaceCategory.motorcycles
+                                ? (listing.motorcycleDetails?['year'] ??
+                                          listing.vehicleDetails?['year'] ??
+                                          '')
+                                      .toString()
+                                : (listing.vehicleDetails?['year'] ?? '')
+                                      .toString();
+
+                            final encodedMake = Uri.encodeComponent(make);
+                            var path = '/marketplace/parts/$encodedMake';
+                            final queryParams = <String, String>{};
+                            if (model.isNotEmpty) queryParams['model'] = model;
+                            if (year.isNotEmpty) queryParams['year'] = year;
+                            if (queryParams.isNotEmpty) {
+                              path +=
+                                  '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}';
+                            }
+                            context.push(path);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  LucideIcons.wrench,
+                                  size: 12,
+                                  color: Colors.orange,
+                                ),
+                                SizedBox(width: 5),
+                                Text(
+                                  'Find Parts',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.orange,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
-                ),
+                  ),
 
                 const SizedBox(height: 12),
 
@@ -486,8 +509,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                       MarketplaceCategory.displayName(listing.category),
                       isDark,
                     ),
-                    if (listing.subcategory != null)
-                      _buildIconChip(null, listing.subcategory!, isDark),
+                    if (_hasValue(listing.subcategory))
+                      _buildIconChip(null, listing.subcategory!.trim(), isDark),
                     _buildIconChip(
                       listing.scope == ListingScope.international
                           ? LucideIcons.globe
@@ -497,7 +520,9 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                           : 'Local',
                       isDark,
                     ),
-                    if (listing.condition != null)
+                    if (listing.condition != null &&
+                        listing.listingType == ListingType.product &&
+                        listing.category != MarketplaceCategory.realEstate)
                       _buildIconChip(
                         null,
                         ItemCondition.displayName(listing.condition!),
@@ -543,8 +568,10 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                 const SizedBox(height: 20),
                 _buildSellerCard(listing, theme, isDark),
 
-                // Delivery
-                if (listing.deliveryOptions != null &&
+                // Delivery (Physical Products only — never on Jobs, Services, or Real Estate)
+                if (listing.listingType == ListingType.product &&
+                    listing.category != MarketplaceCategory.realEstate &&
+                    listing.deliveryOptions != null &&
                     listing.deliveryOptions!.isNotEmpty) ...[
                   const SizedBox(height: 20),
                   _buildSection('Delivery', theme),
@@ -553,7 +580,14 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                     spacing: 6,
                     runSpacing: 6,
                     children: listing.deliveryOptions!
-                        .map((d) => _buildIconChip(_deliveryIcon(d), d, isDark))
+                        .where((d) => d.trim().isNotEmpty)
+                        .map(
+                          (d) => _buildIconChip(
+                            _deliveryIcon(d.trim().toLowerCase()),
+                            DeliveryOption.displayName(d),
+                            isDark,
+                          ),
+                        )
                         .toList(),
                   ),
                 ],
@@ -620,8 +654,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                 onPressed: _isOpeningChat
                     ? null
                     : () {
-                        final sellerRole = _getSellerRole(listing.category);
-                        final listingType = _getListingType(listing.category);
+                        final sellerRole = _getSellerRole(listing);
+                        final listingType = _getListingType(listing);
                         _navigateToListingChat(
                           listing,
                           sellerRole,
@@ -894,6 +928,53 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
     }
   }
 
+  bool _hasValue(dynamic v) => v != null && v.toString().trim().isNotEmpty;
+
+  String _formatDeadline(String raw) {
+    final trimmed = raw.trim();
+    final dt = DateTime.tryParse(trimmed);
+    if (dt == null) return trimmed;
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
+  }
+
+  String _formatServiceExperience(String raw) {
+    final trimmed = raw.trim();
+    final lower = trimmed.toLowerCase();
+    if (lower.contains('yr') || lower.contains('year')) {
+      return trimmed;
+    }
+    return '$trimmed yrs';
+  }
+
+  String _formatRealEstatePurpose(String raw) {
+    final lower = raw.trim().toLowerCase();
+    if (lower == 'rent' || lower == 'for rent') return 'For Rent';
+    if (lower == 'sale' || lower == 'for sale') return 'For Sale';
+    return raw.trim();
+  }
+
+  String _formatVisaSponsorship(dynamic raw) {
+    if (raw is bool) return raw ? 'Yes' : 'No';
+    final str = raw.toString().trim();
+    if (str.toLowerCase() == 'true') return 'Yes';
+    if (str.toLowerCase() == 'false') return 'No';
+    return str;
+  }
+
   // ─── Contextual Category Details ──────────────────────────────────────
   Widget _buildContextualDetails(
     MarketplaceListing listing,
@@ -909,222 +990,247 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
 
       // Primary specs — always visible
       final primarySpecs = <Widget>[
-        if (v['make'] != null)
-          _detailItem('Make', v['make'].toString(), isDark),
-        if (v['model'] != null)
-          _detailItem('Model', v['model'].toString(), isDark),
-        if (v['year'] != null)
-          _detailItem('Year', v['year'].toString(), isDark),
-        if (v['mileage'] != null && v['mileage'].toString().isNotEmpty)
-          _detailItem('Mileage', '${v['mileage']} km', isDark),
-        if (v['transmission'] != null)
-          _detailItem('Trans.', v['transmission'].toString(), isDark),
-        if (v['fuelType'] != null)
-          _detailItem('Fuel', v['fuelType'].toString(), isDark),
+        if (_hasValue(v['make']))
+          _detailItem('Make', v['make'].toString().trim(), isDark),
+        if (_hasValue(v['model']))
+          _detailItem('Model', v['model'].toString().trim(), isDark),
+        if (_hasValue(v['year']))
+          _detailItem('Year', v['year'].toString().trim(), isDark),
+        if (_hasValue(v['mileage']))
+          _detailItem('Mileage', '${v['mileage'].toString().trim()} km', isDark),
+        if (_hasValue(v['transmission']))
+          _detailItem('Trans.', v['transmission'].toString().trim(), isDark),
+        if (_hasValue(v['fuelType']))
+          _detailItem('Fuel', v['fuelType'].toString().trim(), isDark),
       ];
 
       // Secondary specs — body, drive, engine
       final secondarySpecs = <Widget>[
-        if (v['bodyType'] != null)
-          _detailItem('Body', v['bodyType'].toString(), isDark),
-        if (v['driveType'] != null)
-          _detailItem('Drive', v['driveType'].toString(), isDark),
-        if (v['engineSize'] != null)
-          _detailItem('Engine', v['engineSize'].toString(), isDark),
-        if (v['horsepower'] != null)
-          _detailItem('Power', '${v['horsepower']} hp', isDark),
-        if (v['doors'] != null)
-          _detailItem('Doors', v['doors'].toString(), isDark),
-        if (v['trim'] != null)
-          _detailItem('Trim', v['trim'].toString(), isDark),
-        if (v['series'] != null)
-          _detailItem('Series', v['series'].toString(), isDark),
-        if (v['vehicleType'] != null)
-          _detailItem('Type', v['vehicleType'].toString(), isDark),
+        if (_hasValue(v['bodyType']))
+          _detailItem('Body', v['bodyType'].toString().trim(), isDark),
+        if (_hasValue(v['driveType']))
+          _detailItem('Drive', v['driveType'].toString().trim(), isDark),
+        if (_hasValue(v['engineSize']))
+          _detailItem('Engine', v['engineSize'].toString().trim(), isDark),
+        if (_hasValue(v['horsepower']))
+          _detailItem('Power', '${v['horsepower'].toString().trim()} hp', isDark),
+        if (_hasValue(v['doors']))
+          _detailItem('Doors', v['doors'].toString().trim(), isDark),
+        if (_hasValue(v['trim']))
+          _detailItem('Trim', v['trim'].toString().trim(), isDark),
+        if (_hasValue(v['series']))
+          _detailItem('Series', v['series'].toString().trim(), isDark),
+        if (_hasValue(v['vehicleType']))
+          _detailItem('Type', v['vehicleType'].toString().trim(), isDark),
       ];
 
       // Safety & EV specs
       final safetySpecs = <Widget>[
-        if (v['abs'] != null) _detailItem('ABS', v['abs'].toString(), isDark),
-        if (v['airbagLocations'] != null)
-          _detailItem('Airbags', v['airbagLocations'].toString(), isDark),
-        if (v['gvwr'] != null)
-          _detailItem('GVWR', v['gvwr'].toString(), isDark),
-        if (v['electrificationType'] != null)
+        if (_hasValue(v['abs']))
+          _detailItem('ABS', v['abs'].toString().trim(), isDark),
+        if (_hasValue(v['airbagLocations']))
+          _detailItem('Airbags', v['airbagLocations'].toString().trim(), isDark),
+        if (_hasValue(v['gvwr']))
+          _detailItem('GVWR', v['gvwr'].toString().trim(), isDark),
+        if (_hasValue(v['electrificationType']))
           _detailItem(
             'Electrification',
-            v['electrificationType'].toString(),
+            v['electrificationType'].toString().trim(),
             isDark,
           ),
-        if (v['batteryKWh'] != null)
-          _detailItem('Battery', '${v['batteryKWh']} kWh', isDark),
+        if (_hasValue(v['batteryKWh']))
+          _detailItem(
+            'Battery',
+            '${v['batteryKWh'].toString().trim()} kWh',
+            isDark,
+          ),
       ];
 
-      widgets.addAll([
-        _buildSection('Car Details', theme),
-        const SizedBox(height: 8),
-        _buildDetailGrid(primarySpecs),
-        if (secondarySpecs.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          _buildDetailGrid(secondarySpecs),
-        ],
-        if (safetySpecs.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          _buildDetailGrid(safetySpecs),
-        ],
-        // Plant origin badge
-        if ((v['plantCountry'] != null &&
-                v['plantCountry'].toString().isNotEmpty) ||
-            (v['plantCity'] != null &&
-                v['plantCity'].toString().isNotEmpty)) ...[
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.04)
-                  : Colors.black.withValues(alpha: 0.02),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(LucideIcons.factory, size: 13, color: theme.hintColor),
-                const SizedBox(width: 6),
-                Text(
-                  'Made in ${[if (v['plantCity'] != null && v['plantCity'].toString().isNotEmpty) v['plantCity'].toString(), if (v['plantCountry'] != null && v['plantCountry'].toString().isNotEmpty) v['plantCountry'].toString()].join(', ')}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: theme.hintColor,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-        // VIN display
-        if (v['vin'] != null && v['vin'].toString().isNotEmpty) ...[
+      final hasPlantOrigin =
+          _hasValue(v['plantCountry']) || _hasValue(v['plantCity']);
+      final hasVin = _hasValue(v['vin']);
+
+      if (primarySpecs.isNotEmpty ||
+          secondarySpecs.isNotEmpty ||
+          safetySpecs.isNotEmpty ||
+          hasPlantOrigin ||
+          hasVin) {
+        widgets.addAll([
+          _buildSection('Car Details', theme),
           const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.04)
-                  : Colors.black.withValues(alpha: 0.02),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(LucideIcons.fingerprint, size: 13, color: theme.hintColor),
-                const SizedBox(width: 6),
-                Text(
-                  'VIN: ${v['vin']}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: theme.hintColor,
-                    letterSpacing: 1.1,
-                    fontFamily: 'monospace',
+          if (primarySpecs.isNotEmpty) _buildDetailGrid(primarySpecs),
+          if (secondarySpecs.isNotEmpty) ...[
+            if (primarySpecs.isNotEmpty) const SizedBox(height: 10),
+            _buildDetailGrid(secondarySpecs),
+          ],
+          if (safetySpecs.isNotEmpty) ...[
+            if (primarySpecs.isNotEmpty || secondarySpecs.isNotEmpty)
+              const SizedBox(height: 10),
+            _buildDetailGrid(safetySpecs),
+          ],
+          // Plant origin badge
+          if (hasPlantOrigin) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.04)
+                    : Colors.black.withValues(alpha: 0.02),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(LucideIcons.factory, size: 13, color: theme.hintColor),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Made in ${[if (_hasValue(v['plantCity'])) v['plantCity'].toString().trim(), if (_hasValue(v['plantCountry'])) v['plantCountry'].toString().trim()].join(', ')}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: theme.hintColor,
+                      fontStyle: FontStyle.italic,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
-        const SizedBox(height: 16),
-      ]);
+          ],
+          // VIN display
+          if (hasVin) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.04)
+                    : Colors.black.withValues(alpha: 0.02),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    LucideIcons.fingerprint,
+                    size: 13,
+                    color: theme.hintColor,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'VIN: ${v['vin'].toString().trim()}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: theme.hintColor,
+                      letterSpacing: 1.1,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+        ]);
+      }
     }
 
     // Motorcycle
     if (listing.motorcycleDetails != null &&
         listing.category == MarketplaceCategory.motorcycles) {
       final m = listing.motorcycleDetails!;
-      widgets.addAll([
-        _buildSection('Motorcycle Details', theme),
-        const SizedBox(height: 8),
-        _buildDetailGrid([
-          if (m['make'] != null)
-            _detailItem('Make', m['make'].toString(), isDark),
-          if (m['model'] != null)
-            _detailItem('Model', m['model'].toString(), isDark),
-          if (m['year'] != null)
-            _detailItem('Year', m['year'].toString(), isDark),
-          if (m['mileage'] != null && m['mileage'].toString().isNotEmpty)
-            _detailItem('Mileage', '${m['mileage']} km', isDark),
-          if (m['engineSize'] != null)
-            _detailItem('Engine', m['engineSize'].toString(), isDark),
-          if (m['type'] != null)
-            _detailItem('Type', m['type'].toString(), isDark),
-        ]),
-        const SizedBox(height: 16),
-      ]);
+      final motoSpecs = <Widget>[
+        if (_hasValue(m['make']))
+          _detailItem('Make', m['make'].toString().trim(), isDark),
+        if (_hasValue(m['model']))
+          _detailItem('Model', m['model'].toString().trim(), isDark),
+        if (_hasValue(m['year']))
+          _detailItem('Year', m['year'].toString().trim(), isDark),
+        if (_hasValue(m['mileage']))
+          _detailItem('Mileage', '${m['mileage'].toString().trim()} km', isDark),
+        if (_hasValue(m['engineSize']))
+          _detailItem('Engine', m['engineSize'].toString().trim(), isDark),
+        if (_hasValue(m['type']))
+          _detailItem('Type', m['type'].toString().trim(), isDark),
+      ];
+      if (motoSpecs.isNotEmpty) {
+        widgets.addAll([
+          _buildSection('Motorcycle Details', theme),
+          const SizedBox(height: 8),
+          _buildDetailGrid(motoSpecs),
+          const SizedBox(height: 16),
+        ]);
+      }
     }
 
     // Car Parts
     if (listing.carPartsDetails != null &&
         listing.category == MarketplaceCategory.carParts) {
       final cp = listing.carPartsDetails!;
-      widgets.addAll([
-        _buildSection('Part Details', theme),
-        const SizedBox(height: 8),
-        _buildDetailGrid([
-          if (cp['partNumber'] != null &&
-              cp['partNumber'].toString().isNotEmpty)
-            _detailItem('Part #', cp['partNumber'].toString(), isDark),
-          if (cp['carMake'] != null)
-            _detailItem('Fits Make', cp['carMake'].toString(), isDark),
-          if (cp['carModel'] != null)
-            _detailItem('Fits Model', cp['carModel'].toString(), isDark),
-          if (cp['carYear'] != null)
-            _detailItem('Fits Year', cp['carYear'].toString(), isDark),
-          if (cp['vin'] != null && cp['vin'].toString().isNotEmpty)
-            _detailItem('VIN', cp['vin'].toString(), isDark),
-          if (cp['oem'] != null)
-            _detailItem('OEM', cp['oem'].toString(), isDark),
-        ]),
-        // Compatible models list
-        if (cp['compatibleModels'] != null &&
-            (cp['compatibleModels'] as List).isNotEmpty) ...[
-          const SizedBox(height: 10),
-          Text(
-            'Also fits',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: theme.hintColor,
+      final partSpecs = <Widget>[
+        if (_hasValue(cp['partNumber']))
+          _detailItem('Part #', cp['partNumber'].toString().trim(), isDark),
+        if (_hasValue(cp['carMake']))
+          _detailItem('Fits Make', cp['carMake'].toString().trim(), isDark),
+        if (_hasValue(cp['carModel']))
+          _detailItem('Fits Model', cp['carModel'].toString().trim(), isDark),
+        if (_hasValue(cp['carYear']))
+          _detailItem('Fits Year', cp['carYear'].toString().trim(), isDark),
+        if (_hasValue(cp['vin']))
+          _detailItem('VIN', cp['vin'].toString().trim(), isDark),
+        if (_hasValue(cp['oem']))
+          _detailItem('OEM', cp['oem'].toString().trim(), isDark),
+      ];
+      final compatibleModels = (cp['compatibleModels'] is List)
+          ? (cp['compatibleModels'] as List)
+                .map((m) => m.toString().trim())
+                .where((m) => m.isNotEmpty)
+                .toList()
+          : const <String>[];
+
+      if (partSpecs.isNotEmpty || compatibleModels.isNotEmpty) {
+        widgets.addAll([
+          _buildSection('Part Details', theme),
+          const SizedBox(height: 8),
+          if (partSpecs.isNotEmpty) _buildDetailGrid(partSpecs),
+          // Compatible models list
+          if (compatibleModels.isNotEmpty) ...[
+            if (partSpecs.isNotEmpty) const SizedBox(height: 10),
+            Text(
+              'Also fits',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: theme.hintColor,
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: (cp['compatibleModels'] as List)
-                .map(
-                  (m) => Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: compatibleModels
+                  .map(
+                    (m) => Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.06)
+                            : Colors.black.withValues(alpha: 0.04),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(m, style: const TextStyle(fontSize: 11)),
                     ),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.06)
-                          : Colors.black.withValues(alpha: 0.04),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      m.toString(),
-                      style: const TextStyle(fontSize: 11),
-                    ),
-                  ),
-                )
-                .toList(),
-          ),
-        ],
-        const SizedBox(height: 16),
-      ]);
+                  )
+                  .toList(),
+            ),
+          ],
+          const SizedBox(height: 16),
+        ]);
+      }
     }
 
     // Real Estate
@@ -1135,47 +1241,48 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
       final purpose = r['listingPurpose'] ?? r['type'];
       final area = r['squareFootage'] ?? r['sqft'];
       final address = r['address'] ?? r['propertyAddress'];
-      widgets.addAll([
-        _buildSection('Property Details', theme),
-        const SizedBox(height: 8),
-        _buildDetailGrid([
-          if (purpose != null)
-            _detailItem(
-              'Type',
-              purpose.toString().toLowerCase() == 'rent'
-                  ? 'For Rent'
-                  : purpose.toString(),
-              isDark,
-            ),
-          if (r['bedrooms'] != null)
-            _detailItem('Beds', r['bedrooms'].toString(), isDark),
-          if (r['bathrooms'] != null)
-            _detailItem('Baths', r['bathrooms'].toString(), isDark),
-          if (area != null) _detailItem('Area', '$area sqft', isDark),
-          if (address != null)
-            _detailItem('Location', address.toString(), isDark),
-        ]),
-        const SizedBox(height: 16),
-      ]);
+      final propSpecs = <Widget>[
+        if (_hasValue(purpose))
+          _detailItem('Type', _formatRealEstatePurpose(purpose.toString()), isDark),
+        if (_hasValue(r['bedrooms']))
+          _detailItem('Beds', r['bedrooms'].toString().trim(), isDark),
+        if (_hasValue(r['bathrooms']))
+          _detailItem('Baths', r['bathrooms'].toString().trim(), isDark),
+        if (_hasValue(area))
+          _detailItem('Area', '${area.toString().trim()} sqft', isDark),
+        if (_hasValue(address))
+          _detailItem('Location', address.toString().trim(), isDark),
+      ];
+      if (propSpecs.isNotEmpty) {
+        widgets.addAll([
+          _buildSection('Property Details', theme),
+          const SizedBox(height: 8),
+          _buildDetailGrid(propSpecs),
+          const SizedBox(height: 16),
+        ]);
+      }
     }
 
     // Electronics
     if (listing.electronicsDetails != null &&
         listing.category == MarketplaceCategory.electronics) {
       final e = listing.electronicsDetails!;
-      widgets.addAll([
-        _buildSection('Device Details', theme),
-        const SizedBox(height: 8),
-        _buildDetailGrid([
-          if (e['brand'] != null)
-            _detailItem('Brand', e['brand'].toString(), isDark),
-          if (e['model'] != null)
-            _detailItem('Model', e['model'].toString(), isDark),
-          if (e['storage'] != null)
-            _detailItem('Specs', e['storage'].toString(), isDark),
-        ]),
-        const SizedBox(height: 16),
-      ]);
+      final deviceSpecs = <Widget>[
+        if (_hasValue(e['brand']))
+          _detailItem('Brand', e['brand'].toString().trim(), isDark),
+        if (_hasValue(e['model']))
+          _detailItem('Model', e['model'].toString().trim(), isDark),
+        if (_hasValue(e['storage']))
+          _detailItem('Specs', e['storage'].toString().trim(), isDark),
+      ];
+      if (deviceSpecs.isNotEmpty) {
+        widgets.addAll([
+          _buildSection('Device Details', theme),
+          const SizedBox(height: 8),
+          _buildDetailGrid(deviceSpecs),
+          const SizedBox(height: 16),
+        ]);
+      }
     }
 
     // Service
@@ -1184,53 +1291,67 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
       final s = listing.serviceDetails!;
       // Support both old key (experience) and seeder key (yearsExperience)
       final experience = s['yearsExperience'] ?? s['experience'];
-      widgets.addAll([
-        _buildSection('Service Details', theme),
-        const SizedBox(height: 8),
-        _buildDetailGrid([
-          if (experience != null)
-            _detailItem('Experience', '$experience yrs', isDark),
-          if (s['serviceArea'] != null)
-            _detailItem('Area', s['serviceArea'].toString(), isDark),
-          if (s['availability'] != null)
-            _detailItem('Available', s['availability'].toString(), isDark),
-        ]),
-        const SizedBox(height: 16),
-      ]);
+      final serviceSpecs = <Widget>[
+        if (_hasValue(experience))
+          _detailItem(
+            'Experience',
+            _formatServiceExperience(experience.toString()),
+            isDark,
+          ),
+        if (_hasValue(s['serviceArea']))
+          _detailItem('Area', s['serviceArea'].toString().trim(), isDark),
+        if (_hasValue(s['availability']))
+          _detailItem('Available', s['availability'].toString().trim(), isDark),
+      ];
+      if (serviceSpecs.isNotEmpty) {
+        widgets.addAll([
+          _buildSection('Service Details', theme),
+          const SizedBox(height: 8),
+          _buildDetailGrid(serviceSpecs),
+          const SizedBox(height: 16),
+        ]);
+      }
     }
 
     // Job
     if (listing.jobDetails != null && listing.listingType == ListingType.job) {
       final j = listing.jobDetails!;
-      widgets.addAll([
-        _buildSection('Job Details', theme),
-        const SizedBox(height: 8),
-        _buildDetailGrid([
-          if (j['companyName'] != null)
-            _detailItem('Company', j['companyName'].toString(), isDark),
-          if (j['employmentType'] != null)
-            _detailItem('Type', j['employmentType'].toString(), isDark),
-          if (j['salaryRange'] != null)
-            _detailItem('Salary', j['salaryRange'].toString(), isDark),
-          if (j['experienceLevel'] != null)
-            _detailItem('Experience', j['experienceLevel'].toString(), isDark),
-          if (j['workMode'] != null)
-            _detailItem('Work Mode', j['workMode'].toString(), isDark),
-          if (j['applicationDeadline'] != null)
-            _detailItem(
-              'Deadline',
-              j['applicationDeadline'].toString(),
-              isDark,
-            ),
-          if (j['visaSponsorship'] != null)
-            _detailItem(
-              'Visa Sponsor',
-              j['visaSponsorship'].toString(),
-              isDark,
-            ),
-        ]),
-        const SizedBox(height: 16),
-      ]);
+      final jobSpecs = <Widget>[
+        if (_hasValue(j['companyName']))
+          _detailItem('Company', j['companyName'].toString().trim(), isDark),
+        if (_hasValue(j['employmentType']))
+          _detailItem('Type', j['employmentType'].toString().trim(), isDark),
+        if (_hasValue(j['salaryRange']))
+          _detailItem('Salary', j['salaryRange'].toString().trim(), isDark),
+        if (_hasValue(j['experienceLevel']))
+          _detailItem(
+            'Experience',
+            j['experienceLevel'].toString().trim(),
+            isDark,
+          ),
+        if (_hasValue(j['workMode']))
+          _detailItem('Work Mode', j['workMode'].toString().trim(), isDark),
+        if (_hasValue(j['applicationDeadline']))
+          _detailItem(
+            'Deadline',
+            _formatDeadline(j['applicationDeadline'].toString()),
+            isDark,
+          ),
+        if (_hasValue(j['visaSponsorship']))
+          _detailItem(
+            'Visa Sponsor',
+            _formatVisaSponsorship(j['visaSponsorship']),
+            isDark,
+          ),
+      ];
+      if (jobSpecs.isNotEmpty) {
+        widgets.addAll([
+          _buildSection('Job Details', theme),
+          const SizedBox(height: 8),
+          _buildDetailGrid(jobSpecs),
+          const SizedBox(height: 16),
+        ]);
+      }
     }
 
     return Column(
@@ -1615,25 +1736,29 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
     }
   }
 
-  /// Determine the seller role based on the listing category
-  String _getSellerRole(String category) {
-    if (MarketplaceCategory.jobCategories.contains(category)) {
+  /// Determine the seller role based on the listing type and category
+  String _getSellerRole(MarketplaceListing listing) {
+    if (listing.listingType == ListingType.job ||
+        MarketplaceCategory.jobCategories.contains(listing.category)) {
       return 'Employer';
-    } else if (MarketplaceCategory.serviceCategories.contains(category)) {
+    } else if (listing.listingType == ListingType.service ||
+        MarketplaceCategory.serviceCategories.contains(listing.category)) {
       return 'Provider';
     } else {
       return 'Seller';
     }
   }
 
-  /// Determine the listing type (product, service, job) from category
-  String _getListingType(String category) {
-    if (MarketplaceCategory.jobCategories.contains(category)) {
-      return 'job';
-    } else if (MarketplaceCategory.serviceCategories.contains(category)) {
-      return 'service';
+  /// Determine the listing type (product, service, job) from listing
+  String _getListingType(MarketplaceListing listing) {
+    if (listing.listingType == ListingType.job ||
+        MarketplaceCategory.jobCategories.contains(listing.category)) {
+      return ListingType.job;
+    } else if (listing.listingType == ListingType.service ||
+        MarketplaceCategory.serviceCategories.contains(listing.category)) {
+      return ListingType.service;
     } else {
-      return 'product';
+      return ListingType.product;
     }
   }
 
@@ -1645,8 +1770,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
       _listingChat = cached;
       return cached;
     }
-    final sellerRole = _getSellerRole(listing.category);
-    final listingType = _getListingType(listing.category);
+    final sellerRole = _getSellerRole(listing);
+    final listingType = _getListingType(listing);
     final chat = await chatRepo.createListingChat(
       otherUserId: listing.sellerId,
       listingId: listing.id,
@@ -1666,8 +1791,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
     final user = ref.read(authRepositoryProvider).currentUser;
     if (user == null || !mounted) return;
 
-    final sellerRole = _getSellerRole(listing.category);
-    final listingType = _getListingType(listing.category);
+    final sellerRole = _getSellerRole(listing);
+    final listingType = _getListingType(listing);
     await _navigateToListingChat(listing, sellerRole, listingType);
   }
 
