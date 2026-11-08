@@ -47,7 +47,7 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
-        resValue("string", "app_name", "Diaspora Nearby")
+        resValue("string", "app_name", "Diaspora")
         manifestPlaceholders["DEEPLINK_AUTO_VERIFY"] = true
         manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
     }
@@ -58,18 +58,18 @@ android {
         create("dev") {
             dimension = "environment"
             applicationIdSuffix = ".dev"
-            resValue("string", "app_name", "Diaspora Nearby Dev")
+            resValue("string", "app_name", "Diaspora Dev")
             manifestPlaceholders["DEEPLINK_AUTO_VERIFY"] = false
         }
         create("staging") {
             dimension = "environment"
             applicationIdSuffix = ".staging"
-            resValue("string", "app_name", "Diaspora Nearby Staging")
+            resValue("string", "app_name", "Diaspora Staging")
             manifestPlaceholders["DEEPLINK_AUTO_VERIFY"] = false
         }
         create("production") {
             dimension = "environment"
-            resValue("string", "app_name", "Diaspora Nearby")
+            resValue("string", "app_name", "Diaspora")
             manifestPlaceholders["DEEPLINK_AUTO_VERIFY"] = true
         }
     }
