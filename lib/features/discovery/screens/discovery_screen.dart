@@ -22,11 +22,14 @@ final nearbyUsersStreamProvider = StreamProvider<List<ProfileData>>((ref) {
     return users
         .map((json) {
           final profile = ProfileData.fromJson(json);
-          if (profile.uid != null && profile.uid!.isNotEmpty) {
+          if (profile.uid != null &&
+              profile.uid!.isNotEmpty &&
+              !profile.isAiAgent) {
             profileRepo.cacheProfile(profile.uid!, profile);
           }
           return profile;
         })
+        .where((profile) => !profile.isAiAgent)
         .toList(growable: false);
   });
 });
@@ -64,7 +67,9 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
     String homeCountry,
   ) {
     final users = rawUsers
-        .where((user) => !activeChatUserIds.contains(user.uid))
+        .where(
+          (user) => !user.isAiAgent && !activeChatUserIds.contains(user.uid),
+        )
         .toList();
 
     if (users.isEmpty) {

@@ -80,11 +80,17 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     final seenIds = <String>{};
     final seeded = <ProfileData>[];
     for (final chat in cachedChats) {
+      if (chat.id.startsWith('ai_agent_') ||
+          chat.participants.contains(ProfileData.aiAgentUid)) {
+        continue;
+      }
       if (chat.type == 'direct') {
         for (final pid in chat.participants) {
-          if (pid != currentUserId && seenIds.add(pid)) {
+          if (pid != currentUserId &&
+              !ProfileData.isAiAgentUid(pid) &&
+              seenIds.add(pid)) {
             final p = profileRepo.getCachedProfile(pid);
-            if (p != null) {
+            if (p != null && !p.isAiAgent) {
               seeded.add(p);
             }
           }

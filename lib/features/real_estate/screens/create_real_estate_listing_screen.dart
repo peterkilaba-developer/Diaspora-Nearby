@@ -14,6 +14,8 @@ import 'package:diaspora_nearby/features/real_estate/models/real_estate_listing.
 import 'package:diaspora_nearby/features/real_estate/services/real_estate_repository.dart';
 import 'package:diaspora_nearby/features/real_estate/screens/land_survey_screen.dart';
 import 'package:diaspora_nearby/features/real_estate/screens/real_estate_detail_screen.dart';
+import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
+import 'package:diaspora_nearby/core/utils/location_utils.dart';
 
 /// Shared listing form for all real estate categories: Plot, Farm, House.
 /// Opens with the category pre-selected based on which card was tapped.
@@ -180,9 +182,17 @@ class _CreateRealEstateListingScreenState
     _descC.text = l.description;
     _priceC.text = l.price.toStringAsFixed(0);
     _addressC.text = l.address ?? '';
-    _cityC.text = l.locality ?? l.city ?? '';
+    final city = l.locality ?? l.city ?? '';
+    _cityC.text = city;
     _subLocalityC.text = l.subLocality ?? '';
-    _stateC.text = l.state ?? '';
+    _stateC.text =
+        sanitizeStateForCountry(
+          state: l.state,
+          city: city,
+          countryCode: l.countryCode,
+          countryName: l.country,
+        ) ??
+        '';
     _sizeC.text = l.size?.toStringAsFixed(0) ?? '';
     _sizeUnit = l.sizeUnit ?? 'acres';
     _listingType = l.listingType ?? 'sale';
@@ -219,8 +229,16 @@ class _CreateRealEstateListingScreenState
   void _prefillFromProfile() {
     final profile = ref.read(userProfileProvider).value;
     if (profile == null) return;
-    _cityC.text = profile.homeLocation.city ?? '';
-    _stateC.text = profile.homeLocation.state ?? '';
+    final city = profile.homeLocation.city ?? '';
+    _cityC.text = city;
+    _stateC.text =
+        sanitizeStateForCountry(
+          state: profile.homeLocation.state,
+          city: city,
+          countryCode: profile.homeCountryCode,
+          countryName: profile.homeCountry,
+        ) ??
+        '';
   }
 
   @override
@@ -245,11 +263,24 @@ class _CreateRealEstateListingScreenState
 
   /// Auto-generate the listing title based on category and filled fields.
   String _generateTitle() {
+    final profile = ref.read(userProfileProvider).value;
+    final effectiveCountryCode =
+        _surveyCountryCode ??
+        widget.existing?.countryCode ??
+        profile?.homeCountryCode;
+    final effectiveCountry =
+        _surveyCountry ?? widget.existing?.country ?? profile?.homeCountry;
+
     final city = _cityC.text.trim();
-    final state = _stateC.text.trim();
+    final state = sanitizeStateForCountry(
+      state: _stateC.text.trim(),
+      city: city,
+      countryCode: effectiveCountryCode,
+      countryName: effectiveCountry,
+    );
     final locationParts = <String>[];
     if (city.isNotEmpty) locationParts.add(city);
-    if (state.isNotEmpty) locationParts.add(state);
+    if (state != null && state.isNotEmpty) locationParts.add(state);
     final location = locationParts.isNotEmpty ? locationParts.join(', ') : '';
 
     final typeLabel = _listingType == 'sale'
@@ -286,7 +317,14 @@ class _CreateRealEstateListingScreenState
       // Auto-populate location fields (read-only)
       _addressC.text = result.address ?? '';
       _cityC.text = result.city ?? '';
-      _stateC.text = result.state ?? '';
+      _stateC.text =
+          sanitizeStateForCountry(
+            state: result.state,
+            city: result.city,
+            countryCode: result.countryCode,
+            countryName: result.country,
+          ) ??
+          '';
       _subLocalityC.text = result.subLocality ?? '';
       _surveyCountry = result.country;
       _surveyCountryCode = result.countryCode;
@@ -380,31 +418,46 @@ class _CreateRealEstateListingScreenState
       final imagesToUpload = List<XFile>.from(_selectedImages);
       final existingPhotoUrls = List<String>.from(_existingPhotoUrls);
 
+      final effectiveCountry =
+          _surveyCountry ?? widget.existing?.country ?? profile.homeCountry;
+      final effectiveCountryCode =
+          _surveyCountryCode ??
+          widget.existing?.countryCode ??
+          profile.homeCountryCode;
+      final cleanCity = _cityC.text.trim();
+      final cleanState = sanitizeStateForCountry(
+        state: _stateC.text.trim(),
+        city: cleanCity,
+        countryCode: effectiveCountryCode,
+        countryName: effectiveCountry,
+      );
+
       final optimisticListing = RealEstateListing(
         id: listingId,
         category: _category,
-        ownerId: user.uid,
+        ownerId: widget.existing?.ownerId ?? user.uid,
         ownerName: profile.fullName,
         ownerPhoto: profile.profileImage,
         title: _generateTitle(),
         description: _descC.text.trim(),
         photos: existingPhotoUrls,
         price: double.tryParse(_priceC.text.trim()) ?? 0,
-        city: _cityC.text.trim(),
-        country:
-            _surveyCountry ?? widget.existing?.country ?? profile.homeCountry,
-        countryCode:
-            _surveyCountryCode ??
-            widget.existing?.countryCode ??
-            profile.homeCountryCode,
+        currency: widget.existing?.currency ?? 'USD',
+        city: cleanCity,
+        country: effectiveCountry,
+        countryCode: effectiveCountryCode,
         address: _addressC.text.trim(),
-        locality: _cityC.text.trim(),
+        locality: cleanCity,
         subLocality: _subLocalityC.text.trim(),
-        state: _stateC.text.trim(),
-        localityLower: _cityC.text.trim().toLowerCase(),
-        stateLower: _stateC.text.trim().toLowerCase(),
+        state: cleanState,
+        localityLower: cleanCity.toLowerCase(),
+        stateLower: cleanState?.toLowerCase(),
         lat: _surveyResult?.centerLat ?? widget.existing?.lat,
         lng: _surveyResult?.centerLng ?? widget.existing?.lng,
+        status: widget.existing?.status ?? 'active',
+        viewCount: widget.existing?.viewCount ?? 0,
+        savedCount: widget.existing?.savedCount ?? 0,
+        createdAt: widget.existing?.createdAt,
         // GPS Survey data
         boundaryPoints:
             _surveyResult?.boundaryPoints ?? widget.existing?.boundaryPoints,
@@ -474,7 +527,11 @@ class _CreateRealEstateListingScreenState
         }
         messenger.showSnackBar(
           SnackBar(
-            content: Text(isEditing ? 'Listing updated!' : 'Listing created!'),
+            content: Text(
+              isEditing
+                  ? '$_categorySingular updated!'
+                  : '$_categorySingular published!',
+            ),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -524,6 +581,19 @@ class _CreateRealEstateListingScreenState
     }
   }
 
+  String get _categorySingular {
+    switch (_category) {
+      case 'plot':
+        return 'Plot';
+      case 'farm':
+        return 'Farm';
+      case 'house':
+        return 'House';
+      default:
+        return 'Property';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -536,7 +606,7 @@ class _CreateRealEstateListingScreenState
         elevation: 0,
         backgroundColor: Colors.transparent,
         title: Text(
-          isEditing ? 'Edit Listing' : 'List Real Estate',
+          isEditing ? 'Edit $_categorySingular' : 'List a $_categorySingular',
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         actions: [
@@ -575,13 +645,6 @@ class _CreateRealEstateListingScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Category selector ──
-                  _sectionLabel(theme, 'Category'),
-                  const SizedBox(height: 8),
-                  _buildCategorySelector(theme, isDark),
-
-                  const SizedBox(height: 20),
-
                   // ── GPS Land Survey (first, before anything else) ──
                   _sectionLabel(theme, 'Location (GPS Survey)'),
                   const SizedBox(height: 8),
@@ -685,7 +748,7 @@ class _CreateRealEstateListingScreenState
                   _buildTextField(
                     controller: _descC,
                     label: 'Description',
-                    hint: 'Describe the property...',
+                    hint: 'Describe the ${_categorySingular.toLowerCase()}...',
                     icon: LucideIcons.alignLeft,
                     maxLines: 3,
                   ),
@@ -722,7 +785,7 @@ class _CreateRealEstateListingScreenState
                   const SizedBox(height: 20),
 
                   // ── Property details ──
-                  _sectionLabel(theme, 'Property Details'),
+                  _sectionLabel(theme, '$_categorySingular Details'),
                   const SizedBox(height: 8),
 
                   // Size row (read-only, auto-populated from GPS survey)
@@ -867,68 +930,6 @@ class _CreateRealEstateListingScreenState
             ),
         ],
       ),
-    );
-  }
-
-  // ─── Category Selector ────────────────────────────────────────────────
-  Widget _buildCategorySelector(ThemeData theme, bool isDark) {
-    const categories = [
-      ('plot', LucideIcons.map, 'Plot'),
-      ('farm', LucideIcons.sprout, 'Farm'),
-      ('house', LucideIcons.home, 'House'),
-    ];
-
-    return Row(
-      children: categories.map((cat) {
-        final isSelected = _category == cat.$1;
-        return Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(right: cat.$1 != 'house' ? 8 : 0),
-            child: GestureDetector(
-              onTap: () => setState(() => _category = cat.$1),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(
-                  vertical: 14,
-                  horizontal: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
-                      : AppTheme.elevationColor(context, 1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  children: [
-                    Icon(
-                      cat.$2,
-                      size: 22,
-                      color: isSelected
-                          ? AppTheme.accent
-                          : theme.colorScheme.onSurface.withValues(alpha: 0.4),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      cat.$3,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: isSelected
-                            ? FontWeight.w700
-                            : FontWeight.w500,
-                        color: isSelected
-                            ? AppTheme.accent
-                            : theme.colorScheme.onSurface.withValues(
-                                alpha: 0.6,
-                              ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      }).toList(),
     );
   }
 
@@ -1815,7 +1816,17 @@ class _CreateRealEstateListingScreenState
           if (_subLocalityC.text.isNotEmpty)
             _surveyRow(theme, 'Area', _subLocalityC.text),
           _surveyRow(theme, 'City', _cityC.text),
-          _surveyRow(theme, 'State', _stateC.text),
+          if (country_data.hasStateLevelForCountry(
+            countryCode: r.countryCode,
+            countryName: r.country,
+          ))
+            _surveyRow(
+              theme,
+              r.countryCode != null
+                  ? country_data.getStateTerminology(r.countryCode!)
+                  : 'State',
+              _stateC.text,
+            ),
           if (r.country != null) _surveyRow(theme, 'Country', r.country!),
 
           // Aerial view toggle + satellite map
@@ -2127,8 +2138,19 @@ class _CreateRealEstateListingScreenState
             _surveyRow(theme, 'Area', l.subLocality!),
           if (l.locality != null && l.locality!.isNotEmpty)
             _surveyRow(theme, 'City', l.locality!),
-          if (l.state != null && l.state!.isNotEmpty)
-            _surveyRow(theme, 'State', l.state!),
+          if (l.state != null &&
+              l.state!.isNotEmpty &&
+              country_data.hasStateLevelForCountry(
+                countryCode: l.countryCode,
+                countryName: l.country,
+              ))
+            _surveyRow(
+              theme,
+              l.countryCode != null
+                  ? country_data.getStateTerminology(l.countryCode!)
+                  : 'State',
+              l.state!,
+            ),
           if (l.country != null && l.country!.isNotEmpty)
             _surveyRow(theme, 'Country', l.country!),
         ],

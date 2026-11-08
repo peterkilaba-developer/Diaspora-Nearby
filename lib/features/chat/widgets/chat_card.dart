@@ -232,9 +232,13 @@ class ChatCard extends ConsumerWidget {
       isMedia = false;
       final senderName = lastMessage.senderName.trim();
       var content = lastMessage.content.trim();
-      if (content == 'Group created') {
+      if (content == 'Group created' ||
+          content == 'Shop created' ||
+          content == 'Job posted' ||
+          content == 'Service posted' ||
+          content == 'Product listed') {
         if (chat.isListingChat) {
-          content = 'Shop created';
+          content = chat.listingCreatedSystemText;
         } else if (chat.isEvent) {
           content = 'Event created';
         } else if (chat.isOrganization) {
@@ -283,14 +287,21 @@ class ChatCard extends ConsumerWidget {
         case 'dsp_transfer': // [NEW]
           final assetType = lastMessage.metadata?['assetType'] as String?;
           final isTokenTransfer = assetType == 'token';
+          final isConversion = lastMessage.metadata?['isConversion'] == true;
           final amount = lastMessage.metadata?['amount']?.toString() ?? '';
           final currentUserId = ref.watch(authStateProvider).value?.uid;
           final isSent = lastMessage.senderId == currentUserId;
-          final direction = isSent ? 'Sent' : 'Received';
+          final direction = isConversion
+              ? 'Converted'
+              : (isSent ? 'Sent' : 'Received');
           final assetLabel = isTokenTransfer ? r'$DIASPORA' : 'DSP';
           final assetColor = isTokenTransfer
               ? AppTheme.tokenColor
               : AppTheme.dspColor;
+          final previewText =
+              isConversion && lastMessage.content.trim().isNotEmpty
+              ? lastMessage.content.trim()
+              : '$amount $assetLabel $direction';
 
           // Build a rich Row widget directly for transfers
           return Row(
@@ -308,7 +319,7 @@ class ChatCard extends ConsumerWidget {
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
-                  '$amount $assetLabel $direction',
+                  previewText,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: assetColor,
                     fontWeight: FontWeight.w600,
@@ -434,6 +445,8 @@ class ChatCard extends ConsumerWidget {
 
   IconData _getChatTypeIcon() {
     if (chat.isListingChat) {
+      if (chat.isJobListingChat) return LucideIcons.briefcase;
+      if (chat.isServiceListingChat) return LucideIcons.wrench;
       return LucideIcons.shoppingCart;
     }
     switch (chat.type) {
@@ -928,7 +941,11 @@ class ChatCard extends ConsumerWidget {
                                     padding: const EdgeInsets.only(right: 6.0),
                                     child: Icon(
                                       chat.isListingChat
-                                          ? LucideIcons.shoppingCart
+                                          ? (chat.isJobListingChat
+                                                ? LucideIcons.briefcase
+                                                : chat.isServiceListingChat
+                                                ? LucideIcons.wrench
+                                                : LucideIcons.shoppingCart)
                                           : _isFamilyGroup
                                           ? (_isImmediateFamilyGroup
                                                 ? LucideIcons.heartHandshake

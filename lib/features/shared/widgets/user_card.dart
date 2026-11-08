@@ -309,24 +309,27 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
     String? currentCityDisplay;
     final city = effectiveUser.currentLocation?.city;
     if (city != null && city.isNotEmpty) {
-      final state = effectiveUser.currentLocation?.state;
-      final countryCode = effectiveUser.currentLocation?.countryCode;
-
-      if (countryCode != null &&
-          country_data.hasStateLevelHierarchyFromData(countryCode) &&
-          state != null &&
-          state.isNotEmpty) {
-        final fullState = formatLocationName(state);
-        currentCityDisplay = '$city, $fullState';
+      final cleanState = sanitizeStateForCountry(
+        state: effectiveUser.currentLocation?.state,
+        city: city,
+        countryCode: effectiveUser.currentLocation?.countryCode,
+      );
+      if (cleanState != null && cleanState.isNotEmpty) {
+        currentCityDisplay = '$city, $cleanState';
       } else {
         currentCityDisplay = city;
       }
     } else if (effectiveUser.hostLocation.formattedAddress.isNotEmpty) {
       final loc = effectiveUser.hostLocation;
       if (loc.city != null && loc.city!.isNotEmpty) {
-        final state = loc.state;
-        if (state != null && state.isNotEmpty) {
-          currentCityDisplay = '${loc.city}, ${formatLocationName(state)}';
+        final cleanState = sanitizeStateForCountry(
+          state: loc.state,
+          city: loc.city,
+          countryCode: loc.countryCode ?? effectiveUser.hostCountryCode,
+          countryName: loc.country ?? effectiveUser.hostCountry,
+        );
+        if (cleanState != null && cleanState.isNotEmpty) {
+          currentCityDisplay = '${loc.city}, $cleanState';
         } else {
           currentCityDisplay = loc.city;
         }

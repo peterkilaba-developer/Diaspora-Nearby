@@ -116,6 +116,17 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
     }
   }
 
+  String _categoryLabel(MarketplaceListing listing) {
+    switch (listing.listingType) {
+      case ListingType.service:
+        return 'Service';
+      case ListingType.job:
+        return 'Job';
+      default:
+        return 'Product';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -174,39 +185,44 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                 PopupMenuButton<String>(
                   onSelected: (v) => _onMenuAction(v, listing),
                   icon: const Icon(LucideIcons.moreVertical, size: 20),
-                  itemBuilder: (_) => [
-                    const PopupMenuItem(
-                      value: 'edit',
-                      child: Text('Edit Listing'),
-                    ),
-                    if (listing.status == ListingStatus.active)
-                      const PopupMenuItem(
-                        value: 'pause',
-                        child: Text('Pause Listing'),
-                      ),
-                    if (listing.status == ListingStatus.paused ||
-                        listing.status == ListingStatus.sold)
-                      const PopupMenuItem(
-                        value: 'activate',
-                        child: Text('Activate'),
-                      ),
-                    if (listing.status != ListingStatus.sold)
+                  itemBuilder: (_) {
+                    final catLabel = _categoryLabel(listing);
+                    return [
                       PopupMenuItem(
-                        value: 'sold',
+                        value: 'edit',
+                        child: Text('Edit $catLabel'),
+                      ),
+                      if (listing.status == ListingStatus.active)
+                        PopupMenuItem(
+                          value: 'pause',
+                          child: Text('Pause $catLabel'),
+                        ),
+                      if (listing.status == ListingStatus.paused ||
+                          listing.status == ListingStatus.sold)
+                        PopupMenuItem(
+                          value: 'activate',
+                          child: Text('Activate $catLabel'),
+                        ),
+                      if (listing.status != ListingStatus.sold)
+                        PopupMenuItem(
+                          value: 'sold',
+                          child: Text(
+                            listing.listingType == ListingType.job
+                                ? 'Mark as Filled'
+                                : listing.listingType == ListingType.service
+                                ? 'Mark as Booked'
+                                : 'Mark as Sold',
+                          ),
+                        ),
+                      PopupMenuItem(
+                        value: 'delete',
                         child: Text(
-                          listing.listingType == ListingType.job
-                              ? 'Mark as Filled'
-                              : 'Mark as Sold',
+                          'Delete $catLabel',
+                          style: const TextStyle(color: AppTheme.error),
                         ),
                       ),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Text(
-                        'Delete',
-                        style: TextStyle(color: AppTheme.error),
-                      ),
-                    ),
-                  ],
+                    ];
+                  },
                 )
               else
                 IconButton(
@@ -556,7 +572,7 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                     const Spacer(),
                     if (listing.createdAt != null)
                       Text(
-                        'Listed ${timeago.format(listing.createdAt!)}',
+                        '${listing.listingType == ListingType.job ? 'Posted' : 'Listed'} ${timeago.format(listing.createdAt!)}',
                         style: TextStyle(fontSize: 11, color: theme.hintColor),
                       ),
                   ],
@@ -584,6 +600,7 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
   ) {
     const sageGreen = marketplaceSageGreen;
     final isJob = listing.listingType == ListingType.job;
+    final isService = listing.listingType == ListingType.service;
     final isSold = listing.status == ListingStatus.sold;
     final isPaused = listing.status == ListingStatus.paused;
 
@@ -597,7 +614,7 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
       child: SafeArea(
         child: Row(
           children: [
-            // Primary action: Open Shop Chat
+            // Primary action: Open Listing Chat (Job Chat / Service Chat / Shop Chat)
             Expanded(
               child: ElevatedButton.icon(
                 onPressed: _isOpeningChat
@@ -620,10 +637,24 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                           color: Colors.white,
                         ),
                       )
-                    : const Icon(LucideIcons.shoppingCart, size: 18),
-                label: const Text(
-                  'Open Shop Chat',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    : Icon(
+                        isJob
+                            ? LucideIcons.briefcase
+                            : isService
+                            ? LucideIcons.wrench
+                            : LucideIcons.shoppingCart,
+                        size: 18,
+                      ),
+                label: Text(
+                  isJob
+                      ? 'Open Job Chat'
+                      : isService
+                      ? 'Open Service Chat'
+                      : 'Open Shop Chat',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: sageGreen,
@@ -636,7 +667,7 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            // Secondary: Mark Sold / Filled or Relist
+            // Secondary: Mark Sold / Filled / Booked or Relist / Reopen
             ElevatedButton.icon(
               onPressed: () => _onMenuAction(
                 (isSold || isPaused) ? 'activate' : 'sold',
@@ -650,8 +681,12 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
               ),
               label: Text(
                 (isSold || isPaused)
-                    ? 'Relist'
-                    : (isJob ? 'Mark Filled' : 'Mark Sold'),
+                    ? (isJob || isService ? 'Reopen' : 'Relist')
+                    : (isJob
+                          ? 'Mark Filled'
+                          : isService
+                          ? 'Mark Booked'
+                          : 'Mark Sold'),
                 style: const TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 13,
@@ -1388,7 +1423,7 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                         size: 18,
                         color: theme.colorScheme.primary,
                       ),
-                tooltip: 'Listing Chat',
+                tooltip: '${_categoryLabel(listing)} Chat',
                 visualDensity: VisualDensity.compact,
                 onPressed: _isOpeningChat
                     ? null
@@ -1469,7 +1504,11 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
     switch (listing.status) {
       case ListingStatus.sold:
         color = AppTheme.success;
-        label = 'Sold';
+        label = listing.listingType == ListingType.job
+            ? 'Filled'
+            : listing.listingType == ListingType.service
+            ? 'Booked'
+            : 'Sold';
         statusIcon = LucideIcons.checkCircle;
         break;
       case ListingStatus.paused:
@@ -1889,15 +1928,33 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
 
     switch (action) {
       case 'edit':
-        context.push('/marketplace/create', extra: listing);
+        final result = await context.push(
+          '/marketplace/create',
+          extra: listing,
+        );
+        if (!mounted) return;
+        final cached = repo.getCachedListing(widget.listingId);
+        if (result is MarketplaceListing) {
+          setState(() => _listing = cached ?? result);
+        } else if (cached != null) {
+          setState(() => _listing = cached);
+        }
         break;
       case 'pause':
         final paused = listing.copyWith(status: ListingStatus.paused);
         setState(() => _listing = paused);
         repo.cacheListing(paused);
+        final roleLabel = listing.listingType == ListingType.job
+            ? 'employer'
+            : listing.listingType == ListingType.service
+            ? 'provider'
+            : 'seller';
         unawaited(() async {
           await repo.updateListingStatus(listing.id, ListingStatus.paused);
-          await _notifyShopChatStatus(listing, 'Listing paused by seller');
+          await _notifyShopChatStatus(
+            listing,
+            '${_categoryLabel(listing)} paused by $roleLabel',
+          );
         }());
         break;
       case 'activate':
@@ -1908,7 +1965,7 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
           await repo.updateListingStatus(listing.id, ListingStatus.active);
           await _notifyShopChatStatus(
             listing,
-            'Listing is now available again',
+            '${_categoryLabel(listing)} is now available again',
           );
         }());
         break;
@@ -1921,8 +1978,10 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
           await _notifyShopChatStatus(
             listing,
             listing.listingType == ListingType.job
-                ? 'Position marked as Filled'
-                : 'Item marked as Sold',
+                ? 'Job marked as Filled'
+                : listing.listingType == ListingType.service
+                ? 'Service marked as Booked'
+                : '${_categoryLabel(listing)} marked as Sold',
           );
         }());
         break;
@@ -1936,7 +1995,7 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                 horizontal: 8,
                 vertical: 24,
               ),
-              title: const Text('Delete Listing?'),
+              title: Text('Delete ${_categoryLabel(listing)}?'),
               content: const Text('This action cannot be undone.'),
               actions: [
                 TextButton(
@@ -1996,7 +2055,7 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
               horizontal: 8,
               vertical: 24,
             ),
-            title: const Text('Report Listing'),
+            title: Text('Report ${_categoryLabel(listing)}'),
             content: TextField(
               controller: reasonController,
               decoration: const InputDecoration(

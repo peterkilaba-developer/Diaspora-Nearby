@@ -130,11 +130,24 @@ exports.payEmergencyFundInDiaspora = functions
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in required");
     const userId = context.auth.uid;
 
-    // 1. Resolve user wallet and quote price in parallel
-    const [userDoc, price] = await Promise.all([
+    // 1. Check 365-day payment cooldown + resolve user wallet and quote price in parallel
+    const [memDoc, userDoc, price] = await Promise.all([
+      db.collection("emergency_fund_memberships").doc(userId).get(),
       db.collection("users").doc(userId).get(),
       getDiasporaPriceUsd(),
     ]);
+    if (memDoc.exists && memDoc.data().status === "active") {
+      const m = memDoc.data();
+      const nextDueMs = m.nextPaymentDate && m.nextPaymentDate.toMillis
+        ? m.nextPaymentDate.toMillis()
+        : (m.paidAt && m.paidAt.toMillis ? m.paidAt.toMillis() + 365 * 86400 * 1000 : 0);
+      if (nextDueMs > Date.now()) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          `Contribution already paid for the current 365-day period (next due ${new Date(nextDueMs).toISOString().slice(0, 10)}).`
+        );
+      }
+    }
     const userWallet = userDoc.exists ? userDoc.data().walletAddress : null;
     if (!userWallet) throw new functions.https.HttpsError("failed-precondition", "No wallet — verify your phone first.");
 

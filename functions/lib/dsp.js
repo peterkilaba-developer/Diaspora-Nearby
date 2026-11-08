@@ -661,6 +661,42 @@ async function performTGE(triggerSource) {
     }
     await db.collection("tge_events").doc(tgeEventDocId).update({ status: "complete" });
     console.log(`[TGE Oracle] Successfully reset DSP points for ${snapshotDetails.length} participants (tdePenaltyBurn=${tdePenaltyBurn}).`);
+
+    // Notify each user participant via Diaspora AI Agent chat with the $DIASPORA token transfer UI card
+    try {
+      const { sendAiAgentTokenConversionMessage } = require("./ai_agent");
+      const userSnapshots = snapshotDetails.filter((s) => s.userId && Number(s.convertedDsp || 0) > 0);
+      await Promise.all(
+        userSnapshots.map((s) =>
+          sendAiAgentTokenConversionMessage({
+            userId: s.userId,
+            convertedAmount: s.convertedDsp,
+            conversionKind: "tde_conversion",
+            txHash: receipt.hash,
+            pohState: {
+              completedFields: 12,
+              totalFields: 12,
+              uniqueQrCount: 10,
+              uniqueFamilyCount: 10,
+              uniqueFriendCount: 10,
+              uniqueVerificationCount: 10,
+              hasLocation: true,
+              hasEmergencyFund: true,
+              pohTargetDsp: 70000,
+              trustScore: s.trustScore || 100,
+              tokensUnlocked: true,
+            },
+            tdeDetails: {
+              epoch: epochBefore,
+              tdeNumber: eventBefore + 1,
+              efficiency: s.efficiency,
+            },
+          }).catch((e) => console.warn(`[TGE Oracle] AI Agent notify warning for ${s.userId}:`, e.message))
+        )
+      );
+    } catch (aiNotifyErr) {
+      console.warn(`[TGE Oracle] AI Agent notification batch warning:`, aiNotifyErr.message);
+    }
   } catch (resetErr) {
     dspDeductionStatus = "tx_complete_dsp_pending";
     dspDeductionError = (resetErr.message || "unknown").slice(0, 500);
@@ -3736,6 +3772,40 @@ exports.claimTdeTokens = functions
       });
     }
 
+    try {
+      const { sendAiAgentTokenConversionMessage } = require("./ai_agent");
+      const claimedTokensInt = Math.floor(Number(ethers.formatUnits(liquidBn, 18)));
+      if (claimedTokensInt > 0) {
+        await sendAiAgentTokenConversionMessage({
+          userId,
+          userProfile: userDoc.exists ? (userDoc.data() || {}) : {},
+          convertedAmount: claimedTokensInt,
+          conversionKind: "tde_conversion",
+          txHash: receipt.hash,
+          pohState: {
+            completedFields: 12,
+            totalFields: 12,
+            uniqueQrCount: 10,
+            uniqueFamilyCount: 10,
+            uniqueFriendCount: 10,
+            uniqueVerificationCount: 10,
+            hasLocation: true,
+            hasEmergencyFund: true,
+            pohTargetDsp: 70000,
+            trustScore: eff,
+            tokensUnlocked: true,
+          },
+          tdeDetails: {
+            epoch,
+            tdeNumber: tdeEvent + 1,
+            efficiency: eff,
+          },
+        });
+      }
+    } catch (aiErr) {
+      console.warn(`[claimTdeTokens] AI Agent conversion message warning:`, aiErr.message);
+    }
+
     return {
       success: true,
       txHash: receipt.hash,
@@ -4145,6 +4215,7 @@ async function syncProfileMilestoneAndTrust(userId) {
   }
 
   // ── Milestone 1: Profile Completion (First 10 fields -> 1,000 DSP + 1 PCT + immediate 100% $DIASPORA each; 11+ -> 1,000 DSP each for TDE) ──
+  const pohConversionReasons = [];
   const prevProfileFromLifetime = Math.floor(Number(lifetimeEarnings.profile_completion || 0) / 1000);
   let prevProfileDspCount = Math.max(
     Number(ledger.Profile_dsp_count || 0),
@@ -4162,6 +4233,11 @@ async function syncProfileMilestoneAndTrust(userId) {
     const newFieldsCount = completedFields - prevProfileDspCount;
     const newFirst10Fields = Math.max(0, Math.min(10, completedFields) - Math.min(10, prevProfileDspCount));
     const newExtraFields = Math.max(0, completedFields - Math.max(10, prevProfileDspCount));
+    if (newFirst10Fields > 0) {
+      pohConversionReasons.push(
+        `completing ${newFirst10Fields} profile field${newFirst10Fields === 1 ? "" : "s"} (${Math.min(10, completedFields)}/10 PoH profile fields)`
+      );
+    }
     awardedProfileDsp = true;
     ledger.Profile_dsp_count = completedFields;
     await awardMilestoneDsp(
@@ -4189,6 +4265,12 @@ async function syncProfileMilestoneAndTrust(userId) {
   }
   if (uniqueFamilyCount > prevFamilyDspCount) {
     const deltaFamily = uniqueFamilyCount - prevFamilyDspCount;
+    const newFirst10Family = Math.max(0, Math.min(10, uniqueFamilyCount) - Math.min(10, prevFamilyDspCount));
+    if (newFirst10Family > 0) {
+      pohConversionReasons.push(
+        `linking ${newFirst10Family} Family Circle member${newFirst10Family === 1 ? "" : "s"} (${Math.min(10, uniqueFamilyCount)}/10)`
+      );
+    }
     ledger.Family_dsp_count = uniqueFamilyCount;
     await awardMilestoneDsp(
       "family_connection",
@@ -4209,6 +4291,12 @@ async function syncProfileMilestoneAndTrust(userId) {
   }
   if (uniqueFriendCount > prevFriendDspCount) {
     const deltaFriend = uniqueFriendCount - prevFriendDspCount;
+    const newFirst10Friend = Math.max(0, Math.min(10, uniqueFriendCount) - Math.min(10, prevFriendDspCount));
+    if (newFirst10Friend > 0) {
+      pohConversionReasons.push(
+        `linking ${newFirst10Friend} Friend Circle connection${newFirst10Friend === 1 ? "" : "s"} (${Math.min(10, uniqueFriendCount)}/10)`
+      );
+    }
     ledger.Friend_dsp_count = uniqueFriendCount;
     await awardMilestoneDsp(
       "friend_connection",
@@ -4232,6 +4320,12 @@ async function syncProfileMilestoneAndTrust(userId) {
   }
   if (uniqueQrCount > prevQrDspCount) {
     const deltaQr = uniqueQrCount - prevQrDspCount;
+    const newFirst10Qr = Math.max(0, Math.min(10, uniqueQrCount) - Math.min(10, prevQrDspCount));
+    if (newFirst10Qr > 0) {
+      pohConversionReasons.push(
+        `completing ${newFirst10Qr} in-person Identity QR handshake${newFirst10Qr === 1 ? "" : "s"} (${Math.min(10, uniqueQrCount)}/10)`
+      );
+    }
     ledger.QR_dsp_count = uniqueQrCount;
     await awardMilestoneDsp(
       uniqueQrCount > 10 ? "identity_qr_exchange_continuous" : "identity_qr_exchange",
@@ -4252,6 +4346,12 @@ async function syncProfileMilestoneAndTrust(userId) {
   }
   if (uniqueVerificationCount > prevVerifiedDspCount) {
     const deltaVerified = uniqueVerificationCount - prevVerifiedDspCount;
+    const newFirst10Verified = Math.max(0, Math.min(10, uniqueVerificationCount) - Math.min(10, prevVerifiedDspCount));
+    if (newFirst10Verified > 0) {
+      pohConversionReasons.push(
+        `earning ${newFirst10Verified} Peer Profile Verification${newFirst10Verified === 1 ? "" : "s"} (${Math.min(10, uniqueVerificationCount)}/10)`
+      );
+    }
     ledger.Verified_dsp_count = uniqueVerificationCount;
     await awardMilestoneDsp(
       "verified_by_peer",
@@ -4285,6 +4385,7 @@ async function syncProfileMilestoneAndTrust(userId) {
     newExplorationActions.push("location_transparency");
     if (!locationMilestoneAwarded && Number(ledger.LocationTransparency_dsp_awarded || 0) !== -1) {
       ledger.LocationTransparency_dsp_awarded = 1;
+      pohConversionReasons.push("enabling Location Transparency (+10,000 DSP)");
       await awardMilestoneDsp(
         "location_transparency",
         10000,
@@ -4345,6 +4446,7 @@ async function syncProfileMilestoneAndTrust(userId) {
     newExplorationActions.push("milestone_emergency_fund");
     if (!emergencyFundAwarded) {
       ledger.EmergencyFund_dsp_awarded = 1;
+      pohConversionReasons.push("contributing to the Ubuntu Emergency Fund (+10,000 DSP)");
       await awardMilestoneDsp(
         "emergency_fund_contribution",
         10000,
@@ -4752,6 +4854,36 @@ async function syncProfileMilestoneAndTrust(userId) {
         },
         { merge: true }
       );
+    }
+  }
+
+  // Send Diaspora AI Agent $DIASPORA conversion message + push notification whenever new PoH DSP converted to $DIASPORA
+  if (pohConvertDelta > 0) {
+    try {
+      const { sendAiAgentTokenConversionMessage } = require("./ai_agent");
+      await sendAiAgentTokenConversionMessage({
+        userId,
+        userProfile: userData,
+        convertedAmount: pohConvertDelta,
+        conversionKind: "poh_conversion",
+        reasonsList: pohConversionReasons,
+        txHash: pohTxHash,
+        pohState: {
+          completedFields,
+          totalFields,
+          uniqueQrCount,
+          uniqueFamilyCount,
+          uniqueFriendCount,
+          uniqueVerificationCount,
+          hasLocation: cityVisibilityPoCT >= 10,
+          hasEmergencyFund: emergencyFundPoCT >= 10,
+          pohTargetDsp,
+          trustScore: finalTrustScore,
+          tokensUnlocked: uniqueQrCount >= 10,
+        },
+      });
+    } catch (aiConvErr) {
+      console.warn(`[syncProfileMilestoneAndTrust] AI Agent conversion notification warning for ${userId}:`, aiConvErr.message);
     }
   }
 

@@ -14,6 +14,7 @@ import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/features/shared/utils/search_highlight_utils.dart';
 import 'package:diaspora_nearby/core/providers/global_feature_provider.dart';
+import 'package:diaspora_nearby/core/utils/location_utils.dart';
 
 class OrganizationsListScreen extends ConsumerStatefulWidget {
   const OrganizationsListScreen({super.key});
@@ -337,6 +338,24 @@ class _OrganizationsListScreenState
           icon: const Icon(LucideIcons.arrowLeft),
           onPressed: () => context.pop(),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(LucideIcons.plus),
+            tooltip: 'Register Organization',
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                useSafeArea: true,
+                builder: (context) => BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: const BusinessRegistrationModal(),
+                ),
+              ).then((_) => _loadOrganizations());
+            },
+          ),
+        ],
       ),
       body: SafeArea(
         child: Column(
@@ -605,7 +624,11 @@ class _OrganizationsListScreenState
                         const SizedBox(width: 4),
                         Flexible(
                           child: SearchHighlightUtils.highlightText(
-                            [?city, ?state, ?country].join(', '),
+                            formatTieredLocation(
+                              city: city,
+                              state: state,
+                              country: country,
+                            ),
                             _searchQuery,
                             theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurface.withValues(

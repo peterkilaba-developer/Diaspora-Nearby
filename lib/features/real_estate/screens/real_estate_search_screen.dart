@@ -48,6 +48,21 @@ class _RealEstateSearchScreenState
   }
 
   @override
+  void didUpdateWidget(covariant RealEstateSearchScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.category != oldWidget.category) {
+      final cached = ref
+          .read(realEstateRepositoryProvider)
+          .getCachedListings(category: widget.category);
+      setState(() {
+        _allListings = cached;
+        _isLoading = cached.isEmpty;
+      });
+      _loadListings();
+    }
+  }
+
+  @override
   void dispose() {
     _locationController.dispose();
     super.dispose();
@@ -120,10 +135,23 @@ class _RealEstateSearchScreenState
     return list;
   }
 
+  String get _categoryPlural {
+    switch (widget.category) {
+      case 'plot':
+        return 'Plots';
+      case 'farm':
+        return 'Farms';
+      case 'house':
+        return 'Houses';
+      default:
+        return 'Properties';
+    }
+  }
+
   String get _screenTitle {
     switch (widget.category) {
       case 'plot':
-        return 'Plots for Sale';
+        return 'Plots';
       case 'farm':
         return 'Farms';
       case 'house':
@@ -205,19 +233,20 @@ class _RealEstateSearchScreenState
           ),
           itemBuilder: (_) => [
             PopupMenuItem(
-              value: 'add_listing',
+              value: 'saved',
               child: Row(
                 children: [
                   Icon(
-                    LucideIcons.plus,
+                    LucideIcons.bookmark,
                     size: 16,
                     color: theme.colorScheme.onSurface,
                   ),
                   const SizedBox(width: 10),
-                  const Text('Add Listing'),
+                  Text('Saved $_categoryPlural'),
                 ],
               ),
             ),
+            const PopupMenuDivider(),
             PopupMenuItem(
               value: 'my_listings',
               child: Row(
@@ -228,13 +257,36 @@ class _RealEstateSearchScreenState
                     color: theme.colorScheme.onSurface,
                   ),
                   const SizedBox(width: 10),
-                  const Text('My Listings'),
+                  Text('My $_categoryPlural'),
+                ],
+              ),
+            ),
+            const PopupMenuDivider(),
+            PopupMenuItem(
+              value: 'add_listing',
+              child: Row(
+                children: [
+                  Icon(
+                    LucideIcons.plus,
+                    size: 16,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                  const SizedBox(width: 10),
+                  Text('List $_categoryPlural'),
                 ],
               ),
             ),
           ],
           onSelected: (v) async {
-            if (v == 'add_listing') {
+            if (v == 'saved') {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      _SavedRealEstateListingsScreen(category: widget.category),
+                ),
+              );
+            } else if (v == 'add_listing') {
               final created = await Navigator.push<bool>(
                 context,
                 MaterialPageRoute(
@@ -305,7 +357,7 @@ class _RealEstateSearchScreenState
               ),
               const SizedBox(height: 12),
               Text(
-                'Error loading listings',
+                'Error loading ${_categoryPlural.toLowerCase()}',
                 style: TextStyle(color: theme.colorScheme.error, fontSize: 14),
               ),
               const SizedBox(height: 8),
@@ -343,12 +395,23 @@ class _RealEstateSearchScreenState
                 .read(userProfileProvider)
                 .value
                 ?.hostCountryCode,
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => RealEstateDetailScreen(listing: listings[i]),
-              ),
-            ),
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => RealEstateDetailScreen(listing: listings[i]),
+                ),
+              );
+              if (mounted) {
+                final cached = ref
+                    .read(realEstateRepositoryProvider)
+                    .getCachedListings(category: widget.category);
+                if (cached.isNotEmpty) {
+                  setState(() => _allListings = cached);
+                }
+                _loadListings();
+              }
+            },
           ),
         ),
       ),
@@ -443,6 +506,19 @@ class _MyRealEstateListingsScreenState
     }
   }
 
+  String get _categoryPlural {
+    switch (widget.category) {
+      case 'plot':
+        return 'Plots';
+      case 'farm':
+        return 'Farms';
+      case 'house':
+        return 'Houses';
+      default:
+        return 'Properties';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -451,9 +527,25 @@ class _MyRealEstateListingsScreenState
         elevation: 0,
         backgroundColor: Colors.transparent,
         title: Text(
-          'My ${widget.category[0].toUpperCase()}${widget.category.substring(1)} Listings',
+          'My $_categoryPlural',
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(LucideIcons.plus, size: 20),
+            onPressed: () async {
+              final created = await Navigator.push<bool>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CreateRealEstateListingScreen(
+                    defaultCategory: widget.category,
+                  ),
+                ),
+              );
+              if (created == true) _load();
+            },
+          ),
+        ],
       ),
       body: _isLoading
           ? const Center(
@@ -461,11 +553,59 @@ class _MyRealEstateListingsScreenState
             )
           : _listings.isEmpty
           ? Center(
-              child: Text(
-                'No listings yet',
-                style: TextStyle(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    widget.category == 'plot'
+                        ? LucideIcons.map
+                        : widget.category == 'farm'
+                        ? LucideIcons.sprout
+                        : LucideIcons.home,
+                    size: 48,
+                    color: theme.hintColor.withValues(alpha: 0.3),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No ${_categoryPlural.toLowerCase()} yet',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'List your first ${widget.category} to get started',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () async {
+                      final created = await Navigator.push<bool>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CreateRealEstateListingScreen(
+                            defaultCategory: widget.category,
+                          ),
+                        ),
+                      );
+                      if (created == true) _load();
+                    },
+                    icon: const Icon(LucideIcons.plus, size: 16),
+                    label: Text('List $_categoryPlural'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.accent,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             )
           : RefreshIndicator(
@@ -481,13 +621,152 @@ class _MyRealEstateListingsScreenState
                       .read(userProfileProvider)
                       .value
                       ?.hostCountryCode,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          RealEstateDetailScreen(listing: _listings[i]),
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            RealEstateDetailScreen(listing: _listings[i]),
+                      ),
+                    );
+                    if (mounted) _load();
+                  },
+                ),
+              ),
+            ),
+    );
+  }
+}
+
+class _SavedRealEstateListingsScreen extends ConsumerStatefulWidget {
+  final String category;
+  const _SavedRealEstateListingsScreen({required this.category});
+
+  @override
+  ConsumerState<_SavedRealEstateListingsScreen> createState() =>
+      _SavedRealEstateListingsScreenState();
+}
+
+class _SavedRealEstateListingsScreenState
+    extends ConsumerState<_SavedRealEstateListingsScreen> {
+  bool _isLoading = true;
+  List<RealEstateListing> _listings = [];
+
+  String get _categoryPlural {
+    switch (widget.category) {
+      case 'plot':
+        return 'Plots';
+      case 'farm':
+        return 'Farms';
+      case 'house':
+        return 'Houses';
+      default:
+        return 'Properties';
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    final cached = ref
+        .read(realEstateRepositoryProvider)
+        .getCachedSavedListings(category: widget.category);
+    if (cached.isNotEmpty) {
+      _listings = cached;
+      _isLoading = false;
+    }
+    _load();
+  }
+
+  Future<void> _load() async {
+    if (_listings.isEmpty) setState(() => _isLoading = true);
+    try {
+      final uid = ref.read(authRepositoryProvider).currentUser?.uid ?? '';
+      final repo = ref.read(realEstateRepositoryProvider);
+      final results = await repo.getSavedListings(
+        uid,
+        category: widget.category,
+      );
+      if (mounted) {
+        setState(() {
+          _listings = results;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        title: Text(
+          'Saved $_categoryPlural',
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+      ),
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: AppTheme.accent),
+            )
+          : _listings.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    LucideIcons.bookmarkMinus,
+                    size: 48,
+                    color: theme.hintColor.withValues(alpha: 0.3),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No saved ${_categoryPlural.toLowerCase()}',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Browse ${_categoryPlural.toLowerCase()} and save them for later',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : RefreshIndicator(
+              onRefresh: _load,
+              color: AppTheme.accent,
+              child: ListView.separated(
+                padding: const EdgeInsets.all(8),
+                itemCount: _listings.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 8),
+                itemBuilder: (_, i) => RealEstateListingCard(
+                  listing: _listings[i],
+                  viewerCountryCode: ref
+                      .read(userProfileProvider)
+                      .value
+                      ?.hostCountryCode,
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            RealEstateDetailScreen(listing: _listings[i]),
+                      ),
+                    );
+                    if (mounted) _load();
+                  },
                 ),
               ),
             ),

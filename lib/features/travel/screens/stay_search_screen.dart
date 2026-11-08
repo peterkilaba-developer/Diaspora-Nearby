@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/travel/widgets/smart_date_picker.dart';
 import 'package:diaspora_nearby/features/travel/widgets/country_filter_toggle.dart';
@@ -13,6 +14,7 @@ import 'package:diaspora_nearby/features/travel/models/peer_listing.dart';
 import 'package:diaspora_nearby/features/travel/services/peer_listing_repository.dart';
 import 'package:diaspora_nearby/features/travel/screens/peer_listing_detail_screen.dart';
 import 'package:diaspora_nearby/features/travel/screens/my_listings_screen.dart';
+import 'package:diaspora_nearby/features/travel/screens/create_stay_listing_screen.dart';
 import 'package:diaspora_nearby/features/travel/widgets/travel_skeleton_loader.dart';
 import 'package:diaspora_nearby/features/travel/utils/geo_utils.dart';
 
@@ -232,31 +234,6 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
             hostCountryCode: profile?.hostCountryCode,
             homeCountryCode: profile?.homeCountryCode,
           ),
-          // Info banner distinguishing Paid Peer Stays (Airbnb Alternatives) vs Free Peer Hosting in Communities
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            margin: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-            decoration: BoxDecoration(
-              color: AppTheme.accent.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              children: [
-                const Icon(LucideIcons.info, size: 14, color: AppTheme.accent),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Peer Stays below are paid Airbnb alternatives. For Free Peer Hosting, tap the ✈️ airplane icon next to any city in Communities.',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
           if (_showSearch) _buildSearchPanel(theme, isDark),
           Expanded(child: _buildBody(theme, isDark, listings)),
         ],
@@ -299,6 +276,21 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
           ),
           itemBuilder: (_) => [
             PopupMenuItem(
+              value: 'saved',
+              child: Row(
+                children: [
+                  Icon(
+                    LucideIcons.bookmark,
+                    size: 16,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                  const SizedBox(width: 10),
+                  const Text('Saved Stays'),
+                ],
+              ),
+            ),
+            const PopupMenuDivider(),
+            PopupMenuItem(
               value: 'my_listings',
               child: Row(
                 children: [
@@ -308,19 +300,49 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
                     color: theme.colorScheme.onSurface,
                   ),
                   const SizedBox(width: 10),
-                  const Text('My Listings'),
+                  const Text('My Stays'),
+                ],
+              ),
+            ),
+            const PopupMenuDivider(),
+            PopupMenuItem(
+              value: 'post_stay',
+              child: Row(
+                children: [
+                  Icon(
+                    LucideIcons.plus,
+                    size: 16,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                  const SizedBox(width: 10),
+                  const Text('Post Stay'),
                 ],
               ),
             ),
           ],
           onSelected: (v) async {
-            if (v == 'my_listings') {
+            if (v == 'saved') {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const _SavedStaysScreen(),
+                ),
+              );
+            } else if (v == 'my_listings') {
               Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => const MyListingsScreen(filterType: 'stay'),
                 ),
               );
+            } else if (v == 'post_stay') {
+              final created = await Navigator.push<bool>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const CreateStayListingScreen(),
+                ),
+              );
+              if (created == true) _loadListings();
             }
           },
         ),
@@ -710,12 +732,23 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
               .read(userProfileProvider)
               .value
               ?.hostCountryCode,
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PeerListingDetailScreen(listing: listings[i]),
-            ),
-          ),
+          onTap: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => PeerListingDetailScreen(listing: listings[i]),
+              ),
+            );
+            if (mounted) {
+              final cached = ref
+                  .read(peerListingRepositoryProvider)
+                  .getCachedListings(type: 'stay');
+              if (cached.isNotEmpty) {
+                setState(() => _allListings = cached);
+              }
+              _loadListings();
+            }
+          },
         ),
       ),
     );
@@ -762,4 +795,123 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
   // ─── Listing Card ───────────────────────────────────────────────────
 
   // Listing card now uses shared PeerListingCard widget
+}
+
+class _SavedStaysScreen extends ConsumerStatefulWidget {
+  const _SavedStaysScreen();
+
+  @override
+  ConsumerState<_SavedStaysScreen> createState() => _SavedStaysScreenState();
+}
+
+class _SavedStaysScreenState extends ConsumerState<_SavedStaysScreen> {
+  bool _isLoading = true;
+  List<PeerListing> _listings = [];
+
+  @override
+  void initState() {
+    super.initState();
+    final cached = ref
+        .read(peerListingRepositoryProvider)
+        .getCachedSavedListings(type: 'stay');
+    if (cached.isNotEmpty) {
+      _listings = cached;
+      _isLoading = false;
+    }
+    _load();
+  }
+
+  Future<void> _load() async {
+    if (_listings.isEmpty) setState(() => _isLoading = true);
+    try {
+      final uid = ref.read(authRepositoryProvider).currentUser?.uid ?? '';
+      final repo = ref.read(peerListingRepositoryProvider);
+      final results = await repo.getSavedListings(uid, type: 'stay');
+      if (mounted) {
+        setState(() {
+          _listings = results;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        title: const Text(
+          'Saved Stays',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+      ),
+      body: _isLoading
+          ? const TravelSkeletonLoader(
+              label: 'Loading saved stays...',
+              icon: LucideIcons.home,
+            )
+          : _listings.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    LucideIcons.bookmarkMinus,
+                    size: 48,
+                    color: theme.hintColor.withValues(alpha: 0.3),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No saved stays',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Browse stays and save them for later',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : RefreshIndicator(
+              onRefresh: _load,
+              color: AppTheme.accent,
+              child: ListView.separated(
+                padding: const EdgeInsets.only(top: 8, bottom: 80),
+                itemCount: _listings.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 8),
+                itemBuilder: (_, i) => PeerListingCard(
+                  listing: _listings[i],
+                  placeholderIcon: LucideIcons.home,
+                  viewerCountryCode: ref
+                      .read(userProfileProvider)
+                      .value
+                      ?.hostCountryCode,
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            PeerListingDetailScreen(listing: _listings[i]),
+                      ),
+                    );
+                    if (mounted) _load();
+                  },
+                ),
+              ),
+            ),
+    );
+  }
 }

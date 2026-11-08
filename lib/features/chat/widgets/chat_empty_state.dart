@@ -18,11 +18,26 @@ class ChatEmptyState extends StatelessWidget {
 
   List<String> _getPrompts() {
     if (isSeller) {
-      return const [
-        'Welcome! Let me know if you have any questions.',
-        'This item is available and ready for pickup/delivery.',
-        'Feel free to make an offer!',
-      ];
+      switch (listingType) {
+        case 'job':
+          return const [
+            'This position is open and accepting applications.',
+            'Feel free to share your experience or ask about the role!',
+            'Interviews are being scheduled this week.',
+          ];
+        case 'service':
+          return const [
+            'I am available and taking new bookings.',
+            'Feel free to ask about rates, availability, or custom requests!',
+            'Fast turnaround and reliable service guaranteed.',
+          ];
+        default:
+          return const [
+            'Welcome! Let me know if you have any questions.',
+            'This item is available and ready for pickup/delivery.',
+            'Feel free to make an offer!',
+          ];
+      }
     }
     switch (listingType) {
       case 'service':
@@ -53,6 +68,8 @@ class ChatEmptyState extends StatelessWidget {
 
     if (isListingChat) {
       final prompts = _getPrompts();
+      final isJob = listingType == 'job';
+      final isService = listingType == 'service';
       return Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -66,14 +83,28 @@ class ChatEmptyState extends StatelessWidget {
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  LucideIcons.shoppingCart,
+                  isJob
+                      ? LucideIcons.briefcase
+                      : isService
+                      ? LucideIcons.wrench
+                      : LucideIcons.shoppingCart,
                   size: 40,
                   color: Colors.green.shade700,
                 ),
               ),
               const SizedBox(height: 14),
               Text(
-                isSeller ? 'Your Shop is Ready' : 'Ask About This Listing',
+                isSeller
+                    ? (isJob
+                          ? 'Your Job Chat is Ready'
+                          : isService
+                          ? 'Your Service Chat is Ready'
+                          : 'Your Shop is Ready')
+                    : (isService
+                          ? 'Ask About This Service'
+                          : isJob
+                          ? 'Ask About This Job'
+                          : 'Ask About This Product'),
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
@@ -81,7 +112,11 @@ class ChatEmptyState extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 isSeller
-                    ? 'Post an update or welcome shoppers to your shop.'
+                    ? (isJob
+                          ? 'Share role updates or welcome applicants to your job chat.'
+                          : isService
+                          ? 'Share updates or welcome clients to your service chat.'
+                          : 'Post an update or welcome shoppers to your shop.')
                     : 'Tap a quick question below or type a message to start.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,

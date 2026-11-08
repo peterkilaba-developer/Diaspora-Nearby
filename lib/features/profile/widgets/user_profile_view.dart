@@ -35,6 +35,9 @@ import 'package:diaspora_nearby/features/profile/widgets/relationship_selection_
 import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 
 import 'package:diaspora_nearby/features/dsp/models/user_points.dart';
+import 'package:diaspora_nearby/features/dsp/models/emergency_fund_model.dart';
+import 'package:diaspora_nearby/features/dsp/services/emergency_fund_service.dart';
+import 'package:diaspora_nearby/features/profile/widgets/bereavement_announcement_modal.dart';
 import 'package:diaspora_nearby/features/trust/models/trust_data.dart';
 import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 import 'package:diaspora_nearby/features/settings/widgets/language_selector_sheet.dart';
@@ -280,7 +283,12 @@ class UserProfileView extends ConsumerWidget {
                           if (topFamilyRelationshipLabel != null)
                             _buildRelationshipAboveCardLabel(
                               context,
+                              ref,
                               topFamilyRelationshipLabel,
+                              otherUserId: profile.uid,
+                              otherUserName: profile.fullName,
+                              otherUserPhoto: profile.profileImage,
+                              allowMenuWhenViewingOther: true,
                             ),
                           UserCardView(
                             key: const ValueKey('view_UserCard'),
@@ -3135,7 +3143,11 @@ class UserProfileView extends ConsumerWidget {
                           if (roleLabel != null && roleLabel.isNotEmpty)
                             _buildRelationshipAboveCardLabel(
                               context,
+                              ref,
                               roleLabel,
+                              otherUserId: uid,
+                              otherUserName: resolvedProfile.fullName,
+                              otherUserPhoto: resolvedProfile.profileImage,
                             ),
                           UserCardView(
                             user: resolvedProfile,
@@ -3241,33 +3253,356 @@ class UserProfileView extends ConsumerWidget {
     return '';
   }
 
-  Widget _buildRelationshipAboveCardLabel(BuildContext context, String label) {
+  Widget _buildRelationshipAboveCardLabel(
+    BuildContext context,
+    WidgetRef ref,
+    String label, {
+    String? otherUserId,
+    String? otherUserName,
+    String? otherUserPhoto,
+    bool allowMenuWhenViewingOther = false,
+  }) {
     final theme = Theme.of(context);
     final isFamily =
         _familyRelationshipTypes.contains(label.toLowerCase()) ||
         label.toLowerCase() == 'family';
-    return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: 4, top: 4),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            isFamily ? LucideIcons.heartHandshake : LucideIcons.users,
-            size: 13,
-            color: theme.colorScheme.primary,
-          ),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
+    final currentUserId = isSelf
+        ? profile.uid
+        : ref.watch(authRepositoryProvider).currentUser?.uid;
+    final canManageProxy =
+        (isSelf || allowMenuWhenViewingOther) &&
+        isFamily &&
+        currentUserId != null &&
+        currentUserId.isNotEmpty &&
+        otherUserId != null &&
+        otherUserId.isNotEmpty &&
+        otherUserId != currentUserId;
+
+    if (!canManageProxy) {
+      return Padding(
+        padding: const EdgeInsets.only(left: 4, bottom: 4, top: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isFamily ? LucideIcons.heartHandshake : LucideIcons.users,
+              size: 13,
               color: theme.colorScheme.primary,
-              fontWeight: FontWeight.w700,
-              fontSize: 12,
+            ),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final membershipStream = ref
+        .watch(emergencyFundServiceProvider)
+        .streamMembership(currentUserId);
+
+    return StreamBuilder<EmergencyFundMembership?>(
+      stream: membershipStream,
+      builder: (context, memberSnap) {
+        final membership = memberSnap.data;
+        final isProxy = membership?.proxyUserId == otherUserId;
+        final proxyAccepted =
+            isProxy && membership?.proxyStatus == ProxyStatus.accepted;
+        final proxyPending =
+            isProxy && membership?.proxyStatus == ProxyStatus.pending;
+
+        return Padding(
+          padding: const EdgeInsets.only(left: 4, right: 2, bottom: 2, top: 2),
+          child: Row(
+            children: [
+              Icon(
+                LucideIcons.heartHandshake,
+                size: 13,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
+              if (proxyAccepted) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        LucideIcons.shieldCheck,
+                        size: 11,
+                        color: Colors.green.shade400,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Proxy / POA ✓',
+                        style: TextStyle(
+                          color: Colors.green.shade400,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              if (proxyPending) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        LucideIcons.clock,
+                        size: 11,
+                        color: Colors.orange.shade400,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Proxy Pending',
+                        style: TextStyle(
+                          color: Colors.orange.shade400,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const Spacer(),
+              SizedBox(
+                width: 28,
+                height: 28,
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  iconSize: 16,
+                  tooltip: 'Power of Attorney / Proxy options',
+                  icon: Icon(
+                    LucideIcons.moreVertical,
+                    size: 16,
+                    color: theme.hintColor,
+                  ),
+                  onPressed: () {
+                    final rel = Relationship(
+                      id: otherUserId,
+                      name: (otherUserName != null &&
+                              otherUserName.trim().isNotEmpty)
+                          ? otherUserName.trim()
+                          : 'Family Member',
+                      type: label,
+                      createdAt: DateTime.now(),
+                      photoUrl: otherUserPhoto,
+                      status: 'active',
+                    );
+                    _showProxyOptionsDialog(
+                      context,
+                      ref,
+                      rel,
+                      currentUserId: currentUserId,
+                      proxyAccepted: proxyAccepted,
+                      proxyPending: proxyPending,
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showProxyOptionsDialog(
+    BuildContext context,
+    WidgetRef ref,
+    Relationship rel, {
+    required String currentUserId,
+    required bool proxyAccepted,
+    required bool proxyPending,
+  }) async {
+    final theme = Theme.of(context);
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          backgroundColor: theme.colorScheme.surfaceContainerHigh,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide.none,
+          ),
+          child: SizedBox(
+            width: double.maxFinite,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    leading: Icon(
+                      proxyAccepted
+                          ? LucideIcons.shieldCheck
+                          : LucideIcons.shield,
+                      size: 22,
+                      color: proxyAccepted
+                          ? Colors.green
+                          : theme.colorScheme.onSurface,
+                    ),
+                    title: Text(
+                      proxyAccepted
+                          ? 'Change Proxy / Power of Attorney'
+                          : 'Designate as Proxy / POA',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: Text(
+                      proxyPending
+                          ? 'Awaiting acceptance...'
+                          : 'Initiate support if you pass or are incapacitated',
+                    ),
+                    onTap: () => Navigator.pop(ctx, 'proxy'),
+                  ),
+                  ListTile(
+                    leading: Icon(
+                      LucideIcons.flag,
+                      size: 22,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                    title: const Text(
+                      'Announce Passing',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: const Text('Create memorial & alert community'),
+                    onTap: () => Navigator.pop(ctx, 'announce'),
+                  ),
+                ],
+              ),
             ),
           ),
-        ],
+        ),
       ),
     );
+
+    if (!context.mounted || selected == null) return;
+    if (selected == 'proxy') {
+      await _confirmAndDesignateProxyFromProfile(
+        context,
+        ref,
+        rel,
+        currentUserId: currentUserId,
+      );
+    } else if (selected == 'announce') {
+      await showDialog(
+        context: context,
+        builder: (_) => BereavementAnnouncementModal(relationship: rel),
+      );
+    }
+  }
+
+  Future<void> _confirmAndDesignateProxyFromProfile(
+    BuildContext context,
+    WidgetRef ref,
+    Relationship rel, {
+    required String currentUserId,
+  }) async {
+    if (currentUserId.isEmpty) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          title: const Text('Designate Proxy / Power of Attorney'),
+          content: Text(
+            'Are you sure you want to designate ${rel.name} as your Proxy (Power of Attorney)?\n\n'
+            'They will receive a notification to accept this role. '
+            'Once accepted, they can initiate emergency support or announce your passing on your behalf if you pass away or become incapacitated.\n\n'
+            'Note: You can designate a proxy at any time, but emergency fund support can only be disbursed when both you and the beneficiary/proxy are active Emergency Fund members.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Confirm'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      final messenger = ScaffoldMessenger.of(context);
+      try {
+        final selfProfile = isSelf
+            ? profile
+            : (ref
+                      .read(profileRepositoryProvider)
+                      .getCachedProfile(currentUserId) ??
+                  ref.read(userProfileProvider).value);
+        final myName = selfProfile != null
+            ? '${selfProfile.firstName} ${selfProfile.lastName}'.trim()
+            : '';
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'Proxy request sent to ${rel.name}. Waiting for acceptance.',
+            ),
+          ),
+        );
+        await ref
+            .read(emergencyFundServiceProvider)
+            .updateProxy(
+              userId: currentUserId,
+              userName: myName.isEmpty ? 'Someone' : myName,
+              proxyUserId: rel.id,
+            );
+      } catch (e) {
+        debugPrint('❌ [Profile] Failed to set proxy: $e');
+        if (context.mounted) {
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Unable to set proxy at this time. Please try again later.',
+              ),
+            ),
+          );
+        }
+      }
+    }
   }
 
   void _showAllQrExchangesSheet(
@@ -3301,7 +3636,7 @@ class UserProfileView extends ConsumerWidget {
                 final allQrIds = <String>{
                   ...initialUserIds,
                   ...records.keys,
-                }.toList();
+                }.where((id) => !ProfileData.isAiAgentUid(id)).toList();
                 return Column(
                   children: [
                     const SizedBox(height: 12),
@@ -3367,7 +3702,12 @@ class UserProfileView extends ConsumerWidget {
                                             roleLabel.isNotEmpty)
                                           _buildRelationshipAboveCardLabel(
                                             context,
+                                            ref,
                                             roleLabel,
+                                            otherUserId: uid,
+                                            otherUserName: userProfile.fullName,
+                                            otherUserPhoto:
+                                                userProfile.profileImage,
                                           ),
                                         UserCardView(
                                           user: userProfile,
@@ -3466,6 +3806,9 @@ class UserProfileView extends ConsumerWidget {
     Map<String, String> roleByUserId = const {},
     bool showRoleAboveCard = false,
   }) {
+    final filteredUserIds = userIds
+        .where((id) => !ProfileData.isAiAgentUid(id))
+        .toList();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -3500,7 +3843,7 @@ class UserProfileView extends ConsumerWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          '$title (${userIds.length})',
+                          '$title (${filteredUserIds.length})',
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
@@ -3521,9 +3864,9 @@ class UserProfileView extends ConsumerWidget {
                       horizontal: AppTheme.pageHorizontalPadding,
                       vertical: 12,
                     ),
-                    itemCount: userIds.length,
+                    itemCount: filteredUserIds.length,
                     itemBuilder: (context, index) {
-                      final uid = userIds[index];
+                      final uid = filteredUserIds[index];
                       final roleLabel = showRoleAboveCard
                           ? roleByUserId[uid]?.trim()
                           : null;
@@ -3546,7 +3889,12 @@ class UserProfileView extends ConsumerWidget {
                                         roleLabel.isNotEmpty)
                                       _buildRelationshipAboveCardLabel(
                                         context,
+                                        ref,
                                         roleLabel,
+                                        otherUserId: uid,
+                                        otherUserName: userProfile.fullName,
+                                        otherUserPhoto:
+                                            userProfile.profileImage,
                                       ),
                                     UserCardView(
                                       user: userProfile,
@@ -3590,7 +3938,10 @@ class UserProfileView extends ConsumerWidget {
     Map<String, String> roleByUserId = const {},
     bool showRoleAboveCard = false,
   }) {
-    if (userIds.isEmpty) {
+    final visibleIds = userIds
+        .where((id) => !ProfileData.isAiAgentUid(id))
+        .toList();
+    if (visibleIds.isEmpty) {
       return _buildEmptyMilestoneCard(context, emptyMessage, LucideIcons.users);
     }
 
@@ -3599,7 +3950,7 @@ class UserProfileView extends ConsumerWidget {
         horizontal: AppTheme.pageHorizontalPadding,
       ),
       child: Column(
-        children: userIds.map((uid) {
+        children: visibleIds.map((uid) {
           return Consumer(
             builder: (context, ref, _) {
               final profileAsync = ref.watch(userProfileByIdProvider(uid));
@@ -3617,7 +3968,14 @@ class UserProfileView extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (roleLabel != null && roleLabel.isNotEmpty)
-                        _buildRelationshipAboveCardLabel(context, roleLabel),
+                        _buildRelationshipAboveCardLabel(
+                          context,
+                          ref,
+                          roleLabel,
+                          otherUserId: uid,
+                          otherUserName: resolvedProfile.fullName,
+                          otherUserPhoto: resolvedProfile.profileImage,
+                        ),
                       UserCardView(
                         user: resolvedProfile,
                         searchQuery: '',
@@ -4409,6 +4767,10 @@ class _MilestoneContactsSheetState
       final seeded = <ProfileData>[];
       final seenUids = <String>{};
       for (final chat in cachedChats) {
+        if (chat.id.startsWith('ai_agent_') ||
+            chat.participants.contains(ProfileData.aiAgentUid)) {
+          continue;
+        }
         final isDirect = chat.type == 'direct' || chat.id.startsWith('direct_');
         final hasMessages =
             chat.lastMessage != null &&
@@ -4418,10 +4780,11 @@ class _MilestoneContactsSheetState
           for (final uid in chat.participants) {
             if (uid != currentUserId &&
                 uid.isNotEmpty &&
+                !ProfileData.isAiAgentUid(uid) &&
                 seenUids.add(uid)) {
               _chatIdByUserId[uid] = chat.id;
               final cachedProfile = profileRepo.getCachedProfile(uid);
-              if (cachedProfile != null) {
+              if (cachedProfile != null && !cachedProfile.isAiAgent) {
                 seeded.add(cachedProfile);
               }
             }
@@ -4503,6 +4866,10 @@ class _MilestoneContactsSheetState
 
       final contactIds = <String>{};
       for (final chat in chats) {
+        if (chat.id.startsWith('ai_agent_') ||
+            chat.participants.contains(ProfileData.aiAgentUid)) {
+          continue;
+        }
         final isDirect = chat.type == 'direct' || chat.id.startsWith('direct_');
         final hasMessages =
             chat.lastMessage != null &&
@@ -4510,7 +4877,9 @@ class _MilestoneContactsSheetState
                 chat.lastMessage!.content.trim().isNotEmpty);
         if (isDirect && hasMessages) {
           for (final uid in chat.participants) {
-            if (uid != currentUserId && uid.isNotEmpty) {
+            if (uid != currentUserId &&
+                uid.isNotEmpty &&
+                !ProfileData.isAiAgentUid(uid)) {
               contactIds.add(uid);
               _chatIdByUserId[uid] = chat.id;
             }
@@ -4531,9 +4900,12 @@ class _MilestoneContactsSheetState
       final List<ProfileData> loadedProfiles = [];
       final missingIds = <String>[];
       for (final uid in contactIds) {
+        if (ProfileData.isAiAgentUid(uid)) continue;
         final cached = profileRepo.getCachedProfile(uid);
         if (cached != null) {
-          loadedProfiles.add(cached);
+          if (!cached.isAiAgent) {
+            loadedProfiles.add(cached);
+          }
         } else {
           missingIds.add(uid);
         }
@@ -4557,11 +4929,14 @@ class _MilestoneContactsSheetState
         final chunkSnapshots = await Future.wait(chunkFutures);
         for (final snap in chunkSnapshots) {
           for (final doc in snap.docs) {
+            if (ProfileData.isAiAgentUid(doc.id)) continue;
             final data = Map<String, dynamic>.from(doc.data());
             data['uid'] ??= doc.id;
             final p = ProfileData.fromJson(data);
             profileRepo.cacheProfile(doc.id, p);
-            loadedProfiles.add(p);
+            if (!p.isAiAgent) {
+              loadedProfiles.add(p);
+            }
           }
         }
       }

@@ -42,6 +42,8 @@ class _CreateHotelListingScreenState
 
   // Google Places search
   final _searchC = TextEditingController();
+  Timer? _searchDebounce;
+  int _searchSeq = 0;
   List<AutocompletePrediction> _predictions = [];
   bool _isSearching = false;
   bool _isFetchingDetails = false;
@@ -54,6 +56,7 @@ class _CreateHotelListingScreenState
   int _rooms = 1;
   int _maxGuests = 2;
   final List<String> _selectedAmenities = [];
+  final List<String> _existingPhotoUrls = [];
   final List<XFile> _selectedImages = [];
   bool _isSaving = false;
   bool _isUploading = false;
@@ -104,9 +107,17 @@ class _CreateHotelListingScreenState
     _descC.text = l.description;
     _priceC.text = l.pricePerUnit.toStringAsFixed(0);
     _addressC.text = l.address ?? '';
-    _cityC.text = l.locality ?? l.city ?? '';
+    final city = l.locality ?? l.city ?? '';
+    _cityC.text = city;
     _subLocalityC.text = l.subLocality ?? '';
-    _stateC.text = l.state ?? '';
+    _stateC.text =
+        sanitizeStateForCountry(
+          state: l.state,
+          city: city,
+          countryCode: l.countryCode,
+          countryName: l.country,
+        ) ??
+        '';
     _countryC.text = l.country ?? '';
     _countryCode = l.countryCode;
     _hotelCategory = l.hotelCategory ?? 'Hotel';
@@ -118,19 +129,29 @@ class _CreateHotelListingScreenState
     _lat = l.lat;
     _lng = l.lng;
     if (l.amenities != null) _selectedAmenities.addAll(l.amenities!);
+    if (l.photos.isNotEmpty) _existingPhotoUrls.addAll(l.photos);
   }
 
   void _prefillFromProfile() {
     final profile = ref.read(userProfileProvider).value;
     if (profile == null) return;
-    _cityC.text = profile.hostLocation.city ?? '';
-    _stateC.text = profile.hostLocation.state ?? '';
+    final city = profile.hostLocation.city ?? '';
+    _cityC.text = city;
+    _stateC.text =
+        sanitizeStateForCountry(
+          state: profile.hostLocation.state,
+          city: city,
+          countryCode: profile.hostCountryCode,
+          countryName: profile.hostCountry,
+        ) ??
+        '';
     _countryC.text = profile.hostCountry ?? '';
     _countryCode = profile.hostCountryCode;
   }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _titleC.dispose();
     _descC.dispose();
     _priceC.dispose();
@@ -147,35 +168,74 @@ class _CreateHotelListingScreenState
 
   // ─── Google Places Search ───────────────────────────────────────────
 
-  Future<void> _onSearchChanged(String query) async {
-    if (query.length < 3) {
-      setState(() => _predictions = []);
+  void _onSearchChanged(String query) {
+    _searchDebounce?.cancel();
+    final trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setState(() {
+        _predictions = [];
+        _isSearching = false;
+      });
       return;
     }
 
     setState(() => _isSearching = true);
+    final seq = ++_searchSeq;
 
-    try {
-      final service = ref.read(googlePlacesServiceProvider);
-      final results = await service.autocomplete(
-        query,
-        filter: PlaceTypeFilter.ESTABLISHMENT,
-      );
+    _searchDebounce = Timer(const Duration(milliseconds: 280), () async {
+      try {
+        final service = ref.read(googlePlacesServiceProvider);
+        final results = await service.autocomplete(
+          trimmed,
+          filter: PlaceTypeFilter.ALL,
+        );
 
-      if (!mounted) return;
-      setState(() {
-        _predictions = results;
-        _isSearching = false;
-      });
-    } catch (e) {
-      if (mounted) setState(() => _isSearching = false);
-    }
+        if (!mounted || seq != _searchSeq) return;
+        // Sort lodging/hotel establishments first while keeping all matches
+        results.sort((a, b) {
+          final aHotel =
+              a.placeTypes?.any(
+                (t) =>
+                    t == 'lodging' ||
+                    t == 'hotel' ||
+                    t == 'resort_hotel' ||
+                    t == 'point_of_interest' ||
+                    t == 'establishment',
+              ) ??
+              false;
+          final bHotel =
+              b.placeTypes?.any(
+                (t) =>
+                    t == 'lodging' ||
+                    t == 'hotel' ||
+                    t == 'resort_hotel' ||
+                    t == 'point_of_interest' ||
+                    t == 'establishment',
+              ) ??
+              false;
+          if (aHotel != bHotel) return aHotel ? -1 : 1;
+          return 0;
+        });
+
+        setState(() {
+          _predictions = results;
+          _isSearching = false;
+        });
+      } catch (e) {
+        if (mounted && seq == _searchSeq) {
+          setState(() => _isSearching = false);
+        }
+      }
+    });
   }
 
   Future<void> _onPlaceSelected(AutocompletePrediction prediction) async {
+    _searchDebounce?.cancel();
+    FocusScope.of(context).unfocus();
     setState(() {
       _predictions = [];
-      _isFetchingDetails = false;
+      _isSearching = false;
+      _isFetchingDetails = true;
       _searchC.text = prediction.primaryText;
       if (prediction.primaryText.isNotEmpty) {
         _titleC.text = prediction.primaryText;
@@ -196,80 +256,227 @@ class _CreateHotelListingScreenState
 
       final place = response.place;
 
-      // Auto-fill hotel name
-      if (place.name != null && place.name!.isNotEmpty) {
-        _titleC.text = place.name!;
+      // 1. Auto-fill hotel name
+      final hotelName = (place.name != null && place.name!.trim().isNotEmpty)
+          ? place.name!.trim()
+          : prediction.primaryText.trim();
+      if (hotelName.isNotEmpty) {
+        _titleC.text = hotelName;
       }
 
-      // Auto-fill description from Google editorial summary
-      if (place.editorialSummary != null &&
-          place.editorialSummary!.isNotEmpty &&
-          _descC.text.isEmpty) {
-        _descC.text = place.editorialSummary!;
-      }
-
-      // Auto-fill address
-      if (place.fullAddress != null) {
-        _addressC.text = place.fullAddress!;
-      }
-
-      // Auto-fill coordinates
+      // 2. Auto-fill coordinates
       if (place.latLng != null) {
         _lat = place.latLng!.lat;
         _lng = place.latLng!.lng;
       }
 
-      // Auto-fill star rating from Google rating
-      if (place.rating != null) {
+      // 3. Parse address components for street address, neighborhood, city, state, country
+      final rawFullAddress =
+          place.fullAddress ?? place.address ?? prediction.fullText;
+      LocationParsed? parsed;
+      if (place.addressComponents != null &&
+          place.addressComponents!.isNotEmpty) {
+        parsed = parseLocationComponents(
+          rawFullAddress,
+          place.addressComponents!,
+        );
+      }
+
+      if (parsed != null) {
+        _cityC.text = parsed.city ?? '';
+        _subLocalityC.text = parsed.sublocality ?? '';
+        _stateC.text = parsed.state ?? '';
+        _countryC.text = parsed.country;
+        _countryCode = parsed.countryCode;
+        _addressC.text =
+            (parsed.streetAddress != null &&
+                parsed.streetAddress!.trim().isNotEmpty)
+            ? parsed.streetAddress!.trim()
+            : rawFullAddress;
+      } else if (_lat != null && _lng != null) {
+        final rev = await service.reverseGeocode(_lat!, _lng!);
+        if (rev != null) {
+          _cityC.text = (rev['city'] as String?) ?? '';
+          _subLocalityC.text = (rev['subLocality'] as String?) ?? '';
+          _stateC.text = (rev['state'] as String?) ?? '';
+          _countryC.text = (rev['country'] as String?) ?? '';
+          _countryCode = rev['countryCode'] as String?;
+        }
+        if (rawFullAddress.isNotEmpty) {
+          _addressC.text = rawFullAddress;
+        }
+      } else if (rawFullAddress.isNotEmpty) {
+        _addressC.text = rawFullAddress;
+      }
+
+      // 4. Detect Star Rating (prefer explicit "X-star" in editorial summary, then Google rating)
+      final summaryText = place.editorialSummary?.trim() ?? '';
+      final starMatch = RegExp(
+        r'\b([1-5])\s*-\s*star\b',
+        caseSensitive: false,
+      ).firstMatch('$summaryText $hotelName');
+      if (starMatch != null) {
+        _starRating = int.parse(starMatch.group(1)!);
+      } else if (place.rating != null) {
         _starRating = place.rating!.round().clamp(1, 5);
       }
 
-      // Parse address components for city, state, country
-      if (place.addressComponents != null) {
-        final parsed = parseLocationComponents(
-          place.fullAddress ?? place.address ?? '',
-          place.addressComponents!,
-        );
-        if (parsed != null) {
-          _cityC.text = parsed.city ?? '';
-          _stateC.text = parsed.state ?? '';
-          _countryC.text = parsed.country;
-          _countryCode = parsed.countryCode;
-
-          // Try to extract neighborhood/sublocality
-          for (final comp in place.addressComponents!) {
-            if (comp.types.contains('sublocality') ||
-                comp.types.contains('sublocality_level_1') ||
-                comp.types.contains('neighborhood')) {
-              _subLocalityC.text = comp.name;
-              break;
-            }
-          }
-        }
+      // 5. Detect Hotel Category from name, editorial summary, and Google types
+      final combinedLower = '$hotelName $summaryText'.toLowerCase();
+      final placeTypes = place.types ?? const <String>[];
+      if (combinedLower.contains('resort') ||
+          placeTypes.contains('resort_hotel')) {
+        _hotelCategory = 'Resort';
+      } else if (combinedLower.contains('boutique')) {
+        _hotelCategory = 'Boutique Hotel';
+      } else if (combinedLower.contains('hostel') ||
+          placeTypes.contains('hostel')) {
+        _hotelCategory = 'Hostel';
+      } else if (combinedLower.contains('motel') ||
+          placeTypes.contains('motel')) {
+        _hotelCategory = 'Motel';
+      } else if (combinedLower.contains('b&b') ||
+          combinedLower.contains('bed and breakfast') ||
+          combinedLower.contains('bed & breakfast') ||
+          placeTypes.contains('bed_and_breakfast')) {
+        _hotelCategory = 'Bed & Breakfast';
+      } else if (combinedLower.contains('guest house') ||
+          combinedLower.contains('guesthouse') ||
+          combinedLower.contains('lodge') ||
+          placeTypes.contains('guest_house')) {
+        _hotelCategory = 'Guest House';
+      } else if (combinedLower.contains('business') ||
+          combinedLower.contains('conference') ||
+          combinedLower.contains('convention')) {
+        _hotelCategory = 'Business Hotel';
+      } else {
+        _hotelCategory = 'Hotel';
       }
 
-      // Detect hotel category from Google types
-      if (place.types != null) {
-        if (place.types!.contains('lodging') ||
-            place.types!.contains('hotel')) {
-          // Keep default or detect from name
-          final nameLower = (place.name ?? '').toLowerCase();
-          if (nameLower.contains('resort')) {
-            _hotelCategory = 'Resort';
-          } else if (nameLower.contains('hostel')) {
-            _hotelCategory = 'Hostel';
-          } else if (nameLower.contains('motel')) {
-            _hotelCategory = 'Motel';
-          } else if (nameLower.contains('b&b') ||
-              nameLower.contains('bed and breakfast') ||
-              nameLower.contains('bed & breakfast')) {
-            _hotelCategory = 'Bed & Breakfast';
-          } else if (nameLower.contains('guest house') ||
-              nameLower.contains('guesthouse')) {
-            _hotelCategory = 'Guest House';
-          } else if (nameLower.contains('boutique')) {
-            _hotelCategory = 'Boutique Hotel';
+      // 6. Auto-fill Description (editorial summary or synthesized overview)
+      if (summaryText.isNotEmpty) {
+        _descC.text = summaryText;
+      } else {
+        final locText = formatTieredLocation(
+          subLocality: _subLocalityC.text,
+          city: _cityC.text,
+          state: _stateC.text,
+          country: _countryC.text,
+          countryCode: _countryCode,
+          includeSubLocality: true,
+        );
+        final ratingNote = place.rating != null
+            ? ' Rated ${place.rating!.toStringAsFixed(1)}/5 on Google${place.userRatingsTotal != null ? ' (${place.userRatingsTotal} reviews)' : ''}.'
+            : '';
+        _descC.text =
+            '$hotelName is a $_starRating-star ${_hotelCategory.toLowerCase()}'
+            '${locText.isNotEmpty ? ' located in $locText' : ''}.'
+            '$ratingNote '
+            'Welcoming guests with comfortable accommodations and convenient access to local attractions.';
+      }
+
+      // 7. Auto-fill Price per Night (estimate from priceLevel or starRating if empty)
+      if (_priceC.text.trim().isEmpty) {
+        final int estimatedPrice;
+        if (place.priceLevel != null && place.priceLevel! > 0) {
+          switch (place.priceLevel!) {
+            case 1:
+              estimatedPrice = 50;
+            case 2:
+              estimatedPrice = 95;
+            case 3:
+              estimatedPrice = 160;
+            default:
+              estimatedPrice = 260;
           }
+        } else {
+          switch (_starRating) {
+            case 5:
+              estimatedPrice = 220;
+            case 4:
+              estimatedPrice = 135;
+            case 3:
+              estimatedPrice = 80;
+            case 2:
+              estimatedPrice = 50;
+            default:
+              estimatedPrice = 35;
+          }
+        }
+        _priceC.text = '$estimatedPrice';
+      }
+
+      // 8. Auto-populate Amenities from text, types, and star class
+      final inferredAmenities = <String>{'Wi-Fi', 'AC', 'Parking'};
+      if (_starRating >= 4 || _hotelCategory == 'Resort') {
+        inferredAmenities.addAll([
+          'Restaurant',
+          'Room Service',
+          'Concierge',
+          'Laundry',
+          'Bar / Lounge',
+        ]);
+      }
+      if (_starRating >= 5 || _hotelCategory == 'Resort') {
+        inferredAmenities.addAll(['Pool', 'Spa', 'Gym']);
+      }
+      if (_hotelCategory == 'Business Hotel') {
+        inferredAmenities.addAll(['Business Center', 'Conference Room']);
+      }
+      if (combinedLower.contains('pool') ||
+          combinedLower.contains('swimming')) {
+        inferredAmenities.add('Pool');
+      }
+      if (combinedLower.contains('spa') ||
+          combinedLower.contains('wellness') ||
+          combinedLower.contains('massage')) {
+        inferredAmenities.add('Spa');
+      }
+      if (combinedLower.contains('gym') || combinedLower.contains('fitness')) {
+        inferredAmenities.add('Gym');
+      }
+      if (combinedLower.contains('restaurant') ||
+          combinedLower.contains('dining') ||
+          combinedLower.contains('eatery') ||
+          combinedLower.contains('eateries') ||
+          combinedLower.contains('breakfast') ||
+          placeTypes.contains('restaurant')) {
+        inferredAmenities.add('Restaurant');
+      }
+      if (combinedLower.contains('bar') ||
+          combinedLower.contains('lounge') ||
+          placeTypes.contains('bar')) {
+        inferredAmenities.add('Bar / Lounge');
+      }
+      if (combinedLower.contains('conference') ||
+          combinedLower.contains('meeting') ||
+          combinedLower.contains('business')) {
+        inferredAmenities.addAll(['Business Center', 'Conference Room']);
+      }
+      if (combinedLower.contains('airport') ||
+          combinedLower.contains('shuttle')) {
+        inferredAmenities.add('Airport Shuttle');
+      }
+      _selectedAmenities
+        ..clear()
+        ..addAll(
+          _allAmenities.where((a) => inferredAmenities.contains(a)),
+        );
+
+      // 9. Auto-populate Google Places photos if available
+      if (place.photoMetadatas != null && place.photoMetadatas!.isNotEmpty) {
+        final urls = <String>[];
+        for (final item in place.photoMetadatas!) {
+          if (item is Map) {
+            final refStr = item['photo_reference']?.toString();
+            final url = service.getPlacePhotoUrl(refStr, maxWidth: 1200);
+            if (url != null) urls.add(url);
+          }
+        }
+        if (urls.isNotEmpty) {
+          _existingPhotoUrls
+            ..clear()
+            ..addAll(urls.take(20 - _selectedImages.length));
         }
       }
 
@@ -305,7 +512,8 @@ class _CreateHotelListingScreenState
   // ─── Save ───────────────────────────────────────────────────────────
 
   Future<void> _pickImages() async {
-    final remaining = 20 - _selectedImages.length;
+    final totalCurrent = _existingPhotoUrls.length + _selectedImages.length;
+    final remaining = 20 - totalCurrent;
     if (remaining <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Maximum 20 photos allowed')),
@@ -330,12 +538,13 @@ class _CreateHotelListingScreenState
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final totalPhotos = _existingPhotoUrls.length + _selectedImages.length;
     // Validate minimum 10 photos
-    if (_selectedImages.length < 10 && widget.existing == null) {
+    if (totalPhotos < 10 && widget.existing == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Please add at least 10 photos (${_selectedImages.length}/10)',
+            'Please add at least 10 photos ($totalPhotos/10)',
           ),
           behavior: SnackBarBehavior.floating,
           backgroundColor: Colors.red.shade700,
@@ -363,31 +572,53 @@ class _CreateHotelListingScreenState
           ? widget.existing!.id
           : repo.generateListingId();
       final imagesToUpload = List<XFile>.from(_selectedImages);
-      final existingPhotos = widget.existing?.photos ?? const <String>[];
+      final existingPhotos = List<String>.from(_existingPhotoUrls);
+
+      final effectiveCountry = _countryC.text.trim().isNotEmpty
+          ? _countryC.text.trim()
+          : (widget.existing?.country ?? profile.hostCountry);
+      final matchedCountry = effectiveCountry != null
+          ? country_data.getCountryByName(effectiveCountry)
+          : null;
+      final effectiveCountryCode =
+          _countryCode ??
+          matchedCountry?.code ??
+          widget.existing?.countryCode ??
+          profile.hostCountryCode;
+      final cleanCity = _cityC.text.trim();
+      final cleanState = sanitizeStateForCountry(
+        state: _stateC.text.trim(),
+        city: cleanCity,
+        countryCode: effectiveCountryCode,
+        countryName: effectiveCountry,
+      );
 
       final optimisticListing = PeerListing(
         id: listingId,
         type: 'hotel',
-        ownerId: user.uid,
+        ownerId: widget.existing?.ownerId ?? user.uid,
         ownerName: profile.fullName,
         ownerPhoto: profile.profileImage,
         title: _titleC.text.trim(),
         description: _descC.text.trim(),
         photos: existingPhotos,
         pricePerUnit: double.tryParse(_priceC.text.trim()) ?? 0,
-        city: _cityC.text.trim(),
-        country: _countryC.text.trim().isNotEmpty
-            ? _countryC.text.trim()
-            : profile.hostCountry,
-        countryCode: _countryCode ?? profile.hostCountryCode,
+        currency: widget.existing?.currency ?? 'USD',
+        city: cleanCity,
+        country: effectiveCountry,
+        countryCode: effectiveCountryCode,
         address: _addressC.text.trim(),
-        locality: _cityC.text.trim(),
+        locality: cleanCity,
         subLocality: _subLocalityC.text.trim(),
-        state: _stateC.text.trim(),
-        localityLower: _cityC.text.trim().toLowerCase(),
-        stateLower: _stateC.text.trim().toLowerCase(),
-        lat: _lat,
-        lng: _lng,
+        state: cleanState,
+        localityLower: cleanCity.toLowerCase(),
+        stateLower: cleanState?.toLowerCase(),
+        lat: _lat ?? widget.existing?.lat,
+        lng: _lng ?? widget.existing?.lng,
+        status: widget.existing?.status ?? 'active',
+        viewCount: widget.existing?.viewCount ?? 0,
+        savedCount: widget.existing?.savedCount ?? 0,
+        createdAt: widget.existing?.createdAt,
         // Hotel-specific
         hotelCategory: _hotelCategory,
         starRating: _starRating,
@@ -436,7 +667,7 @@ class _CreateHotelListingScreenState
             }),
           );
           final finalPhotos = uploadedUrls.isNotEmpty
-              ? uploadedUrls
+              ? [...existingPhotos, ...uploadedUrls]
               : existingPhotos;
           final finalListing = optimisticListing.copyWith(photos: finalPhotos);
           repo.cacheListing(finalListing);
@@ -495,10 +726,8 @@ class _CreateHotelListingScreenState
               ),
               children: [
                 // ─── Google Places Search ─────────────────────────
-                if (!isEditing) ...[
-                  _buildPlacesSearch(theme),
-                  const SizedBox(height: 20),
-                ],
+                _buildPlacesSearch(theme),
+                const SizedBox(height: 20),
 
                 // Hotel category
                 _sectionLabel(theme, 'Hotel Type'),
@@ -648,9 +877,18 @@ class _CreateHotelListingScreenState
                 Builder(
                   builder: (context) {
                     final profile = ref.read(userProfileProvider).value;
-                    final cc = _countryCode ?? profile?.hostCountryCode ?? '';
-                    final hasState = country_data
-                        .hasStateLevelHierarchyFromData(cc);
+                    final countryText = _countryC.text.trim();
+                    final cc =
+                        _countryCode ??
+                        (countryText.isNotEmpty
+                            ? country_data.getCountryByName(countryText)?.code
+                            : null) ??
+                        profile?.hostCountryCode ??
+                        '';
+                    final hasState = country_data.hasStateLevelForCountry(
+                      countryCode: cc,
+                      countryName: countryText,
+                    );
                     final stateTerm = country_data.getStateTerminology(cc);
 
                     if (hasState) {
@@ -792,126 +1030,177 @@ class _CreateHotelListingScreenState
                 // ─── Hotel Photos ────────────────────────────────
                 _sectionLabel(theme, 'Hotel Photos (min 10, max 20)'),
                 const SizedBox(height: 4),
-                Text(
-                  '${_selectedImages.length}/10 minimum  •  Showcase rooms, lobby, pool, restaurant, and surroundings',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: _selectedImages.length >= 10
-                        ? AppTheme.success
-                        : theme.hintColor,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  height: 110,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _selectedImages.length + 1,
-                    separatorBuilder: (_, _) => const SizedBox(width: 10),
-                    itemBuilder: (context, index) {
-                      if (index == 0) {
-                        return GestureDetector(
-                          onTap: _pickImages,
-                          child: Container(
-                            width: 110,
-                            decoration: BoxDecoration(
-                              color: AppTheme.elevationColor(context, 2),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  LucideIcons.imagePlus,
-                                  size: 28,
-                                  color: _selectedImages.length < 10
-                                      ? AppTheme.accent
-                                      : theme.hintColor,
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  'Add Photos',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: _selectedImages.length < 10
-                                        ? AppTheme.accent
-                                        : theme.hintColor,
-                                  ),
-                                ),
-                                Text(
-                                  'Select multiple',
-                                  style: TextStyle(
-                                    fontSize: 9,
-                                    color: theme.hintColor,
-                                  ),
-                                ),
-                              ],
-                            ),
+                Builder(
+                  builder: (context) {
+                    final totalPhotos =
+                        _existingPhotoUrls.length + _selectedImages.length;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '$totalPhotos/10 minimum  •  Showcase rooms, lobby, pool, restaurant, and surroundings',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: totalPhotos >= 10
+                                ? AppTheme.success
+                                : theme.hintColor,
                           ),
-                        );
-                      }
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          height: 110,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: totalPhotos + 1,
+                            separatorBuilder: (_, _) =>
+                                const SizedBox(width: 10),
+                            itemBuilder: (context, index) {
+                              if (index == 0) {
+                                return GestureDetector(
+                                  onTap: _pickImages,
+                                  child: Container(
+                                    width: 110,
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.elevationColor(
+                                        context,
+                                        2,
+                                      ),
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          LucideIcons.imagePlus,
+                                          size: 28,
+                                          color: totalPhotos < 10
+                                              ? AppTheme.accent
+                                              : theme.hintColor,
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          'Add Photos',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                            color: totalPhotos < 10
+                                                ? AppTheme.accent
+                                                : theme.hintColor,
+                                          ),
+                                        ),
+                                        Text(
+                                          'Select multiple',
+                                          style: TextStyle(
+                                            fontSize: 9,
+                                            color: theme.hintColor,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              }
 
-                      final img = _selectedImages[index - 1];
-                      return Stack(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(14),
-                            child: Image.file(
-                              File(img.path),
-                              width: 110,
-                              height: 110,
-                              fit: BoxFit.cover,
-                            ),
+                              final itemIdx = index - 1;
+                              final isNetwork =
+                                  itemIdx < _existingPhotoUrls.length;
+                              return Stack(
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(14),
+                                    child: isNetwork
+                                        ? Image.network(
+                                            _existingPhotoUrls[itemIdx],
+                                            width: 110,
+                                            height: 110,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, _, _) =>
+                                                Container(
+                                                  width: 110,
+                                                  height: 110,
+                                                  color:
+                                                      AppTheme.elevationColor(
+                                                        context,
+                                                        2,
+                                                      ),
+                                                  child: Icon(
+                                                    LucideIcons.image,
+                                                    color: theme.hintColor,
+                                                  ),
+                                                ),
+                                          )
+                                        : Image.file(
+                                            File(
+                                              _selectedImages[itemIdx -
+                                                      _existingPhotoUrls.length]
+                                                  .path,
+                                            ),
+                                            width: 110,
+                                            height: 110,
+                                            fit: BoxFit.cover,
+                                          ),
+                                  ),
+                                  // Photo number badge
+                                  Positioned(
+                                    bottom: 4,
+                                    left: 4,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black54,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        '$index',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  // Remove button
+                                  Positioned(
+                                    top: 4,
+                                    right: 4,
+                                    child: GestureDetector(
+                                      onTap: () => setState(() {
+                                        if (isNetwork) {
+                                          _existingPhotoUrls.removeAt(itemIdx);
+                                        } else {
+                                          _selectedImages.removeAt(
+                                            itemIdx - _existingPhotoUrls.length,
+                                          );
+                                        }
+                                      }),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black54,
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        child: const Icon(
+                                          LucideIcons.x,
+                                          color: Colors.white,
+                                          size: 14,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
                           ),
-                          // Photo number badge
-                          Positioned(
-                            bottom: 4,
-                            left: 4,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.black54,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                '$index',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                ),
-                              ),
-                            ),
-                          ),
-                          // Remove button
-                          Positioned(
-                            top: 4,
-                            right: 4,
-                            child: GestureDetector(
-                              onTap: () => setState(
-                                () => _selectedImages.removeAt(index - 1),
-                              ),
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  color: Colors.black54,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Icon(
-                                  LucideIcons.x,
-                                  color: Colors.white,
-                                  size: 14,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 32),
 

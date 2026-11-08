@@ -564,15 +564,42 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                           ),
                 ] else if (isListingChat) ...[
                   if (listingId != null && listingId.isNotEmpty)
-                    AppBottomSheetItem(
-                      icon: LucideIcons.shoppingBag,
-                      iconColor: Colors.green.shade700,
-                      iconBgColor: Colors.green.shade50,
-                      title: 'View listing',
-                      subtitle: 'See product details, price, and photos',
-                      onTap: () {
-                        Navigator.pop(context);
-                        context.push('/marketplace/listing/$listingId');
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final listing = ref
+                            .watch(_shopListingMenuProvider(listingId))
+                            .value;
+                        final isJob =
+                            listing?.listingType == ListingType.job ||
+                            chat.isJobListingChat;
+                        final isService =
+                            listing?.listingType == ListingType.service ||
+                            chat.isServiceListingChat;
+                        final catName = isService
+                            ? 'Service'
+                            : isJob
+                            ? 'Job'
+                            : 'Product';
+                        final catLower = catName.toLowerCase();
+                        return AppBottomSheetItem(
+                          icon: isJob
+                              ? LucideIcons.briefcase
+                              : isService
+                              ? LucideIcons.wrench
+                              : LucideIcons.shoppingBag,
+                          iconColor: Colors.green.shade700,
+                          iconBgColor: Colors.green.shade50,
+                          title: 'View $catLower',
+                          subtitle: isJob
+                              ? 'See job details, compensation, and requirements'
+                              : isService
+                              ? 'See service details, rates, and availability'
+                              : 'See product details, price, and photos',
+                          onTap: () {
+                            Navigator.pop(context);
+                            context.push('/marketplace/listing/$listingId');
+                          },
+                        );
                       },
                     ),
                   if (currentUserId.isNotEmpty &&
@@ -589,6 +616,14 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                           final isPaused =
                               listing.status == ListingStatus.paused;
                           final isJob = listing.listingType == ListingType.job;
+                          final isService =
+                              listing.listingType == ListingType.service;
+                          final catName = isService
+                              ? 'Service'
+                              : isJob
+                              ? 'Job'
+                              : 'Product';
+                          final catLower = catName.toLowerCase();
                           final showRelist = isSold || isPaused;
 
                           return AppBottomSheetItem(
@@ -602,13 +637,23 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                                 ? AppTheme.accent.withValues(alpha: 0.1)
                                 : Colors.green.shade50,
                             title: showRelist
-                                ? 'Relist item'
-                                : (isJob ? 'Mark as Filled' : 'Mark as Sold'),
-                            subtitle: showRelist
-                                ? 'Make this listing available again'
+                                ? (isJob
+                                      ? 'Reopen job'
+                                      : isService
+                                      ? 'Reopen service'
+                                      : 'Relist $catLower')
                                 : (isJob
-                                      ? 'Let applicants know this position is filled'
-                                      : 'Let shoppers know this item is sold'),
+                                      ? 'Mark as Filled'
+                                      : isService
+                                      ? 'Mark as Booked'
+                                      : 'Mark as Sold'),
+                            subtitle: showRelist
+                                ? 'Make this $catLower available again'
+                                : (isJob
+                                      ? 'Let applicants know this job is filled'
+                                      : isService
+                                      ? 'Let clients know this service is currently booked'
+                                      : 'Let shoppers know this $catLower is sold'),
                             onTap: () {
                               final messenger = ScaffoldMessenger.maybeOf(
                                 context,
@@ -621,10 +666,12 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                                   ? ListingStatus.active
                                   : ListingStatus.sold;
                               final statusText = showRelist
-                                  ? 'Listing is now available again'
+                                  ? '$catName is now available again'
                                   : (isJob
-                                        ? 'Position marked as Filled'
-                                        : 'Item marked as Sold');
+                                        ? 'Job marked as Filled'
+                                        : isService
+                                        ? 'Service marked as Booked'
+                                        : '$catName marked as Sold');
                               messenger?.showSnackBar(
                                 SnackBar(content: Text(statusText)),
                               );
@@ -659,8 +706,9 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                       icon: LucideIcons.edit3,
                       iconColor: theme.colorScheme.primary,
                       iconBgColor: theme.colorScheme.primaryContainer,
-                      title: 'Manage shop',
-                      subtitle: 'Edit shop name, description, and shoppers',
+                      title: 'Manage ${chat.listingChatNounLower}',
+                      subtitle:
+                          'Edit ${chat.listingChatNounLower} name, description, and ${chat.listingParticipantPlural}',
                       onTap: () {
                         Navigator.pop(context);
                         context.push(
@@ -679,8 +727,9 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                     icon: LucideIcons.settings,
                     iconColor: Colors.grey.shade700,
                     iconBgColor: Colors.grey.shade100,
-                    title: 'Shop info',
-                    subtitle: 'Manage shop settings and shoppers',
+                    title: '${chat.listingChatNoun} info',
+                    subtitle:
+                        'Manage ${chat.listingChatNounLower} settings and ${chat.listingParticipantPlural}',
                     onTap: () {
                       Navigator.pop(context);
                       context.push(
@@ -922,7 +971,7 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                     iconColor: Colors.red.shade700,
                     iconBgColor: Colors.red.shade50,
                     title: isListingChat
-                        ? 'Leave shop'
+                        ? 'Leave ${chat.listingChatNounLower}'
                         : isGroup
                         ? 'Leave group'
                         : (isEvent ? 'Leave event' : 'Unfollow Organization'),

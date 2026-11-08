@@ -3,6 +3,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/features/events/models/event_data.dart';
 import 'package:diaspora_nearby/features/shared/utils/search_highlight_utils.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
+import 'package:diaspora_nearby/core/utils/location_utils.dart';
 
 class EventVenueCard extends StatelessWidget {
   final Event event;
@@ -42,19 +43,25 @@ class EventVenueCard extends StatelessWidget {
 
     String displaySubtitle = '';
 
-    final cityStateComponents = [
-      event.venueCity,
-      event.venueState,
-      event.venueCountry,
-    ].where((e) => e != null && e.isNotEmpty).join(', ');
+    final cityStateComponents = formatTieredLocation(
+      city: event.venueCity,
+      state: event.venueState,
+      country: event.venueCountry,
+    );
 
     if (event.venueAddress != null && event.venueAddress!.isNotEmpty) {
-      displaySubtitle = event.venueAddress!;
+      displaySubtitle = cleanRedundantLocationString(
+        event.venueAddress!,
+        countryName: event.venueCountry,
+      );
     } else if (cityStateComponents.isNotEmpty) {
       displaySubtitle = cityStateComponents;
     } else if (event.location != displayTitle) {
       // Fallback to location string if it wasn't used as title
-      displaySubtitle = event.location;
+      displaySubtitle = cleanRedundantLocationString(
+        event.location,
+        countryName: event.venueCountry,
+      );
     }
 
     return Container(

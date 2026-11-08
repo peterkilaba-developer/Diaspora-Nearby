@@ -73,6 +73,8 @@ class EventRepository {
 
   // [PERF] In-memory cache of events by ID for instant detail views & optimistic updates
   static final Map<String, Event> _eventsByIdCache = {};
+  static final StreamController<String> _cacheUpdatesController =
+      StreamController<String>.broadcast();
 
   // [PERF] Pre-warmed attendance QR codes by eventId
   static final Map<String, String> _attendanceCodeCache = {};
@@ -86,11 +88,13 @@ class EventRepository {
   /// [PERF] Synchronously write or update an event in memory cache
   void cacheEvent(Event event) {
     _eventsByIdCache[event.id] = event;
+    _cacheUpdatesController.add(event.id);
   }
 
   /// [PERF] Synchronously remove an event from memory cache
   void removeCachedEvent(String eventId) {
     _eventsByIdCache.remove(eventId);
+    _cacheUpdatesController.add(eventId);
   }
 
   /// [PERF] Synchronously read pre-warmed attendance code
@@ -478,6 +482,11 @@ class EventRepository {
       if (cached != null) {
         controller.add(cached);
       }
+      final cacheSub = _cacheUpdatesController.stream.listen((updatedId) {
+        if (updatedId == eventId && !controller.isClosed) {
+          controller.add(_eventsByIdCache[eventId]);
+        }
+      });
       final sub = _firestore
           .collection('events')
           .doc(eventId)
@@ -511,7 +520,10 @@ class EventRepository {
             onError: controller.addError,
             onDone: controller.close,
           );
-      controller.onCancel = sub.cancel;
+      controller.onCancel = () {
+        cacheSub.cancel();
+        return sub.cancel();
+      };
     });
   }
 
@@ -962,9 +974,18 @@ class EventRepository {
     }
     try {
       // Optimistically update in-memory cache immediately
-      _eventsByIdCache[event.id] = event;
+      cacheEvent(event);
 
-      final data = event.toJson();
+      final data = Map<String, dynamic>.from(event.toJson())
+        ..remove('id')
+        ..remove('creatorId')
+        ..remove('createdAt')
+        ..remove('attendees')
+        ..remove('attendeeCount')
+        ..remove('interested')
+        ..remove('interestedCount')
+        ..remove('paidAttendeeIds')
+        ..remove('confirmedAttendees');
 
       // Parallelize image upload and geocoding
       String? uploadedImageUrl;
@@ -1012,7 +1033,7 @@ class EventRepository {
         data['ticketPrice'] = cf.FieldValue.delete();
       }
 
-      _eventsByIdCache[event.id] = event;
+      cacheEvent(event);
       await _firestore.collection('events').doc(event.id).update(data);
 
       // Update Chat Name in Firestore if title changed (non-blocking)

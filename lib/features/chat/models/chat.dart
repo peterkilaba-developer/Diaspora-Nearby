@@ -447,6 +447,15 @@ class Chat {
       effectiveUpdatedAt = createdAt;
     }
 
+    Map<String, dynamic>? effectiveMetadata = metadata;
+    final rawUserMeta = userChatData['metadata'];
+    if (rawUserMeta is Map) {
+      final userMeta = Map<String, dynamic>.from(rawUserMeta);
+      effectiveMetadata = effectiveMetadata == null
+          ? userMeta
+          : <String, dynamic>{...userMeta, ...effectiveMetadata};
+    }
+
     return copyWith(
       isPinned:
           userChatData['isPinned'] == true || userChatData['pinned'] == true,
@@ -457,6 +466,7 @@ class Chat {
       unreadCount: userChatData['unreadCount'] as int? ?? 0,
       lastMessage: effectiveLastMessage,
       updatedAt: effectiveUpdatedAt,
+      metadata: effectiveMetadata,
     );
   }
 
@@ -541,6 +551,86 @@ class Chat {
   /// Check if this is a marketplace listing / shop chat
   bool get isListingChat =>
       metadata?['isListingChat'] == true || id.startsWith('listing_');
+
+  /// Normalized listing type for listing chats: 'job' | 'service' | 'product'
+  String get listingType {
+    final raw = (metadata?['listingType'] as String?)?.trim().toLowerCase();
+    if (raw == 'job' || raw == 'service' || raw == 'product') {
+      return raw!;
+    }
+    final role = (metadata?['sellerRole'] as String?)?.trim().toLowerCase();
+    if (role == 'employer') return 'job';
+    if (role == 'provider') return 'service';
+    final lastContent = lastMessage?.content.trim().toLowerCase() ?? '';
+    if (lastContent == 'job posted') return 'job';
+    if (lastContent == 'service posted') return 'service';
+    return 'product';
+  }
+
+  bool get isJobListingChat => isListingChat && listingType == 'job';
+
+  bool get isServiceListingChat => isListingChat && listingType == 'service';
+
+  /// Contextual noun for the listing chat itself
+  String get listingChatNoun {
+    switch (listingType) {
+      case 'job':
+        return 'Job Chat';
+      case 'service':
+        return 'Service Chat';
+      default:
+        return 'Shop';
+    }
+  }
+
+  String get listingChatNounLower => listingChatNoun.toLowerCase();
+
+  /// Contextual noun for the underlying entity
+  String get listingEntityNoun {
+    switch (listingType) {
+      case 'job':
+        return 'Job';
+      case 'service':
+        return 'Service';
+      default:
+        return 'Product';
+    }
+  }
+
+  /// Contextual plural label for participants in this listing chat
+  String get listingParticipantPlural {
+    switch (listingType) {
+      case 'job':
+        return 'applicants';
+      case 'service':
+        return 'clients';
+      default:
+        return 'shoppers';
+    }
+  }
+
+  String get listingParticipantTitlePlural {
+    switch (listingType) {
+      case 'job':
+        return 'Applicants';
+      case 'service':
+        return 'Clients';
+      default:
+        return 'Shoppers';
+    }
+  }
+
+  /// Contextual system message shown when the listing chat is created
+  String get listingCreatedSystemText {
+    switch (listingType) {
+      case 'job':
+        return 'Job posted';
+      case 'service':
+        return 'Service posted';
+      default:
+        return 'Shop created';
+    }
+  }
 
   /// Check if this is an event chat
   bool get isEvent =>

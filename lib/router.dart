@@ -58,6 +58,10 @@ import 'features/travel/screens/flight_search_screen.dart';
 import 'features/travel/screens/hotel_search_screen.dart';
 import 'features/travel/screens/stay_search_screen.dart';
 import 'features/travel/screens/car_rental_search_screen.dart';
+import 'features/travel/models/peer_listing.dart';
+import 'features/travel/screens/peer_listing_detail_screen.dart';
+import 'features/travel/services/peer_listing_repository.dart';
+import 'features/community/repository/community_repository.dart';
 import 'features/settings/screens/settings_screen.dart';
 import 'features/sharing/screens/share_chat_selection_screen.dart';
 import 'features/sharing/services/share_receiver_service.dart';
@@ -74,6 +78,7 @@ import 'features/real_estate/models/real_estate_listing.dart';
 import 'features/real_estate/screens/real_estate_search_screen.dart';
 import 'features/real_estate/screens/real_estate_detail_screen.dart';
 import 'features/real_estate/screens/create_real_estate_listing_screen.dart';
+import 'features/real_estate/services/real_estate_repository.dart';
 
 // [PERF] Cache permission status in memory so route redirects are 100% synchronous
 PermissionStatus? _cachedPermissionStatus;
@@ -560,13 +565,21 @@ final routerProvider = Provider<GoRouter>((ref) {
                     parentNavigatorKey: _rootNavigatorKey,
                     pageBuilder: (context, state) {
                       final communityId = state.pathParameters['communityId']!;
-                      final communityExtra = state.extra as Community;
+                      final communityExtra = state.extra is Community
+                          ? state.extra as Community
+                          : ref
+                                .read(communityRepositoryProvider)
+                                .getCachedCommunity(communityId);
                       return MaterialPage(
                         fullscreenDialog: true,
-                        child: CommunityMembersScreen(
-                          communityId: communityId,
-                          community: communityExtra,
-                        ),
+                        child: communityExtra != null
+                            ? CommunityMembersScreen(
+                                communityId: communityId,
+                                community: communityExtra,
+                              )
+                            : _CommunityMembersLoaderScreen(
+                                communityId: communityId,
+                              ),
                       );
                     },
                   ),
@@ -740,22 +753,58 @@ final routerProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const CarRentalSearchScreen(),
       ),
+      GoRoute(
+        path: '/dsp/travel/listing/:id',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          final extra = state.extra;
+          if (extra is PeerListing) {
+            return PeerListingDetailScreen(listing: extra);
+          }
+          return _PeerListingLoaderScreen(listingId: id);
+        },
+      ),
 
       // Real Estate
+      GoRoute(
+        path: '/dsp/real-estate',
+        parentNavigatorKey: _rootNavigatorKey,
+        redirect: (context, state) => '/dsp/real-estate/house',
+      ),
+      GoRoute(
+        path: '/dsp/real-estate/listing/:id',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          final extra = state.extra;
+          if (extra is RealEstateListing) {
+            return RealEstateDetailScreen(listing: extra);
+          }
+          return _RealEstateListingLoaderScreen(listingId: id);
+        },
+      ),
       GoRoute(
         path: '/dsp/real-estate/:category',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) {
           final category = state.pathParameters['category'] ?? 'plot';
-          return RealEstateSearchScreen(category: category);
+          return RealEstateSearchScreen(
+            key: ValueKey('real_estate_$category'),
+            category: category,
+          );
         },
       ),
       GoRoute(
         path: '/dsp/real-estate-detail',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) {
-          final listing = state.extra as RealEstateListing;
-          return RealEstateDetailScreen(listing: listing);
+          final extra = state.extra;
+          if (extra is RealEstateListing) {
+            return RealEstateDetailScreen(listing: extra);
+          }
+          final id = state.uri.queryParameters['id'] ?? '';
+          return _RealEstateListingLoaderScreen(listingId: id);
         },
       ),
       GoRoute(
@@ -763,8 +812,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) {
           final extras = state.extra as Map<String, dynamic>?;
+          final category =
+              state.uri.queryParameters['category'] ??
+              extras?['category'] as String? ??
+              'plot';
           return CreateRealEstateListingScreen(
-            defaultCategory: extras?['category'] as String? ?? 'plot',
+            key: ValueKey('real_estate_create_$category'),
+            defaultCategory: category,
             existing: extras?['listing'] as RealEstateListing?,
           );
         },
@@ -801,7 +855,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) {
           final type = state.uri.queryParameters['type'];
-          return MarketplaceScreen(initialType: type);
+          return MarketplaceScreen(
+            key: ValueKey('marketplace_${type ?? 'product'}'),
+            initialType: type,
+          );
         },
       ),
       GoRoute(
@@ -810,10 +867,17 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final extra = state.extra;
           if (extra is MarketplaceListing) {
-            return CreateListingScreen(existingListing: extra);
+            return CreateListingScreen(
+              key: ValueKey('edit_listing_${extra.id}'),
+              existingListing: extra,
+            );
           }
+          final type =
+              state.uri.queryParameters['type'] ??
+              (extra is String ? extra : null);
           return CreateListingScreen(
-            defaultListingType: extra is String ? extra : null,
+            key: ValueKey('create_listing_${type ?? 'product'}'),
+            defaultListingType: type,
           );
         },
       ),
@@ -826,12 +890,24 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/marketplace/my-listings',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const MyListingsScreen(),
+        builder: (context, state) {
+          final type = state.uri.queryParameters['type'];
+          return MyListingsScreen(
+            key: ValueKey('my_listings_${type ?? 'product'}'),
+            listingType: type,
+          );
+        },
       ),
       GoRoute(
         path: '/marketplace/saved',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const SavedListingsScreen(),
+        builder: (context, state) {
+          final type = state.uri.queryParameters['type'];
+          return SavedListingsScreen(
+            key: ValueKey('saved_listings_${type ?? 'product'}'),
+            listingType: type,
+          );
+        },
       ),
       GoRoute(
         path: '/marketplace/parts/:make',
@@ -920,3 +996,154 @@ final routerProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+class _PeerListingLoaderScreen extends ConsumerStatefulWidget {
+  final String listingId;
+  const _PeerListingLoaderScreen({required this.listingId});
+
+  @override
+  ConsumerState<_PeerListingLoaderScreen> createState() =>
+      _PeerListingLoaderScreenState();
+}
+
+class _PeerListingLoaderScreenState
+    extends ConsumerState<_PeerListingLoaderScreen> {
+  PeerListing? _listing;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    final cached = ref
+        .read(peerListingRepositoryProvider)
+        .getCachedListing(widget.listingId);
+    if (cached != null) {
+      _listing = cached;
+      _loading = false;
+    }
+    _fetch();
+  }
+
+  Future<void> _fetch() async {
+    final res = await ref
+        .read(peerListingRepositoryProvider)
+        .getListing(widget.listingId);
+    if (mounted) {
+      setState(() {
+        _listing = res ?? _listing;
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_listing != null) {
+      return PeerListingDetailScreen(listing: _listing!);
+    }
+    if (_loading) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+    return Scaffold(
+      appBar: AppBar(),
+      body: const Center(child: Text('Listing not found')),
+    );
+  }
+}
+
+class _RealEstateListingLoaderScreen extends ConsumerStatefulWidget {
+  final String listingId;
+  const _RealEstateListingLoaderScreen({required this.listingId});
+
+  @override
+  ConsumerState<_RealEstateListingLoaderScreen> createState() =>
+      _RealEstateListingLoaderScreenState();
+}
+
+class _RealEstateListingLoaderScreenState
+    extends ConsumerState<_RealEstateListingLoaderScreen> {
+  RealEstateListing? _listing;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.listingId.isEmpty) {
+      _loading = false;
+      return;
+    }
+    final cached = ref
+        .read(realEstateRepositoryProvider)
+        .getCachedListing(widget.listingId);
+    if (cached != null) {
+      _listing = cached;
+      _loading = false;
+    }
+    _fetch();
+  }
+
+  Future<void> _fetch() async {
+    if (widget.listingId.isEmpty) return;
+    final res = await ref
+        .read(realEstateRepositoryProvider)
+        .getListing(widget.listingId);
+    if (mounted) {
+      setState(() {
+        _listing = res ?? _listing;
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_listing != null) {
+      return RealEstateDetailScreen(listing: _listing!);
+    }
+    if (_loading) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+    return Scaffold(
+      appBar: AppBar(),
+      body: const Center(child: Text('Property not found')),
+    );
+  }
+}
+
+class _CommunityMembersLoaderScreen extends ConsumerWidget {
+  final String communityId;
+  const _CommunityMembersLoaderScreen({required this.communityId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final asyncCommunity = ref.watch(communityProvider(communityId));
+    return asyncCommunity.when(
+      data: (community) {
+        if (community == null) {
+          return Scaffold(
+            appBar: AppBar(),
+            body: const Center(child: Text('Community not found')),
+          );
+        }
+        return CommunityMembersScreen(
+          communityId: communityId,
+          community: community,
+        );
+      },
+      loading: () => Scaffold(
+        appBar: AppBar(),
+        body: const Center(child: CircularProgressIndicator()),
+      ),
+      error: (_, _) => Scaffold(
+        appBar: AppBar(),
+        body: const Center(child: Text('Error loading community')),
+      ),
+    );
+  }
+}

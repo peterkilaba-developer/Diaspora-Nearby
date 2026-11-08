@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/features/marketplace/utils/currency_helper.dart';
 import 'package:diaspora_nearby/features/travel/services/amadeus_service.dart';
+import 'package:diaspora_nearby/core/utils/location_utils.dart';
 
 /// Unified model for peer-to-peer stay, car rental & hotel listings.
 class PeerListing {
@@ -146,80 +147,120 @@ class PeerListing {
   }) : createdAt = createdAt ?? DateTime.now();
 
   factory PeerListing.fromJson(Map<String, dynamic> json, String docId) {
+    final details = json['details'] is Map
+        ? Map<String, dynamic>.from(json['details'] as Map)
+        : const <String, dynamic>{};
+    final rawPhotos = json['photos'] ?? json['photoUrls'];
+    final rawPrice =
+        json['pricePerUnit'] ?? json['pricePerDay'] ?? json['pricePerNight'];
+    final rawCity = (json['city'] ?? json['locality']) as String?;
+    final rawLocality = (json['locality'] ?? json['city']) as String?;
+    final rawCountry = json['country'] as String?;
+    final rawCountryCode = json['countryCode'] as String?;
+    final cleanState = sanitizeStateForCountry(
+      state: json['state'] as String?,
+      city: rawLocality ?? rawCity,
+      countryCode: rawCountryCode,
+      countryName: rawCountry,
+    );
+    final rawAmenities = json['amenities'] ?? details['amenities'];
+    final rawFeatures = json['features'] ?? details['features'];
+
     return PeerListing(
       id: docId,
       type: json['type'] ?? 'stay',
       isPeerHosting: json['isPeerHosting'] as bool? ?? false,
       ownerId: json['ownerId'] ?? '',
       ownerName: json['ownerName'] ?? '',
-      ownerPhoto: json['ownerPhoto'] ?? '',
+      ownerPhoto: (json['ownerPhoto'] ?? json['ownerPhotoUrl'] ?? '')
+          .toString(),
       title: json['title'] ?? '',
       description: json['description'] ?? '',
-      photos: List<String>.from(json['photos'] ?? []),
-      pricePerUnit: (json['pricePerUnit'] ?? 0).toDouble(),
+      photos: rawPhotos is List
+          ? rawPhotos.whereType<String>().toList()
+          : const <String>[],
+      pricePerUnit: (rawPrice as num?)?.toDouble() ?? 0.0,
       currency: json['currency'] ?? 'USD',
-      status: json['status'] ?? 'active',
-      city: json['city'],
-      country: json['country'],
-      countryCode: json['countryCode'],
-      lat: json['lat']?.toDouble(),
-      lng: json['lng']?.toDouble(),
+      status:
+          json['status'] as String? ??
+          (json['isAvailable'] == false ? 'paused' : 'active'),
+      city: rawCity,
+      country: rawCountry,
+      countryCode: rawCountryCode,
+      lat: (json['lat'] as num?)?.toDouble(),
+      lng: (json['lng'] as num?)?.toDouble(),
       address: json['address'],
-      locality: json['locality'],
+      locality: rawLocality,
       subLocality: json['subLocality'],
-      state: json['state'],
-      localityLower: json['localityLower'],
-      stateLower: json['stateLower'],
+      state: cleanState,
+      localityLower:
+          json['localityLower'] as String? ?? rawLocality?.toLowerCase(),
+      stateLower: cleanState?.toLowerCase(),
       createdAt: json['createdAt'] is Timestamp
           ? (json['createdAt'] as Timestamp).toDate()
           : DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
                 DateTime.now(),
       updatedAt: json['updatedAt'] is Timestamp
           ? (json['updatedAt'] as Timestamp).toDate()
-          : null,
-      viewCount: json['viewCount'] as int? ?? 0,
-      savedCount: json['savedCount'] as int? ?? 0,
+          : DateTime.tryParse(json['updatedAt']?.toString() ?? ''),
+      viewCount: (json['viewCount'] as num?)?.toInt() ?? 0,
+      savedCount: (json['savedCount'] as num?)?.toInt() ?? 0,
       // Stay
-      propertyType: json['propertyType'],
-      beds: json['beds'],
-      baths: json['baths'],
-      maxGuests: json['maxGuests'],
-      amenities: json['amenities'] != null
-          ? List<String>.from(json['amenities'])
+      propertyType:
+          (json['propertyType'] ?? details['propertyType']) as String?,
+      beds: ((json['beds'] ?? details['beds']) as num?)?.toInt(),
+      baths:
+          ((json['baths'] ??
+                      json['bathrooms'] ??
+                      details['baths'] ??
+                      details['bathrooms'])
+                  as num?)
+              ?.toInt(),
+      maxGuests: ((json['maxGuests'] ?? details['maxGuests']) as num?)?.toInt(),
+      amenities: rawAmenities is List
+          ? rawAmenities.whereType<String>().toList()
           : null,
       // Car
-      make: json['make'],
-      model: json['model'],
-      year: json['year'],
-      vin: json['vin'],
-      transmission: json['transmission'],
-      seats: json['seats'],
-      fuelType: json['fuelType'],
-      drivetrain: json['drivetrain'],
-      bodyType: json['bodyType'],
-      trim: json['trim'],
-      series: json['series'],
-      doors: json['doors'],
-      engineSize: json['engineSize'],
-      engineHP: json['engineHP'],
-      engineLabel: json['engineLabel'],
-      mileage: json['mileage'],
-      vehicleType: json['vehicleType'],
-      abs: json['abs'],
-      airbagLocations: json['airbagLocations'],
-      gvwr: json['gvwr'],
-      electrificationType: json['electrificationType'],
-      batteryKWh: json['batteryKWh'],
-      plantCountry: json['plantCountry'],
-      plantCity: json['plantCity'],
-      features: json['features'] != null
-          ? List<String>.from(json['features'])
+      make: (json['make'] ?? details['make']) as String?,
+      model: (json['model'] ?? details['model']) as String?,
+      year: ((json['year'] ?? details['year']) as num?)?.toInt(),
+      vin: (json['vin'] ?? details['vin']) as String?,
+      transmission:
+          (json['transmission'] ?? details['transmission']) as String?,
+      seats: ((json['seats'] ?? details['seats']) as num?)?.toInt(),
+      fuelType: (json['fuelType'] ?? details['fuelType']) as String?,
+      drivetrain: (json['drivetrain'] ?? details['drivetrain']) as String?,
+      bodyType: (json['bodyType'] ?? details['bodyType']) as String?,
+      trim: (json['trim'] ?? details['trim']) as String?,
+      series: (json['series'] ?? details['series']) as String?,
+      doors: ((json['doors'] ?? details['doors']) as num?)?.toInt(),
+      engineSize: (json['engineSize'] ?? details['engineSize']) as String?,
+      engineHP: (json['engineHP'] ?? details['engineHP'])?.toString(),
+      engineLabel: (json['engineLabel'] ?? details['engineLabel']) as String?,
+      mileage: ((json['mileage'] ?? details['mileage']) as num?)?.toInt(),
+      vehicleType: (json['vehicleType'] ?? details['vehicleType']) as String?,
+      abs: (json['abs'] ?? details['abs']) as String?,
+      airbagLocations:
+          (json['airbagLocations'] ?? details['airbagLocations']) as String?,
+      gvwr: (json['gvwr'] ?? details['gvwr']) as String?,
+      electrificationType:
+          (json['electrificationType'] ?? details['electrificationType'])
+              as String?,
+      batteryKWh: (json['batteryKWh'] ?? details['batteryKWh']) as String?,
+      plantCountry:
+          (json['plantCountry'] ?? details['plantCountry']) as String?,
+      plantCity: (json['plantCity'] ?? details['plantCity']) as String?,
+      features: rawFeatures is List
+          ? rawFeatures.whereType<String>().toList()
           : null,
       // Hotel
-      starRating: json['starRating'],
-      hotelCategory: json['hotelCategory'],
-      checkInTime: json['checkInTime'],
-      checkOutTime: json['checkOutTime'],
+      starRating: ((json['starRating'] ?? details['starRating']) as num?)
+          ?.toInt(),
+      hotelCategory:
+          (json['hotelCategory'] ?? details['hotelCategory']) as String?,
+      checkInTime: (json['checkInTime'] ?? details['checkInTime']) as String?,
+      checkOutTime:
+          (json['checkOutTime'] ?? details['checkOutTime']) as String?,
     );
   }
 
@@ -465,15 +506,15 @@ class PeerListing {
 
   /// e.g. "Midtown, Houston" or "Houston, TX"
   String get locationLabel {
-    final parts = <String>[];
-    if (subLocality != null && subLocality!.isNotEmpty) parts.add(subLocality!);
-    if (locality != null && locality!.isNotEmpty) {
-      parts.add(locality!);
-    } else if (city != null && city!.isNotEmpty) {
-      parts.add(city!);
-    }
-    if (state != null && state!.isNotEmpty) parts.add(state!);
-    return parts.join(', ');
+    return formatTieredLocation(
+      subLocality: subLocality,
+      city: (locality != null && locality!.isNotEmpty) ? locality : city,
+      state: state,
+      country: country,
+      countryCode: countryCode,
+      includeSubLocality: true,
+      includeCountry: false,
+    );
   }
 
   String get subtitleLabel {

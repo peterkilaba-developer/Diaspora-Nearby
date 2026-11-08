@@ -54,6 +54,53 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
   bool _isFamilyGroup = false; // [NEW] Family Group Detection
   bool _isImmediateFamilyGroup = false; // [NEW] Immediate vs Extended
   bool _isListingChat = false; // [NEW] Marketplace Shop / Listing Chat
+  String _listingType = 'product'; // 'job' | 'service' | 'product'
+
+  String get _listingChatNoun {
+    switch (_listingType) {
+      case 'job':
+        return 'Job Chat';
+      case 'service':
+        return 'Service Chat';
+      default:
+        return 'Shop';
+    }
+  }
+
+  String get _listingChatNounLower => _listingChatNoun.toLowerCase();
+
+  String get _listingParticipantSingular {
+    switch (_listingType) {
+      case 'job':
+        return 'applicant';
+      case 'service':
+        return 'client';
+      default:
+        return 'shopper';
+    }
+  }
+
+  String get _listingParticipantPlural {
+    switch (_listingType) {
+      case 'job':
+        return 'applicants';
+      case 'service':
+        return 'clients';
+      default:
+        return 'shoppers';
+    }
+  }
+
+  String get _listingParticipantTitlePlural {
+    switch (_listingType) {
+      case 'job':
+        return 'Applicants';
+      case 'service':
+        return 'Clients';
+      default:
+        return 'Shoppers';
+    }
+  }
 
   // For Batch Editing
   final Set<String> _membersToRemove = {};
@@ -85,6 +132,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
       _isImmediateFamilyGroup =
           cachedChat.metadata?['isFamilyGroupImmediate'] == true;
       _isListingChat = cachedChat.isListingChat;
+      _listingType = cachedChat.listingType;
       _isAdmin =
           cachedChat.createdBy == widget.currentUserId ||
           (cachedChat.admins?.contains(widget.currentUserId) ?? false) ||
@@ -212,6 +260,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
             _isImmediateFamilyGroup =
                 chat.metadata?['isFamilyGroupImmediate'] == true;
             _isListingChat = chat.isListingChat;
+            _listingType = chat.listingType;
 
             _isAdmin =
                 chat.createdBy == widget.currentUserId ||
@@ -371,7 +420,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
       SnackBar(
         content: Text(
           _isListingChat
-              ? 'Shop updated successfully'
+              ? '$_listingChatNoun updated successfully'
               : 'Group updated successfully',
         ),
       ),
@@ -451,9 +500,9 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
 
   Future<void> _leaveGroup() async {
     if (!await _showConfirmation(
-      _isListingChat ? 'Leave Shop' : 'Leave Group',
+      _isListingChat ? 'Leave $_listingChatNoun' : 'Leave Group',
       _isListingChat
-          ? 'Are you sure you want to leave this shop?'
+          ? 'Are you sure you want to leave this $_listingChatNounLower?'
           : 'Are you sure you want to leave this group?',
     )) {
       return;
@@ -507,7 +556,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
           icon: const Icon(LucideIcons.arrowLeft),
           onPressed: () => context.pop(),
         ),
-        title: Text(_isListingChat ? 'Shop Info' : 'Group Info'),
+        title: Text(_isListingChat ? '$_listingChatNoun Info' : 'Group Info'),
         actions: [
           if (_isAdmin && !_isLoading && _isEditing && _isSaving)
             const Padding(
@@ -665,7 +714,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                                       TextCapitalization.sentences,
                                   decoration: InputDecoration(
                                     hintText: _isListingChat
-                                        ? 'Enter shop name'
+                                        ? 'Enter $_listingChatNounLower name'
                                         : 'Enter group name',
                                     filled: true,
                                     fillColor: theme
@@ -713,7 +762,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                                 const SizedBox(width: 4),
                                 Text(
                                   _isListingChat
-                                      ? '${_members.length} shopper${_members.length == 1 ? '' : 's'}'
+                                      ? '${_members.length} ${_members.length == 1 ? _listingParticipantSingular : _listingParticipantPlural}'
                                       : '${_members.length} member${_members.length == 1 ? '' : 's'}',
                                   style: theme.textTheme.bodyMedium?.copyWith(
                                     color: theme.colorScheme.onSurfaceVariant,
@@ -742,7 +791,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                               maxLength: 200,
                               decoration: InputDecoration(
                                 hintText: _isListingChat
-                                    ? 'Add shop description'
+                                    ? 'Add $_listingChatNounLower description'
                                     : 'Add group description',
                                 filled: true,
                                 fillColor: theme
@@ -804,7 +853,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         child: Text(
                           _isListingChat
-                              ? 'SHOPPERS & CONTACTS'
+                              ? '${_listingParticipantTitlePlural.toUpperCase()} & CONTACTS'
                               : 'MEMBERS & CONTACTS',
                           style: theme.textTheme.labelSmall,
                         ),
@@ -828,7 +877,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                         theme,
                         _regularMembers,
                         _isListingChat
-                            ? 'Shoppers (${_regularMembers.length})'
+                            ? '$_listingParticipantTitlePlural (${_regularMembers.length})'
                             : 'Group Members (${_regularMembers.length})',
                       ),
 
@@ -934,7 +983,9 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                         onPressed: _leaveGroup,
                         icon: const Icon(LucideIcons.logOut, size: 18),
                         label: Text(
-                          _isListingChat ? 'Leave Shop' : 'Leave Group',
+                          _isListingChat
+                              ? 'Leave $_listingChatNoun'
+                              : 'Leave Group',
                         ),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: theme.colorScheme.error,

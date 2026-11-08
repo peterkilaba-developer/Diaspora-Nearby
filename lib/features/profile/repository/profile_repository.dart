@@ -553,6 +553,7 @@ class ProfileRepository {
           .get();
 
       List<ProfileData> results = userQuery.docs
+          .where((d) => !ProfileData.isAiAgentUid(d.id))
           .map((d) {
             try {
               final data = d.data();
@@ -563,6 +564,7 @@ class ProfileRepository {
             }
           })
           .whereType<ProfileData>()
+          .where((u) => !u.isAiAgent)
           .toList();
 
       // Optional client-side filtering for community

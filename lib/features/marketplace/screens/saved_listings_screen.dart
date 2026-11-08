@@ -13,7 +13,45 @@ import 'package:diaspora_nearby/features/marketplace/widgets/marketplace_card_he
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 
 class SavedListingsScreen extends ConsumerWidget {
-  const SavedListingsScreen({super.key});
+  final String? listingType;
+
+  const SavedListingsScreen({super.key, this.listingType});
+
+  String get _effectiveType =>
+      (listingType == null || listingType == 'all') ? 'product' : listingType!;
+
+  String get _screenTitle {
+    switch (_effectiveType) {
+      case 'service':
+        return 'Saved Services';
+      case 'job':
+        return 'Saved Jobs';
+      default:
+        return 'Saved Products';
+    }
+  }
+
+  String get _emptyTitle {
+    switch (_effectiveType) {
+      case 'service':
+        return 'No saved services';
+      case 'job':
+        return 'No saved jobs';
+      default:
+        return 'No saved products';
+    }
+  }
+
+  String get _emptySubtitle {
+    switch (_effectiveType) {
+      case 'service':
+        return 'Browse services and save them for later';
+      case 'job':
+        return 'Browse jobs and save them for later';
+      default:
+        return 'Browse products and save them for later';
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -26,20 +64,22 @@ class SavedListingsScreen extends ConsumerWidget {
     }
 
     final repo = ref.watch(marketplaceRepositoryProvider);
-    final cachedSaved = repo.getCachedSavedListings();
+    final cachedSaved = repo.getCachedSavedListings(
+      listingType: _effectiveType,
+    );
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Saved Listings',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        title: Text(
+          _screenTitle,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         elevation: 0,
         backgroundColor: Colors.transparent,
       ),
       body: StreamBuilder<List<MarketplaceListing>>(
         initialData: cachedSaved.isNotEmpty ? cachedSaved : null,
-        stream: repo.getSavedListings(userId),
+        stream: repo.getSavedListings(userId, listingType: _effectiveType),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting &&
               !snapshot.hasData) {
@@ -48,7 +88,10 @@ class SavedListingsScreen extends ConsumerWidget {
             );
           }
 
-          final listings = snapshot.data ?? [];
+          var listings = snapshot.data ?? [];
+          listings = listings
+              .where((l) => l.listingType == _effectiveType)
+              .toList();
 
           if (listings.isEmpty) {
             return Center(
@@ -62,7 +105,7 @@ class SavedListingsScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'No saved listings',
+                    _emptyTitle,
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -71,7 +114,7 @@ class SavedListingsScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Browse the marketplace and save items for later',
+                    _emptySubtitle,
                     style: TextStyle(
                       fontSize: 13,
                       color: theme.hintColor.withValues(alpha: 0.7),
@@ -86,7 +129,7 @@ class SavedListingsScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              childAspectRatio: 0.75,
+              childAspectRatio: 0.68,
               crossAxisSpacing: 10,
               mainAxisSpacing: 10,
             ),
@@ -158,28 +201,35 @@ class SavedListingsScreen extends ConsumerWidget {
                 padding: const EdgeInsets.all(10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    LocalPriceRow(
-                      listing: listing,
-                      viewerCountryCode: ref
-                          .watch(userProfileProvider)
-                          .value
-                          ?.hostCountryCode,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        LocalPriceRow(
+                          listing: listing,
+                          viewerCountryCode: ref
+                              .watch(userProfileProvider)
+                              .value
+                              ?.hostCountryCode,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          listing.title,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      listing.title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const Spacer(),
                     Text(
                       listing.sellerName,
                       style: TextStyle(fontSize: 10, color: theme.hintColor),
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],

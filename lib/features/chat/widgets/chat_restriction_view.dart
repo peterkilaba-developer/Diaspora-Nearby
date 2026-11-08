@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-// Assuming the Chat model is at this path, adjustment might be needed
-// import 'package:diaspora_nearby/features/chat/models/chat.dart';
 
 /// View shown when a user is not a participant of a chat
 /// and is restricted from sending messages.
@@ -10,6 +8,7 @@ class ChatRestrictionView extends StatelessWidget {
   final bool isOrganization;
   final bool isEvent;
   final bool isListingChat;
+  final String? listingType;
   final String chatName;
   final String chatType;
   final VoidCallback? onJoin;
@@ -21,6 +20,7 @@ class ChatRestrictionView extends StatelessWidget {
     required this.isOrganization,
     required this.isEvent,
     this.isListingChat = false,
+    this.listingType,
     required this.chatName,
     required this.chatType,
     this.onJoin,
@@ -62,7 +62,13 @@ class ChatRestrictionView extends StatelessWidget {
             label: Text(
               isJoining
                   ? 'Joining...'
-                  : (isListingChat ? 'Join Shop' : 'Join Group'),
+                  : (isListingChat
+                        ? (listingType == 'job'
+                              ? 'Join Job Chat'
+                              : listingType == 'service'
+                              ? 'Join Service Chat'
+                              : 'Join Shop')
+                        : 'Join Group'),
             ),
           ),
         ),

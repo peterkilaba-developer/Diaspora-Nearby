@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -27,6 +28,7 @@ class AddPastLocationDialog extends StatefulWidget {
 
 class _AddPastLocationDialogState extends State<AddPastLocationDialog> {
   final _searchController = TextEditingController();
+  Timer? _searchDebounce;
   List<AutocompletePrediction> _predictions = [];
   int _searchSeq = 0;
   loc_model.UserLocation? _selectedLocation;
@@ -35,11 +37,13 @@ class _AddPastLocationDialogState extends State<AddPastLocationDialog> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
-  void _onSearchChanged(String v) async {
+  void _onSearchChanged(String v) {
+    _searchDebounce?.cancel();
     final trimmed = v.trim();
     final seq = ++_searchSeq;
     if (trimmed.isEmpty) {
@@ -53,15 +57,18 @@ class _AddPastLocationDialogState extends State<AddPastLocationDialog> {
         trimmed != _selectedLocation!.formattedAddress.trim()) {
       setState(() => _selectedLocation = null);
     }
-    final res = await widget.placesService.autocomplete(trimmed);
-    if (mounted &&
-        seq == _searchSeq &&
-        _searchController.text.trim().isNotEmpty) {
-      setState(() => _predictions = res);
-    }
+    _searchDebounce = Timer(const Duration(milliseconds: 280), () async {
+      final res = await widget.placesService.autocomplete(trimmed);
+      if (mounted &&
+          seq == _searchSeq &&
+          _searchController.text.trim().isNotEmpty) {
+        setState(() => _predictions = res);
+      }
+    });
   }
 
   Future<void> _selectPlace(AutocompletePrediction prediction) async {
+    _searchDebounce?.cancel();
     final id = prediction.placeId;
     _searchSeq++;
 
@@ -78,15 +85,26 @@ class _AddPastLocationDialogState extends State<AddPastLocationDialog> {
     final provisionalCountry = secondaryParts.isNotEmpty
         ? secondaryParts.last
         : null;
-    final provisionalState = secondaryParts.length > 1
-        ? secondaryParts.first
-        : null;
+    final provisionalState = sanitizeStateForCountry(
+      state: secondaryParts.length > 1 ? secondaryParts.first : null,
+      city: prediction.primaryText,
+      countryName: provisionalCountry,
+    );
+    final cleanFallbackAddress = formatTieredLocation(
+      city: prediction.primaryText,
+      state: provisionalState,
+      country: provisionalCountry,
+    );
 
     setState(() {
       _predictions = [];
-      _searchController.text = fallbackAddress;
+      _searchController.text = cleanFallbackAddress.isNotEmpty
+          ? cleanFallbackAddress
+          : fallbackAddress;
       _selectedLocation = loc_model.UserLocation(
-        formattedAddress: fallbackAddress,
+        formattedAddress: cleanFallbackAddress.isNotEmpty
+            ? cleanFallbackAddress
+            : fallbackAddress,
         placeId: id,
         city: prediction.primaryText,
         state: provisionalState,

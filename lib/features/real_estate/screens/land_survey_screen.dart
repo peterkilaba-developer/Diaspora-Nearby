@@ -8,6 +8,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:diaspora_nearby/config/env.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:diaspora_nearby/theme/app_theme.dart';
+import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
+import 'package:diaspora_nearby/core/utils/location_utils.dart';
 
 /// Data returned from the land survey screen.
 class LandSurveyResult {
@@ -271,11 +273,43 @@ class _LandSurveyScreenState extends State<LandSurveyScreen>
           p.street,
           p.name,
         ].where((s) => s != null && s.isNotEmpty).toSet().join(', ');
-        _geocodedCity = p.locality ?? p.subAdministrativeArea;
-        _geocodedState = p.administrativeArea;
-        _geocodedCountry = p.country;
-        _geocodedCountryCode = p.isoCountryCode;
-        _geocodedSubLocality = p.subLocality;
+        final rawCity = (p.locality != null && p.locality!.trim().isNotEmpty)
+            ? p.locality!.trim()
+            : (p.subAdministrativeArea != null &&
+                  p.subAdministrativeArea!.trim().isNotEmpty)
+            ? p.subAdministrativeArea!.trim()
+            : p.subLocality?.trim();
+        _geocodedCity = rawCity != null && rawCity.isNotEmpty
+            ? formatLocationName(rawCity)
+            : null;
+        _geocodedCountryCode = p.isoCountryCode?.trim().toUpperCase();
+        final matchedCountry = _geocodedCountryCode != null
+            ? country_data.getCountryByCode(_geocodedCountryCode!)
+            : null;
+        _geocodedCountry = matchedCountry?.name ?? p.country;
+
+        // Only populate state for 3-tier countries and when not redundant with city
+        _geocodedState = sanitizeStateForCountry(
+          state: p.administrativeArea,
+          city: _geocodedCity,
+          countryCode: _geocodedCountryCode,
+          countryName: _geocodedCountry,
+        );
+
+        String? subLoc =
+            (p.subLocality != null && p.subLocality!.trim().isNotEmpty)
+            ? p.subLocality!.trim()
+            : (p.locality != null &&
+                  p.locality!.trim().isNotEmpty &&
+                  p.subAdministrativeArea != null &&
+                  p.subAdministrativeArea!.trim().isNotEmpty)
+            ? formatLocationName(p.subAdministrativeArea!.trim())
+            : null;
+        if (subLoc != null &&
+            isSameOrRedundantLocationPart(subLoc, _geocodedCity)) {
+          subLoc = null;
+        }
+        _geocodedSubLocality = subLoc;
         _hasGeocodedCenter = true;
       }
     } catch (e) {
@@ -1333,8 +1367,19 @@ class _LandSurveyScreenState extends State<LandSurveyScreen>
             _locationRow(theme, 'Area', _geocodedSubLocality!),
           if (_geocodedCity != null && _geocodedCity!.isNotEmpty)
             _locationRow(theme, 'City', _geocodedCity!),
-          if (_geocodedState != null && _geocodedState!.isNotEmpty)
-            _locationRow(theme, 'State', _geocodedState!),
+          if (_geocodedState != null &&
+              _geocodedState!.isNotEmpty &&
+              country_data.hasStateLevelForCountry(
+                countryCode: _geocodedCountryCode,
+                countryName: _geocodedCountry,
+              ))
+            _locationRow(
+              theme,
+              _geocodedCountryCode != null
+                  ? country_data.getStateTerminology(_geocodedCountryCode!)
+                  : 'State',
+              _geocodedState!,
+            ),
           if (_geocodedCountry != null && _geocodedCountry!.isNotEmpty)
             _locationRow(theme, 'Country', _geocodedCountry!),
           const SizedBox(height: 6),

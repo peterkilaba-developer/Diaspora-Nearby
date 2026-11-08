@@ -17,6 +17,19 @@ class TravelManagementMenu extends StatelessWidget {
 
   const TravelManagementMenu({super.key, required this.category});
 
+  String get _myListingsLabel {
+    switch (category) {
+      case 'Stay':
+        return 'My Stays';
+      case 'Car Rental':
+        return 'My Cars';
+      case 'Hotel':
+        return 'My Hotels';
+      default:
+        return 'My Stays & Cars';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopupMenuButton<String>(
@@ -65,9 +78,12 @@ class TravelManagementMenu extends StatelessWidget {
             ),
           ),
         ),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: 'my_listings',
-          child: _MenuRow(icon: LucideIcons.layoutList, label: 'My Listings'),
+          child: _MenuRow(
+            icon: LucideIcons.layoutList,
+            label: _myListingsLabel,
+          ),
         ),
         const PopupMenuItem(
           value: 'booking_requests',

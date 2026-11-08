@@ -128,8 +128,18 @@ class BereavementService {
       final directChats = chats.where((c) => c.isDirect).toList();
 
       final potentialIds = directChats
+          .where(
+            (c) =>
+                !c.id.startsWith('ai_agent_') &&
+                !c.participants.contains(ProfileData.aiAgentUid),
+          )
           .map((c) => c.getOtherParticipantId(userId))
-          .where((id) => id != null && id.isNotEmpty)
+          .where(
+            (id) =>
+                id != null &&
+                id.isNotEmpty &&
+                !ProfileData.isAiAgentUid(id),
+          )
           .cast<String>()
           .toSet() // Unique
           .toList();
@@ -143,7 +153,7 @@ class BereavementService {
 
       final validProfiles = profiles
           .whereType<ProfileData>()
-          .where((p) => p.uid != null)
+          .where((p) => p.uid != null && !p.isAiAgent)
           .toList();
 
       if (validProfiles.isEmpty) return [];

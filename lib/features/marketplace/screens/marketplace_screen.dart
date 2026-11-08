@@ -106,7 +106,7 @@ class MarketplaceScreen extends ConsumerStatefulWidget {
 
 class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
   String? _selectedCategory;
-  late String _selectedType = widget.initialType ?? 'all';
+  late String _selectedType = widget.initialType ?? 'product';
   String _selectedCountryFilter = 'all';
   bool _showSearch = false;
   final TextEditingController _searchController = TextEditingController();
@@ -168,7 +168,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
 
   void _resetAllFilters() {
     setState(() {
-      _selectedType = widget.initialType ?? 'all';
+      _selectedType = widget.initialType ?? 'product';
       _selectedCategory = null;
       _selectedCountryFilter = 'all';
       _searchController.clear();
@@ -187,34 +187,46 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
   }
 
   @override
+  void didUpdateWidget(covariant MarketplaceScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialType != oldWidget.initialType) {
+      _resetAllFilters();
+    }
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
 
-  String get _screenTitle {
+  String get _categoryPlural {
     switch (_selectedType) {
-      case 'product':
-        return 'Products';
       case 'service':
         return 'Services';
       case 'job':
         return 'Jobs';
       default:
-        return 'Diaspora Marketplace';
+        return 'Products';
     }
   }
 
+  String get _categoryPluralLower => _categoryPlural.toLowerCase();
+
+  String get _screenTitle => _categoryPlural;
+
+  String get _savedActionLabel => 'Saved $_categoryPlural';
+
+  String get _myListingsActionLabel => 'My $_categoryPlural';
+
   String get _searchHint {
     switch (_selectedType) {
-      case 'product':
-        return 'Search products by name, category, or city...';
       case 'service':
         return 'Search services by name, category, or city...';
       case 'job':
         return 'Search jobs by title, category, or city...';
       default:
-        return 'Search products, services, or jobs...';
+        return 'Search products by name, category, or city...';
     }
   }
 
@@ -404,7 +416,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                     color: theme.colorScheme.onSurface,
                   ),
                   const SizedBox(width: 10),
-                  const Text('Saved Listings'),
+                  Text(_savedActionLabel),
                 ],
               ),
             ),
@@ -414,12 +426,16 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
               child: Row(
                 children: [
                   Icon(
-                    LucideIcons.shoppingBag,
+                    _selectedType == 'job'
+                        ? LucideIcons.briefcase
+                        : _selectedType == 'service'
+                        ? LucideIcons.wrench
+                        : LucideIcons.shoppingBag,
                     size: 16,
                     color: theme.colorScheme.onSurface,
                   ),
                   const SizedBox(width: 10),
-                  const Text('My Listings'),
+                  Text(_myListingsActionLabel),
                 ],
               ),
             ),
@@ -445,12 +461,12 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                 child: Row(
                   children: [
                     Icon(
-                      LucideIcons.users,
+                      LucideIcons.wrench,
                       size: 16,
                       color: theme.colorScheme.onSurface,
                     ),
                     const SizedBox(width: 10),
-                    const Text('Find Clients'),
+                    const Text('Offer Services'),
                   ],
                 ),
               ),
@@ -465,7 +481,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                       color: theme.colorScheme.onSurface,
                     ),
                     const SizedBox(width: 10),
-                    const Text('Hire Candidates'),
+                    const Text('Post Jobs'),
                   ],
                 ),
               ),
@@ -696,7 +712,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Error loading listings',
+                    'Error loading $_categoryPluralLower',
                     style: TextStyle(
                       color: theme.colorScheme.error,
                       fontSize: 14,
@@ -715,7 +731,9 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
           );
         }
 
-        var listings = snapshot.data ?? cachedListings;
+        var listings = (snapshot.data ?? cachedListings)
+            .map((l) => repo.getCachedListing(l.id) ?? l)
+            .toList();
 
         // Apply country filter client-side
         if (_selectedCountryFilter != 'all' && profile != null) {
@@ -779,6 +797,62 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
               .where((l) => l.condition == _filterCondition)
               .toList();
         }
+        if (_filterEmploymentType != null) {
+          listings = listings
+              .where(
+                (l) =>
+                    l.jobDetails?['employmentType']?.toString().toLowerCase() ==
+                    _filterEmploymentType!.toLowerCase(),
+              )
+              .toList();
+        }
+        if (_filterWorkMode != null) {
+          listings = listings
+              .where(
+                (l) =>
+                    l.jobDetails?['workMode']?.toString().toLowerCase() ==
+                    _filterWorkMode!.toLowerCase(),
+              )
+              .toList();
+        }
+        if (_filterExperienceLevel != null) {
+          listings = listings
+              .where(
+                (l) =>
+                    l.jobDetails?['experienceLevel']
+                        ?.toString()
+                        .toLowerCase() ==
+                    _filterExperienceLevel!.toLowerCase(),
+              )
+              .toList();
+        }
+        if (_filterBedrooms != null) {
+          listings = listings
+              .where(
+                (l) =>
+                    l.realEstateDetails?['bedrooms']?.toString() ==
+                    _filterBedrooms,
+              )
+              .toList();
+        }
+        if (_filterListingPurpose != null) {
+          listings = listings
+              .where(
+                (l) =>
+                    l.realEstateDetails?['type']?.toString().toLowerCase() ==
+                    _filterListingPurpose!.toLowerCase(),
+              )
+              .toList();
+        }
+        if (_filterBrand != null) {
+          listings = listings
+              .where(
+                (l) =>
+                    l.electronicsDetails?['brand']?.toString().toLowerCase() ==
+                    _filterBrand!.toLowerCase(),
+              )
+              .toList();
+        }
         if (_searchQuery.isNotEmpty) {
           final q = _searchQuery.toLowerCase();
           listings = listings.where((l) {
@@ -812,9 +886,10 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
       return _buildVehicleCard(listing, theme, isDark);
     }
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
         ref.read(marketplaceRepositoryProvider).cacheListing(listing);
-        context.push('/marketplace/listing/${listing.id}');
+        await context.push('/marketplace/listing/${listing.id}');
+        if (mounted) setState(() {});
       },
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
@@ -884,9 +959,10 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
     const radius = 15.0;
 
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
         ref.read(marketplaceRepositoryProvider).cacheListing(listing);
-        context.push('/marketplace/listing/${listing.id}');
+        await context.push('/marketplace/listing/${listing.id}');
+        if (mounted) setState(() {});
       },
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
@@ -1275,14 +1351,20 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
               shape: BoxShape.circle,
             ),
             child: Icon(
-              isSearch ? LucideIcons.searchX : LucideIcons.store,
+              isSearch
+                  ? LucideIcons.searchX
+                  : (_selectedType == 'job'
+                        ? LucideIcons.briefcase
+                        : _selectedType == 'service'
+                        ? LucideIcons.wrench
+                        : LucideIcons.store),
               size: 32,
               color: theme.hintColor.withValues(alpha: 0.3),
             ),
           ),
           const SizedBox(height: 16),
           Text(
-            isSearch ? 'No results found' : 'No listings yet',
+            isSearch ? 'No results found' : 'No $_categoryPluralLower yet',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -1293,7 +1375,11 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
           Text(
             isSearch
                 ? 'Try different keywords or adjust filters'
-                : 'Be the first to sell in your community!',
+                : _selectedType == 'job'
+                ? 'Be the first to post jobs in your community!'
+                : _selectedType == 'service'
+                ? 'Be the first to offer services in your community!'
+                : 'Be the first to sell $_categoryPluralLower in your community!',
             style: TextStyle(
               fontSize: 13,
               color: theme.hintColor.withValues(alpha: 0.6),
@@ -1572,7 +1658,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                           if (tempCount > 0)
                             TextButton(
                               onPressed: () => setSheetState(() {
-                                tempType = widget.initialType ?? 'all';
+                                tempType = widget.initialType ?? 'product';
                                 tempCategory = null;
                                 tempMake = null;
                                 tempModel = null;
@@ -2282,14 +2368,14 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                             ),
                             elevation: 0,
                           ),
-                          child: const Row(
+                          child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(LucideIcons.search, size: 18),
-                              SizedBox(width: 8),
+                              const Icon(LucideIcons.search, size: 18),
+                              const SizedBox(width: 8),
                               Text(
-                                'Show Me Listings',
-                                style: TextStyle(
+                                'Show Me ${tempType == 'service' ? 'Services' : tempType == 'job' ? 'Jobs' : 'Products'}',
+                                style: const TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -2360,21 +2446,31 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
 
   // ─── Helpers ────────────────────────────────────────────────────────────
   void _handleMenuAction(String value, {dynamic profile}) async {
+    final activeType = _selectedType == 'all' ? 'product' : _selectedType;
     switch (value) {
       case 'saved':
-        context.push('/marketplace/saved');
+        context.push('/marketplace/saved?type=$activeType');
         break;
       case 'my_listings':
-        context.push('/marketplace/my-listings');
+        context.push('/marketplace/my-listings?type=$activeType');
         break;
       case 'sell_product':
-        context.push('/marketplace/create', extra: ListingType.product);
+        context.push(
+          '/marketplace/create?type=${ListingType.product}',
+          extra: ListingType.product,
+        );
         break;
       case 'find_clients':
-        context.push('/marketplace/create', extra: ListingType.service);
+        context.push(
+          '/marketplace/create?type=${ListingType.service}',
+          extra: ListingType.service,
+        );
         break;
       case 'hire_candidates':
-        context.push('/marketplace/create', extra: ListingType.job);
+        context.push(
+          '/marketplace/create?type=${ListingType.job}',
+          extra: ListingType.job,
+        );
         break;
     }
   }

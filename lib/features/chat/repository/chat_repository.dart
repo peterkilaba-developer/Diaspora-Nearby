@@ -1008,6 +1008,88 @@ class ChatRepository {
           }
         }
 
+        // Heal legacy listing chats that lacked metadata['listingType'] or had 'Shop created'
+        if (chat.isListingChat &&
+            (chat.metadata?['listingType'] == null ||
+                chat.metadata?['listingType'].toString().isEmpty == true)) {
+          final rawData = chatDoc.data() ?? {};
+          final rawListingData = rawData['listingData'];
+          final listingId =
+              (chat.metadata?['listingId'] ?? rawData['listingId'])
+                  ?.toString()
+                  .trim() ??
+              '';
+          String? healedListingType;
+          String? healedSellerRole;
+          if (rawListingData is Map) {
+            final t = rawListingData['type']?.toString().trim().toLowerCase();
+            if (t == 'job' || t == 'service' || t == 'product') {
+              healedListingType = t;
+            }
+          }
+          if (healedListingType == null && listingId.isNotEmpty) {
+            try {
+              final listingDoc = await _firestore
+                  .collection('listings')
+                  .doc(listingId)
+                  .get();
+              if (listingDoc.exists) {
+                final ld = listingDoc.data() ?? {};
+                final t = ld['type']?.toString().trim().toLowerCase();
+                final cat = ld['category']?.toString().trim().toLowerCase() ?? '';
+                if (t == 'job' || cat.startsWith('job_')) {
+                  healedListingType = 'job';
+                } else if (t == 'service') {
+                  healedListingType = 'service';
+                } else if (t == 'product') {
+                  healedListingType = 'product';
+                }
+              }
+            } catch (_) {}
+          }
+          if (healedListingType != null) {
+            healedSellerRole = healedListingType == 'job'
+                ? 'Employer'
+                : healedListingType == 'service'
+                ? 'Provider'
+                : 'Seller';
+            final mergedMeta = <String, dynamic>{
+              ...?chat.metadata,
+              'isListingChat': true,
+              if (listingId.isNotEmpty) 'listingId': listingId,
+              'listingType': healedListingType,
+              'sellerRole': healedSellerRole,
+            };
+            var healedLastMsg = chat.lastMessage;
+            if (healedLastMsg != null &&
+                (healedLastMsg.content == 'Shop created' ||
+                    healedLastMsg.content == 'Group created')) {
+              final expectedText = healedListingType == 'job'
+                  ? 'Job posted'
+                  : healedListingType == 'service'
+                  ? 'Service posted'
+                  : 'Shop created';
+              if (healedLastMsg.content != expectedText) {
+                healedLastMsg = healedLastMsg.copyWith(content: expectedText);
+              }
+            }
+            chat = chat.copyWith(
+              metadata: mergedMeta,
+              lastMessage: healedLastMsg,
+            );
+            unawaited(
+              _chatsCol
+                  .doc(chatId)
+                  .update({
+                    'metadata': mergedMeta,
+                    if (healedLastMsg != null)
+                      'lastMessage.content': healedLastMsg.content,
+                  })
+                  .catchError((Object _) {}),
+            );
+          }
+        }
+
         if (chat.participants.isEmpty && currentUserId != null) {
           final healedParticipants = <String>[currentUserId!];
           final data = chatDoc.data() ?? {};
@@ -1612,9 +1694,13 @@ class ChatRepository {
 
       final contactIds = <String>{};
       for (final chat in chats) {
+        if (chat.id.startsWith('ai_agent_') ||
+            chat.participants.contains(ProfileData.aiAgentUid)) {
+          continue;
+        }
         if (chat.type == 'direct') {
           for (final uid in chat.participants) {
-            if (uid != currentUserId) {
+            if (uid != currentUserId && !ProfileData.isAiAgentUid(uid)) {
               contactIds.add(uid);
             }
           }
@@ -1628,9 +1714,12 @@ class ChatRepository {
       final List<String> missingIds = [];
 
       for (final uid in contactIds) {
+        if (ProfileData.isAiAgentUid(uid)) continue;
         final cached = profileRepo.getCachedProfile(uid);
         if (cached != null) {
-          profiles.add(cached);
+          if (!cached.isAiAgent) {
+            profiles.add(cached);
+          }
         } else {
           missingIds.add(uid);
         }
@@ -1648,10 +1737,13 @@ class ChatRepository {
         );
         for (final snapshot in snapshots) {
           for (final d in snapshot.docs) {
+            if (ProfileData.isAiAgentUid(d.id)) continue;
             final p = ProfileData.fromJson(d.data());
             p.uid = d.id;
             profileRepo.cacheProfile(d.id, p);
-            profiles.add(p);
+            if (!p.isAiAgent) {
+              profiles.add(p);
+            }
           }
         }
       }

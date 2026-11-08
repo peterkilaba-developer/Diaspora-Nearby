@@ -10,6 +10,7 @@ import 'package:diaspora_nearby/config/env.dart';
 import 'package:uuid/uuid.dart';
 import 'package:diaspora_nearby/features/shared/models/google_places_models.dart';
 import 'package:diaspora_nearby/core/utils/location_utils.dart';
+import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 
 /// Firebase Cloud Functions base URL for CORS proxy
 /// On web, we route Google Places API calls through this proxy
@@ -92,10 +93,13 @@ class GooglePlacesService {
       final useProxy = kIsWeb || apiKey.isEmpty;
 
       // Default to cities to enforce strict locality/city-level matching if no filter provided
-      // For VENUES, we don't pass a 'types' param (fetch all), but we filter client-side.
+      // For VENUES or ALL, we don't pass a 'types' param (fetch all).
       String? requestTypes;
       if (filter == null || filter == PlaceTypeFilter.CITIES) {
         requestTypes = '(cities)';
+      } else if (filter == PlaceTypeFilter.ALL ||
+          filter == PlaceTypeFilter.VENUES) {
+        requestTypes = null;
       } else if (filter == PlaceTypeFilter.REGIONS) {
         requestTypes = '(regions)';
       } else if (filter == PlaceTypeFilter.ADDRESS) {
@@ -107,7 +111,6 @@ class GooglePlacesService {
       } else if (filter == PlaceTypeFilter.SCHOOLS) {
         requestTypes = 'school|university';
       }
-      // For VENUES, we leave requestTypes as null to fetch everything, then filter in code
 
       // On web (or if client API key is not embedded), use the Cloud Functions proxy
       // On mobile with an API key, call the Google Places API directly
@@ -267,13 +270,14 @@ class GooglePlacesService {
               addressComponents,
             );
             if (parsed != null) {
-              final parts = <String>[];
-              if (parsed.city != null) parts.add(parsed.city!);
-              if (parsed.state != null) parts.add(parsed.state!);
-              parts.add(parsed.country);
-
-              if (parts.isNotEmpty) {
-                cleanAddress = parts.toSet().join(', ');
+              final formatted = formatTieredLocation(
+                city: parsed.city,
+                state: parsed.state,
+                country: parsed.country,
+                countryCode: parsed.countryCode,
+              );
+              if (formatted.isNotEmpty) {
+                cleanAddress = formatted;
               }
             }
           }
@@ -319,6 +323,19 @@ class GooglePlacesService {
     }
   }
 
+  /// Constructs a direct Google Places Photo URL for a given [photoReference].
+  String? getPlacePhotoUrl(String? photoReference, {int maxWidth = 1000}) {
+    final ref = photoReference?.trim();
+    if (ref == null || ref.isEmpty) return null;
+    final apiKey = Env.googleMapsApiKey;
+    if (apiKey.isEmpty) return null;
+    return Uri.https('maps.googleapis.com', '/maps/api/place/photo', {
+      'maxwidth': '$maxWidth',
+      'photo_reference': ref,
+      'key': apiKey,
+    }).toString();
+  }
+
   /// Reverse geocode: convert lat/lng to place details
   /// Returns structured location data including city, state, country, countryCode
   Future<Map<String, dynamic>?> reverseGeocode(double lat, double lng) async {
@@ -334,34 +351,53 @@ class GooglePlacesService {
 
       String? country;
       if (countryCode != null) {
-        final countryNames = {
-          'US': 'United States',
-          'TZ': 'Tanzania',
-          'GB': 'United Kingdom',
-          'CA': 'Canada',
-          'AU': 'Australia',
-          'IN': 'India',
-          'CN': 'China',
-          'JP': 'Japan',
-          'BR': 'Brazil',
-          'MX': 'Mexico',
-          'DE': 'Germany',
-          'FR': 'France',
-          'IT': 'Italy',
-        };
-        country = countryNames[countryCode] ?? place.country;
+        final matched = country_data.getCountryByCode(countryCode);
+        country = matched?.name ?? place.country;
       } else {
         country = place.country;
       }
 
-      final city = place.locality ?? place.subAdministrativeArea;
-      final state = place.administrativeArea;
+      final rawCity = (place.locality != null && place.locality!.trim().isNotEmpty)
+          ? place.locality!.trim()
+          : (place.subAdministrativeArea != null &&
+                place.subAdministrativeArea!.trim().isNotEmpty)
+          ? place.subAdministrativeArea!.trim()
+          : place.subLocality?.trim();
+      final city = rawCity != null && rawCity.isNotEmpty
+          ? formatLocationName(rawCity)
+          : null;
 
-      final formattedAddress = [?city, ?state, ?country].join(', ');
+      String? subLocality =
+          (place.subLocality != null && place.subLocality!.trim().isNotEmpty)
+          ? place.subLocality!.trim()
+          : (place.locality != null &&
+                place.locality!.trim().isNotEmpty &&
+                place.subAdministrativeArea != null &&
+                place.subAdministrativeArea!.trim().isNotEmpty)
+          ? formatLocationName(place.subAdministrativeArea!.trim())
+          : null;
+      if (subLocality != null && isSameOrRedundantLocationPart(subLocality, city)) {
+        subLocality = null;
+      }
+
+      final state = sanitizeStateForCountry(
+        state: place.administrativeArea,
+        city: city,
+        countryCode: countryCode,
+        countryName: country,
+      );
+
+      final formattedAddress = formatTieredLocation(
+        city: city,
+        state: state,
+        country: country,
+        countryCode: countryCode,
+      );
 
       return {
         'formattedAddress': formattedAddress,
         'placeId': '',
+        'subLocality': subLocality,
         'city': city,
         'state': state,
         'country': country,

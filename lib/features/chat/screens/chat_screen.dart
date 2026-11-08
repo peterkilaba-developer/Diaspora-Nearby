@@ -1984,7 +1984,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                     )
                   : (chat?.isListingChat == true)
                   ? Icon(
-                      LucideIcons.shoppingCart,
+                      chat!.isJobListingChat
+                          ? LucideIcons.briefcase
+                          : chat.isServiceListingChat
+                          ? LucideIcons.wrench
+                          : LucideIcons.shoppingCart,
                       size: 16,
                       color: Colors.green.shade700,
                     )
@@ -2010,7 +2014,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                             : chat?.memberCount))
                   : null,
               memberLabel: (chat?.isListingChat == true)
-                  ? 'shoppers'
+                  ? chat!.listingParticipantPlural
                   : 'members',
               // [NEW] Event Status
               eventStatus: eventStatus,
@@ -2453,6 +2457,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                   isOrganization: chat.isOrganization,
                   isEvent: chat.isEvent,
                   isListingChat: chat.isListingChat,
+                  listingType: chat.listingType,
                   chatName: chat.name,
                   chatType: chat.type,
                   onJoin: (chat.type == 'group')
@@ -2473,7 +2478,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                             SnackBar(
                               content: Text(
                                 chat.isListingChat
-                                    ? 'Joined shop!'
+                                    ? 'Joined ${chat.listingChatNounLower}!'
                                     : 'Joined group!',
                               ),
                             ),
@@ -2622,7 +2627,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
             (chat?.admins?.contains(currentUserId) ?? false));
     return ChatEmptyState(
       isListingChat: isListing,
-      listingType: chat?.metadata?['listingType']?.toString(),
+      listingType: chat?.listingType,
       isSeller: isSeller,
       onQuickPromptTap: isListing ? (prompt) => _sendMessage(prompt) : null,
     );
@@ -2987,7 +2992,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                   displayName,
                   isLeave: true,
                   titleOverride: chat.isListingChat
-                      ? 'Leave Shop?'
+                      ? 'Leave ${chat.listingChatNoun}?'
                       : chat.isGroup
                       ? 'Leave Group?'
                       : chat.isEvent

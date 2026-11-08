@@ -130,6 +130,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
   DateTime? _jobDeadline;
 
   // Step 3 — Images & Contact
+  List<String> _existingImageUrls = [];
   final List<XFile> _selectedImages = [];
   final List<String> _deliveryOptions = ['pickup'];
   String _contactMethod = ContactMethod.chat;
@@ -159,6 +160,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
     _priceNegotiable = listing.priceNegotiable;
     _condition = listing.condition;
     _contactMethod = listing.contactMethod;
+    _existingImageUrls = List<String>.from(listing.images);
 
     // Vehicle details
     if (listing.vehicleDetails != null) {
@@ -189,6 +191,18 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       _vehicleElectrificationType =
           listing.vehicleDetails!['electrificationType'] as String?;
       _vehicleBatteryKWh = listing.vehicleDetails!['batteryKWh'] as String?;
+    }
+
+    // Motorcycle details
+    if (listing.motorcycleDetails != null) {
+      _motorcycleMake = listing.motorcycleDetails!['make'] as String?;
+      _motorcycleModel = listing.motorcycleDetails!['model'] as String?;
+      _motorcycleYear = listing.motorcycleDetails!['year'] as String?;
+      _motorcycleMileageController.text =
+          listing.motorcycleDetails!['mileage']?.toString() ?? '';
+      _motorcycleEngineSize =
+          listing.motorcycleDetails!['engineSize'] as String?;
+      _motorcycleType = listing.motorcycleDetails!['type'] as String?;
     }
 
     // Car parts details
@@ -372,24 +386,34 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
     );
   }
 
+  String get _categoryName {
+    switch (_listingType) {
+      case ListingType.service:
+        return 'Service';
+      case ListingType.job:
+        return 'Job';
+      default:
+        return 'Product';
+    }
+  }
+
   String _stepTitle() {
     switch (_currentStep) {
       case 0:
+        if (_isEditing) return 'Edit $_categoryName';
         return _listingType == ListingType.job
-            ? 'Post a Job'
-            : 'What are you listing?';
-      case 1:
-        return _listingType == ListingType.job
-            ? 'Job Details'
+            ? 'Post Jobs'
             : _listingType == ListingType.service
-            ? 'Service Details'
-            : 'Listing Details';
+            ? 'Sell Services'
+            : 'Sell Products';
+      case 1:
+        return '$_categoryName Details';
       case 2:
         return _listingType == ListingType.job
             ? 'Images & Contact'
             : 'Photos & Contact';
       default:
-        return _isEditing ? 'Edit Listing' : 'Create Listing';
+        return _isEditing ? 'Edit $_categoryName' : 'Create $_categoryName';
     }
   }
 
@@ -400,68 +424,74 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         : _listingType == ListingType.job
         ? MarketplaceCategory.jobCategories
         : MarketplaceCategory.productCategories;
+    final hasContextualType =
+        _isEditing ||
+        (widget.defaultListingType != null &&
+            widget.defaultListingType!.isNotEmpty);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Product vs Service toggle
-        _buildSectionLabel('Type', theme),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: _buildToggleOption(
-                icon: LucideIcons.package,
-                label: 'Product',
-                isSelected: _listingType == ListingType.product,
-                onTap: () => setState(() {
-                  _listingType = ListingType.product;
-                  _selectedCategory = null;
-                  _selectedSubcategory = null;
-                }),
-                theme: theme,
-                isDark: isDark,
+        if (!hasContextualType) ...[
+          // Product vs Service toggle
+          _buildSectionLabel('Type', theme),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _buildToggleOption(
+                  icon: LucideIcons.package,
+                  label: 'Product',
+                  isSelected: _listingType == ListingType.product,
+                  onTap: () => setState(() {
+                    _listingType = ListingType.product;
+                    _selectedCategory = null;
+                    _selectedSubcategory = null;
+                  }),
+                  theme: theme,
+                  isDark: isDark,
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _buildToggleOption(
-                icon: LucideIcons.wrench,
-                label: 'Service',
-                isSelected: _listingType == ListingType.service,
-                onTap: () => setState(() {
-                  _listingType = ListingType.service;
-                  _selectedCategory = null;
-                  _selectedSubcategory = null;
-                  _condition = null;
-                }),
-                theme: theme,
-                isDark: isDark,
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildToggleOption(
+                  icon: LucideIcons.wrench,
+                  label: 'Service',
+                  isSelected: _listingType == ListingType.service,
+                  onTap: () => setState(() {
+                    _listingType = ListingType.service;
+                    _selectedCategory = null;
+                    _selectedSubcategory = null;
+                    _condition = null;
+                  }),
+                  theme: theme,
+                  isDark: isDark,
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _buildToggleOption(
-                icon: LucideIcons.briefcase,
-                label: 'Job',
-                isSelected: _listingType == ListingType.job,
-                onTap: () => setState(() {
-                  _listingType = ListingType.job;
-                  _selectedCategory = null;
-                  _selectedSubcategory = null;
-                  _condition = null;
-                }),
-                theme: theme,
-                isDark: isDark,
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildToggleOption(
+                  icon: LucideIcons.briefcase,
+                  label: 'Job',
+                  isSelected: _listingType == ListingType.job,
+                  onTap: () => setState(() {
+                    _listingType = ListingType.job;
+                    _selectedCategory = null;
+                    _selectedSubcategory = null;
+                    _condition = null;
+                  }),
+                  theme: theme,
+                  isDark: isDark,
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
 
-        const SizedBox(height: 24),
+          const SizedBox(height: 24),
+        ],
 
         // Category grid
-        _buildSectionLabel('Category', theme),
+        _buildSectionLabel('$_categoryName Category', theme),
         const SizedBox(height: 8),
         GridView.builder(
           shrinkWrap: true,
@@ -640,9 +670,9 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Listing Title',
-                  style: TextStyle(
+                Text(
+                  '$_categoryName Title',
+                  style: const TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
                     color: AppTheme.accent,
@@ -668,14 +698,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         const SizedBox(height: 20),
 
         // Description
-        _buildSectionLabel(
-          _listingType == ListingType.job
-              ? 'Job Description'
-              : _listingType == ListingType.service
-              ? 'Service Description'
-              : 'Item Description',
-          theme,
-        ),
+        _buildSectionLabel('$_categoryName Description', theme),
         const SizedBox(height: 8),
         _buildTextField(
           controller: _descriptionController,
@@ -683,7 +706,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
               ? 'Describe the role, responsibilities, and requirements...'
               : _listingType == ListingType.service
               ? 'Describe your service, what you offer, and how it works...'
-              : 'Describe your item in detail...',
+              : 'Describe your product in detail...',
           maxLines: 4,
           maxLength: 2000,
           theme: theme,
@@ -860,11 +883,11 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildSectionLabel('Listing Title', theme),
+            _buildSectionLabel('$_categoryName Title', theme),
             const SizedBox(height: 8),
             _buildTextField(
               controller: _titleController,
-              hint: 'Give your listing a title',
+              hint: 'Give your ${_categoryName.toLowerCase()} a title',
               maxLength: 120,
               theme: theme,
               isDark: isDark,
@@ -2746,13 +2769,20 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Images
-        _buildSectionLabel('Photos (up to 6)', theme),
+        _buildSectionLabel(
+          _listingType == ListingType.job
+              ? 'Company Logo / Photos (up to 6)'
+              : _listingType == ListingType.service
+              ? 'Portfolio / Service Photos (up to 6)'
+              : 'Photos (up to 6)',
+          theme,
+        ),
         const SizedBox(height: 8),
         SizedBox(
           height: 100,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            itemCount: _selectedImages.length + 1,
+            itemCount: _existingImageUrls.length + _selectedImages.length + 1,
             separatorBuilder: (_, _) => const SizedBox(width: 10),
             itemBuilder: (context, index) {
               if (index == 0) {
@@ -2784,7 +2814,47 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                 );
               }
 
-              final img = _selectedImages[index - 1];
+              final itemIndex = index - 1;
+              if (itemIndex < _existingImageUrls.length) {
+                final url = _existingImageUrls[itemIndex];
+                return Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: Image.network(
+                        url,
+                        width: 100,
+                        height: 100,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: GestureDetector(
+                        onTap: () => setState(
+                          () => _existingImageUrls.removeAt(itemIndex),
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            LucideIcons.x,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              }
+
+              final selectedIdx = itemIndex - _existingImageUrls.length;
+              final img = _selectedImages[selectedIdx];
               return Stack(
                 children: [
                   ClipRRect(
@@ -2801,7 +2871,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                     right: 4,
                     child: GestureDetector(
                       onTap: () =>
-                          setState(() => _selectedImages.removeAt(index - 1)),
+                          setState(() => _selectedImages.removeAt(selectedIdx)),
                       child: Container(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
@@ -3086,7 +3156,11 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                         ),
                       )
                     : Text(
-                        _currentStep == 2 ? 'Publish Listing' : 'Next',
+                        _currentStep == 2
+                            ? (_isEditing
+                                  ? 'Update $_categoryName'
+                                  : 'Publish $_categoryName')
+                            : 'Next',
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
               ),
@@ -3256,20 +3330,22 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       final listingId = _isEditing
           ? widget.existingListing!.id
           : repo.generateListingId();
-      final existingImages = widget.existingListing?.images ?? <String>[];
+      final existingImages = List<String>.from(_existingImageUrls);
       final selectedFiles = List<XFile>.from(_selectedImages);
 
       final optimisticListing = MarketplaceListing(
         id: listingId,
-        sellerId: user.uid,
+        sellerId: widget.existingListing?.sellerId ?? user.uid,
         sellerName: profile.fullName,
         sellerPhoto: profile.profileImage.isNotEmpty
             ? profile.profileImage
             : null,
         sellerCountryCode: profile.hostCountryCode,
         sellerCity: profile.hostLocation.city,
-        orgId: null,
-        orgName: profile.businessProfile?.businessName,
+        orgId: widget.existingListing?.orgId,
+        orgName:
+            widget.existingListing?.orgName ??
+            profile.businessProfile?.businessName,
         title: _generateTitle().isNotEmpty
             ? _generateTitle()
             : _titleController.text.trim(),
@@ -3299,9 +3375,15 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             ? null
             : List<String>.from(_deliveryOptions),
         contactMethod: _contactMethod,
+        status: widget.existingListing?.status ?? ListingStatus.active,
+        viewCount: widget.existingListing?.viewCount ?? 0,
+        savedCount: widget.existingListing?.savedCount ?? 0,
+        reportCount: widget.existingListing?.reportCount ?? 0,
         communityIds: profile.communityMemberships,
         createdAt: widget.existingListing?.createdAt ?? DateTime.now(),
-        expiresAt: DateTime.now().add(const Duration(days: 30)),
+        expiresAt:
+            widget.existingListing?.expiresAt ??
+            DateTime.now().add(const Duration(days: 30)),
       );
 
       // Optimistic cache update on Frame 0
@@ -3310,12 +3392,12 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       if (_isEditing) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Listing updated successfully!'),
+            SnackBar(
+              content: Text('$_categoryName updated successfully!'),
               backgroundColor: AppTheme.success,
             ),
           );
-          context.pop();
+          context.pop(optimisticListing);
         }
         unawaited(() async {
           try {
@@ -3344,8 +3426,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Listing published successfully!'),
+            SnackBar(
+              content: Text('$_categoryName published successfully!'),
               backgroundColor: AppTheme.success,
             ),
           );
@@ -3412,7 +3494,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
   }
 
   Future<void> _pickImage() async {
-    if (_selectedImages.length >= 6) {
+    if (_existingImageUrls.length + _selectedImages.length >= 6) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Maximum 6 photos allowed')));

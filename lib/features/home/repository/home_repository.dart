@@ -74,6 +74,7 @@ class NearbyUsersNotifier extends AsyncNotifier<List<ProfileData>> {
   ) {
     final enriched =
         users
+            .where((u) => !u.isAiAgent)
             .map(
               (u) => u.copyWith(
                 distance: calculateProfileDistanceKm(
@@ -248,7 +249,7 @@ class HomeRepository {
     final currentUid = _auth.currentUser?.uid;
     final allCached = NearbyUsersNotifier.getAllCachedUsers();
     return allCached.where((u) {
-      if (u.uid == currentUid) return false;
+      if (u.uid == currentUid || u.isAiAgent) return false;
       final fullName = '${u.firstName} ${u.lastName}'.toLowerCase();
       final bio = (u.bio ?? '').toLowerCase();
       final city = (u.hostLocation.city ?? '').toLowerCase();
@@ -283,6 +284,7 @@ class HomeRepository {
             (item) =>
                 ProfileData.fromJson(Map<String, dynamic>.from(item as Map)),
           )
+          .where((u) => !u.isAiAgent)
           .toList(growable: false);
     } catch (e) {
       debugPrint('[HomeRepository] getNearbyUsers error: $e');
@@ -305,6 +307,7 @@ class HomeRepository {
             (item) =>
                 ProfileData.fromJson(Map<String, dynamic>.from(item as Map)),
           )
+          .where((u) => !u.isAiAgent)
           .toList(growable: false);
       _searchCache[q] = users;
       return users;

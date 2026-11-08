@@ -28,6 +28,8 @@ class MarketplaceRepository {
   static final Map<String, List<MarketplaceListing>> _userListingsCache = {};
   static final Set<String> _savedListingIdsCache = {};
   static List<MarketplaceListing> _savedListingsCache = [];
+  static final StreamController<void> _cacheUpdatesController =
+      StreamController<void>.broadcast();
 
   List<MarketplaceListing> get cachedListings => _activeListingsCache;
 
@@ -36,12 +38,23 @@ class MarketplaceRepository {
   bool isListingSavedSync(String listingId) =>
       _savedListingIdsCache.contains(listingId);
 
-  List<MarketplaceListing> getCachedSavedListings() => _savedListingsCache;
+  List<MarketplaceListing> getCachedSavedListings({String? listingType}) {
+    if (listingType == null || listingType == 'all') return _savedListingsCache;
+    return _savedListingsCache
+        .where((l) => l.listingType == listingType)
+        .toList();
+  }
 
-  List<MarketplaceListing> getCachedUserListings(String userId) {
+  List<MarketplaceListing> getCachedUserListings(
+    String userId, {
+    String? listingType,
+  }) {
     final direct = _userListingsCache[userId];
-    if (direct != null && direct.isNotEmpty) return direct;
-    return _activeListingsCache.where((l) => l.sellerId == userId).toList();
+    final base = (direct != null && direct.isNotEmpty)
+        ? direct
+        : _activeListingsCache.where((l) => l.sellerId == userId).toList();
+    if (listingType == null || listingType == 'all') return base;
+    return base.where((l) => l.listingType == listingType).toList();
   }
 
   List<MarketplaceListing> getCachedListings({
@@ -65,6 +78,10 @@ class MarketplaceRepository {
     if (communityIds != null && communityIds.isNotEmpty) {
       results = results.where((listing) {
         if (listing.communityIds == null || listing.communityIds!.isEmpty) {
+          return true;
+        }
+        if (listing.communityIds!.contains('global') ||
+            listing.communityIds!.contains('global_community')) {
           return true;
         }
         return listing.communityIds!.any((cid) => communityIds.contains(cid));
@@ -181,6 +198,7 @@ class MarketplaceRepository {
       _savedListingsCache = List<MarketplaceListing>.from(_savedListingsCache)
         ..[savedIdx] = listing;
     }
+    _cacheUpdatesController.add(null);
   }
 
   void removeCachedListing(String listingId) {
@@ -198,6 +216,7 @@ class MarketplaceRepository {
               .where((l) => l.id != listingId)
               .toList();
     }
+    _cacheUpdatesController.add(null);
   }
 
   // ─── READ ───────────────────────────────────────────────────────────────
@@ -234,14 +253,18 @@ class MarketplaceRepository {
     query = query.limit(limit);
 
     final firestoreStream = query.snapshots().map((snapshot) {
-      final listings = snapshot.docs.map((doc) {
-        final item = MarketplaceListing.fromMap(
-          doc.data() as Map<String, dynamic>,
-          doc.id,
-        );
-        _listingsByIdCache[item.id] = item;
-        return item;
-      }).toList();
+      final listings = <MarketplaceListing>[];
+      for (final doc in snapshot.docs) {
+        try {
+          final data = doc.data();
+          if (data is! Map<String, dynamic>) continue;
+          final item = MarketplaceListing.fromMap(data, doc.id);
+          _listingsByIdCache[item.id] = item;
+          listings.add(item);
+        } catch (e) {
+          debugPrint('Error parsing marketplace listing ${doc.id}: $e');
+        }
+      }
 
       if (category == null &&
           scope == null &&
@@ -262,6 +285,10 @@ class MarketplaceRepository {
           if (listing.communityIds == null || listing.communityIds!.isEmpty) {
             return true;
           }
+          if (listing.communityIds!.contains('global') ||
+              listing.communityIds!.contains('global_community')) {
+            return true;
+          }
           return listing.communityIds!.any((cid) => communityIds.contains(cid));
         }).toList();
       }
@@ -279,12 +306,27 @@ class MarketplaceRepository {
       if (cached.isNotEmpty) {
         controller.add(cached);
       }
+      final cacheSub = _cacheUpdatesController.stream.listen((_) {
+        if (!controller.isClosed) {
+          controller.add(
+            getCachedListings(
+              communityIds: communityIds,
+              category: category,
+              scope: scope,
+              listingType: listingType,
+            ),
+          );
+        }
+      });
       final sub = firestoreStream.listen(
         controller.add,
         onError: controller.addError,
         onDone: controller.close,
       );
-      controller.onCancel = sub.cancel;
+      controller.onCancel = () {
+        cacheSub.cancel();
+        sub.cancel();
+      };
     });
   }
 
@@ -306,36 +348,56 @@ class MarketplaceRepository {
   }
 
   /// Stream current user's own listings
-  Stream<List<MarketplaceListing>> getMyListings(String userId) {
+  Stream<List<MarketplaceListing>> getMyListings(
+    String userId, {
+    String? listingType,
+  }) {
     final firestoreStream = _listingsRef
         .where('sellerId', isEqualTo: userId)
         .orderBy('createdAt', descending: true)
         .limit(100)
         .snapshots()
         .map((snapshot) {
-          final list = snapshot.docs.map((doc) {
-            final item = MarketplaceListing.fromMap(
-              doc.data() as Map<String, dynamic>,
-              doc.id,
-            );
-            _listingsByIdCache[item.id] = item;
-            return item;
-          }).toList();
+          final list = <MarketplaceListing>[];
+          for (final doc in snapshot.docs) {
+            try {
+              final data = doc.data();
+              if (data is! Map<String, dynamic>) continue;
+              final item = MarketplaceListing.fromMap(data, doc.id);
+              _listingsByIdCache[item.id] = item;
+              list.add(item);
+            } catch (e) {
+              debugPrint('Error parsing my listing ${doc.id}: $e');
+            }
+          }
           _userListingsCache[userId] = list;
+          if (listingType != null && listingType != 'all') {
+            return list.where((l) => l.listingType == listingType).toList();
+          }
           return list;
         });
 
     return Stream.multi((controller) {
-      final cached = getCachedUserListings(userId);
+      final cached = getCachedUserListings(userId, listingType: listingType);
       if (cached.isNotEmpty) {
         controller.add(cached);
       }
+      final cacheSub = _cacheUpdatesController.stream.listen((_) {
+        if (!controller.isClosed) {
+          controller.add(
+            getCachedUserListings(userId, listingType: listingType),
+          );
+        }
+      });
       final sub = firestoreStream.listen(
         controller.add,
         onError: controller.addError,
         onDone: controller.close,
       );
-      controller.onCancel = sub.cancel;
+      controller.onCancel = () {
+        cacheSub.cancel();
+        sub.cancel();
+      };
     });
   }
 
@@ -355,14 +417,18 @@ class MarketplaceRepository {
         .limit(limit);
 
     final snapshot = await firestoreQuery.get();
-    final results = snapshot.docs.map((doc) {
-      final item = MarketplaceListing.fromMap(
-        doc.data() as Map<String, dynamic>,
-        doc.id,
-      );
-      _listingsByIdCache[item.id] = item;
-      return item;
-    }).toList();
+    final results = <MarketplaceListing>[];
+    for (final doc in snapshot.docs) {
+      try {
+        final data = doc.data();
+        if (data is! Map<String, dynamic>) continue;
+        final item = MarketplaceListing.fromMap(data, doc.id);
+        _listingsByIdCache[item.id] = item;
+        results.add(item);
+      } catch (e) {
+        debugPrint('Error parsing searched listing ${doc.id}: $e');
+      }
+    }
     return results;
   }
 
@@ -468,8 +534,15 @@ class MarketplaceRepository {
     String listingId,
     Map<String, dynamic> updates,
   ) async {
-    updates['updatedAt'] = FieldValue.serverTimestamp();
-    await _listingsRef.doc(listingId).update(updates);
+    final sanitized = Map<String, dynamic>.from(updates)
+      ..remove('id')
+      ..remove('sellerId')
+      ..remove('viewCount')
+      ..remove('savedCount')
+      ..remove('reportCount')
+      ..remove('createdAt');
+    sanitized['updatedAt'] = FieldValue.serverTimestamp();
+    await _listingsRef.doc(listingId).update(sanitized);
   }
 
   /// Delete a listing
@@ -583,7 +656,10 @@ class MarketplaceRepository {
   }
 
   /// Stream saved listings for a user
-  Stream<List<MarketplaceListing>> getSavedListings(String userId) {
+  Stream<List<MarketplaceListing>> getSavedListings(
+    String userId, {
+    String? listingType,
+  }) {
     final firestoreStream = _firestore
         .collection('users')
         .doc(userId)
@@ -620,11 +696,14 @@ class MarketplaceRepository {
             final snaps = await Future.wait(batchFutures);
             for (final snap in snaps) {
               for (final doc in snap.docs) {
-                final item = MarketplaceListing.fromMap(
-                  doc.data() as Map<String, dynamic>,
-                  doc.id,
-                );
-                _listingsByIdCache[item.id] = item;
+                try {
+                  final data = doc.data();
+                  if (data is! Map<String, dynamic>) continue;
+                  final item = MarketplaceListing.fromMap(data, doc.id);
+                  _listingsByIdCache[item.id] = item;
+                } catch (e) {
+                  debugPrint('Error parsing saved listing ${doc.id}: $e');
+                }
               }
             }
           }
@@ -634,12 +713,16 @@ class MarketplaceRepository {
               .whereType<MarketplaceListing>()
               .toList();
           _savedListingsCache = listings;
+          if (listingType != null && listingType != 'all') {
+            return listings.where((l) => l.listingType == listingType).toList();
+          }
           return listings;
         });
 
     return Stream.multi((controller) {
-      if (_savedListingsCache.isNotEmpty) {
-        controller.add(_savedListingsCache);
+      final cached = getCachedSavedListings(listingType: listingType);
+      if (cached.isNotEmpty) {
+        controller.add(cached);
       }
       final sub = firestoreStream.listen(
         controller.add,

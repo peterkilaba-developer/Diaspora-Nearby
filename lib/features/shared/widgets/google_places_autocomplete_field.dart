@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/core/services/google_places_service.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/features/shared/models/google_places_models.dart';
+import 'package:diaspora_nearby/core/utils/location_utils.dart';
 
 class GooglePlacesAutocompleteField extends ConsumerStatefulWidget {
   final String label;
@@ -191,7 +192,10 @@ class _GooglePlacesAutocompleteFieldState
                       _debounce?.cancel();
                       _searchSeq++;
                       _predictions = [];
-                      _controller.text = '$mainText, $secondaryText';
+                      final rawText = secondaryText.isNotEmpty
+                          ? '$mainText, $secondaryText'
+                          : mainText;
+                      _controller.text = cleanRedundantLocationString(rawText);
                       widget.onSelected(_controller.text, placeId);
                       _removeOverlay();
                       _focusNode.unfocus();

@@ -99,7 +99,9 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: AlertDialog(
           insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
-          title: const Text('Delete Listing'),
+          title: Text(
+            'Delete ${listing.type == 'hotel' ? 'Hotel' : listing.type == 'car' ? 'Car' : 'Stay'}',
+          ),
           content: Text('Delete "${listing.title}"? This cannot be undone.'),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -320,6 +322,58 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
     if (result == true) _load();
   }
 
+  String get _screenTitle {
+    switch (widget.filterType) {
+      case 'stay':
+        return 'My Stays';
+      case 'car':
+        return 'My Cars';
+      case 'hotel':
+        return 'My Hotels';
+      default:
+        return 'My Stays & Cars';
+    }
+  }
+
+  String get _emptyTitle {
+    switch (widget.filterType) {
+      case 'stay':
+        return 'No stays yet';
+      case 'car':
+        return 'No cars yet';
+      case 'hotel':
+        return 'No hotels yet';
+      default:
+        return 'No stays or cars yet';
+    }
+  }
+
+  String get _emptySubtitle {
+    switch (widget.filterType) {
+      case 'stay':
+        return 'List your stay for other diaspora members to book.';
+      case 'car':
+        return 'List your car for other diaspora members to rent.';
+      case 'hotel':
+        return 'List your hotel for other diaspora members to book.';
+      default:
+        return 'List your property or car for other diaspora members to book.';
+    }
+  }
+
+  String get _createButtonLabel {
+    switch (widget.filterType) {
+      case 'stay':
+        return 'Post Stay';
+      case 'car':
+        return 'Post Car';
+      case 'hotel':
+        return 'Post Hotel';
+      default:
+        return 'Create Your First Listing';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -327,7 +381,7 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
-        title: const Text('My Listings'),
+        title: Text(_screenTitle),
         elevation: 0,
         backgroundColor: Colors.transparent,
         actions: [
@@ -345,13 +399,13 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
                 color: AppTheme.accent,
               ),
             ),
-            tooltip: 'New Listing',
+            tooltip: _createButtonLabel,
           ),
           const SizedBox(width: 4),
         ],
       ),
       body: _isLoading
-          ? const TravelSkeletonLoader(label: 'Loading listings...')
+          ? TravelSkeletonLoader(label: 'Loading ${_screenTitle.toLowerCase()}...')
           : _listings == null || _listings!.isEmpty
           ? _buildEmptyState(theme)
           : RefreshIndicator(
@@ -372,6 +426,11 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
   }
 
   Widget _buildEmptyState(ThemeData theme) {
+    final emptyIcon = widget.filterType == 'car'
+        ? LucideIcons.car
+        : widget.filterType == 'hotel'
+        ? LucideIcons.hotel
+        : LucideIcons.home;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(40),
@@ -379,20 +438,20 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              LucideIcons.home,
+              emptyIcon,
               size: 56,
               color: theme.colorScheme.onSurface.withValues(alpha: 0.15),
             ),
             const SizedBox(height: 16),
             Text(
-              'No listings yet',
+              _emptyTitle,
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              'List your property or car for other diaspora members to book.',
+              _emptySubtitle,
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
@@ -403,7 +462,7 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
             OutlinedButton.icon(
               onPressed: _createNew,
               icon: const Icon(LucideIcons.plus, size: 16),
-              label: const Text('Create Your First Listing'),
+              label: Text(_createButtonLabel),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppTheme.accent,
                 side: BorderSide.none,

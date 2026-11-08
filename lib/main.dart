@@ -77,8 +77,10 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
           body = msgContent.isEmpty ? 'Document' : msgContent;
           break;
         case 'dsp_transfer':
-          title = 'Diaspora Nearby';
-          body = 'Transfer';
+          if (senderName == null || senderName.trim().isEmpty) {
+            title = 'Diaspora Nearby';
+          }
+          body = msgContent.isEmpty ? r'Received $DIASPORA' : msgContent;
           break;
         case 'money-transfer':
           body = 'Money transfer';

@@ -19,6 +19,7 @@ import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:diaspora_nearby/core/utils/location_utils.dart';
 
 class OrganizationDetailScreen extends ConsumerStatefulWidget {
   final String orgId;
@@ -630,7 +631,11 @@ class _OrganizationDetailScreenState
                     _buildInfoTile(
                       LucideIcons.mapPin,
                       'Location',
-                      [city, ?state, ?country].join(', '),
+                      formatTieredLocation(
+                        city: city,
+                        state: state,
+                        country: country,
+                      ),
                       onTap: () => _openDirections(),
                     ),
 

@@ -91,6 +91,16 @@ class MarketplaceCategory {
     jobOther,
   ];
 
+  static String listingTypeForCategory(
+    String category, {
+    String fallback = ListingType.product,
+  }) {
+    if (serviceCategories.contains(category)) return ListingType.service;
+    if (jobCategories.contains(category)) return ListingType.job;
+    if (productCategories.contains(category)) return ListingType.product;
+    return fallback;
+  }
+
   static String displayName(String id) {
     switch (id) {
       case vehicles:
@@ -745,57 +755,170 @@ class MarketplaceListing {
   }
 
   factory MarketplaceListing.fromMap(Map<String, dynamic> map, String docId) {
+    final category = map['category'] as String? ?? '';
+    final rawType = map['listingType'] as String? ?? ListingType.product;
+    final resolvedType = MarketplaceCategory.listingTypeForCategory(
+      category,
+      fallback: rawType,
+    );
+
+    ListingLocation? parsedLocation;
+    final rawLocation = map['location'];
+    final fallbackCity = (map['sellerCity'] ?? map['city']) as String?;
+    final fallbackCountry = map['country'] as String?;
+    final fallbackCountryCode =
+        (map['sellerCountryCode'] ?? map['sellerCountry'] ?? map['countryCode'])
+            as String?;
+    if (rawLocation is Map) {
+      parsedLocation = ListingLocation.fromMap(
+        Map<String, dynamic>.from(rawLocation),
+      );
+    } else if (rawLocation is String && rawLocation.trim().isNotEmpty) {
+      final parts = rawLocation
+          .split(',')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+      parsedLocation = ListingLocation(
+        city: fallbackCity ?? (parts.isNotEmpty ? parts.first : null),
+        country: fallbackCountry ?? (parts.length > 1 ? parts.last : null),
+        countryCode: fallbackCountryCode,
+        formattedAddress: rawLocation.trim(),
+      );
+    } else if (fallbackCity != null || fallbackCountry != null) {
+      final addrParts = [
+        fallbackCity,
+        fallbackCountry,
+      ].whereType<String>().where((s) => s.trim().isNotEmpty).toList();
+      parsedLocation = ListingLocation(
+        city: fallbackCity,
+        country: fallbackCountry,
+        countryCode: fallbackCountryCode,
+        formattedAddress: addrParts.isNotEmpty ? addrParts.join(', ') : null,
+      );
+    }
+
+    String? normalizedCondition = map['condition'] as String?;
+    if (normalizedCondition != null) {
+      final lowerCond = normalizedCondition.trim().toLowerCase();
+      if (resolvedType == ListingType.job ||
+          resolvedType == ListingType.service) {
+        normalizedCondition = null;
+      } else if (lowerCond == 'new') {
+        normalizedCondition = ItemCondition.brandNew;
+      } else if (lowerCond == 'like new' || lowerCond == 'like_new') {
+        normalizedCondition = ItemCondition.likeNew;
+      } else if (lowerCond == 'good' ||
+          lowerCond == 'used - good' ||
+          lowerCond == 'used_good') {
+        normalizedCondition = ItemCondition.usedGood;
+      } else if (lowerCond == 'fair' ||
+          lowerCond == 'used - fair' ||
+          lowerCond == 'used_fair') {
+        normalizedCondition = ItemCondition.usedFair;
+      }
+    }
+
+    Map<String, dynamic>? parsedJobDetails = map['jobDetails'] is Map
+        ? Map<String, dynamic>.from(map['jobDetails'] as Map)
+        : null;
+    if (parsedJobDetails == null &&
+        (resolvedType == ListingType.job ||
+            map['companyName'] != null ||
+            map['employmentType'] != null ||
+            map['salaryRange'] != null ||
+            map['applicationUrl'] != null)) {
+      parsedJobDetails = <String, dynamic>{
+        if (map['companyName'] != null) 'companyName': map['companyName'],
+        if (map['employmentType'] != null)
+          'employmentType': map['employmentType'],
+        if (map['salaryRange'] != null) 'salaryRange': map['salaryRange'],
+        if (map['experienceLevel'] != null)
+          'experienceLevel': map['experienceLevel'],
+        if (map['workMode'] != null) 'workMode': map['workMode'],
+        if (map['applicationDeadline'] != null)
+          'applicationDeadline': map['applicationDeadline'],
+        if (map['applicationUrl'] != null)
+          'applicationUrl': map['applicationUrl'],
+      };
+    }
+
+    Map<String, dynamic>? parsedServiceDetails = map['serviceDetails'] is Map
+        ? Map<String, dynamic>.from(map['serviceDetails'] as Map)
+        : null;
+    if (parsedServiceDetails == null && resolvedType == ListingType.service) {
+      final pricingModel = map['pricingModel'] as String?;
+      final serviceArea = map['serviceArea'] as String? ?? fallbackCity;
+      if (pricingModel != null || serviceArea != null) {
+        parsedServiceDetails = <String, dynamic>{
+          'pricingModel': ?pricingModel,
+          'serviceArea': ?serviceArea,
+        };
+      }
+    }
+
     return MarketplaceListing(
       id: docId,
       sellerId: map['sellerId'] as String? ?? '',
       sellerName: map['sellerName'] as String? ?? '',
-      sellerPhoto: map['sellerPhoto'] as String?,
-      sellerCountryCode: map['sellerCountryCode'] as String?,
-      sellerCity: map['sellerCity'] as String?,
+      sellerPhoto: (map['sellerPhoto'] ?? map['sellerAvatar']) as String?,
+      sellerCountryCode: fallbackCountryCode,
+      sellerCity: fallbackCity ?? parsedLocation?.city,
       orgId: map['orgId'] as String?,
       orgName: map['orgName'] as String?,
       title: map['title'] as String? ?? '',
       description: map['description'] as String? ?? '',
-      category: map['category'] as String? ?? '',
+      category: category,
       subcategory: map['subcategory'] as String?,
-      listingType: map['listingType'] as String? ?? ListingType.product,
+      listingType: resolvedType,
       scope: map['scope'] as String? ?? ListingScope.local,
-      priceAmount: (map['priceAmount'] as num?)?.toDouble() ?? 0,
+      priceAmount:
+          ((map['priceAmount'] ?? map['price']) as num?)?.toDouble() ?? 0,
       priceNegotiable: map['priceNegotiable'] as bool? ?? false,
-      condition: map['condition'] as String?,
-      vehicleDetails: map['vehicleDetails'] as Map<String, dynamic>?,
-      motorcycleDetails: map['motorcycleDetails'] as Map<String, dynamic>?,
-      carPartsDetails: map['carPartsDetails'] as Map<String, dynamic>?,
-      realEstateDetails: map['realEstateDetails'] as Map<String, dynamic>?,
-      electronicsDetails: map['electronicsDetails'] as Map<String, dynamic>?,
-      serviceDetails: map['serviceDetails'] as Map<String, dynamic>?,
-      jobDetails: map['jobDetails'] as Map<String, dynamic>?,
-      images:
-          (map['images'] as List<dynamic>?)?.map((e) => e as String).toList() ??
-          [],
-      tags: (map['tags'] as List<dynamic>?)?.map((e) => e as String).toList(),
-      location: map['location'] != null
-          ? ListingLocation.fromMap(map['location'] as Map<String, dynamic>)
+      condition: normalizedCondition,
+      vehicleDetails: map['vehicleDetails'] is Map
+          ? Map<String, dynamic>.from(map['vehicleDetails'] as Map)
           : null,
+      motorcycleDetails: map['motorcycleDetails'] is Map
+          ? Map<String, dynamic>.from(map['motorcycleDetails'] as Map)
+          : null,
+      carPartsDetails: map['carPartsDetails'] is Map
+          ? Map<String, dynamic>.from(map['carPartsDetails'] as Map)
+          : null,
+      realEstateDetails: map['realEstateDetails'] is Map
+          ? Map<String, dynamic>.from(map['realEstateDetails'] as Map)
+          : null,
+      electronicsDetails: map['electronicsDetails'] is Map
+          ? Map<String, dynamic>.from(map['electronicsDetails'] as Map)
+          : null,
+      serviceDetails: parsedServiceDetails,
+      jobDetails: parsedJobDetails,
+      images:
+          (map['images'] as List<dynamic>?)
+              ?.whereType<String>()
+              .toList() ??
+          [],
+      tags: (map['tags'] as List<dynamic>?)?.whereType<String>().toList(),
+      location: parsedLocation,
       deliveryOptions: (map['deliveryOptions'] as List<dynamic>?)
-          ?.map((e) => e as String)
+          ?.whereType<String>()
           .toList(),
       contactMethod: map['contactMethod'] as String? ?? ContactMethod.chat,
       status: map['status'] as String? ?? ListingStatus.active,
-      viewCount: map['viewCount'] as int? ?? 0,
-      savedCount: map['savedCount'] as int? ?? 0,
-      reportCount: map['reportCount'] as int? ?? 0,
+      viewCount: (map['viewCount'] as num?)?.toInt() ?? 0,
+      savedCount: (map['savedCount'] as num?)?.toInt() ?? 0,
+      reportCount: (map['reportCount'] as num?)?.toInt() ?? 0,
       createdAt: map['createdAt'] is Timestamp
           ? (map['createdAt'] as Timestamp).toDate()
-          : null,
+          : DateTime.tryParse(map['createdAt']?.toString() ?? ''),
       updatedAt: map['updatedAt'] is Timestamp
           ? (map['updatedAt'] as Timestamp).toDate()
-          : null,
+          : DateTime.tryParse(map['updatedAt']?.toString() ?? ''),
       expiresAt: map['expiresAt'] is Timestamp
           ? (map['expiresAt'] as Timestamp).toDate()
-          : null,
+          : DateTime.tryParse(map['expiresAt']?.toString() ?? ''),
       communityIds: (map['communityIds'] as List<dynamic>?)
-          ?.map((e) => e as String)
+          ?.whereType<String>()
           .toList(),
     );
   }

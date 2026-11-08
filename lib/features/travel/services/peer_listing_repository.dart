@@ -55,6 +55,15 @@ class PeerListingRepository {
   bool isListingSavedSync(String listingId) =>
       _savedListingIdsCache.contains(listingId);
 
+  List<PeerListing> getCachedSavedListings({String? type}) {
+    final list = _savedListingIdsCache
+        .map((id) => _listingsByIdCache[id])
+        .whereType<PeerListing>()
+        .toList();
+    if (type == null) return List.unmodifiable(list);
+    return list.where((l) => l.type == type).toList();
+  }
+
   void cacheListing(PeerListing listing) {
     if (listing.id.isEmpty) return;
     _listingsByIdCache[listing.id] = listing;
@@ -151,8 +160,14 @@ class PeerListingRepository {
 
   /// Update an existing listing
   Future<void> updateListing(String id, Map<String, dynamic> data) async {
-    data['updatedAt'] = FieldValue.serverTimestamp();
-    await _listings.doc(id).update(data);
+    final sanitized = Map<String, dynamic>.from(data)
+      ..remove('id')
+      ..remove('ownerId')
+      ..remove('viewCount')
+      ..remove('savedCount')
+      ..remove('createdAt');
+    sanitized['updatedAt'] = FieldValue.serverTimestamp();
+    await _listings.doc(id).update(sanitized);
   }
 
   /// Delete a listing
@@ -475,21 +490,100 @@ class PeerListingRepository {
   /// Save (bookmark) a listing
   Future<void> saveListing(String listingId, String userId) async {
     _savedListingIdsCache.add(listingId);
-    await _functions.httpsCallable('setListingSaved').call({
-      'listingType': 'peer',
-      'listingId': listingId,
-      'saved': true,
-    });
+    final savedDoc = _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('saved_listings')
+        .doc(listingId);
+    final listing = _listingsByIdCache[listingId];
+    await Future.wait([
+      savedDoc.set({
+        'savedAt': FieldValue.serverTimestamp(),
+        'type': 'peer',
+        if (listing != null) 'peerType': listing.type,
+      }),
+      _functions.httpsCallable('setListingSaved').call({
+        'listingType': 'peer',
+        'listingId': listingId,
+        'saved': true,
+      }),
+    ]);
   }
 
   /// Unsave (remove bookmark) a listing
   Future<void> unsaveListing(String listingId, String userId) async {
     _savedListingIdsCache.remove(listingId);
-    await _functions.httpsCallable('setListingSaved').call({
-      'listingType': 'peer',
-      'listingId': listingId,
-      'saved': false,
-    });
+    final savedDoc = _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('saved_listings')
+        .doc(listingId);
+    await Future.wait([
+      savedDoc.delete(),
+      _functions.httpsCallable('setListingSaved').call({
+        'listingType': 'peer',
+        'listingId': listingId,
+        'saved': false,
+      }),
+    ]);
+  }
+
+  /// Get saved peer listings for a user
+  Future<List<PeerListing>> getSavedListings(
+    String userId, {
+    String? type,
+  }) async {
+    try {
+      final snap = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('saved_listings')
+          .orderBy('savedAt', descending: true)
+          .limit(100)
+          .get();
+      final docIds = snap.docs.map((d) => d.id).toList();
+      final allIds = <String>{...docIds, ..._savedListingIdsCache}.toList();
+      if (allIds.isEmpty) return [];
+
+      final missingIds = allIds
+          .where((id) => !_listingsByIdCache.containsKey(id))
+          .toList();
+      if (missingIds.isNotEmpty) {
+        final batchFutures = <Future<QuerySnapshot>>[];
+        for (var i = 0; i < missingIds.length; i += 10) {
+          final batch = missingIds.sublist(
+            i,
+            i + 10 > missingIds.length ? missingIds.length : i + 10,
+          );
+          batchFutures.add(
+            _listings.where(FieldPath.documentId, whereIn: batch).get(),
+          );
+        }
+        final snaps = await Future.wait(batchFutures);
+        for (final s in snaps) {
+          for (final doc in s.docs) {
+            final item = PeerListing.fromJson(
+              doc.data() as Map<String, dynamic>,
+              doc.id,
+            );
+            _listingsByIdCache[item.id] = item;
+            _savedListingIdsCache.add(item.id);
+          }
+        }
+      }
+
+      var list = allIds
+          .map((id) => _listingsByIdCache[id])
+          .whereType<PeerListing>()
+          .toList();
+      if (type != null) {
+        list = list.where((l) => l.type == type).toList();
+      }
+      return list;
+    } catch (e) {
+      debugPrint('getSavedListings error: $e');
+      return getCachedSavedListings(type: type);
+    }
   }
 
   /// Check if a listing is saved by the user

@@ -114,6 +114,7 @@ exports.findNearbyUsers = functions.https.onCall(async (data, context) => {
 
     const excluded = new Set([
         uid,
+        "diaspora_ai_agent",
         ...(callerPriv.blockedUsers || []),
         ...(callerPub.blockedUsers || []),
         ...(Array.isArray(data && data.excludeUserIds) ?
@@ -272,12 +273,15 @@ exports.searchUsers = functions.https.onCall(async (data, context) => {
     const callerPubData = callerPublic.exists ? callerPublic.data() : {};
     const callerCoords = extractCoordinates(callerPrivData, callerPubData);
     const blocked = new Set([
+        "diaspora_ai_agent",
         ...(callerPrivData.blockedUsers || []),
         ...(callerPubData.blockedUsers || []),
     ]);
     const matches = new Map();
     for (const profile of [...firstNames.docs, ...lastNames.docs]) {
-        if (profile.id !== uid && !blocked.has(profile.id)) matches.set(profile.id, profile);
+        if (profile.id !== uid && !blocked.has(profile.id) && hasUsableName(profile.data() || {})) {
+            matches.set(profile.id, profile);
+        }
     }
     const privateMatches = matches.size === 0 ? [] : await db.getAll(
         ...[...matches.keys()].map((id) => db.collection("user_private").doc(id)),

@@ -99,6 +99,7 @@ class AddressComponent {
 }
 
 enum PlaceTypeFilter {
+  ALL, // Unfiltered: returns establishments, addresses, cities, and regions
   GEOCODE,
   ADDRESS,
   ESTABLISHMENT,

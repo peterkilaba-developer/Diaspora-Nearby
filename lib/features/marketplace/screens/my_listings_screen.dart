@@ -10,7 +10,56 @@ import 'package:diaspora_nearby/features/marketplace/widgets/marketplace_card_he
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 
 class MyListingsScreen extends ConsumerWidget {
-  const MyListingsScreen({super.key});
+  final String? listingType;
+
+  const MyListingsScreen({super.key, this.listingType});
+
+  String get _effectiveType =>
+      (listingType == null || listingType == 'all') ? 'product' : listingType!;
+
+  String get _screenTitle {
+    switch (_effectiveType) {
+      case 'service':
+        return 'My Services';
+      case 'job':
+        return 'My Jobs';
+      default:
+        return 'My Products';
+    }
+  }
+
+  String get _emptyTitle {
+    switch (_effectiveType) {
+      case 'service':
+        return 'No services yet';
+      case 'job':
+        return 'No jobs yet';
+      default:
+        return 'No products yet';
+    }
+  }
+
+  String get _emptySubtitle {
+    switch (_effectiveType) {
+      case 'service':
+        return 'Post your first service to start finding clients';
+      case 'job':
+        return 'Post your first job to start hiring';
+      default:
+        return 'Create your first product to start selling';
+    }
+  }
+
+  String get _createButtonLabel {
+    switch (_effectiveType) {
+      case 'service':
+        return 'Offer Services';
+      case 'job':
+        return 'Post Jobs';
+      default:
+        return 'Sell Products';
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -23,26 +72,32 @@ class MyListingsScreen extends ConsumerWidget {
     }
 
     final repo = ref.watch(marketplaceRepositoryProvider);
-    final cachedListings = repo.getCachedUserListings(userId);
+    final cachedListings = repo.getCachedUserListings(
+      userId,
+      listingType: _effectiveType,
+    );
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'My Listings',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        title: Text(
+          _screenTitle,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         elevation: 0,
         backgroundColor: Colors.transparent,
         actions: [
           IconButton(
             icon: const Icon(LucideIcons.plus, size: 20),
-            onPressed: () => context.push('/marketplace/create'),
+            onPressed: () => context.push(
+              '/marketplace/create?type=$_effectiveType',
+              extra: _effectiveType,
+            ),
           ),
         ],
       ),
       body: StreamBuilder<List<MarketplaceListing>>(
         initialData: cachedListings.isNotEmpty ? cachedListings : null,
-        stream: repo.getMyListings(userId),
+        stream: repo.getMyListings(userId, listingType: _effectiveType),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting &&
               !snapshot.hasData) {
@@ -51,7 +106,10 @@ class MyListingsScreen extends ConsumerWidget {
             );
           }
 
-          final listings = snapshot.data ?? [];
+          var listings = (snapshot.data ?? [])
+              .map((l) => repo.getCachedListing(l.id) ?? l)
+              .where((l) => l.listingType == _effectiveType)
+              .toList();
 
           if (listings.isEmpty) {
             return Center(
@@ -59,13 +117,17 @@ class MyListingsScreen extends ConsumerWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
-                    LucideIcons.packagePlus,
+                    _effectiveType == 'job'
+                        ? LucideIcons.briefcase
+                        : _effectiveType == 'service'
+                        ? LucideIcons.wrench
+                        : LucideIcons.packagePlus,
                     size: 48,
                     color: theme.hintColor.withValues(alpha: 0.3),
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'No listings yet',
+                    _emptyTitle,
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -74,7 +136,7 @@ class MyListingsScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Create your first listing to start selling',
+                    _emptySubtitle,
                     style: TextStyle(
                       fontSize: 13,
                       color: theme.hintColor.withValues(alpha: 0.7),
@@ -82,9 +144,12 @@ class MyListingsScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton.icon(
-                    onPressed: () => context.push('/marketplace/create'),
+                    onPressed: () => context.push(
+                      '/marketplace/create?type=$_effectiveType',
+                      extra: _effectiveType,
+                    ),
                     icon: const Icon(LucideIcons.plus, size: 16),
-                    label: const Text('Create Listing'),
+                    label: Text(_createButtonLabel),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.accent,
                       foregroundColor: Colors.white,
@@ -160,7 +225,15 @@ class MyListingsScreen extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Top row: status chip
-                    Row(children: [_buildStatusChip(listing.status, isDark)]),
+                    Row(
+                      children: [
+                        _buildStatusChip(
+                          listing.status,
+                          listing.listingType,
+                          isDark,
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 3),
                     Text(
                       listing.title,
@@ -195,7 +268,7 @@ class MyListingsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildStatusChip(String status, bool isDark) {
+  Widget _buildStatusChip(String status, String listingType, bool isDark) {
     Color color;
     String label;
     switch (status) {
@@ -205,7 +278,11 @@ class MyListingsScreen extends ConsumerWidget {
         break;
       case ListingStatus.sold:
         color = AppTheme.info;
-        label = 'Sold';
+        label = listingType == ListingType.job
+            ? 'Filled'
+            : listingType == ListingType.service
+            ? 'Booked'
+            : 'Sold';
         break;
       case ListingStatus.paused:
         color = AppTheme.warning;

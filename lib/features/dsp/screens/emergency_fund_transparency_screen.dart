@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:diaspora_nearby/features/dsp/services/emergency_fund_service.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
@@ -41,14 +42,60 @@ class _EmergencyFundTransparencyScreenState
     unawaited(_load());
   }
 
+  Future<Map<String, dynamic>> _ledgerStats() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('emergency_fund_ledger')
+          .where(
+            'createdAt',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(
+              DateTime(DateTime.now().year),
+            ),
+          )
+          .get();
+      // Members pay once every 365 days, so within one calendar year each
+      // transfer into the fund address is one contributing member; every
+      // transfer out of it is one disbursement.
+      int contributedCount = 0;
+      int disbursedCount = 0;
+      num disbursedUsd = 0;
+      num contributedUsd = 0;
+      for (final d in snap.docs) {
+        final e = d.data();
+        final usd = e['amountUsdEquivalent'];
+        final usdNum = usd is num ? usd : (num.tryParse('$usd') ?? 0);
+        if (e['kind'] == 'disbursement') {
+          disbursedUsd += usdNum;
+          disbursedCount++;
+        } else {
+          contributedUsd += usdNum;
+          contributedCount++;
+        }
+      }
+      return {
+        'totalDisbursedUsd': disbursedUsd,
+        'disbursedCount': disbursedCount,
+        'totalContributedUsd': contributedUsd,
+        'contributorsCount': contributedCount,
+      };
+    } catch (e) {
+      debugPrint('[Transparency] ledger stats failed: $e');
+      return {};
+    }
+  }
+
   Future<void> _load() async {
+    final ledger = await _ledgerStats();
     // Try the Cloud Function first (gives live on-chain treasury balance).
     try {
       final res = await FirebaseFunctions.instance
           .httpsCallable('getEmergencyFundStats')
           .call()
           .timeout(const Duration(seconds: 6));
-      final nextStats = Map<String, dynamic>.from(res.data as Map);
+      final nextStats = {
+        ...Map<String, dynamic>.from(res.data as Map),
+        ...ledger,
+      };
       _cachedStats = nextStats;
       if (mounted) {
         setState(() {
@@ -104,10 +151,11 @@ class _EmergencyFundTransparencyScreenState
     final nextStats = {
       'treasuryAddress': treasuryAddr,
       'treasuryBalanceDiaspora': '—',
-      'totalContributedUsd': members * 100,
+      'totalContributedUsd': 0,
       'interestedCount': interested,
       'activeMembers': members,
       'degraded': true,
+      ...ledger,
     };
     _cachedStats = nextStats;
 
@@ -181,7 +229,11 @@ class _EmergencyFundTransparencyScreenState
             _statsCard(theme),
             const SizedBox(height: 16),
             if (_stats['treasuryAddress'] != null)
-              _walletRow(theme, _stats['treasuryAddress'] as String),
+              _walletRow(
+                theme,
+                _stats['treasuryAddress'] as String,
+                _treasuryDisplay(),
+              ),
             const SizedBox(height: 24),
           ],
 
@@ -242,20 +294,50 @@ class _EmergencyFundTransparencyScreenState
     );
   }
 
+  String _treasuryDisplay() {
+    final raw = _stats['treasuryBalanceDiaspora']?.toString() ?? '—';
+    final v = double.tryParse(raw);
+    if (v == null || v == 0) return '—';
+    return NumberFormat.compact().format(v);
+  }
+
   Widget _statsCard(ThemeData theme) {
     String fmtNum(dynamic n) {
       final v = (n is num) ? n : num.tryParse(n?.toString() ?? '');
-      if (v == null || v == 0) return '—';
+      if (v == null || v == 0) return '0';
       return NumberFormat.compact().format(v);
     }
 
-    final treasuryRaw = _stats['treasuryBalanceDiaspora']?.toString() ?? '—';
-    final treasury = (treasuryRaw == '—' || treasuryRaw.isEmpty)
-        ? '—'
-        : NumberFormat.compact().format(double.tryParse(treasuryRaw) ?? 0);
+    String countWithUnit(dynamic n, String singular, String plural) {
+      final v = (n is num) ? n : (num.tryParse(n?.toString() ?? '') ?? 0);
+      return '${fmtNum(v)} ${v == 1 ? singular : plural}';
+    }
+
+    final year = DateTime.now().year;
     final contributedUsd = fmtNum(_stats['totalContributedUsd']);
+    final contributors = countWithUnit(
+      _stats['contributorsCount'],
+      'Member',
+      'Members',
+    );
+    final disbursedUsd = fmtNum(_stats['totalDisbursedUsd']);
+    final disbursedUsers = countWithUnit(
+      _stats['disbursedCount'],
+      'Member',
+      'Members',
+    );
     final interested = fmtNum(_stats['interestedCount']);
+    final interestedSub = countWithUnit(
+      _stats['interestedCount'],
+      'User',
+      'Users',
+    );
     final members = fmtNum(_stats['activeMembers']);
+    final membersSub = countWithUnit(
+      _stats['activeMembers'],
+      'Member',
+      'Members',
+    );
     return Column(
       children: [
         Row(
@@ -263,10 +345,10 @@ class _EmergencyFundTransparencyScreenState
             Expanded(
               child: _statTile(
                 theme,
-                null,
-                treasury,
-                'Treasury \$DIASPORA',
-                logoAsset: 'assets/icons/logo-orange-transparent-32.png',
+                LucideIcons.heart,
+                'Interested Users',
+                interested,
+                '$year · $interestedSub',
               ),
             ),
             const SizedBox(width: 8),
@@ -274,8 +356,9 @@ class _EmergencyFundTransparencyScreenState
               child: _statTile(
                 theme,
                 LucideIcons.dollarSign,
-                '\$$contributedUsd',
-                'Total Contributed',
+                'Contributed',
+                '\$ $contributedUsd',
+                '$year · $contributors',
               ),
             ),
           ],
@@ -286,9 +369,10 @@ class _EmergencyFundTransparencyScreenState
             Expanded(
               child: _statTile(
                 theme,
-                LucideIcons.heart,
-                interested,
-                'Interested',
+                LucideIcons.heartHandshake,
+                'Disbursed',
+                '\$ $disbursedUsd',
+                '$year · $disbursedUsers',
               ),
             ),
             const SizedBox(width: 8),
@@ -296,8 +380,9 @@ class _EmergencyFundTransparencyScreenState
               child: _statTile(
                 theme,
                 LucideIcons.shieldCheck,
-                members,
                 'Active Members',
+                members,
+                '$year · $membersSub',
               ),
             ),
           ],
@@ -309,8 +394,9 @@ class _EmergencyFundTransparencyScreenState
   Widget _statTile(
     ThemeData theme,
     IconData? icon,
+    String title,
     String value,
-    String label, {
+    String subtitle, {
     String? logoAsset,
   }) {
     return Container(
@@ -322,41 +408,87 @@ class _EmergencyFundTransparencyScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (logoAsset != null)
-            Image.asset(logoAsset, width: 16, height: 16)
-          else
-            Icon(icon, size: 16, color: theme.colorScheme.primary),
+          Row(
+            children: [
+              if (logoAsset != null)
+                Image.asset(logoAsset, width: 16, height: 16)
+              else
+                Icon(icon, size: 16, color: theme.colorScheme.primary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 6),
           Text(
             value,
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
-          Text(label, style: TextStyle(fontSize: 11, color: theme.hintColor)),
+          const SizedBox(height: 2),
+          Text(subtitle, style: TextStyle(fontSize: 11, color: theme.hintColor)),
         ],
       ),
     );
   }
 
-  Widget _walletRow(ThemeData theme, String addr) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          Icon(LucideIcons.wallet, size: 14, color: theme.colorScheme.primary),
-          const SizedBox(width: 8),
-          const Text('Treasury: ', style: TextStyle(fontSize: 11)),
-          Expanded(
-            child: Text(
-              addr,
-              style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
-              overflow: TextOverflow.ellipsis,
-            ),
+  Widget _walletRow(ThemeData theme, String addr, String treasuryBal) {
+    final short = addr.length > 16
+        ? '${addr.substring(0, 8)}…${addr.substring(addr.length - 6)}'
+        : addr;
+    final primary = theme.colorScheme.primary;
+    return Material(
+      color: primary.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => launchUrl(
+          Uri.parse('https://basescan.org/address/$addr'),
+          mode: LaunchMode.externalApplication,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Icon(LucideIcons.wallet, size: 20, color: primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      treasuryBal == '—'
+                          ? 'Fund Treasury'
+                          : 'Fund Treasury · $treasuryBal \$DIASPORA',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$short · View on BaseScan',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                        color: primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(LucideIcons.externalLink, size: 18, color: primary),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

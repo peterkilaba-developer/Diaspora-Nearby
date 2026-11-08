@@ -10,6 +10,9 @@ import 'package:diaspora_nearby/features/travel/services/peer_listing_repository
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/features/travel/screens/peer_listing_detail_screen.dart';
 import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
+import 'package:diaspora_nearby/core/services/google_places_service.dart';
+import 'package:diaspora_nearby/core/utils/location_utils.dart';
+import 'package:diaspora_nearby/features/shared/models/google_places_models.dart';
 
 class CreateStayListingScreen extends ConsumerStatefulWidget {
   final PeerListing? existing; // If editing
@@ -36,6 +39,15 @@ class _CreateStayListingScreenState
   final _cityC = TextEditingController();
   final _subLocalityC = TextEditingController();
   final _stateC = TextEditingController();
+  final _locationSearchC = TextEditingController();
+  Timer? _searchDebounce;
+  int _searchSeq = 0;
+  List<AutocompletePrediction> _predictions = [];
+  bool _isSearchingLocation = false;
+  double? _lat;
+  double? _lng;
+  String? _country;
+  String? _countryCode;
 
   String _propertyType = 'Apartment';
   int _beds = 1;
@@ -92,9 +104,21 @@ class _CreateStayListingScreenState
     _descC.text = l.description;
     _priceC.text = l.pricePerUnit.toStringAsFixed(0);
     _addressC.text = l.address ?? '';
-    _cityC.text = l.locality ?? l.city ?? '';
+    final city = l.locality ?? l.city ?? '';
+    _cityC.text = city;
     _subLocalityC.text = l.subLocality ?? '';
-    _stateC.text = l.state ?? '';
+    _stateC.text =
+        sanitizeStateForCountry(
+          state: l.state,
+          city: city,
+          countryCode: l.countryCode,
+          countryName: l.country,
+        ) ??
+        '';
+    _country = l.country;
+    _countryCode = l.countryCode;
+    _lat = l.lat;
+    _lng = l.lng;
     _propertyType = l.propertyType ?? 'Apartment';
     _beds = l.beds ?? 1;
     _baths = l.baths ?? 1;
@@ -111,12 +135,23 @@ class _CreateStayListingScreenState
   void _prefillFromProfile() {
     final profile = ref.read(userProfileProvider).value;
     if (profile == null) return;
-    _cityC.text = profile.hostLocation.city ?? '';
-    _stateC.text = profile.hostLocation.state ?? '';
+    final city = profile.hostLocation.city ?? '';
+    _cityC.text = city;
+    _stateC.text =
+        sanitizeStateForCountry(
+          state: profile.hostLocation.state,
+          city: city,
+          countryCode: profile.hostCountryCode,
+          countryName: profile.hostCountry,
+        ) ??
+        '';
+    _country = profile.hostCountry;
+    _countryCode = profile.hostCountryCode;
   }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _titleC.dispose();
     _descC.dispose();
     _priceC.dispose();
@@ -124,7 +159,83 @@ class _CreateStayListingScreenState
     _cityC.dispose();
     _subLocalityC.dispose();
     _stateC.dispose();
+    _locationSearchC.dispose();
     super.dispose();
+  }
+
+  void _onLocationSearchChanged(String query) {
+    _searchDebounce?.cancel();
+    final trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setState(() {
+        _predictions = [];
+        _isSearchingLocation = false;
+      });
+      return;
+    }
+    setState(() => _isSearchingLocation = true);
+    final seq = ++_searchSeq;
+    _searchDebounce = Timer(const Duration(milliseconds: 280), () async {
+      try {
+        final service = ref.read(googlePlacesServiceProvider);
+        final results = await service.autocomplete(
+          trimmed,
+          filter: PlaceTypeFilter.ALL,
+        );
+        if (!mounted || seq != _searchSeq) return;
+        setState(() {
+          _predictions = results;
+          _isSearchingLocation = false;
+        });
+      } catch (_) {
+        if (mounted && seq == _searchSeq) {
+          setState(() => _isSearchingLocation = false);
+        }
+      }
+    });
+  }
+
+  Future<void> _onPlaceSelected(AutocompletePrediction prediction) async {
+    _searchDebounce?.cancel();
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _predictions = [];
+      _isSearchingLocation = false;
+      _locationSearchC.text = prediction.fullText;
+    });
+
+    try {
+      final service = ref.read(googlePlacesServiceProvider);
+      final response = await service.getPlaceDetails(prediction.placeId);
+      if (!mounted || response == null) return;
+      final place = response.place;
+      final rawFull =
+          place.fullAddress ?? place.address ?? prediction.fullText;
+      if (place.latLng != null) {
+        _lat = place.latLng!.lat;
+        _lng = place.latLng!.lng;
+      }
+      if (place.addressComponents != null) {
+        final parsed = parseLocationComponents(
+          rawFull,
+          place.addressComponents!,
+        );
+        if (parsed != null) {
+          setState(() {
+            _cityC.text = parsed.city ?? '';
+            _subLocalityC.text = parsed.sublocality ?? '';
+            _stateC.text = parsed.state ?? '';
+            _country = parsed.country;
+            _countryCode = parsed.countryCode;
+            _addressC.text =
+                (parsed.streetAddress != null &&
+                    parsed.streetAddress!.isNotEmpty)
+                ? parsed.streetAddress!
+                : rawFull;
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _save() async {
@@ -155,27 +266,49 @@ class _CreateStayListingScreenState
           ? widget.existing!.id
           : repo.generateListingId();
 
+      final effectiveCountry =
+          _country ?? widget.existing?.country ?? profile.hostCountry;
+      final effectiveCountryCode =
+          _countryCode ??
+          widget.existing?.countryCode ??
+          profile.hostCountryCode;
+      final cleanCity = _cityC.text.trim();
+      final cleanState = sanitizeStateForCountry(
+        state: _stateC.text.trim(),
+        city: cleanCity,
+        countryCode: effectiveCountryCode,
+        countryName: effectiveCountry,
+      );
+
       final listing = PeerListing(
         id: listingId,
         type: 'stay',
         isPeerHosting: _isPeerHosting,
-        ownerId: user.uid,
+        ownerId: widget.existing?.ownerId ?? user.uid,
         ownerName: profile.fullName,
         ownerPhoto: profile.profileImage,
         title: _titleC.text.trim(),
         description: _descC.text.trim(),
+        photos: widget.existing?.photos ?? const [],
         pricePerUnit: _isPeerHosting
             ? 0
             : (double.tryParse(_priceC.text.trim()) ?? 0),
-        city: _cityC.text.trim(),
-        country: profile.hostCountry,
-        countryCode: profile.hostCountryCode,
+        currency: widget.existing?.currency ?? 'USD',
+        city: cleanCity,
+        country: effectiveCountry,
+        countryCode: effectiveCountryCode,
         address: _addressC.text.trim(),
-        locality: _cityC.text.trim(),
+        locality: cleanCity,
         subLocality: _subLocalityC.text.trim(),
-        state: _stateC.text.trim(),
-        localityLower: _cityC.text.trim().toLowerCase(),
-        stateLower: _stateC.text.trim().toLowerCase(),
+        state: cleanState,
+        localityLower: cleanCity.toLowerCase(),
+        stateLower: cleanState?.toLowerCase(),
+        lat: _lat ?? widget.existing?.lat,
+        lng: _lng ?? widget.existing?.lng,
+        status: widget.existing?.status ?? 'active',
+        viewCount: widget.existing?.viewCount ?? 0,
+        savedCount: widget.existing?.savedCount ?? 0,
+        createdAt: widget.existing?.createdAt,
         propertyType: _propertyType,
         beds: _beds,
         baths: _baths,
@@ -198,7 +331,7 @@ class _CreateStayListingScreenState
         }
         messenger.showSnackBar(
           SnackBar(
-            content: Text(isEditing ? 'Listing updated!' : 'Listing created!'),
+            content: Text(isEditing ? 'Stay updated!' : 'Stay published!'),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -237,7 +370,7 @@ class _CreateStayListingScreenState
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
-        title: Text(isEditing ? 'Edit Stay Listing' : 'List Your Stay'),
+        title: Text(isEditing ? 'Edit Stay' : 'Post Stay'),
         elevation: 0,
         backgroundColor: Colors.transparent,
       ),
@@ -284,7 +417,7 @@ class _CreateStayListingScreenState
             // Title
             _buildTextField(
               controller: _titleC,
-              label: 'Listing Title',
+              label: 'Stay Title',
               hint: 'e.g. Cozy 2BR Apartment near Downtown',
               icon: LucideIcons.type,
               validator: (v) =>
@@ -325,6 +458,85 @@ class _CreateStayListingScreenState
             // Location section
             _sectionLabel(theme, 'Location'),
             const SizedBox(height: 8),
+            TextFormField(
+              controller: _locationSearchC,
+              onChanged: _onLocationSearchChanged,
+              decoration: InputDecoration(
+                labelText: 'Search Address or Area on Google Maps',
+                hintText: 'Type address, building, or neighborhood...',
+                prefixIcon: const Icon(
+                  LucideIcons.search,
+                  size: 18,
+                  color: AppTheme.accent,
+                ),
+                suffixIcon: _isSearchingLocation
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppTheme.accent,
+                          ),
+                        ),
+                      )
+                    : _locationSearchC.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(LucideIcons.x, size: 16),
+                        onPressed: () {
+                          _locationSearchC.clear();
+                          setState(() => _predictions = []);
+                        },
+                      )
+                    : null,
+                filled: true,
+                fillColor: AppTheme.elevationColor(context, 2),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+            if (_predictions.isNotEmpty)
+              Container(
+                margin: const EdgeInsets.only(top: 4),
+                constraints: const BoxConstraints(maxHeight: 200),
+                decoration: BoxDecoration(
+                  color: theme.cardColor,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _predictions.length,
+                  itemBuilder: (context, idx) {
+                    final p = _predictions[idx];
+                    return ListTile(
+                      dense: true,
+                      leading: const Icon(
+                        LucideIcons.mapPin,
+                        size: 16,
+                        color: AppTheme.accent,
+                      ),
+                      title: Text(
+                        p.primaryText,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      subtitle: p.secondaryText.isNotEmpty
+                          ? Text(
+                              p.secondaryText,
+                              style: const TextStyle(fontSize: 11),
+                            )
+                          : null,
+                      onTap: () => _onPlaceSelected(p),
+                    );
+                  },
+                ),
+              ),
+            const SizedBox(height: 12),
             _buildTextField(
               controller: _cityC,
               label: 'City',
@@ -335,9 +547,10 @@ class _CreateStayListingScreenState
             Builder(
               builder: (context) {
                 final profile = ref.read(userProfileProvider).value;
-                final cc = profile?.hostCountryCode ?? '';
-                final hasState = country_data.hasStateLevelHierarchyFromData(
-                  cc,
+                final cc = _countryCode ?? profile?.hostCountryCode ?? '';
+                final hasState = country_data.hasStateLevelForCountry(
+                  countryCode: cc,
+                  countryName: _country ?? profile?.hostCountry,
                 );
                 final stateTerm = country_data.getStateTerminology(cc);
 
@@ -485,7 +698,7 @@ class _CreateStayListingScreenState
                         ),
                       )
                     : Text(
-                        isEditing ? 'Update Listing' : 'Publish Listing',
+                        isEditing ? 'Update Stay' : 'Publish Stay',
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,

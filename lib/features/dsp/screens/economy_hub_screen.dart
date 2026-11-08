@@ -190,7 +190,7 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
                     icon: LucideIcons.briefcase,
                     iconColor: Colors.orange.shade700,
                     title: 'Jobs',
-                    subtitle: 'Find opportunities',
+                    subtitle: 'Find jobs',
                     onTap: () => context.push('/marketplace?type=job'),
                   ),
                 ],

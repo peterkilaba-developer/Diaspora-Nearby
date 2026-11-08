@@ -17,6 +17,8 @@ import 'package:geocoding/geocoding.dart';
 import 'package:diaspora_nearby/features/organization/repository/organization_repository.dart';
 import 'package:diaspora_nearby/features/community/repository/community_repository.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
+import 'package:diaspora_nearby/core/utils/location_utils.dart';
+import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 
 class BusinessRegistrationModal extends ConsumerStatefulWidget {
   final String? communityId; // [NEW] optional community context
@@ -30,11 +32,22 @@ class BusinessRegistrationModal extends ConsumerStatefulWidget {
 class _BusinessRegistrationModalState
     extends ConsumerState<BusinessRegistrationModal> {
   final _formKey = GlobalKey<FormState>();
+  final _searchController = TextEditingController();
   final _nameController = TextEditingController();
   final _descController = TextEditingController();
   final _phoneController = TextEditingController();
   final _websiteController = TextEditingController();
   final _locationController = TextEditingController();
+
+  Timer? _searchDebounce;
+  Timer? _nameDebounce;
+  Timer? _locationDebounce;
+  int _searchSeq = 0;
+  int _nameSeq = 0;
+  int _locationSeq = 0;
+  bool _isSearchingPlaces = false;
+  bool _isSearchingLocation = false;
+  List<AutocompletePrediction> _topSearchPredictions = [];
 
   XFile? _logoImage;
   Future<String?>? _logoUploadFuture;
@@ -205,31 +218,84 @@ class _BusinessRegistrationModalState
 
   final bool _isLoading = false;
 
-  void _onLocationChanged(String input) async {
-    if (input.isEmpty) {
+  void _onTopSearchChanged(String input) {
+    _searchDebounce?.cancel();
+    final trimmed = input.trim();
+    if (trimmed.length < 2) {
       setState(() {
-        _predictions = [];
-        _showPredictions = false;
+        _topSearchPredictions = [];
+        _isSearchingPlaces = false;
       });
       return;
     }
 
-    final places = ref.read(googlePlacesServiceProvider);
-    final results = await places.autocomplete(input);
-    if (mounted) {
+    setState(() => _isSearchingPlaces = true);
+    final seq = ++_searchSeq;
+
+    _searchDebounce = Timer(const Duration(milliseconds: 280), () async {
+      try {
+        final places = ref.read(googlePlacesServiceProvider);
+        final results = await places.autocomplete(
+          trimmed,
+          filter: PlaceTypeFilter.ALL,
+        );
+        if (!mounted || seq != _searchSeq) return;
+        setState(() {
+          _topSearchPredictions = results;
+          _isSearchingPlaces = false;
+        });
+      } catch (_) {
+        if (mounted && seq == _searchSeq) {
+          setState(() => _isSearchingPlaces = false);
+        }
+      }
+    });
+  }
+
+  void _onLocationChanged(String input) {
+    _locationDebounce?.cancel();
+    final trimmed = input.trim();
+    if (trimmed.length < 2) {
       setState(() {
-        _predictions = results;
-        _showPredictions = results.isNotEmpty;
+        _predictions = [];
+        _showPredictions = false;
+        _isSearchingLocation = false;
       });
+      return;
     }
+
+    setState(() => _isSearchingLocation = true);
+    final seq = ++_locationSeq;
+
+    _locationDebounce = Timer(const Duration(milliseconds: 280), () async {
+      try {
+        final places = ref.read(googlePlacesServiceProvider);
+        final results = await places.autocomplete(
+          trimmed,
+          filter: PlaceTypeFilter.ALL,
+        );
+        if (!mounted || seq != _locationSeq) return;
+        setState(() {
+          _predictions = results;
+          _showPredictions = results.isNotEmpty;
+          _isSearchingLocation = false;
+        });
+      } catch (_) {
+        if (mounted && seq == _locationSeq) {
+          setState(() => _isSearchingLocation = false);
+        }
+      }
+    });
   }
 
   Future<void> _selectPlace(AutocompletePrediction prediction) async {
-    // Optimistically update text field and close prediction list in 0ms
+    _locationDebounce?.cancel();
+    FocusScope.of(context).unfocus();
     setState(() {
       _locationController.text = prediction.fullText;
       _predictions = [];
       _showPredictions = false;
+      _isSearchingLocation = false;
     });
 
     final places = ref.read(googlePlacesServiceProvider);
@@ -237,29 +303,61 @@ class _BusinessRegistrationModalState
     final place = response?.place;
 
     if (place != null && mounted) {
-      _populateLocation(place, prediction.fullText);
+      _populateLocation(
+        place,
+        place.fullAddress ?? place.address ?? prediction.fullText,
+      );
     }
   }
 
-  void _populateLocation(Place place, String? fullAddress) {
+  void _populateLocation(Place place, String? fallbackAddress) {
     if (!mounted) return;
 
-    String? city, state, country;
+    final rawAddress =
+        place.fullAddress ?? place.address ?? fallbackAddress ?? '';
     final components = place.addressComponents ?? [];
+    final parsed = parseLocationComponents(rawAddress, components);
 
-    for (final component in components) {
-      final types = component.types;
-      if (types.contains('locality')) {
-        city = component.name;
-      } else if (types.contains('administrative_area_level_1')) {
-        state = component.name;
-      } else if (types.contains('country')) {
-        country = component.name;
+    String? city = parsed?.city;
+    String? country = parsed?.country;
+    String? countryCode = parsed?.countryCode;
+    String? state = parsed?.state;
+
+    if (parsed == null) {
+      for (final component in components) {
+        final types = component.types;
+        if (types.contains('locality') || types.contains('postal_town')) {
+          city ??= component.name;
+        } else if (types.contains('administrative_area_level_2')) {
+          city ??= component.name;
+        } else if (types.contains('administrative_area_level_1')) {
+          state ??= component.name;
+        } else if (types.contains('country')) {
+          country ??= component.name;
+          countryCode ??= component.shortName;
+        }
       }
+      state = sanitizeStateForCountry(
+        state: state,
+        city: city,
+        countryCode: countryCode,
+        countryName: country,
+      );
     }
 
+    final displayLocation = formatTieredLocation(
+      subLocality: parsed?.sublocality,
+      city: city,
+      state: state,
+      country: country,
+      countryCode: countryCode,
+      includeSubLocality: true,
+    );
+
     setState(() {
-      _locationController.text = fullAddress ?? place.address ?? '';
+      _locationController.text = displayLocation.isNotEmpty
+          ? displayLocation
+          : (place.fullAddress ?? place.address ?? fallbackAddress ?? '');
       _locationLat = place.latLng?.lat;
       _locationLng = place.latLng?.lng;
       _locationCity = city;
@@ -277,10 +375,12 @@ class _BusinessRegistrationModalState
   bool _isPhoneLocked = false;
   bool _isWebsiteLocked = false;
 
-  void _onNameChanged(String input) async {
-    if (_isVerifiedBusiness) return; // Prevent search if locked
+  void _onNameChanged(String input) {
+    if (_isNameLocked) return;
+    _nameDebounce?.cancel();
+    final trimmed = input.trim();
 
-    if (input.isEmpty) {
+    if (trimmed.length < 2) {
       setState(() {
         _namePredictions = [];
         _showNamePredictions = false;
@@ -288,18 +388,20 @@ class _BusinessRegistrationModalState
       return;
     }
 
-    final places = ref.read(googlePlacesServiceProvider);
-    // Use VENUES filter to strictly exclude cities/regions
-    final results = await places.autocomplete(
-      input,
-      filter: PlaceTypeFilter.VENUES,
-    );
-    if (mounted) {
-      setState(() {
-        _namePredictions = results;
-        _showNamePredictions = results.isNotEmpty;
-      });
-    }
+    final seq = ++_nameSeq;
+    _nameDebounce = Timer(const Duration(milliseconds: 280), () async {
+      final places = ref.read(googlePlacesServiceProvider);
+      final results = await places.autocomplete(
+        trimmed,
+        filter: PlaceTypeFilter.VENUES,
+      );
+      if (mounted && seq == _nameSeq) {
+        setState(() {
+          _namePredictions = results;
+          _showNamePredictions = results.isNotEmpty;
+        });
+      }
+    });
   }
 
   void _resetSelection() {
@@ -310,23 +412,99 @@ class _BusinessRegistrationModalState
       _isPhoneLocked = false;
       _isWebsiteLocked = false;
       _selectedRichData = null;
+      _topSearchPredictions = [];
+      _namePredictions = [];
+      _predictions = [];
+      _showNamePredictions = false;
+      _showPredictions = false;
 
+      _searchController.clear();
       _nameController.clear();
+      _descController.clear();
       _phoneController.clear();
       _websiteController.clear();
       _locationController.clear();
       _selectedOrgType = null;
+      _selectedTitle = null;
       _locationLat = null;
       _locationLng = null;
+      _locationCity = null;
+      _locationState = null;
+      _locationCountry = null;
     });
   }
 
+  String _inferOrganizationType(Place place, String fallbackName) {
+    final googleTypes = (place.types ?? const <String>[])
+        .map((t) => t.toLowerCase())
+        .toSet();
+    final textLower =
+        '${place.name ?? fallbackName} ${place.editorialSummary ?? ''}'
+            .toLowerCase();
+
+    if (googleTypes.contains(PlaceType.CHURCH) ||
+        googleTypes.contains(PlaceType.HINDU_TEMPLE) ||
+        googleTypes.contains(PlaceType.MOSQUE) ||
+        googleTypes.contains(PlaceType.SYNAGOGUE) ||
+        googleTypes.contains('place_of_worship') ||
+        textLower.contains('church') ||
+        textLower.contains('mosque') ||
+        textLower.contains('ministry') ||
+        textLower.contains('temple') ||
+        textLower.contains('cathedral') ||
+        textLower.contains('parish') ||
+        textLower.contains('chapel') ||
+        textLower.contains('synagogue')) {
+      return 'Faith Organization (FO)';
+    }
+
+    if (googleTypes.contains(PlaceType.CITY_HALL) ||
+        googleTypes.contains(PlaceType.LOCAL_GOVERNMENT_OFFICE) ||
+        googleTypes.contains(PlaceType.COURTHOUSE) ||
+        googleTypes.contains('embassy') ||
+        textLower.contains('embassy') ||
+        textLower.contains('consulate') ||
+        textLower.contains('high commission') ||
+        textLower.contains('ministry of')) {
+      return 'Government Organization (GO)';
+    }
+
+    if (textLower.contains('political') || textLower.contains('party')) {
+      return 'Political Organization (PO)';
+    }
+
+    if (textLower.contains('diaspora')) {
+      return 'Diaspora Organization (DO)';
+    }
+
+    if (textLower.contains('ngo') ||
+        textLower.contains('non-governmental') ||
+        textLower.contains('humanitarian')) {
+      return 'Non Governmental Organization (NGO)';
+    }
+
+    if (textLower.contains('foundation') ||
+        textLower.contains('charity') ||
+        textLower.contains('non-profit') ||
+        textLower.contains('nonprofit') ||
+        textLower.contains('association')) {
+      return 'Non-Profit Organization (NPO)';
+    }
+
+    return 'Business Organization (BO)';
+  }
+
   Future<void> _selectBusiness(AutocompletePrediction prediction) async {
-    // Optimistically update business name and hide predictions in 0ms
+    _searchDebounce?.cancel();
+    _nameDebounce?.cancel();
+    FocusScope.of(context).unfocus();
+
     setState(() {
       _isVerifiedBusiness = true;
+      _searchController.text = prediction.primaryText;
       _nameController.text = prediction.primaryText;
       _isNameLocked = true;
+      _topSearchPredictions = [];
       _namePredictions = [];
       _showNamePredictions = false;
       if (prediction.secondaryText.isNotEmpty) {
@@ -339,45 +517,38 @@ class _BusinessRegistrationModalState
     final place = response?.place;
 
     if (place != null && mounted) {
-      // Map Google Place types to our Org Types
-      final googleTypes = place.types ?? [];
-      String? matchedType;
+      final matchedType = _inferOrganizationType(place, prediction.primaryText);
 
-      if (googleTypes.contains(PlaceType.RESTAURANT) ||
-          googleTypes.contains(PlaceType.STORE) ||
-          googleTypes.contains(PlaceType.CAFE) ||
-          googleTypes.contains(PlaceType.BANK) ||
-          googleTypes.contains(PlaceType.POST_OFFICE)) {
-        matchedType = 'Business Organization (BO)';
-      } else if (googleTypes.contains(PlaceType.CHURCH) ||
-          googleTypes.contains(PlaceType.HINDU_TEMPLE) ||
-          googleTypes.contains(PlaceType.MOSQUE) ||
-          googleTypes.contains(PlaceType.SYNAGOGUE)) {
-        matchedType = 'Faith Organization (FO)';
-      } else if (googleTypes.contains(PlaceType.CITY_HALL) ||
-          googleTypes.contains(PlaceType.LOCAL_GOVERNMENT_OFFICE) ||
-          googleTypes.contains(PlaceType.COURTHOUSE)) {
-        matchedType = 'Government Organization (GO)';
-      }
+      // Populate location first so _locationCity/_locationCountry are ready for description
+      _populateLocation(
+        place,
+        place.fullAddress ?? place.address ?? prediction.secondaryText,
+      );
 
       setState(() {
-        // Also populate phone if available
-        if (place.phoneNumber != null) {
-          _phoneController.text = place.phoneNumber!;
+        if (place.name != null && place.name!.trim().isNotEmpty) {
+          _nameController.text = place.name!.trim();
+        }
+
+        // Populate phone if available
+        if (place.phoneNumber != null && place.phoneNumber!.trim().isNotEmpty) {
+          _phoneController.text = place.phoneNumber!.trim();
           _isPhoneLocked = true;
+        } else {
+          _isPhoneLocked = false;
         }
 
         // Populate website if available
         if (place.websiteUri != null) {
           _websiteController.text = place.websiteUri.toString();
           _isWebsiteLocked = true;
+        } else {
+          _isWebsiteLocked = false;
         }
 
-        // Set matched type if found
-        if (matchedType != null) {
-          _selectedOrgType = matchedType;
-          _updateTitleOptions(matchedType);
-        }
+        // Set matched organization type and default title
+        _selectedOrgType = matchedType;
+        _updateTitleOptions(matchedType);
 
         // Capture Rich Data
         _selectedRichData = {
@@ -393,32 +564,21 @@ class _BusinessRegistrationModalState
 
         // Smart Description Population
         if (place.editorialSummary != null &&
-            place.editorialSummary!.isNotEmpty) {
-          _descController.text = place.editorialSummary!;
+            place.editorialSummary!.trim().isNotEmpty) {
+          _descController.text = place.editorialSummary!.trim();
         } else {
-          final type = matchedType != null
-              ? matchedType.split(' (').first
-              : (prediction.secondaryText.isNotEmpty
-                    ? prediction.secondaryText
-                    : 'Organization');
-
-          String location = 'Area';
-          final components = place.addressComponents ?? [];
-          for (final c in components) {
-            if (c.types.contains('locality')) location = c.name;
-          }
-          if (location == 'Area') {
-            location = place.address?.split(',').first ?? 'Area';
-          }
-
-          _descController.text = 'A $type in $location.';
+          final typeLabel = matchedType.split(' (').first;
+          final locLabel = formatTieredLocation(
+            city: _locationCity,
+            state: _locationState,
+            country: _locationCountry,
+          );
+          _descController.text = locLabel.isNotEmpty
+              ? '${_nameController.text} is a $typeLabel based in $locLabel.'
+              : '${_nameController.text} ($typeLabel).';
         }
-      });
 
-      // Auto-populate location from the business place
-      _populateLocation(place, prediction.fullText);
-      setState(() {
-        _isLocationLocked = true;
+        _isLocationLocked = _locationLat != null && _locationLng != null;
       });
     }
   }
@@ -462,20 +622,37 @@ class _BusinessRegistrationModalState
 
       if (placemarks.isNotEmpty && mounted) {
         final pm = placemarks.first;
-        final address = [
-          if (pm.street != null && pm.street!.isNotEmpty) pm.street,
-          if (pm.locality != null && pm.locality!.isNotEmpty) pm.locality,
-          if (pm.administrativeArea != null &&
-              pm.administrativeArea!.isNotEmpty)
-            pm.administrativeArea,
-          if (pm.country != null && pm.country!.isNotEmpty) pm.country,
-        ].join(', ');
+        final countryCode = pm.isoCountryCode?.trim().toUpperCase();
+        final matchedCountry = countryCode != null
+            ? country_data.getCountryByCode(countryCode)
+            : null;
+        final country = matchedCountry?.name ?? pm.country;
+        final rawCity = (pm.locality != null && pm.locality!.trim().isNotEmpty)
+            ? pm.locality!.trim()
+            : pm.subAdministrativeArea?.trim();
+        final city = rawCity != null && rawCity.isNotEmpty
+            ? formatLocationName(rawCity)
+            : null;
+        final state = sanitizeStateForCountry(
+          state: pm.administrativeArea,
+          city: city,
+          countryCode: countryCode,
+          countryName: country,
+        );
+        final tiered = formatTieredLocation(
+          subLocality: pm.subLocality,
+          city: city,
+          state: state,
+          country: country,
+          countryCode: countryCode,
+          includeSubLocality: true,
+        );
 
         setState(() {
-          _locationController.text = address;
-          _locationCity = pm.locality;
-          _locationState = pm.administrativeArea;
-          _locationCountry = pm.country;
+          _locationController.text = tiered;
+          _locationCity = city;
+          _locationState = state;
+          _locationCountry = country;
         });
       }
     } catch (e) {
@@ -711,6 +888,10 @@ class _BusinessRegistrationModalState
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
+    _nameDebounce?.cancel();
+    _locationDebounce?.cancel();
+    _searchController.dispose();
     _nameController.dispose();
     _descController.dispose();
     _phoneController.dispose();
@@ -884,7 +1065,144 @@ class _BusinessRegistrationModalState
                         ),
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
+
+                    // ─── Google Places Search & Auto-Fill ────────────────
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppTheme.accent.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(
+                                LucideIcons.sparkles,
+                                size: 16,
+                                color: AppTheme.accent,
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                'SEARCH & AUTO-FILL FROM GOOGLE MAPS',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.accent,
+                                  letterSpacing: 1.0,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Search your business or organization on Google to auto-fill details.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withValues(alpha: 0.6),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          TextFormField(
+                            controller: _searchController,
+                            onChanged: _onTopSearchChanged,
+                            decoration: InputDecoration(
+                              hintText:
+                                  'Search business, organization, or address...',
+                              hintStyle: TextStyle(
+                                fontSize: 13,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: 0.4),
+                              ),
+                              prefixIcon: const Icon(
+                                LucideIcons.search,
+                                size: 18,
+                                color: AppTheme.accent,
+                              ),
+                              suffixIcon: _isSearchingPlaces
+                                  ? const Padding(
+                                      padding: EdgeInsets.all(12),
+                                      child: SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: AppTheme.accent,
+                                        ),
+                                      ),
+                                    )
+                                  : _searchController.text.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(LucideIcons.x, size: 16),
+                                      onPressed: () {
+                                        _searchController.clear();
+                                        setState(
+                                          () => _topSearchPredictions = [],
+                                        );
+                                      },
+                                    )
+                                  : null,
+                              filled: true,
+                              fillColor: AppTheme.elevationColor(context, 2),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 12,
+                              ),
+                            ),
+                          ),
+                          if (_topSearchPredictions.isNotEmpty)
+                            Container(
+                              margin: const EdgeInsets.only(top: 6),
+                              constraints: const BoxConstraints(maxHeight: 200),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).cardColor,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: ListView.builder(
+                                shrinkWrap: true,
+                                itemCount: _topSearchPredictions.length,
+                                itemBuilder: (context, index) {
+                                  final p = _topSearchPredictions[index];
+                                  return ListTile(
+                                    dense: true,
+                                    leading: const Icon(
+                                      LucideIcons.building2,
+                                      size: 16,
+                                      color: AppTheme.accent,
+                                    ),
+                                    title: Text(
+                                      p.primaryText,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    subtitle: p.secondaryText.isNotEmpty
+                                        ? Text(
+                                            p.secondaryText,
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                            ),
+                                          )
+                                        : null,
+                                    onTap: () => _selectBusiness(p),
+                                  );
+                                },
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
 
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -902,10 +1220,15 @@ class _BusinessRegistrationModalState
                               size: 18,
                             ),
                             suffixIcon: _isNameLocked
-                                ? const Icon(
-                                    LucideIcons.lock,
-                                    size: 16,
-                                    color: Colors.green,
+                                ? IconButton(
+                                    icon: const Icon(
+                                      LucideIcons.lock,
+                                      size: 16,
+                                      color: Colors.green,
+                                    ),
+                                    tooltip: 'Tap to edit name',
+                                    onPressed: () =>
+                                        setState(() => _isNameLocked = false),
                                   )
                                 : null,
                             locked: _isNameLocked,
@@ -983,13 +1306,27 @@ class _BusinessRegistrationModalState
                             suffixIcon: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                if (_isLocationLocked)
+                                if (_isSearchingLocation)
                                   const Padding(
                                     padding: EdgeInsets.only(right: 8.0),
-                                    child: Icon(
+                                    child: SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    ),
+                                  ),
+                                if (_isLocationLocked)
+                                  IconButton(
+                                    icon: const Icon(
                                       LucideIcons.lock,
                                       color: Colors.green,
                                       size: 16,
+                                    ),
+                                    tooltip: 'Tap to edit location',
+                                    onPressed: () => setState(
+                                      () => _isLocationLocked = false,
                                     ),
                                   )
                                 else if (_locationLat != null)

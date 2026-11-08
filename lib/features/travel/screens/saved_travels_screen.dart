@@ -15,10 +15,27 @@ class _SavedTravelsScreenState extends State<SavedTravelsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
+  int get _initialTabIndex {
+    switch (widget.category) {
+      case 'Hotel':
+        return 1;
+      case 'Stay':
+        return 2;
+      case 'Car Rental':
+        return 3;
+      default:
+        return 0;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(
+      length: 4,
+      vsync: this,
+      initialIndex: _initialTabIndex,
+    );
   }
 
   @override

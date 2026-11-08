@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:diaspora_nearby/config/env.dart';
 import 'package:diaspora_nearby/features/marketplace/utils/currency_helper.dart';
+import 'package:diaspora_nearby/core/utils/location_utils.dart';
 
 /// Model for real estate listings: plots, farms, and houses.
 class RealEstateListing {
@@ -142,70 +143,111 @@ class RealEstateListing {
   }) : createdAt = createdAt ?? DateTime.now();
 
   factory RealEstateListing.fromJson(Map<String, dynamic> json, String docId) {
+    final specs = json['specs'] is Map
+        ? Map<String, dynamic>.from(json['specs'] as Map)
+        : const <String, dynamic>{};
+    final rawPhotos = json['photos'] ?? json['photoUrls'];
+    final rawSize = json['size'] ?? json['sizeSqm'] ?? specs['sizeSqm'];
+    final rawSizeUnit = (json['sizeUnit'] ?? 'm²').toString();
+    final normalizedSizeUnit = rawSizeUnit.toLowerCase() == 'sqm'
+        ? 'm²'
+        : rawSizeUnit;
+    final rawCity = (json['city'] ?? json['locality']) as String?;
+    final rawLocality = (json['locality'] ?? json['city']) as String?;
+    final rawCountry = json['country'] as String?;
+    final rawCountryCode = json['countryCode'] as String?;
+    final rawState = json['state'] as String?;
+    final cleanState = sanitizeStateForCountry(
+      state: rawState,
+      city: rawLocality ?? rawCity,
+      countryCode: rawCountryCode,
+      countryName: rawCountry,
+    );
+    var cleanTitle = (json['title'] ?? '').toString();
+    if (cleanState == null &&
+        rawState != null &&
+        rawState.trim().isNotEmpty &&
+        cleanTitle.endsWith(', ${rawState.trim()}')) {
+      cleanTitle = cleanTitle
+          .substring(0, cleanTitle.length - (rawState.trim().length + 2))
+          .trim();
+    }
+
     return RealEstateListing(
       id: docId,
       category: json['category'] ?? 'plot',
       ownerId: json['ownerId'] ?? '',
       ownerName: json['ownerName'] ?? '',
-      ownerPhoto: json['ownerPhoto'] ?? '',
-      title: json['title'] ?? '',
+      ownerPhoto: (json['ownerPhoto'] ?? json['ownerPhotoUrl'] ?? '')
+          .toString(),
+      title: cleanTitle,
       description: json['description'] ?? '',
-      photos: List<String>.from(json['photos'] ?? []),
-      price: (json['price'] ?? 0).toDouble(),
+      photos: rawPhotos is List
+          ? rawPhotos.whereType<String>().toList()
+          : const <String>[],
+      price: (json['price'] as num?)?.toDouble() ?? 0.0,
       currency: json['currency'] ?? 'USD',
       status: json['status'] ?? 'active',
-      city: json['city'],
-      country: json['country'],
-      countryCode: json['countryCode'],
-      lat: json['lat']?.toDouble(),
-      lng: json['lng']?.toDouble(),
+      city: rawCity,
+      country: rawCountry,
+      countryCode: rawCountryCode,
+      lat: (json['lat'] as num?)?.toDouble(),
+      lng: (json['lng'] as num?)?.toDouble(),
       address: json['address'],
-      locality: json['locality'],
+      locality: rawLocality,
       subLocality: json['subLocality'],
-      state: json['state'],
-      localityLower: json['localityLower'],
-      stateLower: json['stateLower'],
+      state: cleanState,
+      localityLower:
+          json['localityLower'] as String? ?? rawLocality?.toLowerCase(),
+      stateLower: cleanState?.toLowerCase(),
       createdAt: json['createdAt'] is Timestamp
           ? (json['createdAt'] as Timestamp).toDate()
           : DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
                 DateTime.now(),
       updatedAt: json['updatedAt'] is Timestamp
           ? (json['updatedAt'] as Timestamp).toDate()
-          : null,
-      viewCount: json['viewCount'] as int? ?? 0,
-      savedCount: json['savedCount'] as int? ?? 0,
+          : DateTime.tryParse(json['updatedAt']?.toString() ?? ''),
+      viewCount: (json['viewCount'] as num?)?.toInt() ?? 0,
+      savedCount: (json['savedCount'] as num?)?.toInt() ?? 0,
       // Common
-      size: json['size']?.toDouble(),
-      sizeUnit: json['sizeUnit'],
+      size: (rawSize as num?)?.toDouble(),
+      sizeUnit: normalizedSizeUnit,
       listingType: json['listingType'],
-      hasTitle: json['hasTitle'],
-      zoning: json['zoning'],
+      hasTitle: (json['hasTitle'] ?? json['hasTitleDeed']) as bool?,
+      zoning: (json['zoning'] ?? specs['zoning']) as String?,
       // Plot
-      isFenced: json['isFenced'],
-      hasWater: json['hasWater'],
-      hasElectricity: json['hasElectricity'],
-      hasRoad: json['hasRoad'],
-      terrainType: json['terrainType'],
+      isFenced: (json['isFenced'] ?? specs['isFenced']) as bool?,
+      hasWater: (json['hasWater'] ?? specs['hasWater']) as bool?,
+      hasElectricity:
+          (json['hasElectricity'] ?? specs['hasElectricity']) as bool?,
+      hasRoad: (json['hasRoad'] ?? specs['hasRoad']) as bool?,
+      terrainType: (json['terrainType'] ?? specs['terrainType']) as String?,
       // Farm
-      farmableArea: json['farmableArea']?.toDouble(),
-      soilType: json['soilType'],
-      crops: json['crops'] != null ? List<String>.from(json['crops']) : null,
-      hasIrrigation: json['hasIrrigation'],
-      hasStorage: json['hasStorage'],
-      workers: json['workers'],
-      // House
-      bedrooms: json['bedrooms'],
-      bathrooms: json['bathrooms'],
-      floors: json['floors'],
-      propertyCondition: json['propertyCondition'],
-      yearBuilt: json['yearBuilt'],
-      livingArea: json['livingArea']?.toDouble(),
-      livingAreaUnit: json['livingAreaUnit'],
-      amenities: json['amenities'] != null
-          ? List<String>.from(json['amenities'])
+      farmableArea: ((json['farmableArea'] ?? specs['farmableArea']) as num?)
+          ?.toDouble(),
+      soilType: (json['soilType'] ?? specs['soilType']) as String?,
+      crops: json['crops'] is List
+          ? (json['crops'] as List).whereType<String>().toList()
           : null,
-      hasGarage: json['hasGarage'],
-      hasGarden: json['hasGarden'],
+      hasIrrigation: (json['hasIrrigation'] ?? specs['hasIrrigation']) as bool?,
+      hasStorage: (json['hasStorage'] ?? specs['hasStorage']) as bool?,
+      workers: ((json['workers'] ?? specs['workers']) as num?)?.toInt(),
+      // House
+      bedrooms: ((json['bedrooms'] ?? specs['bedrooms']) as num?)?.toInt(),
+      bathrooms: ((json['bathrooms'] ?? specs['bathrooms']) as num?)?.toInt(),
+      floors: ((json['floors'] ?? specs['floors']) as num?)?.toInt(),
+      propertyCondition:
+          (json['propertyCondition'] ?? specs['propertyCondition']) as String?,
+      yearBuilt: ((json['yearBuilt'] ?? specs['yearBuilt']) as num?)?.toInt(),
+      livingArea: ((json['livingArea'] ?? specs['livingArea']) as num?)
+          ?.toDouble(),
+      livingAreaUnit:
+          (json['livingAreaUnit'] ?? specs['livingAreaUnit']) as String?,
+      amenities: json['amenities'] is List
+          ? (json['amenities'] as List).whereType<String>().toList()
+          : null,
+      hasGarage: (json['hasGarage'] ?? specs['hasGarage']) as bool?,
+      hasGarden: (json['hasGarden'] ?? specs['hasGarden']) as bool?,
       // GPS Survey
       boundaryPoints: json['boundaryPoints'] != null
           ? List<Map<String, double>>.from(
@@ -217,10 +259,11 @@ class RealEstateListing {
               ),
             )
           : null,
-      centerLat: json['centerLat']?.toDouble(),
-      centerLng: json['centerLng']?.toDouble(),
-      calculatedAreaSqm: json['calculatedAreaSqm']?.toDouble(),
-      locationVerified: json['locationVerified'],
+      centerLat: (json['centerLat'] as num?)?.toDouble(),
+      centerLng: (json['centerLng'] as num?)?.toDouble(),
+      calculatedAreaSqm: (json['calculatedAreaSqm'] as num?)?.toDouble(),
+      locationVerified:
+          (json['locationVerified'] ?? json['isVerified']) as bool?,
     );
   }
 
@@ -367,15 +410,15 @@ class RealEstateListing {
   }
 
   String get locationLabel {
-    final parts = <String>[];
-    if (subLocality != null && subLocality!.isNotEmpty) parts.add(subLocality!);
-    if (locality != null && locality!.isNotEmpty) {
-      parts.add(locality!);
-    } else if (city != null && city!.isNotEmpty) {
-      parts.add(city!);
-    }
-    if (state != null && state!.isNotEmpty) parts.add(state!);
-    return parts.join(', ');
+    return formatTieredLocation(
+      subLocality: subLocality,
+      city: (locality != null && locality!.isNotEmpty) ? locality : city,
+      state: state,
+      country: country,
+      countryCode: countryCode,
+      includeSubLocality: true,
+      includeCountry: false,
+    );
   }
 
   String get subtitleLabel {

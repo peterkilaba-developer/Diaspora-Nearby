@@ -26,6 +26,7 @@ import 'package:diaspora_nearby/features/events/widgets/event_card.dart';
 import 'package:diaspora_nearby/features/events/screens/organizer_events_screen.dart';
 import 'package:diaspora_nearby/core/services/google_places_service.dart';
 import 'package:diaspora_nearby/core/services/plus_code_service.dart';
+import 'package:diaspora_nearby/core/utils/location_utils.dart';
 
 import 'package:diaspora_nearby/features/chat/models/chat.dart';
 
@@ -531,8 +532,12 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
     }
   }
 
+  Timer? _locationDebounce;
+  int _locationSeq = 0;
+
   @override
   void dispose() {
+    _locationDebounce?.cancel();
     _titleController.removeListener(_onFormChanged);
     _locationController.removeListener(_onFormChanged);
     _titleController.dispose();
@@ -560,26 +565,32 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
   }
 
   void _onLocationChanged(String value) {
-    if (value.isEmpty) {
+    _locationDebounce?.cancel();
+    final trimmed = value.trim();
+    if (trimmed.length < 2) {
       setState(() {
         _placePredictions = [];
         _showPredictions = false;
       });
       return;
     }
-    ref
-        .read(googlePlacesServiceProvider)
-        .autocomplete(value, filter: places.PlaceTypeFilter.VENUES)
-        .then((predictions) {
-          if (!mounted) return;
-          setState(() {
-            _placePredictions = predictions;
-            _showPredictions = true;
+    final seq = ++_locationSeq;
+    _locationDebounce = Timer(const Duration(milliseconds: 280), () {
+      ref
+          .read(googlePlacesServiceProvider)
+          .autocomplete(trimmed, filter: places.PlaceTypeFilter.ALL)
+          .then((predictions) {
+            if (!mounted || seq != _locationSeq) return;
+            setState(() {
+              _placePredictions = predictions;
+              _showPredictions = predictions.isNotEmpty;
+            });
           });
-        });
+    });
   }
 
   void _selectPlace(places.AutocompletePrediction prediction) {
+    _locationDebounce?.cancel();
     _locationController.text = prediction.fullText;
     _venueName = prediction.primaryText;
     _venueAddress = prediction.secondaryText;
@@ -597,20 +608,43 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
 
         final place = response?.place;
         if (place != null && mounted) {
+          final rawFull =
+              place.fullAddress ?? place.address ?? prediction.fullText;
+          final parsed = place.addressComponents != null
+              ? parseLocationComponents(rawFull, place.addressComponents!)
+              : null;
+
           setState(() {
-            _venueName = place.name;
-            _venueAddress = place.address;
+            _venueName = place.name ?? prediction.primaryText;
+            _venueAddress = place.address ?? prediction.secondaryText;
             _latitude = place.latLng?.lat;
             _longitude = place.latLng?.lng;
 
-            if (place.addressComponents != null) {
+            if (parsed != null) {
+              _venueCity = parsed.city;
+              _venueState = parsed.state;
+              _venueCountry = parsed.country;
+            } else if (place.addressComponents != null) {
+              String? countryCode;
               for (var comp in place.addressComponents!) {
-                if (comp.types.contains('locality')) _venueCity = comp.name;
+                if (comp.types.contains('locality') ||
+                    comp.types.contains('postal_town')) {
+                  _venueCity ??= comp.name;
+                }
                 if (comp.types.contains('administrative_area_level_1')) {
                   _venueState = comp.name;
                 }
-                if (comp.types.contains('country')) _venueCountry = comp.name;
+                if (comp.types.contains('country')) {
+                  _venueCountry = comp.name;
+                  countryCode = comp.shortName;
+                }
               }
+              _venueState = sanitizeStateForCountry(
+                state: _venueState,
+                city: _venueCity,
+                countryCode: countryCode,
+                countryName: _venueCountry,
+              );
             }
           });
         }
@@ -903,13 +937,14 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                             ),
                             onPressed: () async {
                               FocusScope.of(context).unfocus();
+                              final now = DateTime.now();
                               final d = await showDatePicker(
                                 context: context,
                                 initialDate: _startDate,
-                                firstDate: DateTime.now(),
-                                lastDate: DateTime.now().add(
-                                  const Duration(days: 30),
-                                ),
+                                firstDate: _startDate.isBefore(now)
+                                    ? _startDate
+                                    : now,
+                                lastDate: DateTime(2030),
                               );
                               if (d != null) {
                                 setState(() {

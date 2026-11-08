@@ -16,22 +16,91 @@ LocationParsed? parseLocationComponents(
   String address,
   List<AddressComponent> components,
 ) {
-  String? sublocality, city, state, country, countryCode;
+  String? streetNumber,
+      route,
+      premise,
+      sublocality,
+      neighborhood,
+      sublocality2,
+      adminArea3,
+      adminArea2,
+      postalTown,
+      locality,
+      state,
+      country,
+      countryCode,
+      postalCode;
 
   for (final component in components) {
     final types = component.types;
-    if (types.contains('sublocality') ||
+    final name = component.name.trim();
+    if (name.isEmpty) continue;
+
+    if (types.contains('street_number')) {
+      streetNumber ??= name;
+    } else if (types.contains('route')) {
+      route ??= name;
+    } else if (types.contains('premise') || types.contains('subpremise')) {
+      premise ??= name;
+    } else if (types.contains('sublocality') ||
         types.contains('sublocality_level_1')) {
-      sublocality ??= component.name;
+      sublocality ??= name;
     } else if (types.contains('neighborhood')) {
-      sublocality ??= component.name; // fallback if no sublocality
+      neighborhood ??= name;
+    } else if (types.contains('sublocality_level_2') ||
+        types.contains('sublocality_level_3')) {
+      sublocality2 ??= name;
+    } else if (types.contains('administrative_area_level_3')) {
+      adminArea3 ??= name;
+    } else if (types.contains('administrative_area_level_2')) {
+      adminArea2 ??= name;
+    } else if (types.contains('postal_town')) {
+      postalTown ??= name;
     } else if (types.contains('locality')) {
-      city = component.name;
+      locality ??= name;
     } else if (types.contains('administrative_area_level_1')) {
-      state = component.name;
+      state ??= name;
     } else if (types.contains('country')) {
-      country = component.name;
-      countryCode = component.shortName;
+      country = name;
+      countryCode = component.shortName.trim();
+    } else if (types.contains('postal_code')) {
+      postalCode ??= name;
+    }
+  }
+
+  sublocality ??= neighborhood ?? sublocality2 ?? adminArea3;
+
+  String? city =
+      locality ?? postalTown ?? adminArea2 ?? sublocality ?? adminArea3;
+
+  // If city came from locality/postalTown and sublocality wasn't set,
+  // use administrative_area_level_2 (e.g. "Ilala" district in Dar es Salaam)
+  // when it is distinct from city and state.
+  if ((locality != null || postalTown != null) &&
+      sublocality == null &&
+      adminArea2 != null &&
+      !isSameOrRedundantLocationPart(adminArea2, city) &&
+      !isSameOrRedundantLocationPart(adminArea2, state)) {
+    sublocality = formatLocationName(adminArea2);
+  }
+
+  if (sublocality != null && isSameOrRedundantLocationPart(sublocality, city)) {
+    sublocality = null;
+  }
+
+  // Fallback for country from address string if components lacked country
+  if ((country == null || countryCode == null) && address.isNotEmpty) {
+    final parts = address
+        .split(',')
+        .map((p) => p.trim())
+        .where((p) => p.isNotEmpty)
+        .toList();
+    if (parts.isNotEmpty) {
+      final matchedCountry = country_data.getCountryByName(parts.last);
+      if (matchedCountry != null) {
+        country ??= matchedCountry.name;
+        countryCode ??= matchedCountry.code;
+      }
     }
   }
 
@@ -64,19 +133,60 @@ LocationParsed? parseLocationComponents(
     }
   }
 
-  // [FALLBACK] If no city found (e.g. Region selected), use first part of address
+  // [FALLBACK] If no city found (e.g. Region/Resort selected), extract from address or state
   if (city == null && address.isNotEmpty) {
-    final parts = address.split(',');
-    if (parts.isNotEmpty) {
-      city = parts.first.trim();
+    final parts = address
+        .split(',')
+        .map((p) => p.trim())
+        .where((p) => p.isNotEmpty)
+        .toList();
+    for (final part in parts) {
+      if (!PlusCodeService.isValidPlusCode(part) &&
+          !isSameOrRedundantLocationPart(part, country) &&
+          !isSameOrRedundantLocationPart(part, state)) {
+        city = formatLocationName(part);
+        break;
+      }
     }
+  }
+  if (city == null && state != null) {
+    city = formatLocationName(state);
   }
 
   if (country == null || countryCode == null) return null;
 
-  // Verify if country supports state level
-  if (!country_data.hasStateLevelHierarchyFromData(countryCode)) {
-    state = null;
+  // Enforce 2-tier vs 3-tier hierarchy & strip redundant state (e.g. "Dar es Salam" vs "Dar es Salaam")
+  state = sanitizeStateForCountry(
+    state: state,
+    city: city,
+    countryCode: countryCode,
+    countryName: country,
+  );
+
+  // Build clean street address (without duplicating city/state/country)
+  String? streetAddress;
+  if (streetNumber != null && route != null) {
+    streetAddress = '$streetNumber $route';
+  } else if (route != null) {
+    streetAddress = route;
+  } else if (premise != null &&
+      !isSameOrRedundantLocationPart(premise, city)) {
+    streetAddress = premise;
+  } else if (address.isNotEmpty) {
+    final parts = address
+        .split(',')
+        .map((p) => p.trim())
+        .where((p) => p.isNotEmpty)
+        .toList();
+    if (parts.length > 1) {
+      final first = parts.first;
+      if (!PlusCodeService.isValidPlusCode(first) &&
+          !isSameOrRedundantLocationPart(first, city) &&
+          !isSameOrRedundantLocationPart(first, state) &&
+          !isSameOrRedundantLocationPart(first, country)) {
+        streetAddress = first;
+      }
+    }
   }
 
   return LocationParsed(
@@ -85,6 +195,8 @@ LocationParsed? parseLocationComponents(
     state: state,
     country: country,
     countryCode: countryCode,
+    streetAddress: streetAddress,
+    postalCode: postalCode,
   );
 }
 
@@ -96,6 +208,8 @@ class LocationParsed {
   final String country;
   final String countryCode;
   final String? placeId; // [NEW] Explicit Place ID for robust matching
+  final String? streetAddress;
+  final String? postalCode;
 
   LocationParsed({
     this.sublocality,
@@ -104,11 +218,13 @@ class LocationParsed {
     required this.country,
     required this.countryCode,
     this.placeId,
+    this.streetAddress,
+    this.postalCode,
   });
 
   @override
   String toString() =>
-      'LocationParsed(sublocality: $sublocality, city: $city, state: $state, country: $country, code: $countryCode, placeId: $placeId)';
+      'LocationParsed(sublocality: $sublocality, city: $city, state: $state, country: $country, code: $countryCode, placeId: $placeId, streetAddress: $streetAddress)';
 }
 
 // --------------------------------------------------------------------------
@@ -607,4 +723,168 @@ String formatFullAddress(String address) {
       .toList();
 
   return formattedParts.join(', ');
+}
+
+String _normalizeLocationToken(String value, {bool collapseRepeats = false}) {
+  var s = value.toLowerCase().trim();
+  s = s.replaceAll(
+    RegExp(
+      r'\b(region|state|province|district|county|township|municipality|governorate|prefecture|department|parish|city|division|zone)\b',
+      caseSensitive: false,
+    ),
+    '',
+  );
+  s = s.replaceAll(RegExp(r'[^a-z0-9\s]'), ' ');
+  s = s.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (collapseRepeats && s.isNotEmpty) {
+    s = s.replaceAllMapped(RegExp(r'(.)\1+'), (m) => m.group(1)!);
+  }
+  return s;
+}
+
+/// Returns true if two location parts represent the same or redundant place
+/// (e.g. "Dar es Salaam" vs "Dar es Salam", "Mwanza" vs "Mwanza Region",
+/// "New York City" vs "New York").
+bool isSameOrRedundantLocationPart(String? a, String? b) {
+  if (a == null || b == null) return false;
+  final trimA = a.trim();
+  final trimB = b.trim();
+  if (trimA.isEmpty || trimB.isEmpty) return false;
+  if (trimA.toLowerCase() == trimB.toLowerCase()) return true;
+
+  final normA = _normalizeLocationToken(trimA);
+  final normB = _normalizeLocationToken(trimB);
+  if (normA.isNotEmpty && normA == normB) return true;
+
+  final collapsedA = _normalizeLocationToken(trimA, collapseRepeats: true);
+  final collapsedB = _normalizeLocationToken(trimB, collapseRepeats: true);
+  if (collapsedA.isNotEmpty && collapsedA == collapsedB) return true;
+
+  return false;
+}
+
+/// Returns a cleaned state/region name ONLY if the country uses a 3-tier
+/// hierarchy (`hasStateLevel == true`) AND the state is not redundant with [city].
+/// For 2-tier countries (like Tanzania, Kenya, Uganda, UK, etc.), always returns null.
+String? sanitizeStateForCountry({
+  String? state,
+  String? city,
+  String? countryCode,
+  String? countryName,
+}) {
+  if (state == null) return null;
+  final trimmed = state.trim();
+  if (trimmed.isEmpty) return null;
+
+  final hasCountryInfo =
+      (countryCode != null && countryCode.trim().isNotEmpty) ||
+      (countryName != null && countryName.trim().isNotEmpty);
+
+  if (hasCountryInfo &&
+      !country_data.hasStateLevelForCountry(
+        countryCode: countryCode,
+        countryName: countryName,
+      )) {
+    return null;
+  }
+
+  final cleaned = formatLocationName(trimmed);
+  if (cleaned.isEmpty) return null;
+
+  if (isSameOrRedundantLocationPart(city, trimmed) ||
+      isSameOrRedundantLocationPart(city, cleaned)) {
+    return null;
+  }
+
+  return cleaned;
+}
+
+/// Formats a location string strictly following 2-tier (`City, Country`) or
+/// 3-tier (`City, State, Country`) rules for the given country, while
+/// deduplicating any redundant parts (such as "Dar es Salaam, Dar es Salam").
+String formatTieredLocation({
+  String? subLocality,
+  String? city,
+  String? state,
+  String? country,
+  String? countryCode,
+  bool includeSubLocality = false,
+  bool includeCountry = true,
+}) {
+  final cleanSub = subLocality?.trim();
+  final cleanCity = city?.trim();
+  final cleanCountry = country?.trim();
+  final cleanState = sanitizeStateForCountry(
+    state: state,
+    city: cleanCity,
+    countryCode: countryCode,
+    countryName: cleanCountry,
+  );
+
+  final parts = <String>[];
+
+  void addUnique(String? value) {
+    if (value == null) return;
+    final v = value.trim();
+    if (v.isEmpty) return;
+    if (parts.any((existing) => isSameOrRedundantLocationPart(existing, v))) {
+      return;
+    }
+    parts.add(v);
+  }
+
+  if (includeSubLocality) {
+    addUnique(cleanSub);
+  }
+  addUnique(cleanCity);
+  addUnique(cleanState);
+  if (includeCountry) {
+    addUnique(cleanCountry);
+  }
+
+  return parts.join(', ');
+}
+
+/// Cleans a comma-separated location display string by removing consecutive or
+/// redundant parts (e.g. "Dar es Salaam, Dar es Salam, Tanzania" -> "Dar es Salaam, Tanzania")
+/// and enforcing 2-tier formatting if the trailing country is a 2-tier country.
+String cleanRedundantLocationString(
+  String raw, {
+  String? countryCode,
+  String? countryName,
+}) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return '';
+
+  final rawParts = trimmed
+      .split(',')
+      .map((p) => p.trim())
+      .where((p) => p.isNotEmpty)
+      .toList();
+  if (rawParts.length <= 1) return trimmed;
+
+  final deduped = <String>[];
+  for (final part in rawParts) {
+    if (deduped.any((existing) => isSameOrRedundantLocationPart(existing, part))) {
+      continue;
+    }
+    deduped.add(part);
+  }
+
+  final effectiveCountryName = countryName ?? deduped.last;
+  final matchedCountry =
+      (countryCode != null && countryCode.trim().isNotEmpty)
+      ? country_data.getCountryByCode(countryCode)
+      : country_data.getCountryByName(effectiveCountryName);
+
+  // If 2-tier country and we have [City, Region/State, Country], drop the middle State part
+  // when the last element matches the country name.
+  if (matchedCountry != null &&
+      !matchedCountry.hasStateLevel &&
+      deduped.length == 3 &&
+      isSameOrRedundantLocationPart(deduped.last, matchedCountry.name)) {
+    return '${deduped.first}, ${deduped.last}';
+  }
+
+  return deduped.join(', ');
 }

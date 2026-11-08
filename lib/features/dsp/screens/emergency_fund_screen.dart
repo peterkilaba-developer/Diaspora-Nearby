@@ -459,9 +459,16 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
       stream: widget.membershipStream,
       builder: (context, memSnapshot) {
         final membership = memSnapshot.data;
+        final now = DateTime.now();
+        final paidWithin365Days =
+            membership != null &&
+            membership.status == MembershipStatus.active &&
+            now.isBefore(
+              membership.nextPaymentDate ??
+                  membership.joinedDate.add(const Duration(days: 365)),
+            );
 
-        if (membership != null &&
-            membership.status == MembershipStatus.active) {
+        if (paidWithin365Days) {
           return _buildActiveMemberView(context, membership);
         }
 
@@ -648,6 +655,16 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
     BuildContext context,
     EmergencyFundMembership membership,
   ) {
+    final proxyUid = membership.proxyUserId;
+    final proxyProfileAsync =
+        proxyUid != null && proxyUid.isNotEmpty
+            ? ref.watch(userProfileByIdProvider(proxyUid))
+            : null;
+    final resolvedProxyName =
+        proxyProfileAsync?.value != null
+            ? '${proxyProfileAsync!.value!.firstName} ${proxyProfileAsync.value!.lastName}'.trim()
+            : (proxyUid ?? 'Pending');
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32.0),
@@ -666,7 +683,7 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
             ),
             const SizedBox(height: 12),
             Text(
-              'Request sent to: ${membership.proxyUserId ?? "Pending"}',
+              'Request sent to: $resolvedProxyName',
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 16, height: 1.5),
             ),
@@ -779,11 +796,33 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
                 '${membership.coveredFamilyMembers.length + 1} People',
               ),
               const SizedBox(height: 10),
-              _buildMemberInfoRow(
-                theme,
-                LucideIcons.userCheck,
-                'Proxy',
-                membership.proxyUserId ?? 'Not Assigned',
+              Builder(
+                builder: (context) {
+                  final proxyUid = membership.proxyUserId;
+                  String proxyLabel = 'Not Assigned';
+                  if (proxyUid != null && proxyUid.isNotEmpty) {
+                    final proxyProfile = ref
+                        .watch(userProfileByIdProvider(proxyUid))
+                        .value;
+                    final name = proxyProfile != null
+                        ? '${proxyProfile.firstName} ${proxyProfile.lastName}'
+                              .trim()
+                        : proxyUid;
+                    if (membership.proxyStatus == ProxyStatus.pending) {
+                      proxyLabel = '$name (Pending)';
+                    } else if (membership.proxyStatus == ProxyStatus.accepted) {
+                      proxyLabel = '$name ✓';
+                    } else {
+                      proxyLabel = name;
+                    }
+                  }
+                  return _buildMemberInfoRow(
+                    theme,
+                    LucideIcons.userCheck,
+                    'Proxy / POA',
+                    proxyLabel,
+                  );
+                },
               ),
             ],
           ),
@@ -1111,7 +1150,7 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Family members who are also fund members. Designate a proxy or announce passing.',
+            'Designate a Proxy / Power of Attorney anytime, or announce passing. Support is disbursed only when both are active fund members.',
             style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
           ),
           const SizedBox(height: 16),
@@ -1125,29 +1164,43 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                 return _buildEmptyFamilyCard(context);
               }
 
-              // Filter to only family who are also fund members
-              return FutureBuilder<List<Relationship>>(
-                future: _filterFundMembers(family),
+              final ValueKey familyKey = ValueKey(
+                family.map((r) => '${r.id}_${r.status}').join(','),
+              );
+              return FutureBuilder<List<bool>>(
+                key: familyKey,
+                future: Future.wait(family.map((rel) => _isFundMember(rel.id))),
                 builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(16),
-                        child: CircularProgressIndicator(),
-                      ),
-                    );
-                  }
+                  final flags = snapshot.data;
+                  final isLoadingFlags =
+                      snapshot.connectionState == ConnectionState.waiting &&
+                      flags == null;
 
-                  final fundFamily = snapshot.data ?? [];
-
-                  if (fundFamily.isEmpty) {
-                    return _buildNoFundFamilyCard(context, family.length);
+                  int fundMemberCount = 0;
+                  final Map<String, bool> isMemberById = {};
+                  if (flags != null) {
+                    for (int i = 0; i < family.length; i++) {
+                      final isMem = i < flags.length ? flags[i] : false;
+                      isMemberById[family[i].id] = isMem;
+                      if (isMem) fundMemberCount++;
+                    }
                   }
 
                   return Column(
-                    children: fundFamily
-                        .map((rel) => _buildFamilyMemberCard(context, rel))
-                        .toList(),
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (!isLoadingFlags && fundMemberCount == 0) ...[
+                        _buildNoFundFamilyCard(context, family.length),
+                        const SizedBox(height: 12),
+                      ],
+                      ...family.map(
+                        (rel) => _buildFamilyMemberCard(
+                          context,
+                          rel,
+                          isFundMember: isMemberById[rel.id],
+                        ),
+                      ),
+                    ],
                   );
                 },
               );
@@ -1386,8 +1439,12 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
     );
   }
 
-  // â”€â”€â”€ Family Member Card with Proxy & Announce â”€â”€â”€
-  Widget _buildFamilyMemberCard(BuildContext context, Relationship rel) {
+  // ─── Family Member Card with Proxy & Announce ───
+  Widget _buildFamilyMemberCard(
+    BuildContext context,
+    Relationship rel, {
+    bool? isFundMember,
+  }) {
     final profileAsync = ref.watch(userProfileByIdProvider(rel.id));
     final membershipStream = ref
         .watch(emergencyFundServiceProvider)
@@ -1481,7 +1538,7 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          'Proxy âœ“',
+                          'Proxy / POA ✓',
                           style: TextStyle(
                             color: Colors.green.shade700,
                             fontSize: 10,
@@ -1502,7 +1559,7 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          'Pending',
+                          'Proxy Pending',
                           style: TextStyle(
                             color: Colors.orange.shade700,
                             fontSize: 10,
@@ -1514,62 +1571,27 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                   ],
                 ),
                 subtitle: Text(
-                  rel.type,
+                  isFundMember == true
+                      ? '${rel.type} · Fund Member'
+                      : isFundMember == false
+                      ? '${rel.type} · Not a Fund Member'
+                      : rel.type,
                   style: TextStyle(color: theme.hintColor, fontSize: 12),
                 ),
                 trailing: isDeceased
                     ? null
-                    : PopupMenuButton<String>(
+                    : IconButton(
                         icon: Icon(
                           LucideIcons.moreVertical,
                           size: 18,
                           color: theme.hintColor,
                         ),
-                        onSelected: (value) {
-                          if (value == 'proxy') {
-                            _designateProxy(rel);
-                          } else if (value == 'announce') {
-                            _announcePassingForFamily(rel);
-                          }
-                        },
-                        itemBuilder: (_) => [
-                          PopupMenuItem(
-                            value: 'proxy',
-                            child: ListTile(
-                              leading: Icon(
-                                proxyAccepted
-                                    ? LucideIcons.shieldCheck
-                                    : LucideIcons.shield,
-                                size: 20,
-                                color: proxyAccepted ? Colors.green : null,
-                              ),
-                              title: Text(
-                                proxyAccepted ? 'Change Proxy' : 'Set as Proxy',
-                              ),
-                              subtitle: Text(
-                                proxyPending
-                                    ? 'Awaiting acceptance...'
-                                    : 'Point of contact if you pass',
-                              ),
-                              dense: true,
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                          ),
-                          // Only show "Announce Passing" if proxy has accepted
-                          if (proxyAccepted)
-                            const PopupMenuItem(
-                              value: 'announce',
-                              child: ListTile(
-                                leading: Icon(LucideIcons.flag, size: 20),
-                                title: Text('Announce Passing'),
-                                subtitle: Text(
-                                  'Create memorial & alert community',
-                                ),
-                                dense: true,
-                                contentPadding: EdgeInsets.zero,
-                              ),
-                            ),
-                        ],
+                        onPressed: () => _showFamilyProxyActionsDialog(
+                          context,
+                          rel,
+                          proxyAccepted: proxyAccepted,
+                          proxyPending: proxyPending,
+                        ),
                       ),
               ),
             );
@@ -1584,6 +1606,85 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
     );
   }
 
+  Future<void> _showFamilyProxyActionsDialog(
+    BuildContext context,
+    Relationship rel, {
+    required bool proxyAccepted,
+    required bool proxyPending,
+  }) async {
+    final theme = Theme.of(context);
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          backgroundColor: theme.colorScheme.surfaceContainerHigh,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide.none,
+          ),
+          child: SizedBox(
+            width: double.maxFinite,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    leading: Icon(
+                      proxyAccepted
+                          ? LucideIcons.shieldCheck
+                          : LucideIcons.shield,
+                      size: 22,
+                      color: proxyAccepted
+                          ? Colors.green
+                          : theme.colorScheme.onSurface,
+                    ),
+                    title: Text(
+                      proxyAccepted
+                          ? 'Change Proxy / Power of Attorney'
+                          : 'Designate as Proxy / POA',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: Text(
+                      proxyPending
+                          ? 'Awaiting acceptance...'
+                          : 'Initiate support if you pass or are incapacitated',
+                    ),
+                    onTap: () => Navigator.pop(ctx, 'proxy'),
+                  ),
+                  ListTile(
+                    leading: Icon(
+                      LucideIcons.flag,
+                      size: 22,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                    title: const Text(
+                      'Announce Passing',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: const Text(
+                      'Create memorial & alert community',
+                    ),
+                    onTap: () => Navigator.pop(ctx, 'announce'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (!mounted || selected == null) return;
+    if (selected == 'proxy') {
+      _designateProxy(rel);
+    } else if (selected == 'announce') {
+      _announcePassingForFamily(rel);
+    }
+  }
+
   void _designateProxy(Relationship rel) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -1591,12 +1692,12 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: AlertDialog(
           insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
-          title: const Text('Designate Proxy'),
+          title: const Text('Designate Proxy / Power of Attorney'),
           content: Text(
-            'Are you sure you want to designate ${rel.name} as your proxy?\n\n'
+            'Are you sure you want to designate ${rel.name} as your Proxy (Power of Attorney)?\n\n'
             'They will receive a notification to accept this role. '
-            'Once accepted, they will be your point of contact and can manage your '
-            'emergency fund on your behalf if you are unable to.',
+            'Once accepted, they can initiate emergency support or announce your passing on your behalf if you pass away or become incapacitated.\n\n'
+            'Note: You can designate a proxy at any time, but emergency fund support can only be disbursed when both you and the beneficiary/proxy are active Emergency Fund members.',
           ),
           actions: [
             TextButton(
@@ -1855,22 +1956,6 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
     );
   }
 
-  /// Filters a list of family relationships, returning only those
-  /// whose related user is also an active Emergency Fund member.
-  Future<List<Relationship>> _filterFundMembers(
-    List<Relationship> family,
-  ) async {
-    if (family.isEmpty) return const [];
-    final flags = await Future.wait(family.map((rel) => _isFundMember(rel.id)));
-    final results = <Relationship>[];
-    for (int i = 0; i < family.length; i++) {
-      if (flags[i]) {
-        results.add(family[i]);
-      }
-    }
-    return results;
-  }
-
   /// Shown when you have family connections but none are fund members.
   Widget _buildNoFundFamilyCard(BuildContext context, int totalFamily) {
     final theme = Theme.of(context);
@@ -1903,9 +1988,12 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                 const SizedBox(height: 4),
                 Text(
                   'You have $totalFamily family connection${totalFamily == 1 ? '' : 's'}, but none are Emergency Fund members. '
-                  'Family members must also be fund members to be eligible for bereavement and repatriation support.',
+                  'You can designate a Proxy / Power of Attorney (POA) anytime using the ⋮ menu on a family member below (or from your Profile), '
+                  'so they can initiate support or announce your passing if you die or become incapacitated. '
+                  'However, support can only be disbursed when both you and the family member are active Emergency Fund members.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: Colors.orange.shade700,
+                    height: 1.35,
                   ),
                 ),
               ],
@@ -2572,8 +2660,13 @@ class _SecretaryAnnouncementSheetState
           .get();
 
       final members = snapshot.docs
-          .map((doc) => ProfileData.fromJson(doc.data()))
-          .where((p) => p.uid != widget.secretaryUserId)
+          .where((doc) => !ProfileData.isAiAgentUid(doc.id))
+          .map((doc) {
+            final data = Map<String, dynamic>.from(doc.data());
+            data['uid'] ??= doc.id;
+            return ProfileData.fromJson(data);
+          })
+          .where((p) => p.uid != widget.secretaryUserId && !p.isAiAgent)
           .toList();
 
       if (mounted) {
@@ -3044,34 +3137,19 @@ class _DiasporaPaymentCardState extends ConsumerState<_DiasporaPaymentCard> {
   Map<String, dynamic>? _quote;
   bool _loadingQuote = false;
   bool _paying = false;
+  DateTime? _paidUntil;
+  late Stream<EmergencyFundMembership?> _membershipStream;
   String? _error;
-  String? _treasuryAddress;
 
   @override
   void initState() {
     super.initState();
+    _membershipStream = ref
+        .read(emergencyFundServiceProvider)
+        .streamMembership(widget.userId);
     _quote = _fallbackQuote();
     _loadQuote();
-    _loadTreasury();
   }
-
-  Future<void> _loadTreasury() async {
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('system_stats')
-          .doc('emergency_fund')
-          .get();
-      final addr = doc.data()?['treasuryWallet'] as String?;
-      if (mounted && addr != null && addr.isNotEmpty) {
-        setState(() => _treasuryAddress = addr);
-      }
-    } catch (e) {
-      debugPrint('[EmergencyFund] treasury fetch failed: $e');
-    }
-  }
-
-  String _shortAddr(String s) =>
-      s.length > 16 ? '${s.substring(0, 8)}…${s.substring(s.length - 6)}' : s;
 
   // Fallback rate if the price-oracle Cloud Function is unreachable.
   // Matches the implied $DIASPORA price used on the marketing site.
@@ -3115,6 +3193,9 @@ class _DiasporaPaymentCardState extends ConsumerState<_DiasporaPaymentCard> {
     try {
       await ref.read(emergencyFundServiceProvider).payContributionInDiaspora();
       if (mounted) {
+        setState(() {
+          _paidUntil = DateTime.now().add(const Duration(days: 365));
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
@@ -3181,12 +3262,6 @@ class _DiasporaPaymentCardState extends ConsumerState<_DiasporaPaymentCard> {
             _buildBalanceRow(theme),
             const SizedBox(height: 6),
             _row(theme, 'Rate', '1 \$DIASPORA ≈ \$${_quote!['pricePerToken']}'),
-            const SizedBox(height: 6),
-            _row(
-              theme,
-              'Treasury',
-              _treasuryAddress == null ? '—' : _shortAddr(_treasuryAddress!),
-            ),
           ],
           if (_error != null)
             Padding(
@@ -3256,21 +3331,43 @@ class _DiasporaPaymentCardState extends ConsumerState<_DiasporaPaymentCard> {
       data: (b) {
         final bal = _balanceNum(b);
         final enough = bal >= required;
-        return Row(
+        final rawPrice = _quote?['pricePerToken'];
+        final price = rawPrice is num
+            ? rawPrice
+            : (num.tryParse('$rawPrice') ?? 0);
+        final usd = bal * price;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Your balance',
-              style: TextStyle(fontSize: 12, color: theme.hintColor),
+            Row(
+              children: [
+                Text(
+                  'Your balance',
+                  style: TextStyle(fontSize: 12, color: theme.hintColor),
+                ),
+                const Spacer(),
+                Text(
+                  '$b \$DIASPORA',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: enough
+                        ? theme.colorScheme.onSurface
+                        : Colors.redAccent,
+                  ),
+                ),
+              ],
             ),
-            const Spacer(),
-            Text(
-              '$b \$DIASPORA',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: enough ? theme.colorScheme.onSurface : Colors.redAccent,
+            if (price > 0) ...[
+              const SizedBox(height: 2),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  '≈ \$${usd.toStringAsFixed(2)} USD',
+                  style: TextStyle(fontSize: 11, color: theme.hintColor),
+                ),
               ),
-            ),
+            ],
           ],
         );
       },
@@ -3316,37 +3413,52 @@ class _DiasporaPaymentCardState extends ConsumerState<_DiasporaPaymentCard> {
         : (balanceReady && !hasEnough)
         ? 'Insufficient \$DIASPORA balance'
         : 'Contribute & Activate Membership';
-    return Row(
-      children: [
-        Expanded(
-          child: FilledButton.icon(
-            onPressed: canPay ? _pay : null,
-            icon: _paying
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : Icon(
-                    hasEnough ? LucideIcons.zap : LucideIcons.alertCircle,
-                    size: 16,
-                    color: Colors.white,
-                  ),
-            label: Text(label),
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.all(16),
-              backgroundColor: const Color(0xFF7CAE7A),
-              disabledBackgroundColor: Colors.grey.shade400,
-              disabledForegroundColor: Colors.white,
+    return StreamBuilder<EmergencyFundMembership?>(
+      stream: _membershipStream,
+      builder: (context, snap) {
+        final mem = snap.data;
+        final nextDue =
+            _paidUntil ??
+            (mem != null && mem.status == MembershipStatus.active
+                ? (mem.nextPaymentDate ??
+                      mem.joinedDate.add(const Duration(days: 365)))
+                : null);
+        if (nextDue != null && DateTime.now().isBefore(nextDue)) {
+          return const SizedBox.shrink();
+        }
+        return Row(
+          children: [
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: canPay ? _pay : null,
+                icon: _paying
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Icon(
+                        hasEnough ? LucideIcons.zap : LucideIcons.alertCircle,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                label: Text(label),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.all(16),
+                  backgroundColor: const Color(0xFF7CAE7A),
+                  disabledBackgroundColor: Colors.grey.shade400,
+                  disabledForegroundColor: Colors.white,
+                ),
+              ),
             ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        _InterestHeartButton(userId: widget.userId, hasEnough: hasEnough),
-      ],
+            const SizedBox(width: 8),
+            _InterestHeartButton(userId: widget.userId, hasEnough: hasEnough),
+          ],
+        );
+      },
     );
   }
 }

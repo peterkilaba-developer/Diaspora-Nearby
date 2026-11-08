@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/travel/widgets/smart_date_picker.dart';
 import 'package:diaspora_nearby/features/travel/widgets/country_filter_toggle.dart';
@@ -13,6 +14,7 @@ import 'package:diaspora_nearby/features/travel/models/peer_listing.dart';
 import 'package:diaspora_nearby/features/travel/services/peer_listing_repository.dart';
 import 'package:diaspora_nearby/features/travel/screens/peer_listing_detail_screen.dart';
 import 'package:diaspora_nearby/features/travel/screens/my_listings_screen.dart';
+import 'package:diaspora_nearby/features/travel/screens/create_car_listing_screen.dart';
 import 'package:diaspora_nearby/features/travel/widgets/travel_skeleton_loader.dart';
 import 'package:diaspora_nearby/features/travel/utils/geo_utils.dart';
 
@@ -281,6 +283,21 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
           ),
           itemBuilder: (_) => [
             PopupMenuItem(
+              value: 'saved',
+              child: Row(
+                children: [
+                  Icon(
+                    LucideIcons.bookmark,
+                    size: 16,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                  const SizedBox(width: 10),
+                  const Text('Saved Cars'),
+                ],
+              ),
+            ),
+            const PopupMenuDivider(),
+            PopupMenuItem(
               value: 'my_listings',
               child: Row(
                 children: [
@@ -290,19 +307,49 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
                     color: theme.colorScheme.onSurface,
                   ),
                   const SizedBox(width: 10),
-                  const Text('My Listings'),
+                  const Text('My Cars'),
+                ],
+              ),
+            ),
+            const PopupMenuDivider(),
+            PopupMenuItem(
+              value: 'post_car',
+              child: Row(
+                children: [
+                  Icon(
+                    LucideIcons.plus,
+                    size: 16,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                  const SizedBox(width: 10),
+                  const Text('Post Car'),
                 ],
               ),
             ),
           ],
           onSelected: (v) async {
-            if (v == 'my_listings') {
+            if (v == 'saved') {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const _SavedCarsScreen(),
+                ),
+              );
+            } else if (v == 'my_listings') {
               Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => const MyListingsScreen(filterType: 'car'),
                 ),
               );
+            } else if (v == 'post_car') {
+              final created = await Navigator.push<bool>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const CreateCarListingScreen(),
+                ),
+              );
+              if (created == true) _loadListings();
             }
           },
         ),
@@ -724,12 +771,23 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
               .read(userProfileProvider)
               .value
               ?.hostCountryCode,
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PeerListingDetailScreen(listing: listings[i]),
-            ),
-          ),
+          onTap: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => PeerListingDetailScreen(listing: listings[i]),
+              ),
+            );
+            if (mounted) {
+              final cached = ref
+                  .read(peerListingRepositoryProvider)
+                  .getCachedListings(type: 'car');
+              if (cached.isNotEmpty) {
+                setState(() => _allListings = cached);
+              }
+              _loadListings();
+            }
+          },
         ),
       ),
     );
@@ -776,4 +834,123 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
   // ─── Listing Card ───────────────────────────────────────────────────
 
   // Listing card now uses shared PeerListingCard widget
+}
+
+class _SavedCarsScreen extends ConsumerStatefulWidget {
+  const _SavedCarsScreen();
+
+  @override
+  ConsumerState<_SavedCarsScreen> createState() => _SavedCarsScreenState();
+}
+
+class _SavedCarsScreenState extends ConsumerState<_SavedCarsScreen> {
+  bool _isLoading = true;
+  List<PeerListing> _listings = [];
+
+  @override
+  void initState() {
+    super.initState();
+    final cached = ref
+        .read(peerListingRepositoryProvider)
+        .getCachedSavedListings(type: 'car');
+    if (cached.isNotEmpty) {
+      _listings = cached;
+      _isLoading = false;
+    }
+    _load();
+  }
+
+  Future<void> _load() async {
+    if (_listings.isEmpty) setState(() => _isLoading = true);
+    try {
+      final uid = ref.read(authRepositoryProvider).currentUser?.uid ?? '';
+      final repo = ref.read(peerListingRepositoryProvider);
+      final results = await repo.getSavedListings(uid, type: 'car');
+      if (mounted) {
+        setState(() {
+          _listings = results;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        title: const Text(
+          'Saved Cars',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+      ),
+      body: _isLoading
+          ? const TravelSkeletonLoader(
+              label: 'Loading saved cars...',
+              icon: LucideIcons.car,
+            )
+          : _listings.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    LucideIcons.bookmarkMinus,
+                    size: 48,
+                    color: theme.hintColor.withValues(alpha: 0.3),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No saved cars',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Browse cars and save them for later',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : RefreshIndicator(
+              onRefresh: _load,
+              color: AppTheme.accent,
+              child: ListView.separated(
+                padding: const EdgeInsets.only(top: 8, bottom: 80),
+                itemCount: _listings.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 8),
+                itemBuilder: (_, i) => PeerListingCard(
+                  listing: _listings[i],
+                  placeholderIcon: LucideIcons.car,
+                  viewerCountryCode: ref
+                      .read(userProfileProvider)
+                      .value
+                      ?.hostCountryCode,
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            PeerListingDetailScreen(listing: _listings[i]),
+                      ),
+                    );
+                    if (mounted) _load();
+                  },
+                ),
+              ),
+            ),
+    );
+  }
 }

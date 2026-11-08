@@ -309,6 +309,7 @@ exports.onChatWritten = functions.firestore
         subtype: after.subtype || null,
         photoUrl: after.photoUrl || null,
         ...(after && after.lastMessage ? { lastMessage: after.lastMessage } : {}),
+        ...(after && after.metadata ? { metadata: after.metadata } : {}),
         updatedAt: updatedAtMs,
         isDeleted: false,
       }, { merge: true });
@@ -468,6 +469,20 @@ exports.createChat = functions.https.onCall(async (data, context) => {
     }
     const images = Array.isArray(listingData.images) ? listingData.images : [];
     const canonicalPhoto = validHttpsUrl(images[0]) ? images[0] : null;
+    const rawListingType = String(listingData.listingType || "").toLowerCase();
+    const resolvedListingType = ["job", "service", "product"].includes(rawListingType) ?
+      rawListingType :
+      (String(listingData.category || "").startsWith("job_") ? "job" : "product");
+    const defaultSellerRole = resolvedListingType === "job" ?
+      "Employer" :
+      (resolvedListingType === "service" ? "Provider" : "Seller");
+    const resolvedSellerRole = (typeof data.sellerRole === "string" && data.sellerRole.trim()) ?
+      data.sellerRole.trim().slice(0, 50) :
+      defaultSellerRole;
+    const createdSystemText = resolvedListingType === "job" ?
+      "Job posted" :
+      (resolvedListingType === "service" ? "Service posted" : "Shop created");
+
     chatId = `listing_${stableHash(listingId).slice(0, 40)}`;
     chatData = baseChat({
       chatId,
@@ -479,15 +494,13 @@ exports.createChat = functions.https.onCall(async (data, context) => {
       photoUrl: canonicalPhoto,
       description: null,
     });
-    chatData.lastMessage.content = "Shop created";
+    chatData.lastMessage.content = createdSystemText;
     chatData.isPublic = true;
     chatData.metadata = {
       isListingChat: true,
       listingId,
-      listingType: String(listingData.listingType || "marketplace").slice(0, 100),
-      ...(typeof data.sellerRole === "string" && data.sellerRole.trim()
-        ? { sellerRole: data.sellerRole.trim().slice(0, 50) }
-        : {}),
+      listingType: resolvedListingType,
+      sellerRole: resolvedSellerRole,
     };
     addCallerToExisting = true;
   } else if (mode === "event") {
@@ -623,11 +636,29 @@ exports.createChat = functions.https.onCall(async (data, context) => {
       if (participants.length > MAX_CHAT_PARTICIPANTS) {
         throw new functions.https.HttpsError("resource-exhausted", "This chat is full.");
       }
-      transaction.update(chatRef, {
+      const updatePayload = {
         participants,
         memberCount: participants.length,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      };
+      if (mode === "listing" && chatData && chatData.metadata) {
+        updatePayload.metadata = {
+          ...(existingData.metadata || {}),
+          ...chatData.metadata,
+        };
+        if (existingData.lastMessage &&
+            existingData.lastMessage.senderId === "system" &&
+            existingData.lastMessage.content === "Shop created" &&
+            chatData.lastMessage &&
+            chatData.lastMessage.content &&
+            chatData.lastMessage.content !== "Shop created") {
+          updatePayload.lastMessage = {
+            ...existingData.lastMessage,
+            content: chatData.lastMessage.content,
+          };
+        }
+      }
+      transaction.update(chatRef, updatePayload);
     }
     if (mode === "event") {
       transaction.set(db.collection("events").doc(data.eventId), {

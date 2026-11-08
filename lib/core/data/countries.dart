@@ -68,13 +68,85 @@ String getStateTerminology(String countryCode) {
 }
 
 Country? getCountryByCode(String countryCode) {
+  final trimmed = countryCode.trim();
+  if (trimmed.isEmpty) return null;
+  final upper = trimmed.toUpperCase();
+  if (upper.startsWith('GB-')) {
+    return countries.firstWhere((c) => c.code == 'GB');
+  }
   try {
     return countries.firstWhere(
-      (c) => c.code.toUpperCase() == countryCode.toUpperCase(),
+      (c) => c.code.toUpperCase() == upper,
     );
   } catch (e) {
     return null;
   }
+}
+
+Country? getCountryByName(String countryName) {
+  final normalized = countryName.trim().toLowerCase();
+  if (normalized.isEmpty) return null;
+
+  const aliases = <String, String>{
+    'usa': 'US',
+    'u.s.': 'US',
+    'u.s.a.': 'US',
+    'united states of america': 'US',
+    'uk': 'GB',
+    'great britain': 'GB',
+    'england': 'GB',
+    'scotland': 'GB',
+    'wales': 'GB',
+    'northern ireland': 'GB',
+    'uae': 'AE',
+    'united republic of tanzania': 'TZ',
+    'drc': 'CD',
+    'democratic republic of the congo': 'CD',
+    'congo - kinshasa': 'CD',
+    'republic of the congo': 'CG',
+    'congo - brazzaville': 'CG',
+    'ivory coast': 'CI',
+    "cote d'ivoire": 'CI',
+    "côte d'ivoire": 'CI',
+    'south korea': 'KR',
+    'republic of korea': 'KR',
+    'russian federation': 'RU',
+  };
+
+  final aliasCode = aliases[normalized];
+  if (aliasCode != null) {
+    return getCountryByCode(aliasCode);
+  }
+
+  if (normalized.length == 2) {
+    final byCode = getCountryByCode(normalized);
+    if (byCode != null) return byCode;
+  }
+
+  for (final c in countries) {
+    if (c.name.toLowerCase() == normalized) {
+      return c;
+    }
+  }
+  for (final c in countries) {
+    if (normalized.contains(c.name.toLowerCase()) ||
+        c.name.toLowerCase().contains(normalized)) {
+      return c;
+    }
+  }
+  return null;
+}
+
+bool hasStateLevelForCountry({String? countryCode, String? countryName}) {
+  if (countryCode != null && countryCode.trim().isNotEmpty) {
+    final byCode = getCountryByCode(countryCode);
+    if (byCode != null) return byCode.hasStateLevel;
+  }
+  if (countryName != null && countryName.trim().isNotEmpty) {
+    final byName = getCountryByName(countryName);
+    if (byName != null) return byName.hasStateLevel;
+  }
+  return false;
 }
 
 const List<Country> countries = [

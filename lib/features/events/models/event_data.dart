@@ -171,7 +171,21 @@ class Event {
     normalized['location'] = (normalized['location'] ?? '').toString();
     normalized['category'] = (normalized['category'] ?? 'Other').toString();
     normalized['creatorId'] =
-        (normalized['creatorId'] ?? normalized['createdBy'] ?? '').toString();
+        (normalized['creatorId'] ??
+                normalized['createdBy'] ??
+                normalized['organizerId'] ??
+                '')
+            .toString();
+    normalized['creatorName'] =
+        (normalized['creatorName'] ?? normalized['organizerName'])?.toString();
+    normalized['creatorPhoto'] =
+        (normalized['creatorPhoto'] ?? normalized['organizerAvatar'])
+            ?.toString();
+    normalized['attendingPermission'] =
+        (normalized['attendingPermission'] ??
+                normalized['communityId'] ??
+                'global_community')
+            .toString();
     normalized['createdAt'] = toIsoString(normalized['createdAt']);
     normalized['status'] = (normalized['status'] ?? 'published').toString();
     normalized['attendees'] = toStringList(normalized['attendees']);

@@ -57,14 +57,15 @@ class _PeerListingDetailScreenState
 
   // ── Save / engagement state ──
   bool _isSaved = false;
+  late PeerListing _listing;
 
-  bool get _isStay => widget.listing.type == 'stay';
-  bool get _isHotel => widget.listing.type == 'hotel';
-  bool get _isCar => widget.listing.type == 'car';
-  bool get _isApiHotel => _isHotel && widget.listing.ownerId == 'amadeus';
+  bool get _isStay => _listing.type == 'stay';
+  bool get _isHotel => _listing.type == 'hotel';
+  bool get _isCar => _listing.type == 'car';
+  bool get _isApiHotel => _isHotel && _listing.ownerId == 'amadeus';
   bool get _isOwner {
     final uid = ref.read(authRepositoryProvider).currentUser?.uid;
-    return uid == widget.listing.ownerId;
+    return uid == _listing.ownerId;
   }
 
   int get _days {
@@ -72,17 +73,18 @@ class _PeerListingDetailScreenState
     return _endDate!.difference(_startDate!).inDays;
   }
 
-  double get _totalPrice => _days * widget.listing.pricePerUnit;
+  double get _totalPrice => _days * _listing.pricePerUnit;
 
   @override
   void initState() {
     super.initState();
+    _listing = _listing;
     _prefillHotelDates();
     _prefillGuestAddressFromProfile();
     final repo = ref.read(peerListingRepositoryProvider);
-    _isSaved = repo.isListingSavedSync(widget.listing.id);
+    _isSaved = repo.isListingSavedSync(_listing.id);
     if (_isOwner) {
-      _ownerBookings = repo.getCachedListingBookings(widget.listing.id);
+      _ownerBookings = repo.getCachedListingBookings(_listing.id);
       _dashboardLoading = false;
       _loadOwnerBookings();
     }
@@ -93,8 +95,8 @@ class _PeerListingDetailScreenState
 
   void _prefillHotelDates() {
     if (!_isHotel) return;
-    final checkInRaw = widget.listing.checkInTime;
-    final checkOutRaw = widget.listing.checkOutTime;
+    final checkInRaw = _listing.checkInTime;
+    final checkOutRaw = _listing.checkOutTime;
     if (checkInRaw != null && checkInRaw.contains('-')) {
       _startDate = DateTime.tryParse(checkInRaw);
     }
@@ -180,7 +182,7 @@ class _PeerListingDetailScreenState
 
   /// Record a view for this listing.
   void _recordView() {
-    final listing = widget.listing;
+    final listing = _listing;
     // Skip API hotels and own listings
     if (listing.id.startsWith('api_') || listing.id.startsWith('mock_')) return;
     final uid = ref.read(authRepositoryProvider).currentUser?.uid;
@@ -192,7 +194,7 @@ class _PeerListingDetailScreenState
 
   /// Check if user has saved this listing.
   Future<void> _checkSavedState() async {
-    final listing = widget.listing;
+    final listing = _listing;
     if (listing.id.startsWith('api_') || listing.id.startsWith('mock_')) return;
     final uid = ref.read(authRepositoryProvider).currentUser?.uid;
     if (uid == null) return;
@@ -206,7 +208,7 @@ class _PeerListingDetailScreenState
 
   /// Toggle save state.
   Future<void> _toggleSave() async {
-    final listing = widget.listing;
+    final listing = _listing;
     if (listing.id.startsWith('api_') || listing.id.startsWith('mock_')) return;
     final uid = ref.read(authRepositoryProvider).currentUser?.uid;
     if (uid == null) return;
@@ -224,7 +226,11 @@ class _PeerListingDetailScreenState
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(_isSaved ? 'Listing saved!' : 'Removed from saved'),
+          content: Text(
+            _isSaved
+                ? '${_isHotel ? 'Hotel' : _isStay ? 'Stay' : 'Car'} saved!'
+                : 'Removed from saved',
+          ),
           duration: const Duration(seconds: 1),
         ),
       );
@@ -233,7 +239,7 @@ class _PeerListingDetailScreenState
 
   Future<void> _loadOwnerBookings() async {
     final repo = ref.read(peerListingRepositoryProvider);
-    final bookings = await repo.getListingBookings(widget.listing.id);
+    final bookings = await repo.getListingBookings(_listing.id);
     if (mounted) {
       setState(() {
         _ownerBookings = bookings;
@@ -362,7 +368,7 @@ class _PeerListingDetailScreenState
       final profile = ref.read(userProfileProvider).value;
       if (user == null || profile == null) throw Exception('Not logged in');
 
-      if (widget.listing.isPeerHosting) {
+      if (_listing.isPeerHosting) {
         final trustData = ref.read(userTrustProvider(user.uid)).value;
         if (trustData == null || trustData.trustScore < 91) {
           throw Exception(
@@ -381,14 +387,14 @@ class _PeerListingDetailScreenState
       final bookingId = repo.generateBookingId();
       final booking = PeerBooking(
         id: bookingId,
-        listingId: widget.listing.id,
-        listingType: widget.listing.type,
-        listingTitle: widget.listing.title,
+        listingId: _listing.id,
+        listingType: _listing.type,
+        listingTitle: _listing.title,
         guestId: user.uid,
         guestName: profile.fullName,
         guestPhone: profile.phone,
-        hostId: widget.listing.ownerId,
-        hostName: widget.listing.ownerName,
+        hostId: _listing.ownerId,
+        hostName: _listing.ownerName,
         startDate: _startDate!,
         endDate: _endDate!,
         guests: _guests,
@@ -428,9 +434,9 @@ class _PeerListingDetailScreenState
     final profile = ref.read(userProfileProvider).value;
     final valuation = ref.read(dspValuationProvider);
     final guestCountryCode = (profile?.hostCountryCode ?? 'US').toUpperCase();
-    final hotelCountryCode = _resolvedListingCountryCode(widget.listing);
+    final hotelCountryCode = _resolvedListingCountryCode(_listing);
     final baseCountryCode = _baseCurrencyCountryCode(
-      widget.listing,
+      _listing,
       hotelCountryCode,
     );
 
@@ -534,7 +540,7 @@ class _PeerListingDetailScreenState
                       _dialogSummaryRow(
                         theme,
                         LucideIcons.building2,
-                        widget.listing.title,
+                        _listing.title,
                       ),
                       if (_startDate != null && _endDate != null)
                         _dialogSummaryRow(
@@ -664,7 +670,7 @@ class _PeerListingDetailScreenState
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Your request has been sent to ${widget.listing.ownerName}. You\'ll be notified once they confirm.',
+                  'Your request has been sent to ${_listing.ownerName}. You\'ll be notified once they confirm.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 13,
@@ -687,7 +693,7 @@ class _PeerListingDetailScreenState
                       Text(
                         CurrencyHelper.formatLocalPrice(
                           _totalPrice,
-                          widget.listing.countryCode,
+                          _listing.countryCode,
                         ),
                         style: const TextStyle(
                           fontSize: 18,
@@ -813,7 +819,7 @@ class _PeerListingDetailScreenState
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final listing = widget.listing;
+    final listing = _listing;
 
     return Scaffold(
       body: CustomScrollView(
@@ -840,8 +846,8 @@ class _PeerListingDetailScreenState
               ),
             ),
             actions: [
-              if (!widget.listing.id.startsWith('api_') &&
-                  !widget.listing.id.startsWith('mock_'))
+              if (!_listing.id.startsWith('api_') &&
+                  !_listing.id.startsWith('mock_'))
                 Container(
                   margin: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
@@ -855,7 +861,9 @@ class _PeerListingDetailScreenState
                       size: 20,
                     ),
                     onPressed: _toggleSave,
-                    tooltip: _isSaved ? 'Remove from saved' : 'Save listing',
+                    tooltip: _isSaved
+                        ? 'Remove from saved'
+                        : 'Save ${_isHotel ? 'hotel' : _isStay ? 'stay' : 'car'}',
                   ),
                 ),
             ],
@@ -1034,7 +1042,7 @@ class _PeerListingDetailScreenState
                       else
                         Text(
                           _isOwner
-                              ? 'No description added yet. Edit your listing to add one.'
+                              ? 'No description added yet. Edit your ${_isHotel ? 'hotel' : _isStay ? 'stay' : 'car'} to add one.'
                               : 'No description available.',
                           style: TextStyle(
                             fontSize: 13,
@@ -1351,7 +1359,9 @@ class _PeerListingDetailScreenState
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Bookings will appear here when guests request to book',
+                        _isCar
+                            ? 'Bookings will appear here when renters request to rent'
+                            : 'Bookings will appear here when guests request to book',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 11,
@@ -1499,7 +1509,7 @@ class _PeerListingDetailScreenState
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${_formatDate(booking.startDate)} → ${_formatDate(booking.endDate)}  •  ${booking.nights} night${booking.nights > 1 ? 's' : ''}',
+                  '${_formatDate(booking.startDate)} → ${_formatDate(booking.endDate)}  •  ${booking.nights} ${_isCar ? 'day' : 'night'}${booking.nights > 1 ? 's' : ''}',
                   style: TextStyle(
                     fontSize: 11,
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
@@ -1544,7 +1554,12 @@ class _PeerListingDetailScreenState
       ),
     );
     if (result == true && mounted) {
-      Navigator.pop(context, true);
+      final updated = ref
+          .read(peerListingRepositoryProvider)
+          .getCachedListing(listing.id);
+      if (updated != null) {
+        setState(() => _listing = updated);
+      }
     }
   }
 
@@ -1561,8 +1576,10 @@ class _PeerListingDetailScreenState
     );
     if (result == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('New listing created!'),
+        SnackBar(
+          content: Text(
+            '${type == 'hotel' ? 'Hotel' : type == 'car' ? 'Car' : 'Stay'} listed!',
+          ),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -1572,17 +1589,23 @@ class _PeerListingDetailScreenState
   Future<void> _toggleListingStatus(PeerListing listing) async {
     final repo = ref.read(peerListingRepositoryProvider);
     final newStatus = listing.status == 'active' ? 'paused' : 'active';
-    repo.cacheListing(listing.copyWith(status: newStatus));
+    final typeLabel = _isHotel
+        ? 'Hotel'
+        : _isStay
+        ? 'Stay'
+        : 'Car';
+    final updated = listing.copyWith(status: newStatus);
+    repo.cacheListing(updated);
     if (mounted) {
+      setState(() => _listing = updated);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Listing ${newStatus == 'active' ? 'activated' : 'paused'}',
+            '$typeLabel ${newStatus == 'active' ? 'activated' : 'paused'}',
           ),
           behavior: SnackBarBehavior.floating,
         ),
       );
-      Navigator.pop(context, true);
     }
     unawaited(repo.toggleListingStatus(listing.id, newStatus));
   }
@@ -2140,7 +2163,7 @@ class _PeerListingDetailScreenState
           else
             Text(
               _isOwner
-                  ? 'No $label added yet. Edit your listing to add some.'
+                  ? 'No $label added yet. Edit your ${_isHotel ? 'hotel' : _isStay ? 'stay' : 'car'} to add some.'
                   : 'No $label listed.',
               style: TextStyle(
                 fontSize: 13,

@@ -602,10 +602,12 @@ class PushNotificationService {
     final String msgContent = (data['content'] ?? data['body'] ?? '')
         .toString();
 
-    if (rawType == 'dsp_transfer' ||
-        rawType == 'points_update' ||
-        msgType == 'dsp_transfer' ||
-        msgType == 'points_update') {
+    final bool isAiAgentSender = data['senderId']?.toString() == 'diaspora_ai_agent';
+    if (!isAiAgentSender &&
+        (rawType == 'dsp_transfer' ||
+            rawType == 'points_update' ||
+            msgType == 'dsp_transfer' ||
+            msgType == 'points_update')) {
       debugPrint(
         '🔕 [PushNotificationService] Skipping DSP transfer/reward foreground notification (handled by backend or silenced)',
       );

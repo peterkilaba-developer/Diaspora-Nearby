@@ -17,6 +17,15 @@ class ProfileData {
 
   String get fullName => '$firstName $lastName';
 
+  static const String aiAgentUid = 'diaspora_ai_agent';
+
+  static bool isAiAgentUid(String? id) =>
+      id != null && id.trim() == aiAgentUid;
+
+  bool get isAiAgent =>
+      isAiAgentUid(uid) ||
+      fullName.trim().toLowerCase() == 'diaspora ai agent';
+
   bool get isComplete => getMissingRequiredFields().isEmpty;
 
   // [UPDATED v3] Milestone Tracking — single source of truth.

@@ -132,7 +132,8 @@ class GlobalUserSearchService {
         final data = doc.data();
         final userId = doc.id;
 
-        if (excludeUserId != null && userId == excludeUserId) {
+        if (userId == 'diaspora_ai_agent' ||
+            (excludeUserId != null && userId == excludeUserId)) {
           continue;
         }
 
@@ -142,6 +143,10 @@ class GlobalUserSearchService {
             lastName == null ||
             firstName.isEmpty ||
             lastName.isEmpty) {
+          continue;
+        }
+        if ('$firstName $lastName'.trim().toLowerCase() ==
+            'diaspora ai agent') {
           continue;
         }
 

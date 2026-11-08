@@ -390,9 +390,11 @@ class _CommunityMembersScreenState
       final List<ProfileData> members = [];
       for (final doc in docs) {
         try {
+          if (ProfileData.isAiAgentUid(doc.id)) continue;
           final data = doc.data();
           final profile = ProfileData.fromJson(data);
           profile.uid = doc.id;
+          if (profile.isAiAgent) continue;
           profileRepo.cacheProfile(doc.id, profile);
 
           final dist = calculateProfileDistanceKm(currentUserProfile, profile);

@@ -47,6 +47,15 @@ class RealEstateRepository {
   bool isListingSavedSync(String listingId) =>
       _savedIdsCache.contains(listingId);
 
+  List<RealEstateListing> getCachedSavedListings({String? category}) {
+    final list = _savedIdsCache
+        .map((id) => _listingsByIdCache[id])
+        .whereType<RealEstateListing>()
+        .toList();
+    if (category == null) return List.unmodifiable(list);
+    return list.where((l) => l.category == category).toList();
+  }
+
   ({Map<String, int> viewsByCountry, int totalViews})? getCachedStats(
     String listingId,
   ) => _statsByListingCache[listingId];
@@ -121,8 +130,14 @@ class RealEstateRepository {
 
   /// Update an existing listing
   Future<void> updateListing(String id, Map<String, dynamic> data) async {
-    data['updatedAt'] = FieldValue.serverTimestamp();
-    await _col.doc(id).update(data);
+    final sanitized = Map<String, dynamic>.from(data)
+      ..remove('id')
+      ..remove('ownerId')
+      ..remove('viewCount')
+      ..remove('savedCount')
+      ..remove('createdAt');
+    sanitized['updatedAt'] = FieldValue.serverTimestamp();
+    await _col.doc(id).update(sanitized);
   }
 
   /// Delete a listing
@@ -350,21 +365,100 @@ class RealEstateRepository {
   /// Save (bookmark) a listing
   Future<void> saveListing(String listingId, String userId) async {
     _savedIdsCache.add(listingId);
-    await _functions.httpsCallable('setListingSaved').call({
-      'listingType': 'real_estate',
-      'listingId': listingId,
-      'saved': true,
-    });
+    final savedDoc = _db
+        .collection('users')
+        .doc(userId)
+        .collection('saved_listings')
+        .doc(listingId);
+    final listing = _listingsByIdCache[listingId];
+    await Future.wait([
+      savedDoc.set({
+        'savedAt': FieldValue.serverTimestamp(),
+        'type': 'real_estate',
+        if (listing != null) 'category': listing.category,
+      }),
+      _functions.httpsCallable('setListingSaved').call({
+        'listingType': 'real_estate',
+        'listingId': listingId,
+        'saved': true,
+      }),
+    ]);
   }
 
   /// Unsave (remove bookmark) a listing
   Future<void> unsaveListing(String listingId, String userId) async {
     _savedIdsCache.remove(listingId);
-    await _functions.httpsCallable('setListingSaved').call({
-      'listingType': 'real_estate',
-      'listingId': listingId,
-      'saved': false,
-    });
+    final savedDoc = _db
+        .collection('users')
+        .doc(userId)
+        .collection('saved_listings')
+        .doc(listingId);
+    await Future.wait([
+      savedDoc.delete(),
+      _functions.httpsCallable('setListingSaved').call({
+        'listingType': 'real_estate',
+        'listingId': listingId,
+        'saved': false,
+      }),
+    ]);
+  }
+
+  /// Get saved real estate listings for a user
+  Future<List<RealEstateListing>> getSavedListings(
+    String userId, {
+    String? category,
+  }) async {
+    try {
+      final snap = await _db
+          .collection('users')
+          .doc(userId)
+          .collection('saved_listings')
+          .orderBy('savedAt', descending: true)
+          .limit(100)
+          .get();
+      final docIds = snap.docs.map((d) => d.id).toList();
+      final allIds = <String>{...docIds, ..._savedIdsCache}.toList();
+      if (allIds.isEmpty) return [];
+
+      final missingIds = allIds
+          .where((id) => !_listingsByIdCache.containsKey(id))
+          .toList();
+      if (missingIds.isNotEmpty) {
+        final batchFutures = <Future<QuerySnapshot>>[];
+        for (var i = 0; i < missingIds.length; i += 10) {
+          final batch = missingIds.sublist(
+            i,
+            i + 10 > missingIds.length ? missingIds.length : i + 10,
+          );
+          batchFutures.add(
+            _col.where(FieldPath.documentId, whereIn: batch).get(),
+          );
+        }
+        final snaps = await Future.wait(batchFutures);
+        for (final s in snaps) {
+          for (final doc in s.docs) {
+            final item = RealEstateListing.fromJson(
+              doc.data() as Map<String, dynamic>,
+              doc.id,
+            );
+            _listingsByIdCache[item.id] = item;
+            _savedIdsCache.add(item.id);
+          }
+        }
+      }
+
+      var list = allIds
+          .map((id) => _listingsByIdCache[id])
+          .whereType<RealEstateListing>()
+          .toList();
+      if (category != null) {
+        list = list.where((l) => l.category == category).toList();
+      }
+      return list;
+    } catch (e) {
+      debugPrint('getSavedListings error: $e');
+      return getCachedSavedListings(category: category);
+    }
   }
 
   /// Check if a listing is saved by the user

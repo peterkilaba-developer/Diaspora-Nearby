@@ -884,13 +884,23 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
                       return PeerListingCard(
                         listing: listing,
                         viewerCountryCode: viewerCountryCode,
-                        onTap: () {
-                          Navigator.of(context).push(
+                        onTap: () async {
+                          await Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (_) =>
                                   PeerListingDetailScreen(listing: listing),
                             ),
                           );
+                          if (mounted) {
+                            final peerRepo = ref.read(
+                              peerListingRepositoryProvider,
+                            );
+                            setState(() {
+                              _peerHotels = _peerHotels
+                                  .map((h) => peerRepo.getCachedListing(h.id) ?? h)
+                                  .toList();
+                            });
+                          }
                         },
                       );
                     }
@@ -919,13 +929,23 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
                       return PeerListingCard(
                         listing: listing,
                         viewerCountryCode: viewerCountryCode,
-                        onTap: () {
-                          Navigator.of(context).push(
+                        onTap: () async {
+                          await Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (_) =>
                                   PeerListingDetailScreen(listing: listing),
                             ),
                           );
+                          if (mounted) {
+                            final peerRepo = ref.read(
+                              peerListingRepositoryProvider,
+                            );
+                            setState(() {
+                              _peerHotels = _peerHotels
+                                  .map((h) => peerRepo.getCachedListing(h.id) ?? h)
+                                  .toList();
+                            });
+                          }
                         },
                       );
                     }

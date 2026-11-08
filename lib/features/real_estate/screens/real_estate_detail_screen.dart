@@ -28,8 +28,9 @@ class _RealEstateDetailScreenState
   int _totalViews = 0;
   bool _statsLoaded = false;
   bool _isSaved = false;
+  late RealEstateListing _listing = widget.listing;
 
-  RealEstateListing get listing => widget.listing;
+  RealEstateListing get listing => _listing;
 
   Color get _categoryColor {
     switch (listing.category) {
@@ -130,7 +131,9 @@ class _RealEstateDetailScreenState
     setState(() => _isSaved = newSaved);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(newSaved ? 'Listing saved!' : 'Removed from saved'),
+        content: Text(
+          newSaved ? '${listing.categoryLabel} saved!' : 'Removed from saved',
+        ),
         duration: const Duration(seconds: 1),
       ),
     );
@@ -443,10 +446,10 @@ class _RealEstateDetailScreenState
         children: [
           const Icon(LucideIcons.info, size: 14, color: AppTheme.accent),
           const SizedBox(width: 8),
-          const Expanded(
+          Expanded(
             child: Text(
-              'This is your listing',
-              style: TextStyle(
+              'This is your ${listing.categoryLabel.toLowerCase()}',
+              style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
                 color: AppTheme.accent,
@@ -464,8 +467,13 @@ class _RealEstateDetailScreenState
                   ),
                 ),
               );
-              if (result == true && context.mounted) {
-                Navigator.pop(context, true);
+              if (result == true && mounted) {
+                final updated = ref
+                    .read(realEstateRepositoryProvider)
+                    .getCachedListing(listing.id);
+                if (updated != null) {
+                  setState(() => _listing = updated);
+                }
               }
             },
             child: Container(
@@ -501,7 +509,7 @@ class _RealEstateDetailScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionTitle(theme, 'Listing Statistics'),
+        _sectionTitle(theme, '${listing.categoryLabel} Statistics'),
         const SizedBox(height: 8),
         Container(
           padding: const EdgeInsets.all(14),
@@ -785,7 +793,9 @@ class _RealEstateDetailScreenState
               size: 20,
             ),
             onPressed: _toggleSave,
-            tooltip: _isSaved ? 'Remove from saved' : 'Save listing',
+            tooltip: _isSaved
+                ? 'Remove from saved'
+                : 'Save ${listing.categoryLabel.toLowerCase()}',
           ),
         ),
       ],
