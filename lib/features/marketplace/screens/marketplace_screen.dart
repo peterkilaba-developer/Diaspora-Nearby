@@ -13,6 +13,7 @@ import 'package:diaspora_nearby/features/marketplace/data/motorcycle_data.dart';
 import 'package:diaspora_nearby/features/marketplace/widgets/marketplace_card_helpers.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:diaspora_nearby/features/shared/widgets/currency_price_display.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 
 // ─── Category → Icon mapping ────────────────────────────────────────────────
 IconData categoryIcon(String id) {
@@ -289,7 +290,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
             onChanged: (value) => setState(() => _searchQuery = value.trim()),
             style: const TextStyle(fontSize: 13),
             decoration: InputDecoration(
-              hintText: _searchHint,
+              hintText: AppLocalizations.tr(ref, _searchHint),
               hintStyle: TextStyle(fontSize: 12, color: theme.hintColor),
               prefixIcon: const Icon(
                 LucideIcons.search,
@@ -333,7 +334,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
       ),
       titleSpacing: 8,
       title: Text(
-        _screenTitle,
+        AppLocalizations.tr(ref, _screenTitle),
         style: TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.bold,
@@ -416,7 +417,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                     color: theme.colorScheme.onSurface,
                   ),
                   const SizedBox(width: 10),
-                  Text(_savedActionLabel),
+                  Flexible(child: Text(_savedActionLabel)),
                 ],
               ),
             ),
@@ -435,7 +436,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                     color: theme.colorScheme.onSurface,
                   ),
                   const SizedBox(width: 10),
-                  Text(_myListingsActionLabel),
+                  Flexible(child: Text(_myListingsActionLabel)),
                 ],
               ),
             ),
@@ -451,7 +452,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                       color: theme.colorScheme.onSurface,
                     ),
                     const SizedBox(width: 10),
-                    const Text('Sell Products'),
+                    const Flexible(child: Text('Sell Products')),
                   ],
                 ),
               ),
@@ -466,7 +467,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                       color: theme.colorScheme.onSurface,
                     ),
                     const SizedBox(width: 10),
-                    const Text('Offer Services'),
+                    const Flexible(child: Text('Offer Services')),
                   ],
                 ),
               ),
@@ -481,7 +482,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                       color: theme.colorScheme.onSurface,
                     ),
                     const SizedBox(width: 10),
-                    const Text('Post Jobs'),
+                    const Flexible(child: Text('Post Jobs')),
                   ],
                 ),
               ),
@@ -654,12 +655,16 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
         children: [
           Icon(icon, size: 12, color: AppTheme.accent),
           const SizedBox(width: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: AppTheme.accent,
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: AppTheme.accent,
+              ),
             ),
           ),
           const SizedBox(width: 4),
@@ -940,23 +945,27 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: SizedBox(
-                height: 110,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 110),
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      listing.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: theme.colorScheme.onSurface,
-                        height: 1.3,
+                    NoTranslate(
+                      child: Text(
+                        listing.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onSurface,
+                          height: 1.3,
+                        ),
                       ),
                     ),
-                    const Spacer(),
+                    const SizedBox(height: 4),
                     LocalPriceRow(
                       listing: listing,
                       viewerCountryCode: ref
@@ -964,7 +973,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                           .value
                           ?.hostCountryCode,
                     ),
-                    const Spacer(),
+                    const SizedBox(height: 4),
                     QuickSpecs(listing: listing),
                     const SizedBox(height: 4),
                     MarketplaceCardFooter(listing: listing),
@@ -1147,16 +1156,20 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                     bottom: 10,
                     left: 12,
                     right: 80,
-                    child: Text(
-                      listing.title,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        shadows: [Shadow(blurRadius: 4, color: Colors.black54)],
+                    child: NoTranslate(
+                      child: Text(
+                        listing.title,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          shadows: [
+                            Shadow(blurRadius: 4, color: Colors.black54),
+                          ],
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -1591,12 +1604,16 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                   children: [
                     Icon(icon, size: 11, color: AppTheme.accent),
                     const SizedBox(width: 4),
-                    Text(
-                      label,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        color: AppTheme.accent,
+                    Flexible(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: AppTheme.accent,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 3),
@@ -2407,11 +2424,15 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                             children: [
                               const Icon(LucideIcons.search, size: 18),
                               const SizedBox(width: 8),
-                              Text(
-                                'Show Me ${tempType == 'service' ? 'Services' : tempType == 'job' ? 'Jobs' : 'Products'}',
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
+                              Flexible(
+                                child: Text(
+                                  'Show Me ${tempType == 'service' ? 'Services' : tempType == 'job' ? 'Jobs' : 'Products'}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
                             ],
@@ -2464,12 +2485,16 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
               ),
               const SizedBox(width: 6),
             ],
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                color: isSelected ? AppTheme.accent : Colors.grey,
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                  color: isSelected ? AppTheme.accent : Colors.grey,
+                ),
               ),
             ),
           ],

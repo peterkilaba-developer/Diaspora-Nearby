@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -55,7 +57,31 @@ class AuthRepository {
   }
 
   Future<void> signOut() async {
+    // Detach this device's push token from the account BEFORE signing out
+    // (afterwards Firestore rules no longer let us write user_private).
+    // Otherwise a signed-out device keeps receiving that account's private
+    // pushes (DMs, requests), and the next account on the device could too.
+    final uid = _firebaseAuth.currentUser?.uid;
+    if (uid != null) {
+      try {
+        await _detachPushToken(uid).timeout(const Duration(seconds: 4));
+      } catch (_) {
+        // Best effort — never block sign-out on notification cleanup.
+      }
+    }
     await _firebaseAuth.signOut();
+  }
+
+  Future<void> _detachPushToken(String uid) async {
+    await FirebaseFirestore.instance.collection('user_private').doc(uid).set({
+      'fcmToken': FieldValue.delete(),
+      // Tells the server-side self-heal this removal is intentional.
+      'fcmTokenRevoked': true,
+      'fcmTokenRevokedReason': 'signed_out',
+      'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    // Rotate the device token so the next account gets a fresh one.
+    await FirebaseMessaging.instance.deleteToken();
   }
 
   /// Deletes the authenticated account through the privileged, recursive

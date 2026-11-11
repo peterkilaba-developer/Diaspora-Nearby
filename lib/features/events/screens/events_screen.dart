@@ -14,6 +14,7 @@ import 'package:diaspora_nearby/core/utils/location_utils.dart';
 import 'package:diaspora_nearby/features/events/widgets/event_card.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 
 class EventsScreen extends ConsumerStatefulWidget {
   const EventsScreen({super.key});
@@ -193,13 +194,16 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    searchQuery.isNotEmpty
-                        ? 'No events match "$searchQuery".'
-                        : (isGlobalViewMode
-                              ? 'No global community events found.'
-                              : (userHomeCountryCode != null
-                                    ? 'No community events found for $userHomeCountryCode.'
-                                    : 'No local community events found.')),
+                    AppLocalizations.tr(
+                      ref,
+                      searchQuery.isNotEmpty
+                          ? 'No events match "$searchQuery".'
+                          : (isGlobalViewMode
+                                ? 'No global community events found.'
+                                : (userHomeCountryCode != null
+                                      ? 'No community events found for $userHomeCountryCode.'
+                                      : 'No local community events found.')),
+                    ),
                     style: TextStyle(color: Theme.of(context).hintColor),
                   ),
                 ],

@@ -9,6 +9,7 @@
  *     and full recipient info (publicly readable for transparency).
  */
 const { functions, admin, db } = require("./shared");
+const { requireAppCheck, requireAuth, requireAdmin } = require("./security");
 const { ethers } = require("ethers");
 const {
   getSmartWalletInfra,
@@ -108,6 +109,8 @@ async function getDiasporaPriceUsd() {
 // Returns { usd, pricePerToken, amountDiaspora } — how much $DIASPORA the user must pay.
 // ===================================================================
 exports.getEmergencyFundContributionQuote = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  requireAuth(context);
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in required");
   const price = await getDiasporaPriceUsd();
   const amountDiaspora = Math.ceil(CONTRIBUTION_USD / price);
@@ -127,6 +130,8 @@ exports.getEmergencyFundContributionQuote = functions.https.onCall(async (data, 
 exports.payEmergencyFundInDiaspora = functions
   .runWith({ secrets: ["BACKEND_SIGNER_PRIVATE_KEY"], timeoutSeconds: 120 })
   .https.onCall(async (data, context) => {
+    requireAppCheck(context);
+    requireAuth(context);
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in required");
     const userId = context.auth.uid;
 
@@ -241,6 +246,8 @@ exports.payEmergencyFundInDiaspora = functions
 exports.getEmergencyFundStats = functions
   .runWith({ secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
   .https.onCall(async (data, context) => {
+    requireAppCheck(context);
+    requireAuth(context);
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in required");
 
     let treasuryAddress = null;
@@ -423,16 +430,9 @@ exports.onEmergencyClaimWrite = functions
 // ===================================================================
 
 exports.slashPromissoryForFraud = functions.https.onCall(async (data, context) => {
-
-  if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in required");
-
-  const callerDoc = await db.collection("users").doc(context.auth.uid).get();
-
-  if (!callerDoc.exists || !callerDoc.data().isAdmin) {
-
-    throw new functions.https.HttpsError("permission-denied", "Admin only");
-
-  }
+  requireAppCheck(context);
+  // Platform admin custom claim (not the Firestore `isAdmin` profile flag).
+  requireAdmin(context);
 
   const { userId, claimId, reason } = data || {};
 
@@ -517,6 +517,8 @@ exports.slashPromissoryForFraud = functions.https.onCall(async (data, context) =
  * Promissory staking is deprecated as all users can contribute directly.
  */
 exports.stakeEmergencyFundPromissory = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  requireAuth(context);
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in required");
   return { success: true, legacy: true, message: "Promissory staking is no longer required." };
 });
@@ -529,6 +531,8 @@ exports.stakeEmergencyFundPromissory = functions.https.onCall(async (data, conte
  *   - Community Vote Tier: Over $50,000 USD (Requires 10 full trust score members, 51% approval in 48h community vote)
  */
 exports.submitEmergencyClaim = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  requireAuth(context);
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in required");
   const userId = context.auth.uid;
   const input = data || {};
@@ -605,6 +609,8 @@ exports.submitEmergencyClaim = functions.https.onCall(async (data, context) => {
  * expressEmergencyFundInterest — Records a user's interest in joining the Ubuntu Emergency Fund.
  */
 exports.expressEmergencyFundInterest = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  requireAuth(context);
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in required");
   const userId = context.auth.uid;
   await db.collection("emergency_fund_interest").doc(userId).set({
@@ -618,6 +624,8 @@ exports.expressEmergencyFundInterest = functions.https.onCall(async (data, conte
  * requestEmergencyProxy — Creates or updates an Emergency Fund membership proxy request.
  */
 exports.requestEmergencyProxy = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  requireAuth(context);
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in required");
   const userId = context.auth.uid;
   const input = data || {};
@@ -666,6 +674,8 @@ exports.requestEmergencyProxy = functions.https.onCall(async (data, context) => 
  * respondEmergencyProxy — Allows the designated proxy user to accept or reject a proxy request.
  */
 exports.respondEmergencyProxy = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  requireAuth(context);
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in required");
   const proxyUserId = context.auth.uid;
   const input = data || {};

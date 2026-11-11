@@ -209,16 +209,17 @@ class _ShareChatSelectionScreenState
             },
           ),
           bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(60),
+            preferredSize: const Size.fromHeight(64),
             child: Container(
               padding: const EdgeInsets.symmetric(
                 horizontal: AppTheme.pageHorizontalPadding,
-                vertical: 8,
+                vertical: 6,
               ),
               child: TextField(
                 controller: _searchController,
                 onChanged: (value) => setState(() => _searchQuery = value),
                 decoration: InputDecoration(
+                  isDense: true,
                   hintText: 'Search chats...',
                   prefixIcon: const Icon(LucideIcons.search, size: 20),
                   contentPadding: const EdgeInsets.symmetric(

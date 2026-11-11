@@ -17,6 +17,7 @@ import 'package:diaspora_nearby/features/travel/screens/my_listings_screen.dart'
 import 'package:diaspora_nearby/features/travel/screens/create_car_listing_screen.dart';
 import 'package:diaspora_nearby/features/travel/widgets/travel_skeleton_loader.dart';
 import 'package:diaspora_nearby/features/travel/utils/geo_utils.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 
 class CarRentalSearchScreen extends ConsumerStatefulWidget {
   const CarRentalSearchScreen({super.key});
@@ -256,7 +257,7 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
       backgroundColor: Colors.transparent,
       titleSpacing: 0,
       title: Text(
-        'Rent a Car',
+        AppLocalizations.tr(ref, 'Rent a Car'),
         style: TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.bold,
@@ -292,7 +293,7 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
                     color: theme.colorScheme.onSurface,
                   ),
                   const SizedBox(width: 10),
-                  const Text('Saved Cars'),
+                  const Flexible(child: Text('Saved Cars')),
                 ],
               ),
             ),
@@ -307,7 +308,7 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
                     color: theme.colorScheme.onSurface,
                   ),
                   const SizedBox(width: 10),
-                  const Text('My Cars'),
+                  const Flexible(child: Text('My Cars')),
                 ],
               ),
             ),
@@ -322,7 +323,7 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
                     color: theme.colorScheme.onSurface,
                   ),
                   const SizedBox(width: 10),
-                  const Text('Post Car'),
+                  const Flexible(child: Text('Post Car')),
                 ],
               ),
             ),

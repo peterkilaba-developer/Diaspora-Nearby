@@ -156,6 +156,7 @@ exports.awardPoints = dsp.awardPoints;
 exports.backfillLifetimeEarnings = dsp.backfillLifetimeEarnings;
 exports.evaluatePoHGenesisStatus = dsp.evaluatePoHGenesisStatus;
 exports.evaluateProfileMilestone = dsp.evaluateProfileMilestone;
+exports.reconcileOnChainTgeState = dsp.reconcileOnChainTgeState;
 exports.generateTdeClaimProof = dsp.generateTdeClaimProof;
 exports.claimTdeTokens = dsp.claimTdeTokens;
 exports.deductPoints = dsp.deductPoints;
@@ -234,3 +235,18 @@ exports.youtubeGenerateShortScript = functions.https.onCall(async (data, context
 });
 
 
+
+// Engagement push notifications — server-side so they reach users whose app
+// is closed/backgrounded (replaces foreground-only client listeners).
+const engagement = require("./lib/engagement_notifications");
+exports.onRelationshipRequestNotify = engagement.onRelationshipRequestNotify;
+exports.onProxyRequestNotify = engagement.onProxyRequestNotify;
+exports.onHostingRequestNotify = engagement.onHostingRequestNotify;
+exports.onHostingSessionNotify = engagement.onHostingSessionNotify;
+exports.onPeerBookingNotify = engagement.onPeerBookingNotify;
+exports.onEventNotify = engagement.onEventNotify;
+exports.eventReminderCron = engagement.eventReminderCron;
+exports.onGovernanceNotify = engagement.onGovernanceNotify;
+exports.onDdiApplicationNotify = engagement.onDdiApplicationNotify;
+exports.onEmergencyClaimNotify = engagement.onEmergencyClaimNotify;
+exports.streakReminderCron = engagement.streakReminderCron;

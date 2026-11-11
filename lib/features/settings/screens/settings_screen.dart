@@ -299,13 +299,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
           ),
           const SizedBox(width: 8),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.0,
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+          Flexible(
+            child: Text(
+              AppLocalizations.tr(ref, title),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1.0,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+              ),
             ),
           ),
         ],
@@ -364,7 +368,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    title,
+                    AppLocalizations.tr(ref, title),
                     style: TextStyle(
                       fontWeight: FontWeight.w500,
                       fontSize: 16,
@@ -373,7 +377,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   if (subtitle.isNotEmpty)
                     Text(
-                      subtitle,
+                      AppLocalizations.tr(ref, subtitle),
                       style: TextStyle(
                         fontSize: 13,
                         color: theme.textTheme.bodySmall?.color?.withValues(
@@ -685,11 +689,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           children: [
                             Icon(LucideIcons.send, size: 16),
                             SizedBox(width: 8),
-                            Text(
-                              'Sign Up as Tester',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 15,
+                            Flexible(
+                              child: Text(
+                                'Sign Up as Tester',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 15,
+                                ),
                               ),
                             ),
                           ],

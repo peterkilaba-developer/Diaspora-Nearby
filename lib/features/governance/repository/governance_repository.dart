@@ -79,70 +79,35 @@ class GovernanceRepository {
     return unit;
   }
 
-  Future<void> saveGovernanceUnit(GovernanceUnit unit) async {
-    _unitCache[unit.id] = unit;
-    await _firestore.collection('governance').doc(unit.id).set(unit.toJson());
-  }
-
   Stream<GovernanceUnit?> watchGovernanceUnit(String id) {
     return Stream.multi((controller) {
       final cached = _unitCache[id];
       if (cached != null) {
         controller.add(cached);
       }
-      final sub = _firestore.collection('governance').doc(id).snapshots().listen(
-        (doc) {
-          if (!doc.exists || doc.data() == null) {
-            controller.add(_unitCache[id]);
-            return;
-          }
-          final data = Map<String, dynamic>.from(doc.data()!);
-          data['id'] ??= doc.id;
-          data['name'] ??= doc.id.replaceAll('_', ' ').toUpperCase();
-          data['type'] ??= 'local';
-          final unit = GovernanceUnit.fromJson(data);
-          _unitCache[id] = unit;
-          controller.add(unit);
-        },
-        onError: (_) => controller.add(_unitCache[id]),
-        onDone: controller.close,
-      );
+      final sub = _firestore
+          .collection('governance')
+          .doc(id)
+          .snapshots()
+          .listen(
+            (doc) {
+              if (!doc.exists || doc.data() == null) {
+                controller.add(_unitCache[id]);
+                return;
+              }
+              final data = Map<String, dynamic>.from(doc.data()!);
+              data['id'] ??= doc.id;
+              data['name'] ??= doc.id.replaceAll('_', ' ').toUpperCase();
+              data['type'] ??= 'local';
+              final unit = GovernanceUnit.fromJson(data);
+              _unitCache[id] = unit;
+              controller.add(unit);
+            },
+            onError: (_) => controller.add(_unitCache[id]),
+            onDone: controller.close,
+          );
       controller.onCancel = sub.cancel;
     });
-  }
-
-  Future<void> updateSigners(String id, List<String> signerIds) async {
-    final cached = _unitCache[id];
-    if (cached != null) {
-      final json = cached.toJson();
-      json['signers'] = signerIds;
-      _unitCache[id] = GovernanceUnit.fromJson(json);
-    }
-    await _firestore.collection('governance').doc(id).update({
-      'signers': signerIds,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-  }
-
-  Future<void> updateGovernanceStructure(
-    String id, {
-    List<String>? councilMembers,
-    List<String>? signers,
-  }) async {
-    final cached = _unitCache[id];
-    if (cached != null) {
-      final json = cached.toJson();
-      if (councilMembers != null) json['councilMembers'] = councilMembers;
-      if (signers != null) json['signers'] = signers;
-      _unitCache[id] = GovernanceUnit.fromJson(json);
-    }
-    final Map<String, dynamic> updates = {
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-    if (councilMembers != null) updates['councilMembers'] = councilMembers;
-    if (signers != null) updates['signers'] = signers;
-
-    await _firestore.collection('governance').doc(id).update(updates);
   }
 
   Future<List<Map<String, dynamic>>> getVotes(String unitId) async {
@@ -178,61 +143,6 @@ class GovernanceRepository {
           );
       controller.onCancel = sub.cancel;
     });
-  }
-
-  Future<void> startElection(String id, int durationDays) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final endTime = now + (durationDays * 24 * 60 * 60 * 1000);
-
-    // [FIX] Ensure required fields exist even when merging/creating
-    await _firestore.collection('governance').doc(id).set({
-      'id': id,
-      'isActiveElection': true,
-      'electionEndTime': endTime,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-  }
-
-  Future<void> endElection(String id) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final nextElectionAt = now + (365 * 24 * 60 * 60 * 1000); // 1 Year Term
-
-    await _firestore.collection('governance').doc(id).update({
-      'isActiveElection': false,
-      'lastElectionAt': now,
-      'nextElectionAt': nextElectionAt,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-  }
-
-  Future<void> castVote({
-    required String unitId,
-    required String voterId,
-    required String candidateId,
-    String? signerId,
-  }) async {
-    final data = {
-      'unitId': unitId,
-      'voterId': voterId,
-      'candidateId': candidateId,
-      'timestamp': FieldValue.serverTimestamp(),
-    };
-
-    if (signerId != null) {
-      data['signerId'] = signerId;
-    }
-
-    await _firestore
-        .collection('governance_votes')
-        .doc('${unitId}_$voterId')
-        .set(data);
-  }
-
-  Future<void> saveElectionResult(ElectionResult result) async {
-    await _firestore
-        .collection('governance_history')
-        .doc(result.id)
-        .set(result.toJson());
   }
 
   Future<List<ElectionResult>> getElectionHistory(String unitId) async {
@@ -404,62 +314,6 @@ class GovernanceRepository {
       nayCount: nay,
       abstainCount: abstain,
     );
-  }
-
-  /// Add a user to the role-specific candidate list.
-  Future<void> addRoleCandidate(
-    String unitId,
-    String userId,
-    String role,
-  ) async {
-    final cached = _unitCache[unitId];
-    if (cached != null) {
-      final json = cached.toJson();
-      final roleCandidates = Map<String, dynamic>.from(
-        json['roleCandidates'] as Map? ?? {},
-      );
-      final current = List<String>.from(roleCandidates[role] as List? ?? []);
-      if (!current.contains(userId)) current.add(userId);
-      roleCandidates[role] = current;
-      json['roleCandidates'] = roleCandidates;
-      _unitCache[unitId] = GovernanceUnit.fromJson(json);
-    }
-    await _firestore.collection('governance').doc(unitId).set({
-      'roleCandidates': {
-        role: FieldValue.arrayUnion([userId]),
-      },
-    }, SetOptions(merge: true));
-  }
-
-  /// Remove a user from the role-specific candidate list.
-  Future<void> removeRoleCandidate(
-    String unitId,
-    String userId,
-    String role,
-  ) async {
-    await _firestore.collection('governance').doc(unitId).update({
-      'roleCandidates.$role': FieldValue.arrayRemove([userId]),
-    });
-  }
-
-  /// Update council: add member with role.
-  Future<void> addCouncilMember(
-    String unitId,
-    String userId,
-    String role,
-  ) async {
-    await _firestore.collection('governance').doc(unitId).update({
-      'councilMembers': FieldValue.arrayUnion([userId]),
-      'councilRoles.$userId': role,
-    });
-  }
-
-  /// Remove a council member (vote-out).
-  Future<void> removeCouncilMember(String unitId, String userId) async {
-    await _firestore.collection('governance').doc(unitId).update({
-      'councilMembers': FieldValue.arrayRemove([userId]),
-      'councilRoles.$userId': FieldValue.delete(),
-    });
   }
 
   /// Get community member IDs by looking up the community group chat participants.

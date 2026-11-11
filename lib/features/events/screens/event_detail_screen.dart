@@ -15,6 +15,7 @@ import 'package:diaspora_nearby/features/organization/repository/organization_re
 import 'package:diaspora_nearby/features/events/widgets/share_event_dialog.dart';
 import 'package:diaspora_nearby/features/events/widgets/event_venue_card.dart';
 import 'package:diaspora_nearby/core/utils/location_utils.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 
 import 'package:diaspora_nearby/theme/app_theme.dart';
 
@@ -264,41 +265,50 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                       // Category & Status row
                       Row(
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primary.withValues(
-                                alpha: 0.1,
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
                               ),
-                              borderRadius: BorderRadius.circular(30),
-                            ),
-                            child: Text(
-                              event.category.toUpperCase(),
-                              style: TextStyle(
-                                color: theme.colorScheme.primary,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 1,
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.primary.withValues(
+                                  alpha: 0.1,
+                                ),
+                                borderRadius: BorderRadius.circular(30),
+                              ),
+                              child: Text(
+                                event.category.toUpperCase(),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: theme.colorScheme.primary,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1,
+                                ),
                               ),
                             ),
                           ),
-                          const Spacer(),
+                          const SizedBox(width: 8),
                           if (event.getStatusBadgeInfo()['text'] != null)
-                            Text(
-                              (event.getStatusBadgeInfo()['text'] as String)
-                                  .toUpperCase(),
-                              style: TextStyle(
-                                color:
-                                    event.getStatusBadgeInfo()['color'] ==
-                                        'green'
-                                    ? Colors.green
-                                    : theme.colorScheme.primary,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.5,
+                            Flexible(
+                              child: Text(
+                                (event.getStatusBadgeInfo()['text'] as String)
+                                    .toUpperCase(),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.end,
+                                style: TextStyle(
+                                  color:
+                                      event.getStatusBadgeInfo()['color'] ==
+                                          'green'
+                                      ? Colors.green
+                                      : theme.colorScheme.primary,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.5,
+                                ),
                               ),
                             ),
                         ],
@@ -387,14 +397,16 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                                                   fontWeight: FontWeight.bold,
                                                 ),
                                           ),
-                                          Text(
-                                            orgName,
-                                            style: theme.textTheme.titleSmall
-                                                ?.copyWith(
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
+                                          NoTranslate(
+                                            child: Text(
+                                              orgName,
+                                              style: theme.textTheme.titleSmall
+                                                  ?.copyWith(
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
                                           ),
                                         ],
                                       ),
@@ -474,13 +486,29 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                                                     fontWeight: FontWeight.bold,
                                                   ),
                                             ),
-                                            Text(
-                                              organizerName,
-                                              style: theme.textTheme.titleSmall
-                                                  ?.copyWith(
-                                                    fontWeight: FontWeight.bold,
+                                            organizerName == 'Event Organizer'
+                                                ? Text(
+                                                    organizerName,
+                                                    style: theme
+                                                        .textTheme
+                                                        .titleSmall
+                                                        ?.copyWith(
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                        ),
+                                                  )
+                                                : NoTranslate(
+                                                    child: Text(
+                                                      organizerName,
+                                                      style: theme
+                                                          .textTheme
+                                                          .titleSmall
+                                                          ?.copyWith(
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                          ),
+                                                    ),
                                                   ),
-                                            ),
                                           ],
                                         ),
                                       ),
@@ -533,12 +561,16 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                Text(
-                                  '${event.attendeeCount ?? event.attendees?.length ?? 0}${event.maxAttendees != null ? " / ${event.maxAttendees}" : ""} going \u2022 ${event.interested?.length ?? 0} interested',
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    color: theme.colorScheme.onSurface
-                                        .withValues(alpha: 0.6),
-                                    fontWeight: FontWeight.w500,
+                                Flexible(
+                                  child: Text(
+                                    '${event.attendeeCount ?? event.attendees?.length ?? 0}${event.maxAttendees != null ? " / ${event.maxAttendees}" : ""} going \u2022 ${event.interested?.length ?? 0} interested',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: theme.colorScheme.onSurface
+                                          .withValues(alpha: 0.6),
+                                      fontWeight: FontWeight.w500,
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: 4),
@@ -717,13 +749,15 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      Text(
-                        event.description,
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(
-                            alpha: 0.8,
+                      NoTranslate(
+                        child: Text(
+                          event.description,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.8,
+                            ),
+                            height: 1.6,
                           ),
-                          height: 1.6,
                         ),
                       ),
 
@@ -760,17 +794,21 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                                           color: theme.colorScheme.primary,
                                         ),
                                         const SizedBox(width: 8),
-                                        Text(
-                                          profile
-                                                  ?.businessProfile
-                                                  ?.businessName ??
-                                              'Verified Business',
-                                          style: theme.textTheme.labelLarge
-                                              ?.copyWith(
-                                                fontWeight: FontWeight.bold,
-                                              ),
+                                        Expanded(
+                                          child: Text(
+                                            profile
+                                                    ?.businessProfile
+                                                    ?.businessName ??
+                                                'Verified Business',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: theme.textTheme.labelLarge
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                          ),
                                         ),
-                                        const Spacer(),
+                                        const SizedBox(width: 8),
                                         const Icon(
                                           LucideIcons.checkCircle2,
                                           size: 16,
@@ -875,31 +913,37 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       ),
       child: Row(
         children: [
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                event.isPaid == true && (event.ticketPrice ?? 0) > 0
-                    ? '\$${event.ticketPrice!.toStringAsFixed(0)}'
-                    : 'Free Entry',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary,
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  event.isPaid == true && (event.ticketPrice ?? 0) > 0
+                      ? '\$${event.ticketPrice!.toStringAsFixed(0)}'
+                      : 'Free Entry',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                  ),
                 ),
-              ),
-              Text(
-                event.isPaid == true && (event.ticketPrice ?? 0) > 0
-                    ? 'Ticket Price'
-                    : 'No ticket required',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                Text(
+                  event.isPaid == true && (event.ticketPrice ?? 0) > 0
+                      ? 'Ticket Price'
+                      : 'No ticket required',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-          const Spacer(),
+          const SizedBox(width: 12),
 
           // Chat Button (Only if attending or if chat exists)
           if (isAttending || currentUserId == event.creatorId)

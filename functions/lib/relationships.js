@@ -700,6 +700,7 @@ async function ensureAiAgentWelcomeChatForUser(userId, profileOverride = null) {
         }, {merge: true});
       }
       const userChatData = userChatSnap.exists ? (userChatSnap.data() || {}) : {};
+      const shouldDefaultPin = !userChatSnap.exists && typeof userChatData.pinned !== "boolean";
       if (
         !userChatSnap.exists ||
         userChatData.isDeleted ||
@@ -715,6 +716,7 @@ async function ensureAiAgentWelcomeChatForUser(userId, profileOverride = null) {
           lastMessage: existingChatData.lastMessage,
           updatedAt: typeof existingChatData.updatedAt === "number" ? existingChatData.updatedAt : Date.now(),
           isDeleted: false,
+          ...(shouldDefaultPin ? {pinned: true, pinnedBottom: false} : {}),
         }, {merge: true});
       }
       if (!agentChatSnap.exists || agentChatSnap.data().isDeleted) {
@@ -772,6 +774,11 @@ async function ensureAiAgentWelcomeChatForUser(userId, profileOverride = null) {
         updatedAt: nowMs,
         metadata: {isAiAgent: true},
       }, {merge: true});
+      const existingUserChatData = userChatSnap.exists ? (userChatSnap.data() || {}) : {};
+      const shouldPinInitialChat = !userChatSnap.exists || (
+        typeof existingUserChatData.pinned !== "boolean" &&
+        typeof existingUserChatData.isPinned !== "boolean"
+      );
       transaction.set(
           userChatRef,
           {
@@ -786,6 +793,7 @@ async function ensureAiAgentWelcomeChatForUser(userId, profileOverride = null) {
             unreadCount: 1,
             unreadNotificationLines: [welcomeContent.slice(0, 500)],
             isDeleted: false,
+            ...(shouldPinInitialChat ? {pinned: true, pinnedBottom: false} : {}),
           },
           {merge: true},
       );

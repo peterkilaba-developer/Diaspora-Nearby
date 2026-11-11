@@ -79,25 +79,32 @@ class TrustRepository {
       if (cached != null) {
         controller.add(cached);
       }
-      final sub = _firestore.collection('trust_data').doc(uid).snapshots().listen(
-        (doc) {
-          if (doc.exists && doc.data() != null) {
-            final raw = Map<String, dynamic>.from(doc.data()!);
-            raw['uid'] ??= doc.id;
-            final parsed = TrustData.fromJson(raw);
-            _trustCache[uid] = parsed;
-            controller.add(parsed);
-          } else {
-            controller.add(null);
-          }
-        },
-        onError: controller.addError,
-        onDone: controller.close,
-      );
+      final sub = _firestore
+          .collection('trust_data')
+          .doc(uid)
+          .snapshots()
+          .listen(
+            (doc) {
+              if (doc.exists && doc.data() != null) {
+                final raw = Map<String, dynamic>.from(doc.data()!);
+                raw['uid'] ??= doc.id;
+                final parsed = TrustData.fromJson(raw);
+                _trustCache[uid] = parsed;
+                controller.add(parsed);
+              } else {
+                controller.add(null);
+              }
+            },
+            onError: controller.addError,
+            onDone: controller.close,
+          );
       controller.onCancel = sub.cancel;
     });
   }
 
+  // Note: the authoritative `trust_data` document is written only by Cloud
+  // Functions (`syncProfileMilestoneAndTrust`); client writes are denied by
+  // firestore.rules. Use [cacheTrustData] for local projections.
   Future<void> saveTrustData(TrustData data) async {
     _trustCache[data.uid] = data;
     try {

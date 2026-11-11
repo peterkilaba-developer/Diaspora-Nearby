@@ -18,6 +18,7 @@ import 'package:diaspora_nearby/features/hosting/repository/hosting_repository.d
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
@@ -73,15 +74,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
   Widget build(BuildContext context) {
     final userId = ref.watch(authRepositoryProvider).currentUser?.uid;
     final cachedNotifications = userId != null
-        ? ref.read(notificationsRepositoryProvider).getCachedNotifications(
-            userId,
-          )
+        ? ref
+              .read(notificationsRepositoryProvider)
+              .getCachedNotifications(userId)
         : null;
     final notificationsAsync = ref.watch(notificationsStreamProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final rawNotifications =
-        notificationsAsync.value ?? cachedNotifications;
+    final rawNotifications = notificationsAsync.value ?? cachedNotifications;
     final effectiveNotifications = rawNotifications != null
         ? _applyOptimisticState(rawNotifications)
         : null;
@@ -98,9 +98,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
             }
           },
         ),
-        title: const Text(
-          'Notifications',
-          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20),
+        title: Text(
+          AppLocalizations.tr(ref, 'Notifications'),
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 20),
         ),
         actions: [
           PopupMenuButton<String>(
@@ -124,18 +124,29 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                       color: Theme.of(context).colorScheme.onSurface,
                     ),
                     const SizedBox(width: 8),
-                    const Text('Mark all as read'),
+                    Flexible(
+                      child: Text(AppLocalizations.tr(ref, 'Mark all as read')),
+                    ),
                   ],
                 ),
               ),
               const PopupMenuDivider(),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'clear_all',
                 child: Row(
                   children: [
-                    Icon(LucideIcons.trash2, size: 16, color: AppTheme.error),
-                    SizedBox(width: 8),
-                    Text('Clear all', style: TextStyle(color: AppTheme.error)),
+                    const Icon(
+                      LucideIcons.trash2,
+                      size: 16,
+                      color: AppTheme.error,
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        AppLocalizations.tr(ref, 'Clear all'),
+                        style: const TextStyle(color: AppTheme.error),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -166,28 +177,28 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                 children: [
                   const Icon(LucideIcons.alertCircle, size: 16),
                   const SizedBox(width: 6),
-                  const Text('Action Required'),
+                  Text(AppLocalizations.tr(ref, 'Action Required')),
                   _buildBadge(effectiveNotifications),
                 ],
               ),
             ),
-            const Tab(
+            Tab(
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(LucideIcons.checkCircle2, size: 16),
-                  SizedBox(width: 6),
-                  Text('Completed'),
+                  const Icon(LucideIcons.checkCircle2, size: 16),
+                  const SizedBox(width: 6),
+                  Text(AppLocalizations.tr(ref, 'Completed')),
                 ],
               ),
             ),
-            const Tab(
+            Tab(
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(LucideIcons.inbox, size: 16),
-                  SizedBox(width: 6),
-                  Text('All'),
+                  const Icon(LucideIcons.inbox, size: 16),
+                  const SizedBox(width: 6),
+                  Text(AppLocalizations.tr(ref, 'All')),
                 ],
               ),
             ),
@@ -575,6 +586,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         break;
     }
 
+    // Server-side engagement notifications carry an explicit deep link.
+    final payloadRoute = item.payload['route']?.toString();
+    if (route == null &&
+        payloadRoute != null &&
+        payloadRoute.startsWith('/') &&
+        !payloadRoute.startsWith('//')) {
+      route = payloadRoute;
+    }
+
     if (shouldCompleteAction && item.actionRequired && !item.actionCompleted) {
       setState(() {
         _optimisticCompletedIds.add(item.id);
@@ -754,48 +774,46 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
 
       // Run arrangement confirmation and system message in background
       final hostingService = ref.read(hostingServiceProvider);
-      unawaited(
-        () async {
-          try {
-            final session = await hostingService.confirmArrangement(
-              request: request,
-              hostId: hostId,
-              hostName: hostProfile.fullName,
-              hostPhoto: hostProfile.profileImage,
-              chatId: targetChatId,
+      unawaited(() async {
+        try {
+          final session = await hostingService.confirmArrangement(
+            request: request,
+            hostId: hostId,
+            hostName: hostProfile.fullName,
+            hostPhoto: hostProfile.profileImage,
+            chatId: targetChatId,
+          );
+          if (session != null) {
+            await chatRepo.sendTextMessage(
+              targetChatId,
+              '🏠 Hosting arrangement confirmed! '
+              '${request.travelerName} will be hosted by ${hostProfile.fullName} '
+              'from ${_formatDate(request.arrivalDate)} to ${_formatDate(request.departureDate)}. '
+              'Use this chat to coordinate the details.',
+              type: 'system',
+              senderIdOverride: 'system',
+              senderNameOverride: 'Hosting',
+              metadata: {
+                'systemType': 'hosting_arrangement',
+                'sessionId': session.id,
+                'requestId': request.id,
+                'travelerId': request.travelerId,
+                'travelerName': request.travelerName,
+                'travelerPhoto': request.travelerPhoto,
+                'hostId': hostId,
+                'hostName': hostProfile.fullName,
+                'hostPhoto': hostProfile.profileImage,
+                'communityName': request.communityName,
+                'arrivalDate': request.arrivalDate.toIso8601String(),
+                'departureDate': request.departureDate.toIso8601String(),
+                'stayDuration': request.stayDuration,
+              },
             );
-            if (session != null) {
-              await chatRepo.sendTextMessage(
-                targetChatId,
-                '🏠 Hosting arrangement confirmed! '
-                '${request.travelerName} will be hosted by ${hostProfile.fullName} '
-                'from ${_formatDate(request.arrivalDate)} to ${_formatDate(request.departureDate)}. '
-                'Use this chat to coordinate the details.',
-                type: 'system',
-                senderIdOverride: 'system',
-                senderNameOverride: 'Hosting',
-                metadata: {
-                  'systemType': 'hosting_arrangement',
-                  'sessionId': session.id,
-                  'requestId': request.id,
-                  'travelerId': request.travelerId,
-                  'travelerName': request.travelerName,
-                  'travelerPhoto': request.travelerPhoto,
-                  'hostId': hostId,
-                  'hostName': hostProfile.fullName,
-                  'hostPhoto': hostProfile.profileImage,
-                  'communityName': request.communityName,
-                  'arrivalDate': request.arrivalDate.toIso8601String(),
-                  'departureDate': request.departureDate.toIso8601String(),
-                  'stayDuration': request.stayDuration,
-                },
-              );
-            }
-          } catch (e) {
-            debugPrint('Background error confirming arrangement: $e');
           }
-        }(),
-      );
+        } catch (e) {
+          debugPrint('Background error confirming arrangement: $e');
+        }
+      }());
     } catch (e) {
       debugPrint('Error selecting host: $e');
       if (mounted) {
@@ -1066,12 +1084,16 @@ class _NotificationCard extends StatelessWidget {
                             color: AppTheme.success,
                           ),
                           SizedBox(width: 4),
-                          Text(
-                            'Completed',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppTheme.success,
-                              fontWeight: FontWeight.w500,
+                          Flexible(
+                            child: Text(
+                              'Completed',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppTheme.success,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
                         ],
@@ -1415,12 +1437,16 @@ class _NotificationCard extends StatelessWidget {
             children: [
               Icon(icon, size: 14, color: color),
               const SizedBox(width: 5),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: color,
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
                 ),
               ),
             ],

@@ -4,6 +4,7 @@ import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/travel/models/travel_search_result.dart';
 import 'package:diaspora_nearby/features/travel/widgets/travel_search_result_card.dart';
 import 'package:diaspora_nearby/features/travel/widgets/travel_skeleton_loader.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 
 class TravelSearchInterface extends StatefulWidget {
   final String title;
@@ -52,7 +53,7 @@ class _TravelSearchInterfaceState extends State<TravelSearchInterface> {
               Icon(widget.icon, color: AppTheme.accent),
               const SizedBox(width: 8),
               Text(
-                widget.title,
+                AppLocalizations.of(context, widget.title),
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -78,7 +79,7 @@ class _TravelSearchInterfaceState extends State<TravelSearchInterface> {
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                 ),
                 label: Text(
-                  'Clear',
+                  AppLocalizations.of(context, 'Clear'),
                   style: TextStyle(
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                   ),
@@ -108,7 +109,7 @@ class _TravelSearchInterfaceState extends State<TravelSearchInterface> {
                         ),
                       )
                     : const Icon(LucideIcons.search, size: 18),
-                label: const Text('Search'),
+                label: Text(AppLocalizations.of(context, 'Search')),
               ),
             ],
           ),
@@ -158,7 +159,7 @@ class _TravelSearchInterfaceState extends State<TravelSearchInterface> {
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            widget.emptyStateMessage,
+                            AppLocalizations.of(context, widget.emptyStateMessage),
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: theme.colorScheme.onSurface.withValues(

@@ -43,11 +43,15 @@ class ChatTypingIndicator extends ConsumerWidget {
               color: theme.colorScheme.primary,
             ),
             const SizedBox(width: 4),
-            Text(
-              'Diaspora AI Agent is thinking...',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.primary,
-                fontWeight: FontWeight.w500,
+            Flexible(
+              child: Text(
+                'Diaspora AI Agent is thinking...',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
           ],

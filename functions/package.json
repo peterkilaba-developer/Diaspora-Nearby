@@ -2,7 +2,7 @@
     "name": "functions",
     "description": "Cloud Functions for Diaspora Nearby",
     "scripts": {
-        "lint": "eslint",
+        "lint": "eslint .",
         "audit:callables": "node scripts/audit-callable-security.js",
         "serve": "firebase emulators:start --only functions",
         "shell": "firebase functions:shell",

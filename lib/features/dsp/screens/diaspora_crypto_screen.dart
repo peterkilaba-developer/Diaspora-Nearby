@@ -30,6 +30,7 @@ import 'package:diaspora_nearby/features/dsp/services/smart_wallet_service.dart'
 import 'package:diaspora_nearby/features/dsp/providers/dsp_valuation_provider.dart';
 import 'package:diaspora_nearby/features/dsp/models/user_points.dart';
 import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 
 class DiasporaCryptoScreen extends ConsumerStatefulWidget {
   const DiasporaCryptoScreen({super.key});
@@ -152,9 +153,9 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text(
-          '\$DIASPORA Token Ecosystem',
-          style: TextStyle(
+        title: Text(
+          AppLocalizations.tr(ref, r'$DIASPORA Token Ecosystem'),
+          style: const TextStyle(
             color: Colors.white,
             fontSize: 16,
             fontWeight: FontWeight.bold,
@@ -180,9 +181,9 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                 fontWeight: FontWeight.bold,
                 fontSize: 13,
               ),
-              tabs: const [
-                Tab(text: 'DASHBOARD'),
-                Tab(text: 'TREASURIES'),
+              tabs: [
+                Tab(text: AppLocalizations.tr(ref, 'DASHBOARD')),
+                Tab(text: AppLocalizations.tr(ref, 'TREASURIES')),
               ],
             ),
           ),

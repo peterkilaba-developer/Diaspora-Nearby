@@ -28,6 +28,7 @@ import 'package:diaspora_nearby/features/chat/services/audio_playback_service.da
 import 'package:diaspora_nearby/core/providers/global_feature_provider.dart';
 import 'package:diaspora_nearby/core/services/app_update_service.dart';
 import 'package:diaspora_nearby/features/home/repository/home_repository.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 
 class ScaffoldWithNavBar extends ConsumerStatefulWidget {
   final StatefulNavigationShell navigationShell;
@@ -364,18 +365,18 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
                 child: NavigationBar(
                   selectedIndex: visualIndex,
                   onDestinationSelected: _goBranch,
-                  destinations: const [
+                  destinations: [
                     NavigationDestination(
-                      icon: Icon(LucideIcons.messageCircle),
-                      label: 'Chats',
+                      icon: const Icon(LucideIcons.messageCircle),
+                      label: AppLocalizations.tr(ref, 'Chats'),
                     ),
                     NavigationDestination(
-                      icon: Icon(LucideIcons.locateFixed),
-                      label: 'Nearby',
+                      icon: const Icon(LucideIcons.locateFixed),
+                      label: AppLocalizations.tr(ref, 'Nearby'),
                     ),
                     NavigationDestination(
-                      icon: Icon(LucideIcons.calendar),
-                      label: 'Events',
+                      icon: const Icon(LucideIcons.calendar),
+                      label: AppLocalizations.tr(ref, 'Events'),
                     ),
                   ],
                 ),

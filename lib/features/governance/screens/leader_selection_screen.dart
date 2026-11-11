@@ -435,7 +435,9 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
     return Consumer(
       builder: (context, ref, _) {
         final cachedTrust = profile?.uid != null
-            ? ref.read(trustRepositoryProvider).getCachedTrustData(profile!.uid!)
+            ? ref
+                  .read(trustRepositoryProvider)
+                  .getCachedTrustData(profile!.uid!)
             : null;
         final trustDataAsync = profile != null
             ? ref.watch(trustDataProvider(profile.uid!))
@@ -449,7 +451,8 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
               _buildEligibilityCriterion(
                 '7 Genesis Milestones Completed',
                 isMet:
-                    (resolvedTrust?.awardedQualificationMilestones.length ?? 0) >=
+                    (resolvedTrust?.awardedQualificationMilestones.length ??
+                        0) >=
                     7,
               ),
               _buildEligibilityCriterion(

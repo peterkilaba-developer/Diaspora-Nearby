@@ -2,7 +2,22 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/core/data/world_languages.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 import 'package:diaspora_nearby/core/providers/theme_provider.dart';
+
+class TranslationRevisionNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void bump() {
+    state = state + 1;
+  }
+}
+
+final translationRevisionProvider =
+    NotifierProvider<TranslationRevisionNotifier, int>(
+      TranslationRevisionNotifier.new,
+    );
 
 class AppLocaleNotifier extends Notifier<String> {
   static const String _langKey = 'app_language_code';
@@ -10,17 +25,40 @@ class AppLocaleNotifier extends Notifier<String> {
   @override
   String build() {
     final prefs = ref.watch(sharedPreferencesProvider);
+    AppLocalizations.bindPersistence(
+      prefs: prefs,
+      onCacheUpdated: () {
+        Future.microtask(() {
+          try {
+            ref.read(translationRevisionProvider.notifier).bump();
+          } catch (_) {}
+        });
+      },
+    );
+
     final savedCode = prefs.getString(_langKey);
     if (savedCode != null && savedCode.trim().isNotEmpty) {
-      return getWorldLanguageByCode(savedCode).code;
+      final resolved = getWorldLanguageByCode(savedCode).code;
+      AppLocalizations.loadPersistedLanguageCache(resolved);
+      if (resolved != 'en') {
+        unawaited(AppLocalizations.preloadCoreVocabulary(resolved));
+      }
+      return resolved;
     }
     return 'en';
   }
 
   void setLanguage(String code, {String? uid}) {
     final resolved = getWorldLanguageByCode(code).code;
-    if (state == resolved) return;
-    state = resolved;
+    AppLocalizations.loadPersistedLanguageCache(resolved);
+    if (resolved != 'en') {
+      unawaited(AppLocalizations.preloadCoreVocabulary(resolved));
+    }
+    if (state != resolved) {
+      state = resolved;
+    } else {
+      ref.read(translationRevisionProvider.notifier).bump();
+    }
 
     final prefs = ref.read(sharedPreferencesProvider);
     unawaited(prefs.setString(_langKey, resolved));

@@ -8,6 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 import 'package:diaspora_nearby/core/providers/locale_provider.dart';
+import 'package:diaspora_nearby/core/providers/theme_provider.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/notifications/services/push_notification_service.dart';
@@ -95,16 +96,23 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
     final homeCountry = profileAsync.value?.homeCountry;
     final profile = profileAsync.value;
     final currentLang = ref.watch(currentWorldLanguageProvider);
+    final currentTheme = ref.watch(themeProvider);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(LucideIcons.globe, size: 22, color: AppTheme.accent),
-            SizedBox(width: 8),
-            Text(
-              'Diaspora Ecosystem',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            const Icon(LucideIcons.globe, size: 22, color: AppTheme.accent),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                AppLocalizations.tr(ref, 'Diaspora Ecosystem'),
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
             ),
           ],
         ),
@@ -132,9 +140,29 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
             if (kIsWeb) ...[const AppInstallCard(), const SizedBox(height: 16)],
 
             // ============================================
+            // TOP APPEARANCE & WORLD LANGUAGE ROWS
+            // (Directly below the Diaspora Ecosystem title)
+            // ============================================
+            _buildSectionContainer(
+              context,
+              child: Column(
+                children: [
+                  _buildThemeModeRow(context, ref, currentTheme),
+                  _buildLanguageSelectionRow(context, ref, currentLang),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ============================================
             // SECTION 1: SAFETY NET (Emergency Fund first)
             // ============================================
-            _buildSectionHeader(context, 'SAFETY NET', LucideIcons.shieldAlert),
+            _buildSectionHeader(
+              context,
+              ref,
+              'SAFETY NET',
+              LucideIcons.shieldAlert,
+            ),
             _buildSectionContainer(
               context,
               child: Column(
@@ -159,6 +187,7 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
             // ============================================
             _buildSectionHeader(
               context,
+              ref,
               'MARKETPLACE',
               LucideIcons.shoppingBag,
             ),
@@ -201,7 +230,7 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
             // ============================================
             // SECTION 3: TRAVEL
             // ============================================
-            _buildSectionHeader(context, 'TRAVEL', LucideIcons.plane),
+            _buildSectionHeader(context, ref, 'TRAVEL', LucideIcons.plane),
             _buildSectionContainer(
               context,
               child: Column(
@@ -250,7 +279,12 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
             // ============================================
             // SECTION 4: REAL ESTATE
             // ============================================
-            _buildSectionHeader(context, 'REAL ESTATE', LucideIcons.building),
+            _buildSectionHeader(
+              context,
+              ref,
+              'REAL ESTATE',
+              LucideIcons.building,
+            ),
             _buildSectionContainer(
               context,
               child: Column(
@@ -290,7 +324,7 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
             // ============================================
             // SECTION 5: MY WALLET
             // ============================================
-            _buildSectionHeader(context, 'MY WALLET', LucideIcons.wallet),
+            _buildSectionHeader(context, ref, 'MY WALLET', LucideIcons.wallet),
             _buildSectionContainer(
               context,
               child: Column(
@@ -364,7 +398,8 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
             // ============================================
             _buildSectionHeader(
               context,
-              AppLocalizations.tr(ref, 'QUICK SETTINGS'),
+              ref,
+              'QUICK SETTINGS',
               LucideIcons.zap,
             ),
             _buildSectionContainer(
@@ -377,7 +412,7 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
                     ref: ref,
                     icon: LucideIcons.bell,
                     iconColor: Colors.purple,
-                    title: AppLocalizations.tr(ref, 'Push Notifications'),
+                    title: 'Push Notifications',
                     subtitle: 'Receive updates & alerts',
                     value:
                         _optimisticNotificationsEnabled ??
@@ -393,7 +428,7 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
                         if (val) {
                           await ref
                               .read(pushNotificationServiceProvider)
-                              .registerForUser(uid);
+                              .registerForUser(uid, userInitiated: true);
                         } else {
                           await ref
                               .read(pushNotificationServiceProvider)
@@ -428,28 +463,14 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
                         }
                       },
                     ),
-                  // App Language
-                  _buildRow(
-                    context,
-                    ref: ref,
-                    icon: LucideIcons.languages,
-                    iconColor: AppTheme.accent,
-                    title: AppLocalizations.tr(ref, 'App Language'),
-                    subtitle:
-                        '${currentLang.primaryFlag}  ${currentLang.displayLabel}',
-                    onTap: () => showLanguageSelectorSheet(context, ref),
-                  ),
                   // My Profile
                   _buildRow(
                     context,
                     ref: ref,
                     icon: LucideIcons.user,
                     iconColor: AppTheme.accent,
-                    title: AppLocalizations.tr(ref, 'My Profile'),
-                    subtitle: AppLocalizations.tr(
-                      ref,
-                      'View & edit your profile',
-                    ),
+                    title: 'My Profile',
+                    subtitle: 'View & edit your profile',
                     explorationAction: ExplorationAction.profileEdit,
                     onTap: () => context.push('/profile'),
                   ),
@@ -459,11 +480,8 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
                     ref: ref,
                     icon: LucideIcons.settings,
                     iconColor: Colors.grey,
-                    title: AppLocalizations.tr(ref, 'Settings'),
-                    subtitle: AppLocalizations.tr(
-                      ref,
-                      'Account, language, privacy & theme',
-                    ),
+                    title: 'Settings',
+                    subtitle: 'Account, language, privacy & theme',
                     explorationAction: ExplorationAction.moreScreenSettings,
                     onTap: () => context.push('/settings'),
                   ),
@@ -477,9 +495,170 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
     );
   }
 
+  // ─── Theme Mode toggle row (Light / Dark / System — toggles only, no filler text) ───
+  Widget _buildThemeModeRow(
+    BuildContext context,
+    WidgetRef ref,
+    ThemeMode currentTheme,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppTheme.sectionHorizontalPadding,
+        8,
+        AppTheme.sectionHorizontalPadding,
+        4,
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: AppTheme.elevationColor(context, 2),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: _buildThemeOptionChip(
+                context,
+                ref: ref,
+                icon: LucideIcons.sun,
+                label: AppLocalizations.tr(ref, 'Light'),
+                mode: ThemeMode.light,
+                currentTheme: currentTheme,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: _buildThemeOptionChip(
+                context,
+                ref: ref,
+                icon: LucideIcons.moon,
+                label: AppLocalizations.tr(ref, 'Dark'),
+                mode: ThemeMode.dark,
+                currentTheme: currentTheme,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: _buildThemeOptionChip(
+                context,
+                ref: ref,
+                icon: LucideIcons.monitor,
+                label: AppLocalizations.tr(ref, 'System'),
+                mode: ThemeMode.system,
+                currentTheme: currentTheme,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildThemeOptionChip(
+    BuildContext context, {
+    required WidgetRef ref,
+    required IconData icon,
+    required String label,
+    required ThemeMode mode,
+    required ThemeMode currentTheme,
+  }) {
+    final isActive = currentTheme == mode;
+    final theme = Theme.of(context);
+    return GestureDetector(
+      onTap: () => ref.read(themeProvider.notifier).setTheme(mode),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: isActive
+              ? AppTheme.accent.withValues(alpha: 0.18)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(7),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 15,
+              color: isActive ? AppTheme.accent : theme.hintColor,
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                  color: isActive ? AppTheme.accent : theme.hintColor,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── Language Selection row (selected language only, no filler text) ───
+  Widget _buildLanguageSelectionRow(
+    BuildContext context,
+    WidgetRef ref,
+    dynamic currentLang,
+  ) {
+    final theme = Theme.of(context);
+    return NoTranslate(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => showLanguageSelectorSheet(context, ref),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppTheme.sectionHorizontalPadding,
+            6,
+            AppTheme.sectionHorizontalPadding,
+            10,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppTheme.accent.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  LucideIcons.languages,
+                  color: AppTheme.accent,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  currentLang.displayLabel as String,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                    color: theme.textTheme.bodyMedium?.color,
+                  ),
+                ),
+              ),
+              const LanguageTogglePill(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   // ─── Section header (uppercase label + icon) ───
   Widget _buildSectionHeader(
     BuildContext context,
+    WidgetRef ref,
     String title,
     IconData icon,
   ) {
@@ -494,13 +673,17 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
             color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
           ),
           const SizedBox(width: 8),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.0,
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+          Flexible(
+            child: Text(
+              AppLocalizations.tr(ref, title),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1.0,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+              ),
             ),
           ),
         ],
@@ -534,6 +717,10 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
     bool useLogoImage = false,
   }) {
     final theme = Theme.of(context);
+    final translatedTitle = AppLocalizations.tr(ref, title);
+    final translatedSubtitle = subtitle.isNotEmpty
+        ? AppLocalizations.tr(ref, subtitle)
+        : '';
 
     final effectiveOnTap = explorationAction != null
         ? () {
@@ -576,16 +763,16 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    title,
+                    translatedTitle,
                     style: TextStyle(
                       fontWeight: FontWeight.w500,
                       fontSize: 15,
                       color: theme.textTheme.bodyMedium?.color,
                     ),
                   ),
-                  if (subtitle.isNotEmpty)
+                  if (translatedSubtitle.isNotEmpty)
                     Text(
-                      subtitle,
+                      translatedSubtitle,
                       style: TextStyle(
                         fontSize: 13,
                         color: theme.textTheme.bodySmall?.color?.withValues(
@@ -607,7 +794,7 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Text(
-                  'Coming Soon',
+                  AppLocalizations.tr(ref, 'Coming Soon'),
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
@@ -641,6 +828,11 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
     required ValueChanged<bool> onChanged,
   }) {
     final theme = Theme.of(context);
+    final translatedTitle = AppLocalizations.tr(ref, title);
+    final translatedSubtitle = subtitle.isNotEmpty
+        ? AppLocalizations.tr(ref, subtitle)
+        : '';
+
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppTheme.sectionHorizontalPadding,
@@ -663,16 +855,16 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
+                  translatedTitle,
                   style: TextStyle(
                     fontWeight: FontWeight.w500,
                     fontSize: 15,
                     color: theme.textTheme.bodyMedium?.color,
                   ),
                 ),
-                if (subtitle.isNotEmpty)
+                if (translatedSubtitle.isNotEmpty)
                   Text(
-                    subtitle,
+                    translatedSubtitle,
                     style: TextStyle(
                       fontSize: 13,
                       color: theme.textTheme.bodySmall?.color?.withValues(

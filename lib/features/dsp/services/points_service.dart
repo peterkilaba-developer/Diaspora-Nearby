@@ -361,23 +361,14 @@ class PointsService {
 
   Future<void> trackProfileCompletion(String userId) async {
     try {
-      await Future.wait([
-        FirebaseFunctions.instance
-            .httpsCallable('evaluateProfileMilestone')
-            .call<Map<String, dynamic>>({'userId': userId}),
-        _trustService.updateTrustForUser(userId),
-      ]);
+      await _trustService.updateTrustForUser(userId);
     } catch (e) {
-      debugPrint('DSP: evaluateProfileMilestone fallback: $e');
-      await trackCompleteProfile(userId);
+      debugPrint('DSP: evaluateProfileMilestone error: $e');
     }
   }
 
   Future<void> trackCompleteProfile(String userId) async {
     try {
-      await FirebaseFunctions.instance
-          .httpsCallable('evaluateProfileMilestone')
-          .call<Map<String, dynamic>>({'userId': userId});
       await _trustService.updateTrustForUser(userId);
     } catch (e) {
       debugPrint('DSP: evaluateProfileMilestone in trackCompleteProfile error: $e');

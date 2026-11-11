@@ -8,6 +8,7 @@ import 'package:diaspora_nearby/features/profile/repository/profile_repository.d
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/marketplace/widgets/marketplace_card_helpers.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 
 import 'message_content/text_message_content.dart';
 import 'message_content/image_message_content.dart';
@@ -309,24 +310,26 @@ class MessageBubble extends ConsumerWidget {
                                                             CrossAxisAlignment
                                                                 .start,
                                                         children: [
-                                                          Text(
-                                                            repliedMessage!
-                                                                .senderName,
-                                                            style: theme
-                                                                .textTheme
-                                                                .bodySmall
-                                                                ?.copyWith(
-                                                                  color: isOwn
-                                                                      ? theme
-                                                                            .colorScheme
-                                                                            .onPrimary
-                                                                      : theme
-                                                                            .colorScheme
-                                                                            .primary,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w600,
-                                                                ),
+                                                          NoTranslate(
+                                                            child: Text(
+                                                              repliedMessage!
+                                                                  .senderName,
+                                                              style: theme
+                                                                  .textTheme
+                                                                  .bodySmall
+                                                                  ?.copyWith(
+                                                                    color: isOwn
+                                                                        ? theme
+                                                                              .colorScheme
+                                                                              .onPrimary
+                                                                        : theme
+                                                                              .colorScheme
+                                                                              .primary,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w600,
+                                                                  ),
+                                                            ),
                                                           ),
                                                           const SizedBox(
                                                             height: 2,
@@ -601,17 +604,31 @@ class MessageBubble extends ConsumerWidget {
             ],
             // Use Flexible to prevent overflow
             Flexible(
-              child: Text(
-                displayName,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: isOwn
-                      ? theme.colorScheme.onPrimary
-                      : theme.colorScheme.primary,
-                  fontWeight: FontWeight.bold,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+              child: isAiAgent
+                  ? Text(
+                      displayName,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: isOwn
+                            ? theme.colorScheme.onPrimary
+                            : theme.colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    )
+                  : NoTranslate(
+                      child: Text(
+                        displayName,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: isOwn
+                              ? theme.colorScheme.onPrimary
+                              : theme.colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
             ),
             // Seller role badge
             if (sellerRole != null && !isOwn) ...[
@@ -735,7 +752,9 @@ class MessageBubble extends ConsumerWidget {
         }
         return TextMessageContent(message: message, isOwn: isOwn);
       default:
-        return TextMessageContent(message: message, isOwn: isOwn);
+        return NoTranslate(
+          child: TextMessageContent(message: message, isOwn: isOwn),
+        );
     }
   }
 
@@ -910,16 +929,29 @@ class MessageBubble extends ConsumerWidget {
           const SizedBox(width: 4),
         ],
         Expanded(
-          child: Text(
-            contentText,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: isOwn
-                  ? theme.colorScheme.onPrimary.withValues(alpha: 0.8)
-                  : theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
+          child: (mediaIcon == null || repliedMessage.type == 'document')
+              ? NoTranslate(
+                  child: Text(
+                    contentText,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: isOwn
+                          ? theme.colorScheme.onPrimary.withValues(alpha: 0.8)
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                )
+              : Text(
+                  contentText,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: isOwn
+                        ? theme.colorScheme.onPrimary.withValues(alpha: 0.8)
+                        : theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
         ),
       ],
     );

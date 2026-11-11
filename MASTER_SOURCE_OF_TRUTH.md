@@ -9,20 +9,20 @@ This document is the definitive, multi-dimensional guide to the **Diaspora Nearb
 
 **Diaspora Nearby** is not just an app; it is a **Trust-to-Asset Engine**. It is designed to solve the fundamental isolation, economic fragmentation, and trust resets experienced by millions in the **Diaspora**.
 
-### 1.0 The Founder's Odyssey: Peter Swai's 25-Year Diaspora Journey & The Return Home
-Diaspora Nearby was born directly out of the lived experience of its founder, **Peter Swai**.
+### 1.0 The Founder's Odyssey: My 25-Year Diaspora Journey & The Return Home
+Diaspora Nearby was born directly out of my lived experience as its founder, **Peter Swai**.
 
-Peter moved from Tanzania to the United States in **1998**, landing first in **San Francisco, California** with two friends. Within just a few months, he was confronted with the harsh economic realities familiar to so many newcomers: the high cost of living and college tuition were completely unaffordable without a job. 
+I moved from Tanzania to the United States in **1998**, landing first in **San Francisco, California**. Within just a few months, I was confronted with the harsh economic realities familiar to so many newcomers: the high cost of living and college tuition were completely unaffordable without a job. 
 
-Seeking more affordable ground, he moved south to **Santa Monica in Southern California**—only to find the cost of living there equally prohibitive. Pushing forward in search of opportunity, stability, and survival, his journey took him to **Iowa**, then to **Washington, D.C.**, then southwest to **Phoenix, Arizona**, and eventually back to **Iowa**, where he currently lives today.
+Seeking more affordable ground, I moved south to **Santa Monica in Southern California**—only to find the cost of living there equally prohibitive. Pushing forward in search of opportunity, stability, and survival, my journey took me to **Iowa**, then to **Washington, D.C.**, then southwest to **Phoenix, Arizona**, and eventually back to **Iowa**, where I currently live today.
 
-Across every single relocation—landing in new cities where he knew nobody, had no established credit history, and possessed zero local community trust—Peter lived the universal diaspora experience. When you move, you don't just change your zip code; your entire social safety net and trust profile evaporate. You are forced to start from zero in every new city, searching blindly for familiar cultural ties, roommates, and economic partners.
+Across every single relocation—landing in new cities where I knew nobody, had no sense of belonging, and possessed zero local community trust—I lived the universal diaspora experience. When you move, you don't just change your zip code; your entire social safety net and trust profile evaporate. You are forced to start from zero in every new city, searching blindly for familiar cultural ties, roommates, and economic partners.
 
-Now, after **over 25 years in the United States**, Peter is himself actively returning home to **Tanzania**. 
+Now, after **over 25 years in the United States**, I am actively returning home to **Tanzania**. 
 
 This lived transition revealed the other, equally critical half of the diaspora equation: **The Return Home**. Returning home after decades abroad carries immense emotional and economic friction. Many returnees find their childhood ties scattered, their foreign credit and career achievements unrecognized locally, and their hard-earned capital vulnerable to scams when attempting to build homes or businesses without verified local partners.
 
-Therefore, Peter's vision for Diaspora Nearby encompasses the **complete 360-degree diaspora lifecycle**:
+Therefore, my vision for Diaspora Nearby encompasses the **complete 360-degree diaspora lifecycle**:
 1. **Welcoming Newcomers**: Ensuring that anyone arriving in a new city or host country never starts from zero—instantly connecting with verified peers, local cultural hubs, and peer hosting.
 2. **Empowering the Return Home**: Preparing diaspora members who are returning home after years or decades abroad—giving them portable cryptographic trust (PCT/PoH), unbroken homeland ties, verified local business networks via Bilateral Chambers of Commerce, and access to **Home Town & Home Country DDI Member Loans** with 10% collateral so they can launch farms, enterprises, or community developments back home with collective sovereignty.
 
@@ -55,16 +55,16 @@ The economy is powered by three interlinking validation protocols.
 
 ### 2.1 Mechanism 1: Proof of Identity (PoI)
 **Status**: The Identity Foundation.
-Before a member can extract on-chain value, they must prove their humanity by completing the **6 Base Proof of Humanity (PoH) Milestones** (`60,000 DSP & 60 PCT Base`), which immediately unlocks the **Genesis Distribution of 7,000 on-chain $DIASPORA** on Ethereum Base Blockchain (with Milestone 7 deferred post-genesis for `70,000 DSP & 70 PCT` total).
+Across the **7 Proof of Humanity (PoH) Milestones** (`70,000 DSP & 70 PCT Base`), every PoH step immediately converts earned DSP **1:1 (100% efficiency) into real on-chain `$DIASPORA` tokens** on Ethereum Base Blockchain (up to **70,000 `$DIASPORA`** lifetime PoH Genesis cap per wallet). All PoH-minted `$DIASPORA` is minted directly into the member's self-custodial smart wallet and **unlocks for transfers and DEX swaps upon completing 10 unique in-person QR Exchanges**.
 
-- **Level 1: Profile Completeness & Location Transparency**: Filling out all 10 core profile fields (`10,000 DSP & 10 PCT`) and keeping live location active (`10,000 DSP & 10 PCT`).
+- **Level 1: Profile Completeness (12 Fields) & Location Transparency**: Filling out your 12 profile fields (the first 10 fields award `10,000 DSP & 10 PCT` → immediately converted 1:1 into `10,000 $DIASPORA`, plus `2,000 DSP` on fields 11–12 for upcoming TDEs, with optional Diaspora AI Agent chat assistance) and keeping live location active (`10,000 DSP & 10 PCT` → immediately converted 1:1 into `10,000 $DIASPORA`).
 - **Level 2: Social Entropy (Multi-User Verification & Circle of Trust)**:
     - The system enforces a **"One field per verifier"** constraint.
-    - To be fully verified, **10** unique peers must validate your profile fields (`10,000 DSP & 10 PCT`), alongside 10 verified Family connections (`10,000 DSP & 10 PCT`) and 10 verified Friend connections (`10,000 DSP & 10 PCT`).
+    - To be fully verified, **10** unique peers must validate your profile fields (`10,000 DSP & 10 PCT` → `10,000 $DIASPORA` 1:1), alongside 10 verified Family connections (`10,000 DSP & 10 PCT` → `10,000 $DIASPORA` 1:1) and 10 verified Friend connections (`10,000 DSP & 10 PCT` → `10,000 $DIASPORA` 1:1).
     - *Why?* This prevents collusive bot-farms from "auto-verifying" each other. Algorithms cannot easily fake the messy, diverse validations of real humans.
-- **Level 3: Physical Presence (The QR Handshake)**:
-    - A cryptographic handshake performed via QR code when two users meet in person (`10,000 DSP & 10 PCT` at 10 scans, plus `1,000 DSP` per scan 11+).
-    - This is the "Gold Standard" of identity, awarding high trust and connection bonuses.
+- **Level 3: Physical Presence (The QR Handshake — Smart Wallet Unlock Gate)**:
+    - A cryptographic handshake performed via QR code when two users meet in person (`10,000 DSP & 10 PCT` → `10,000 $DIASPORA` 1:1 across the first 10 scans, plus `1,000 DSP` per scan 11+ and `+1 PCT` per 10 scans).
+    - Completing **10 unique in-person QR Exchanges** is the "Gold Standard" of physical humanity that **unlocks all minted `$DIASPORA` in the member's smart wallet**.
 
 ---
 
@@ -111,26 +111,27 @@ To unlock high-trust privileges, a member **must complete all 7 Proof of Humanit
 3. **Leadership Candidacy**: Running for or holding an elected 4-seat Community Council position (President, Treasurer, Secretary, Council Member).
 4. **Voting Rights & DDI Loans**: Voting on Community Leaders and applying for / voting on DDI Community Loan Applications.
 
-#### 🏛️ The 4 Pillars of Proof of Humanity (PoH) Genesis (60,000 DSP / 60 PCT Base + 10,000 DSP / 10 PCT Post-Genesis = 70,000 DSP & 70 PCT Total)
+#### 🏛️ The 4 Pillars of Proof of Humanity (PoH) Genesis (70,000 $DIASPORA Immediate 1:1 Pool & 70 PCT Base)
 The PoH milestones establish the user's sovereign, verified human baseline:
-- **Instant On-Chain Proof of Humanity Distribution (7,000 $DIASPORA)**: The Genesis Gate unlocks upon completing the **first 6 base milestones** (Self-Sovereign Identity, Physical Attestation, and Circles of Trust). Upon completing these 6 milestones, 7,000 DSP (10%) is automatically converted and claimable as **7,000 real on-chain $DIASPORA tokens on Ethereum Base Blockchain by Coinbase** (the *only* on-chain distribution prior to macro TDE).
-- **Remaining Off-Chain Balance**: The remaining 63,000 DSP (from the 70,000 PoH total) plus all other earned off-chain DSP converts at scheduled global TDE milestones based on dynamic PCT efficiency via individual user pull claims.
-- **Deferred Milestone 7 (Ubuntu Emergency Fund Contribution)**: Excluded from the initial Genesis Gate so new members can access their Genesis distribution without upfront token requirements. The contribution (`$100/year` in `$DIASPORA`) is deferred post-genesis, payable from earned tokens, and is required before a member can receive assistance from the Emergency Fund and for full 7-milestone leadership/DDI loan qualification.
+- **Immediate 1:1 On-Chain Proof of Humanity Distribution (Up to 70,000 `$DIASPORA`)**: Across the 7 PoH milestones, each completed step immediately converts earned DSP **1:1 (100% efficiency)** into real on-chain **`$DIASPORA`** tokens on Ethereum Base Blockchain (enforced on-chain by `DiasporaTGEControllerV2.maxGenesisDistribution = 70,000 * 10**18`, alongside the 1:1 Ubuntu Community Match).
+- **10 QR Exchanges Smart-Wallet Unlock Gate**: All PoH-minted `$DIASPORA` sits safely in the member's self-custodial smart wallet and **unlocks for transfers and DEX swaps upon completing 10 unique in-person QR Exchanges**.
+- **Ongoing Off-Chain Balance**: Fields 11–12 of Profile Completion (`+2,000 DSP`), 11+ connections/scans/verifications (`1,000 DSP` each), and all other earned off-chain DSP convert at scheduled global TDE milestones based on dynamic PCT efficiency via individual user pull claims.
+- **Milestone 7 (Ubuntu Emergency Fund Contribution)**: Active annual `$100/year` contribution in `$DIASPORA` awards `10,000 DSP & 10 PCT` → immediately converted 1:1 into `10,000 $DIASPORA`. Can be completed anytime (payable from earned tokens) and is required before requesting assistance from the Emergency Fund and for full 7-milestone leadership/DDI loan qualification.
 
 1. **Pillar 1: Self-Sovereign Identity (Individual Proof)**:
-   - **Profile Completion (10 Fields)**: Complete all 10 profile fields → **10,000 DSP and 10 PCT** (Awarded immediately upon 10/10; unlocks marketplace and service listings).
-   - **Location Transparency**: Active live location → **10,000 DSP and 10 PCT** (Awarded immediately upon enabling; *if deliberately toggled off inside the app settings: permanently burns 10,000 DSP and forfeits 10 PCT; does not apply to OS background optimizations or signal dropouts*).
+   - **Profile Completion (12 Fields)**: Complete your 12 profile fields (`1,000 DSP` per field; fillable directly in chat with the Diaspora AI Agent) → first 10 fields award **10,000 DSP and 10 PCT**, immediately converted 1:1 into **10,000 `$DIASPORA`**, plus **2,000 DSP** on fields 11–12 for upcoming TDEs (unlocks marketplace and service listings).
+   - **Location Transparency**: Active live location → **10,000 DSP and 10 PCT**, immediately converted 1:1 into **10,000 `$DIASPORA`** (Awarded immediately upon enabling; *if deliberately toggled off inside the app settings: permanently burns 10,000 DSP and forfeits 10 PCT; does not apply to OS background optimizations or signal dropouts*).
 2. **Pillar 2: Physical & Peer Attestation (Cryptographic Grounding)**:
-   - **Identity QR Exchanges (10 Scans)**: In-person scans → **10,000 DSP and 10 PCT** (Awarded immediately at 10 scans; **1,000 DSP** per scan for scan 11+).
-   - **Peer Profile Verifications (10 Fields)**: Peer verification of profile claims → **10,000 DSP and 10 PCT** (Awarded immediately at 10 verifications).
+   - **Identity QR Exchanges (10 Scans — Wallet Unlock Gate)**: First 10 in-person scans → **10,000 DSP and 10 PCT**, immediately converted 1:1 into **10,000 `$DIASPORA`** (`1,000` per scan) **and unlocks all minted `$DIASPORA` in the member's smart wallet** (**1,000 DSP** per scan for scan 11+; `+1 PCT` per 10 scans).
+   - **Peer Profile Verifications (10 Fields)**: First 10 peer verifications of profile claims → **10,000 DSP and 10 PCT**, immediately converted 1:1 into **10,000 `$DIASPORA`** (`1,000` per verification; **1,000 DSP** for 11+; `+1 PCT` per 10).
 3. **Pillar 3: Circle of Trust (Social Graph Integrity)**:
-   - **Family Circle (10 Connections)**: Reciprocal family bonds → **10,000 DSP and 10 PCT** (Awarded immediately at 10 connections).
-   - **Friend Circle (10 Connections)**: Reciprocal friend bonds → **10,000 DSP and 10 PCT** (Awarded immediately at 10 connections).
+   - **Family Circle (10 Connections)**: First 10 reciprocal family bonds → **10,000 DSP and 10 PCT**, immediately converted 1:1 into **10,000 `$DIASPORA`** (`1,000` per connection; **1,000 DSP** for 11+; `+1 PCT` per 10).
+   - **Friend Circle (10 Connections)**: First 10 reciprocal friend bonds → **10,000 DSP and 10 PCT**, immediately converted 1:1 into **10,000 `$DIASPORA`** (`1,000` per connection; **1,000 DSP** for 11+; `+1 PCT` per 10).
    - *Bilateral Chat Prerequisite*: Direct chat must have at least 1 message sent by each user before a relationship request can be sent.
    - *Anti-Collusion Firewall*: Circle of Trust members (20 people maximum) CAN perform QR scans & profile verifications, but CANNOT participate in Trust Slider Staking/Vouching on each other to prevent artificial score inflation.
    - *Slashing Contagion*: Accepting a Circle of Trust relationship directly binds your trust score and economic standing together. If any member in your Circle of Trust commits fraud, malicious behavior, or protocol violations that incur DSP or PCT slashing penalties, **the identical slashing penalty is deducted from your account as well (slashing contagion)**. This creates collective family/friend moral accountability—members only connect with individuals whose real-world character they fully back.
-4. **Pillar 4: Ubuntu Economic Solidarity (Collective Wealth - Post-Genesis Milestone)**:
-   - **Ubuntu Emergency Fund Contribution (Deferred)**: Active annual `$100` contribution in `$DIASPORA` → **10,000 DSP and 10 PCT** (Awarded immediately upon contribution; required before requesting emergency assistance).
+4. **Pillar 4: Ubuntu Economic Solidarity (Collective Wealth)**:
+   - **Ubuntu Emergency Fund Contribution**: Active annual `$100` contribution in `$DIASPORA` → **10,000 DSP and 10 PCT**, immediately converted 1:1 into **10,000 `$DIASPORA`** (Awarded immediately upon contribution; required before requesting emergency assistance and for 7-milestone leadership/DDI eligibility).
      - *Governance & Custodianship*: Managed by the elected **Community Secretaries** of the member's dual geographic identity (home/host town and home/host country).
      - *Standard Tier (Up to $1,000)*: Rapid assistance review for urgent local micro-emergencies.
      - *Fast-Track Tier ($1,001 to $50,000)*: When a local member requests emergency support (medical, legal, bereavement, repatriation), the **host town secretary** and **host country secretary** can authorize disbursement up to **$50,000 within 24 hours**.
@@ -165,8 +166,8 @@ To maintain active governance and prevent community apathy:
 - 🛡️ **PoH Verified**: Completed all Proof of Humanity Milestones.
 - 👑 **PCT 91+ Sovereign**: Unlocked Peer Host, Peer Stay, & Leadership Candidacy.
 - **The HTS Ledger, Staker Economics & Dynamic Prediction Market (Beyond 70 PCT Base)**:
-    - **PoH Milestones (One-Time 10 PCT)**: 6 Base Milestones (`60,000 DSP & 60 PCT`) + 1 Post-Genesis Milestone (`10,000 DSP & 10 PCT`) = **70,000 DSP & 70 PCT Base**.
-    - **Continuous QR Rewards**: `1,000 DSP` per unique scan after milestone completion (11+).
+    - **PoH Milestones (One-Time 10 PCT each)**: 7 PoH Milestones = **70,000 `$DIASPORA` (immediate 1:1 PoH Genesis conversion, unlocked at 10 QR scans) & 70 PCT Base**.
+    - **Continuous Attestation Rewards**: `1,000 DSP` per unique QR scan, Circle connection, or peer verification after milestone completion (11+, with `+1 PCT` per 10).
     - **Trust Slider Staking (1–100 Prediction Market)**: Long-press any message to rate a member from 1 to 100. **First-time ratings award 1,000 DSP to both the rater and the recipient.**
       - **Score 1–10 (Flag Dishonesty)**: `1,000 DSP` staked as collateral against dishonesty.
       - **Score 11–90 (Standard Rating)**: Neutral rating earning `1,000 DSP` immediately with zero collateral locked and zero ongoing risk.
@@ -260,7 +261,7 @@ Each Epoch consists of **10 Token Distribution Events (TDEs)**.
 - **System Exemption**: Founders, Liquidity Treasury, and Global Reserve convert at **100% efficiency**.
 
 ### 4.3 Universal Participation, Rolling Carry-Over & The Great Reset
-- **Universal Inclusion**: Every registered member who completes the 6 Base PoH milestones participates in TDE conversions.
+- **Universal Inclusion**: Every registered member who completes 10 in-person QR Exchanges and maintains active live location participates in TDE conversions and wallet unlocks.
 - **Rolling Carry-Over (TDE 1–9) & The Great Reset (TDE 10)**: During TDE 1 through TDE 9, only the converted portion (`DSP × PCT%`) is deducted from a member's off-chain `availablePoints`, while the unconverted DSP **carries over** into the next TDE milestone so members can increase their PCT score and convert it later. Only at **TDE 10 (The Great Reset — 100% of the Epoch target)** is any remaining unconverted DSP reset to **0** off-chain (and burned to `0x000...dEaD` on-chain), starting fresh accumulation for the next 10x Epoch.
 
 ---

@@ -5,6 +5,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/travel/models/peer_listing.dart';
 import 'package:diaspora_nearby/features/shared/widgets/currency_price_display.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 
 /// Unified listing card for ALL peer-to-peer travel listings:
 ///   - Stays  (type == 'stay')
@@ -129,47 +130,55 @@ class PeerListingCard extends StatelessWidget {
                   Positioned(
                     top: 10,
                     left: 10,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.55),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            _isHotel
-                                ? LucideIcons.hotel
-                                : _isCar
-                                ? LucideIcons.car
-                                : listing.isPeerHosting
-                                ? LucideIcons.plane
-                                : LucideIcons.home,
-                            size: 10,
-                            color: Colors.white.withValues(alpha: 0.9),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _isApiHotel
-                                ? 'Partner Hotel'
-                                : _isHotel
-                                ? 'Community Hotel'
-                                : _isCar
-                                ? 'Car Rental'
-                                : listing.isPeerHosting
-                                ? 'Free Peer Host'
-                                : 'Paid Peer Stay (Airbnb Alt)',
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w600,
+                    right: 120,
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.55),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _isHotel
+                                  ? LucideIcons.hotel
+                                  : _isCar
+                                  ? LucideIcons.car
+                                  : listing.isPeerHosting
+                                  ? LucideIcons.plane
+                                  : LucideIcons.home,
+                              size: 10,
                               color: Colors.white.withValues(alpha: 0.9),
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                _isApiHotel
+                                    ? 'Partner Hotel'
+                                    : _isHotel
+                                    ? 'Community Hotel'
+                                    : _isCar
+                                    ? 'Car Rental'
+                                    : listing.isPeerHosting
+                                    ? 'Free Peer Host'
+                                    : 'Paid Peer Stay (Airbnb Alt)',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white.withValues(alpha: 0.9),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -182,18 +191,20 @@ class PeerListingCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          listing.title,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            shadows: [
-                              Shadow(blurRadius: 4, color: Colors.black54),
-                            ],
+                        NoTranslate(
+                          child: Text(
+                            listing.title,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              shadows: [
+                                Shadow(blurRadius: 4, color: Colors.black54),
+                              ],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
@@ -248,15 +259,17 @@ class PeerListingCard extends StatelessWidget {
                   // Description
                   if (listing.description.isNotEmpty) ...[
                     const SizedBox(height: 8),
-                    Text(
-                      listing.description,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        height: 1.4,
-                        color: theme.colorScheme.onSurface.withValues(
-                          alpha: 0.55,
+                    NoTranslate(
+                      child: Text(
+                        listing.description,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          height: 1.4,
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.55,
+                          ),
                         ),
                       ),
                     ),
@@ -333,30 +346,26 @@ class PeerListingCard extends StatelessWidget {
       return Wrap(spacing: 12, runSpacing: 6, children: chips);
     } else {
       // Stay
-      return Row(
+      return Wrap(
+        spacing: 12,
+        runSpacing: 6,
         children: [
           if (listing.propertyType != null)
             _infoChip(theme, LucideIcons.home, listing.propertyType!),
-          if (listing.beds != null) ...[
-            const SizedBox(width: 12),
+          if (listing.beds != null)
             _infoChip(
               theme,
               LucideIcons.bedDouble,
               '${listing.beds} bed${listing.beds! > 1 ? 's' : ''}',
             ),
-          ],
-          if (listing.baths != null) ...[
-            const SizedBox(width: 12),
+          if (listing.baths != null)
             _infoChip(
               theme,
               LucideIcons.bath,
               '${listing.baths} bath${listing.baths! > 1 ? 's' : ''}',
             ),
-          ],
-          if (listing.maxGuests != null) ...[
-            const SizedBox(width: 12),
+          if (listing.maxGuests != null)
             _infoChip(theme, LucideIcons.users, '${listing.maxGuests}'),
-          ],
         ],
       );
     }
@@ -476,18 +485,31 @@ class PeerListingCard extends StatelessWidget {
           ],
           const SizedBox(width: 6),
           Expanded(
-            child: Text(
-              _isApiHotel
-                  ? listing.hotelCategory ?? 'Partner Hotel'
-                  : listing.ownerName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-              ),
-            ),
+            child: _isApiHotel
+                ? Text(
+                    listing.hotelCategory ?? 'Partner Hotel',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                  )
+                : NoTranslate(
+                    child: Text(
+                      listing.ownerName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.6,
+                        ),
+                      ),
+                    ),
+                  ),
           ),
           // Country flag + name (right-aligned) — same for all types
           if (listing.country != null && listing.country!.isNotEmpty) ...[
@@ -499,9 +521,13 @@ class PeerListingCard extends StatelessWidget {
               ),
               const SizedBox(width: 4),
             ],
-            Text(
-              listing.country!,
-              style: TextStyle(fontSize: 10, color: theme.hintColor),
+            Flexible(
+              child: Text(
+                listing.country!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 10, color: theme.hintColor),
+              ),
             ),
           ],
           // View & save counts (for non-API listings)

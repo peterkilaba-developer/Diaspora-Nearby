@@ -35,16 +35,18 @@ class AccountSection extends ConsumerWidget {
         GlassContainer(
           child: Column(
             children: [
-              // 0. App Language (All Main Official Languages of Every Country)
-              _buildMenuItem(
-                context,
-                icon: LucideIcons.languages,
-                iconColor: AppTheme.accent,
-                title: AppLocalizations.tr(ref, 'App Language'),
-                subtitle:
-                    '${currentLang.primaryFlag}  ${currentLang.displayLabel}',
-                onTap: () => showLanguageSelectorSheet(context, ref),
-                ref: ref,
+              // 0. Selected World Language (no filler label)
+              NoTranslate(
+                child: _buildMenuItem(
+                  context,
+                  icon: LucideIcons.languages,
+                  iconColor: AppTheme.accent,
+                  title: currentLang.displayLabel,
+                  translateTitle: false,
+                  trailing: const LanguageTogglePill(),
+                  onTap: () => showLanguageSelectorSheet(context, ref),
+                  ref: ref,
+                ),
               ),
               // 1. Notifications
               _buildMenuItem(
@@ -141,43 +143,41 @@ class AccountSection extends ConsumerWidget {
           ), // 8px padding
           child: Column(
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    AppLocalizations.tr(ref, 'Theme Mode'),
-                    style: const TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surface,
-                      borderRadius: BorderRadius.circular(12),
+              Container(
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.all(4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    Expanded(
+                      child: _buildThemeToggle(
+                        context,
+                        ref,
+                        LucideIcons.sun,
+                        ThemeMode.light,
+                      ),
                     ),
-                    padding: const EdgeInsets.all(4),
-                    child: Row(
-                      children: [
-                        _buildThemeToggle(
-                          context,
-                          ref,
-                          LucideIcons.sun,
-                          ThemeMode.light,
-                        ),
-                        _buildThemeToggle(
-                          context,
-                          ref,
-                          LucideIcons.moon,
-                          ThemeMode.dark,
-                        ),
-                        _buildThemeToggle(
-                          context,
-                          ref,
-                          LucideIcons.monitor,
-                          ThemeMode.system,
-                        ),
-                      ],
+                    Expanded(
+                      child: _buildThemeToggle(
+                        context,
+                        ref,
+                        LucideIcons.moon,
+                        ThemeMode.dark,
+                      ),
                     ),
-                  ),
-                ],
+                    Expanded(
+                      child: _buildThemeToggle(
+                        context,
+                        ref,
+                        LucideIcons.monitor,
+                        ThemeMode.system,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 24),
               Center(
@@ -299,11 +299,13 @@ class AccountSection extends ConsumerWidget {
     required IconData icon,
     required Color iconColor,
     required String title,
-    required String subtitle,
+    String subtitle = '',
+    bool translateTitle = true,
     required VoidCallback onTap,
     Color? titleColor,
     Color? subtitleColor,
     Widget? iconWidget,
+    Widget? trailing,
     String? actionId,
     required WidgetRef ref, // [FIX]
   }) {
@@ -338,7 +340,7 @@ class AccountSection extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    title,
+                    translateTitle ? AppLocalizations.tr(ref, title) : title,
                     style: TextStyle(
                       fontWeight: FontWeight.w500,
                       fontSize: 16,
@@ -347,7 +349,7 @@ class AccountSection extends ConsumerWidget {
                   ),
                   if (subtitle.isNotEmpty)
                     Text(
-                      subtitle,
+                      AppLocalizations.tr(ref, subtitle),
                       style: TextStyle(
                         fontSize: 13,
                         color:
@@ -360,11 +362,12 @@ class AccountSection extends ConsumerWidget {
                 ],
               ),
             ),
-            Icon(
-              LucideIcons.chevronRight,
-              size: 16,
-              color: theme.iconTheme.color?.withValues(alpha: 0.3),
-            ),
+            trailing ??
+                Icon(
+                  LucideIcons.chevronRight,
+                  size: 16,
+                  color: theme.iconTheme.color?.withValues(alpha: 0.3),
+                ),
           ],
         ),
       ),
@@ -395,7 +398,7 @@ class AccountSection extends ConsumerWidget {
                   children: [
                     Icon(LucideIcons.bell),
                     SizedBox(width: 8),
-                    Text('Notifications'),
+                    Flexible(child: Text('Notifications')),
                   ],
                 ),
                 content: Column(
@@ -434,7 +437,7 @@ class AccountSection extends ConsumerWidget {
                             unawaited(
                               ref
                                   .read(pushNotificationServiceProvider)
-                                  .registerForUser(uid),
+                                  .registerForUser(uid, userInitiated: true),
                             );
                           } else {
                             unawaited(
@@ -478,7 +481,12 @@ class AccountSection extends ConsumerWidget {
             children: [
               Icon(LucideIcons.alertTriangle, color: Colors.red),
               SizedBox(width: 8),
-              Text('Delete Account?', style: TextStyle(color: Colors.red)),
+              Flexible(
+                child: Text(
+                  'Delete Account?',
+                  style: TextStyle(color: Colors.red),
+                ),
+              ),
             ],
           ),
           content: const Text(

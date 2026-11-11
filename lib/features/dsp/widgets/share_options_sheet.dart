@@ -351,9 +351,13 @@ class _ShareOptionsSheetState extends State<ShareOptionsSheet> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Share Invitation',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              const Expanded(
+                child: Text(
+                  'Share Invitation',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
               ),
               IconButton(
                 onPressed: () => context.pop(),
@@ -375,7 +379,7 @@ class _ShareOptionsSheetState extends State<ShareOptionsSheet> {
             physics: const NeverScrollableScrollPhysics(),
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
-            childAspectRatio: 1.1,
+            childAspectRatio: 0.95,
             children: [
               _buildOptionCard(
                 context,
@@ -458,21 +462,25 @@ class _ShareOptionsSheetState extends State<ShareOptionsSheet> {
               ),
               child: Icon(icon, color: AppTheme.accent, size: 24),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Text(
               title,
               textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4),
-            Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11,
-                color: Theme.of(context).hintColor,
+            Flexible(
+              child: Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(context).hintColor,
+                ),
               ),
             ),
           ],

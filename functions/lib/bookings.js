@@ -194,6 +194,7 @@ exports.updatePeerBookingStatus = functions.https.onCall(async (data, context) =
       status: nextStatus,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       [`${nextStatus}At`]: admin.firestore.FieldValue.serverTimestamp(),
+      ...(nextStatus === "cancelled" ? {cancelledBy: uid} : {}),
     });
     if (nextStatus === "completed") {
       const nowTs = admin.firestore.FieldValue.serverTimestamp();

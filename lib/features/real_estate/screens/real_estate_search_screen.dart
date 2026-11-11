@@ -12,6 +12,7 @@ import 'package:diaspora_nearby/features/real_estate/screens/real_estate_detail_
 import 'package:diaspora_nearby/features/travel/widgets/country_filter_toggle.dart';
 import 'package:diaspora_nearby/features/travel/widgets/travel_search_field.dart';
 import 'package:diaspora_nearby/features/travel/widgets/travel_skeleton_loader.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 
 /// Browse and search real estate listings filtered by category.
 class RealEstateSearchScreen extends ConsumerStatefulWidget {
@@ -206,7 +207,7 @@ class _RealEstateSearchScreenState
       backgroundColor: Colors.transparent,
       titleSpacing: 0,
       title: Text(
-        _screenTitle,
+        AppLocalizations.tr(ref, _screenTitle),
         style: TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.bold,
@@ -242,7 +243,7 @@ class _RealEstateSearchScreenState
                     color: theme.colorScheme.onSurface,
                   ),
                   const SizedBox(width: 10),
-                  Text('Saved $_categoryPlural'),
+                  Flexible(child: Text('Saved $_categoryPlural')),
                 ],
               ),
             ),
@@ -257,7 +258,7 @@ class _RealEstateSearchScreenState
                     color: theme.colorScheme.onSurface,
                   ),
                   const SizedBox(width: 10),
-                  Text('My $_categoryPlural'),
+                  Flexible(child: Text('My $_categoryPlural')),
                 ],
               ),
             ),
@@ -272,7 +273,7 @@ class _RealEstateSearchScreenState
                     color: theme.colorScheme.onSurface,
                   ),
                   const SizedBox(width: 10),
-                  Text('List $_categoryPlural'),
+                  Flexible(child: Text('List $_categoryPlural')),
                 ],
               ),
             ),

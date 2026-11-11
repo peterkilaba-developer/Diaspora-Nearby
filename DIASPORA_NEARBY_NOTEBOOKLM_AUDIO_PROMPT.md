@@ -16,13 +16,13 @@ The hosts must explicitly speak directly to listeners who live with a Dual Geogr
 - Community Leaders & Group Admins: Leaders of WhatsApp chats, Facebook groups, Telegram channels, and cultural associations who have been managing communities for $0 return while Big Tech extracts billions from their work.
 
 CENTRAL CASE STUDY — FOUNDER PETER SWAI (THE 25-YEAR ODYSSEY & THE RETURN HOME):
-The hosts MUST ground the entire conversation in the deeply relatable personal story of founder and architect Peter Swai:
-- Peter moved from Tanzania to the United States in 1998, landing first in San Francisco, California with two friends.
-- Within a few months, he faced the reality millions of immigrants know intimately: without a job, the high cost of living and college tuition became completely unaffordable.
-- He relocated south to Santa Monica in Southern California, but living costs were equally crushing.
-- Searching for stability and opportunity, his diaspora odyssey took him to Iowa, then to Washington, D.C., then to Phoenix, Arizona, and eventually back to Iowa, where he lives today.
-- TAP INTO THE FEAR OF STARTING FROM ZERO: Across every relocation (San Francisco -> Santa Monica -> Iowa -> D.C. -> Phoenix -> Iowa), his social circle reset to zero. He had no local credit history, no established trust, and no easy way to find verified people from home.
-- TAP INTO THE FEAR & ASPIRATION OF RETURNING HOME: After over 25 years in the United States, Peter is now actively preparing his return home to Tanzania—living the other half of the diaspora equation!
+The hosts MUST ground the entire conversation in my deeply relatable personal story as founder and architect Peter Swai:
+- I moved from Tanzania to the United States in 1998, landing first in San Francisco, California.
+- Within a few months, I faced the reality millions of immigrants know intimately: without a job, the high cost of living and college tuition became completely unaffordable.
+- I relocated south to Santa Monica in Southern California, but living costs were equally crushing.
+- Searching for stability and opportunity, my diaspora odyssey took me to Iowa, then to Washington, D.C., then to Phoenix, Arizona, and eventually back to Iowa, where I live today.
+- TAP INTO THE FEAR OF STARTING FROM ZERO: Across every relocation (San Francisco -> Santa Monica -> Iowa -> D.C. -> Phoenix -> Iowa), my social circle reset to zero. I had no sense of belonging, no established trust, and no easy way to find verified people from home.
+- TAP INTO THE FEAR & ASPIRATION OF RETURNING HOME: After over 25 years in the United States, I am now actively preparing my return home to Tanzania—living the other half of the diaspora equation!
 - Returning home after 25+ years abroad is daunting: childhood circles have scattered, overseas credit doesn't transfer back home, and sending money home to buy land or launch businesses without verified local peers exposes life savings to the "Trust Gap" and scams.
 - How Diaspora Nearby solves both halves of the 360-degree diaspora journey:
   1. Welcomes Newcomers: Anchors you in your host city with privacy-first nearby discovery, peer hosting, and instant peer verification so you never start from zero.

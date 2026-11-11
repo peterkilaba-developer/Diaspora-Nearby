@@ -107,9 +107,10 @@ class MiniPlayer extends ConsumerWidget {
                 ), // 8px gap to match card horizontalTitleGap
                 // 2. Station Info
                 Expanded(
-                  child: SizedBox(
-                    height: 48,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 48),
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -172,23 +173,27 @@ class MiniPlayer extends ConsumerWidget {
                                 color: Colors.white,
                               ),
                             const SizedBox(width: 4),
-                            Text(
-                              radioState.error != null
-                                  ? 'Connection Failed'
-                                  : radioState.isLoading
-                                  ? 'Buffering...'
-                                  : radioState.isPlaying
-                                  ? 'Broadcasting Live'
-                                  : 'Paused',
-                              style: TextStyle(
-                                fontSize: 10,
-                                height: 1.1,
-                                color: radioState.error != null
-                                    ? Colors.redAccent
+                            Flexible(
+                              child: Text(
+                                radioState.error != null
+                                    ? 'Connection Failed'
+                                    : radioState.isLoading
+                                    ? 'Buffering...'
                                     : radioState.isPlaying
-                                    ? Colors.greenAccent
-                                    : Colors.white,
-                                fontWeight: FontWeight.w600,
+                                    ? 'Broadcasting Live'
+                                    : 'Paused',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  height: 1.1,
+                                  color: radioState.error != null
+                                      ? Colors.redAccent
+                                      : radioState.isPlaying
+                                      ? Colors.greenAccent
+                                      : Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ],
@@ -267,12 +272,15 @@ class MiniPlayer extends ConsumerWidget {
                     color: bottomContentColor,
                   ),
                   const SizedBox(width: 4),
-                  Text(
-                    '${NumberFormat.compact().format(listeners)} listeners \u2022 $countriesCount countries',
-                    style: TextStyle(color: bottomContentColor, fontSize: 12),
+                  Expanded(
+                    child: Text(
+                      '${NumberFormat.compact().format(listeners)} listeners \u2022 $countriesCount countries',
+                      style: TextStyle(color: bottomContentColor, fontSize: 12),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-
-                  const Spacer(),
+                  const SizedBox(width: 8),
 
                   // Close button
                   IconButton(

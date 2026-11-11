@@ -3,6 +3,7 @@
  * TGE Oracle, epoch management, awards, deductions, treasury sync.
  */
 const { functions, admin, db, sendPushToUser } = require("./shared");
+const { requireAppCheck, requireAuth, requireAdmin } = require("./security");
 const { ethers } = require("ethers");
 
 // ── Configuration (from environment) ──
@@ -20,6 +21,11 @@ const TGE_CONTROLLER_ABI = [
   "function mintEpochSupply(uint256 amount) external",
   "function distributeWelcomeBonus(address userRecipient, uint256 userAmount, address[] treasuryRecipients, uint256[] treasuryAmounts, bytes32 merkleRoot) external",
   "function distributeGenesisTokens(address userRecipient, uint256 userAmount, address[] treasuryRecipients, uint256[] treasuryAmounts, bytes32 merkleRoot) external",
+  "function maxGenesisDistribution() view returns (uint256)",
+  "function genesisDistributionReceived(address) view returns (uint256)",
+  "function epochLockedSupply() view returns (uint256)",
+  "function epochDistributed() view returns (uint256)",
+  "function adminReconcileState(uint256[10] _stats, address[] _genesisUsers, uint256[] _genesisAmounts) external",
   "function publishTdeRoot(uint256 epoch, uint256 tdeEvent, bytes32 merkleRoot, uint256 totalBatchAmount) external",
   "function claimTdeTokens(address recipient, uint256 epoch, uint256 tdeEvent, uint256 earnedAmount, uint8 efficiency, bytes32[] proof) external",
   "function tdeClaimed(bytes32 key) view returns (bool)",
@@ -267,7 +273,11 @@ async function performTGE(triggerSource) {
     commAwardedMap["global_community"] = exactFivePercentCap;
   }
 
-  const provider = new ethers.JsonRpcProvider(process.env.RPC_URL || "https://mainnet.base.org");
+  const provider = new ethers.JsonRpcProvider(
+    process.env.RPC_URL || "https://mainnet.base.org",
+    8453,
+    { staticNetwork: true }
+  );
   const tokenContract = new ethers.Contract(
     tokenAddress,
     ["function balanceOf(address account) external view returns (uint256)"],
@@ -827,10 +837,9 @@ exports.onGlobalDspMilestone = functions
 exports.executeTGE = functions
   .runWith({ timeoutSeconds: 300, memory: "512MB", secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
   .https.onCall(async (data, context) => {
-    if (!context.auth) {
-      throw new functions.https.HttpsError("unauthenticated", "Must be authenticated.");
-    }
-    // TODO: Add admin role check for production
+    requireAppCheck(context);
+    // Token generation is a privileged, irreversible operation.
+    requireAdmin(context);
 
     try {
       const result = await performTGE("manual:" + context.auth.uid);
@@ -865,6 +874,8 @@ exports.executeTGE = functions
 exports.backfillLifetimeEarnings = functions
   .runWith({ timeoutSeconds: 540, memory: '512MB' })
   .https.onCall(async (data, context) => {
+    requireAppCheck(context);
+    requireAuth(context);
     if (!context.auth) {
       throw new functions.https.HttpsError('unauthenticated', 'Sign in required.');
     }
@@ -974,6 +985,8 @@ exports.backfillLifetimeEarnings = functions
 exports.awardPoints = functions
   .runWith({ secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
   .https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  requireAuth(context);
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Must be authenticated.");
   }
@@ -1256,6 +1269,8 @@ exports.awardPoints = functions
  * @param {object} metadata — Optional metadata
  */
 exports.deductPoints = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  requireAuth(context);
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Must be authenticated.");
   }
@@ -1503,6 +1518,8 @@ async function distributeUbuntuMatchingSupply(batch, userId, userPointsAmount, n
 exports.initializeUserPoints = functions
   .runWith({ secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
   .https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  requireAuth(context);
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Must be authenticated.");
   }
@@ -1701,6 +1718,8 @@ exports.ensureUserReferralCode = ensureUserReferralCode;
  * creating it only if none exists yet.
  */
 exports.getOrCreateReferralCode = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  requireAuth(context);
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Must be authenticated.");
   }
@@ -1722,6 +1741,8 @@ exports.getOrCreateReferralCode = functions.https.onCall(async (data, context) =
  * awards 1,000 DSP (plus 1:1 Ubuntu matching supply) to the referrer who invited them.
  */
 exports.redeemReferralCode = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  requireAuth(context);
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Must be authenticated.");
   }
@@ -1833,6 +1854,12 @@ exports.redeemReferralCode = functions.https.onCall(async (data, context) => {
     await syncProfileMilestoneAndTrust(referrerId).catch((syncErr) => {
       console.warn(`[redeemReferralCode] syncProfileMilestoneAndTrust warning: ${syncErr.message}`);
     });
+    try {
+      const { notifyReferralJoined } = require("./engagement_notifications");
+      await notifyReferralJoined(referrerId, refereeId);
+    } catch (notifErr) {
+      console.warn(`[redeemReferralCode] Referral notification warning: ${notifErr.message}`);
+    }
 
     return {
       success: true,
@@ -1852,6 +1879,8 @@ exports.redeemReferralCode = functions.https.onCall(async (data, context) => {
  * Uses a transaction to atomically read-check-update the daily counter.
  */
 exports.awardMessagePoints = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  requireAuth(context);
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Must be authenticated.");
   }
@@ -2027,6 +2056,8 @@ exports.awardMessagePoints = functions.https.onCall(async (data, context) => {
  * Checks completedExplorationActions to prevent duplicate awards.
  */
 exports.awardExplorationPoints = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  requireAuth(context);
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Must be authenticated.");
   }
@@ -2189,6 +2220,8 @@ exports.awardExplorationPoints = functions.https.onCall(async (data, context) =>
  * awardSharePoints — Awards DSP for sharing content with daily cap (12/day).
  */
 exports.awardSharePoints = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  requireAuth(context);
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Must be authenticated.");
   }
@@ -2361,6 +2394,8 @@ exports.awardSharePoints = functions.https.onCall(async (data, context) => {
  * Writes to system_stats/treasury (blocked for clients) via Admin SDK.
  */
 exports.recordFiatGdp = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  requireAuth(context);
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Must be authenticated.");
   }
@@ -2417,12 +2452,9 @@ exports.recordFiatGdp = functions.https.onCall(async (data, context) => {
 exports.syncTreasuryBalances = functions
   .runWith({ timeoutSeconds: 300, memory: "512MB", secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
   .https.onCall(async (data, context) => {
-    if (!context.auth) {
-      throw new functions.https.HttpsError("unauthenticated", "Must be authenticated.");
-    }
-
-    // TODO: Add admin role check for production
-    const callerId = context.auth.uid;
+    requireAppCheck(context);
+    // Rewrites every treasury balance — platform admins only.
+    const callerId = requireAdmin(context);
     console.log(`[syncTreasuryBalances] Triggered by ${callerId}`);
 
     try {
@@ -2520,7 +2552,11 @@ exports.syncTreasuryBalances = functions
       // Reconcile active unconverted DSP against on-chain $DIASPORA balances
       const onChainBalances = {};
       try {
-        const provider = new ethers.JsonRpcProvider(process.env.RPC_URL || "https://mainnet.base.org");
+        const provider = new ethers.JsonRpcProvider(
+    process.env.RPC_URL || "https://mainnet.base.org",
+    8453,
+    { staticNetwork: true }
+  );
         const tokenAddress = process.env.DIASPORA_TOKEN_ADDRESS || "0x55d7e7d006938A15082752225ED44Fd130B87735";
         const tokenContract = new ethers.Contract(
           tokenAddress,
@@ -2718,7 +2754,7 @@ async function executeImmediatePohTokenMint(userId, userData, amountDsp) {
   );
 
   const RPC_URL = process.env.RPC_URL || "https://mainnet.base.org";
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
+  const provider = new ethers.JsonRpcProvider(RPC_URL, 8453, { staticNetwork: true });
   const signer = new ethers.Wallet(backendSignerKey, provider);
   const tge = new ethers.Contract(tgeControllerAddress, TGE_CONTROLLER_ABI, signer);
   const factory = new ethers.Contract(
@@ -2727,8 +2763,27 @@ async function executeImmediatePohTokenMint(userId, userData, amountDsp) {
     provider
   );
 
-  const userAmount = ethers.parseUnits(String(Math.floor(amountDsp)), 18);
-  const unitDsp = Math.round(amountDsp * 0.10);
+  const requestedTokens = Math.floor(Number(amountDsp) || 0);
+  if (requestedTokens <= 0) {
+    return null;
+  }
+
+  // On-chain Genesis lifetime cap check (70,000 $DIASPORA across the 7 PoH pillars)
+  const [maxGenWei, alreadyReceivedWei] = await Promise.all([
+    tge.maxGenesisDistribution().catch(() => ethers.parseUnits("70000", 18)),
+    tge.genesisDistributionReceived(walletAddress),
+  ]);
+  const capWei = maxGenWei > 0n ? maxGenWei : ethers.parseUnits("70000", 18);
+  const remainingCapWei = capWei > alreadyReceivedWei ? capWei - alreadyReceivedWei : 0n;
+  const remainingCapTokens = Math.floor(Number(ethers.formatUnits(remainingCapWei, 18)));
+  const effectiveTokens = Math.min(requestedTokens, remainingCapTokens);
+  if (effectiveTokens <= 0) {
+    console.log(`[executeImmediatePohTokenMint] User ${userId} (${walletAddress}) already reached on-chain Genesis cap.`);
+    return null;
+  }
+
+  const userAmount = ethers.parseUnits(String(effectiveTokens), 18);
+  const unitDsp = Math.round(effectiveTokens * 0.10);
   const unitAmount = ethers.parseUnits(String(unitDsp), 18);
   const BURN = "0x000000000000000000000000000000000000dEaD";
   const DEPLOYER_FALLBACK = signer.address;
@@ -2781,62 +2836,65 @@ async function executeImmediatePohTokenMint(userId, userData, amountDsp) {
     [walletAddress, userAmount, treasuryRecipients, treasuryAmounts]
   );
 
-  let tx;
-  try {
-    tx = await tge.distributeGenesisTokens(
-      walletAddress,
-      userAmount,
-      treasuryRecipients,
-      treasuryAmounts,
-      merkleRoot
-    );
-  } catch (genesisErr) {
+  // Ensure controller holds sufficient locked supply for this Genesis distribution
+  const totalNeeded = userAmount + treasuryAmounts.reduce((a, b) => a + b, 0n);
+  const locked = await tge.getLockedBalance();
+  if (locked < totalNeeded) {
+    const stats = await tge.getStats();
+    const epochNow = Number(stats[0]);
+    const epochEntry = EPOCH_SCHEDULE.find((e) => e.level === epochNow) || EPOCH_SCHEDULE[0];
+    const mintTx = await tge.mintEpochSupply(ethers.parseUnits(epochEntry.dspTarget.toString(), 18));
+    await mintTx.wait();
+  }
+
+  // Strictly call distributeGenesisTokens (enforces 70k lifetime Genesis cap on-chain
+  // and NEVER falls back to executeTGE, which would bypass per-user caps and advance TDE epochs).
+  const maxAttempts = 4;
+  let lastError;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      tx = await tge.distributeWelcomeBonus(
+      const nonce = await provider.getTransactionCount(signer.address, "pending");
+      const tx = await tge.distributeGenesisTokens(
         walletAddress,
         userAmount,
         treasuryRecipients,
         treasuryAmounts,
-        merkleRoot
+        merkleRoot,
+        { nonce }
       );
-    } catch (wbErr) {
-      // Fallback for un-upgraded proxy where maxWelcomeBonusPerRecipient < 70,000:
-      // executeTGE at 100% efficiency with reconciled treasury recipients.
-      const { MerkleTree } = require("merkletreejs");
-      const stats = await tge.getStats();
-      const epochBefore = Number(stats[0]);
-      const eventBefore = Number(stats[1]);
-      const allRecipients = [walletAddress, ...treasuryRecipients];
-      const allAmounts = [userAmount, ...treasuryAmounts];
-      const allEfficiencies = allRecipients.map(() => 100);
-      const totalNeeded = allAmounts.reduce((a, b) => a + b, 0n);
-      const locked = await tge.getLockedBalance();
-      if (locked < totalNeeded) {
-        const epochEntry = EPOCH_SCHEDULE.find(e => e.level === epochBefore) || EPOCH_SCHEDULE[0];
-        const epochSupplyTokens = epochEntry.dspTarget;
-        const mintTx = await tge.mintEpochSupply(ethers.parseUnits(epochSupplyTokens.toString(), 18));
-        await mintTx.wait();
+      const receipt = await tx.wait();
+      return receipt.hash;
+    } catch (err) {
+      lastError = err;
+      const msg = String(err.message || "").toLowerCase();
+      const isTransientContention =
+        err.code === "NONCE_EXPIRED" ||
+        err.code === "REPLACEMENT_UNDERPRICED" ||
+        msg.includes("replacement") ||
+        msg.includes("nonce") ||
+        msg.includes("already known") ||
+        msg.includes("request limit reached") ||
+        msg.includes("-32007") ||
+        msg.includes("429");
+      if (isTransientContention && attempt < maxAttempts) {
+        const delayMs = attempt * 1500 + Math.floor(Math.random() * 1000);
+        console.warn(
+          `[executeImmediatePohTokenMint] Transient RPC/nonce contention for ${userId} (attempt ${attempt}/${maxAttempts}), retrying in ${delayMs}ms...`
+        );
+        await new Promise((r) => setTimeout(r, delayMs));
+        continue;
       }
-      const leaves = allRecipients.map((r, i) =>
-        ethers.keccak256(
-          ethers.AbiCoder.defaultAbiCoder().encode(
-            ["address", "uint256", "uint256", "uint256", "uint8"],
-            [r, epochBefore, eventBefore, allAmounts[i], 100]
-          )
-        )
-      );
-      const tree = new MerkleTree(leaves, ethers.keccak256, { sortPairs: true });
-      const root = tree.getHexRoot();
-      tx = await tge.executeTGE(allRecipients, allAmounts, allEfficiencies, root);
+      throw err;
     }
   }
-  const receipt = await tx.wait();
-  return receipt.hash;
+  throw lastError;
 }
 
 exports.retryPendingWelcomeBonuses = functions
   .runWith({ timeoutSeconds: 540, memory: "512MB", secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
   .https.onCall(async (data, context) => {
+    requireAppCheck(context);
+    requireAuth(context);
     if (!context.auth) {
       throw new functions.https.HttpsError("unauthenticated", "Must be authenticated.");
     }
@@ -2953,6 +3011,8 @@ exports.retryPendingWelcomeBonuses = functions
 exports.retryPendingTGEDeductions = functions
   .runWith({ timeoutSeconds: 540, memory: "512MB" })
   .https.onCall(async (data, context) => {
+    requireAppCheck(context);
+    requireAuth(context);
     if (!context.auth) {
       throw new functions.https.HttpsError("unauthenticated", "Must be authenticated.");
     }
@@ -3316,6 +3376,17 @@ exports.onVouchWrite = functions.firestore
 
     await batch.commit();
 
+    // First-time (non-staked) vouch → tell the vouched member. Staked ratings
+    // get their own richer notification in section 4 below.
+    if (!beforeData && !isNowStaked && fromUserId && toUserId && fromUserId !== toUserId) {
+      try {
+        const { notifyTrustVouch } = require("./engagement_notifications");
+        await notifyTrustVouch(fromUserId, toUserId, afterData.fromUserName);
+      } catch (notifErr) {
+        console.warn(`[onVouchWrite] Vouch notification warning: ${notifErr.message}`);
+      }
+    }
+
     // 4. Push & In-App Notifications for Staked Member + All Other Stakers on Either Trust End
     if (stakeTierEnteredOrFlipped && remainingStake > 0 && fromUserId && toUserId) {
       try {
@@ -3443,6 +3514,8 @@ exports.onVouchWrite = functions.firestore
 exports.evaluatePoHGenesisStatus = functions
   .runWith({ secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
   .https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  requireAuth(context);
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "User must be authenticated.");
   }
@@ -3562,6 +3635,8 @@ exports.evaluatePoHGenesisStatus = functions
  * Users can claim their earned tokens anytime without epoch expiration.
  */
 exports.generateTdeClaimProof = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  requireAuth(context);
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "User must be authenticated.");
   }
@@ -3631,6 +3706,8 @@ exports.generateTdeClaimProof = functions.https.onCall(async (data, context) => 
 exports.claimTdeTokens = functions
   .runWith({ timeoutSeconds: 60, memory: "256MB", secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
   .https.onCall(async (data, context) => {
+    requireAppCheck(context);
+    requireAuth(context);
     if (!context.auth) {
       throw new functions.https.HttpsError("unauthenticated", "User must be authenticated.");
     }
@@ -3675,7 +3752,11 @@ exports.claimTdeTokens = functions
       throw new functions.https.HttpsError("internal", "Smart contract relayer not configured.");
     }
 
-    const provider = new ethers.JsonRpcProvider(process.env.RPC_URL || "https://mainnet.base.org");
+    const provider = new ethers.JsonRpcProvider(
+    process.env.RPC_URL || "https://mainnet.base.org",
+    8453,
+    { staticNetwork: true }
+  );
     const signer = new ethers.Wallet(backendSignerKey, provider);
     const tgeController = new ethers.Contract(tgeControllerAddress, TGE_CONTROLLER_ABI, signer);
 
@@ -3823,6 +3904,8 @@ exports.evaluateWelcomeBonus = exports.evaluatePoHGenesisStatus;
  * recordDailyCheckIn — Records daily check-in, tracking streaks and awarding retention rewards.
  */
 exports.recordDailyCheckIn = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  requireAuth(context);
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "User must be authenticated.");
   }
@@ -3972,16 +4055,86 @@ const FAMILY_TYPES_SET = new Set([
   "brother", "aunt", "uncle", "nephew", "niece", "cousin", "relative",
 ]);
 
+const crypto = require("crypto");
+
+/**
+ * Per-user distributed lease for syncProfileMilestoneAndTrust.
+ * Serializes concurrent triggers (e.g. multiple client evaluateProfileMilestone calls +
+ * onUserWrite + initializeUserPoints) so two instances can NEVER read stale
+ * milestone counters or double-mint PoH $DIASPORA for the same user.
+ */
+async function withPohSyncLock(userId, fn) {
+  const lockRef = db.collection("poh_sync_locks").doc(userId);
+  const lockOwner = `${Date.now()}_${crypto.randomBytes(6).toString("hex")}`;
+  const LEASE_TTL_MS = 90 * 1000;
+  let acquired = false;
+
+  for (let attempt = 0; attempt < 24; attempt++) {
+    const nowMs = Date.now();
+    acquired = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(lockRef);
+      const data = snap.exists ? (snap.data() || {}) : {};
+      const expiresAtMs = Number(data.expiresAtMs || 0);
+      if (data.inFlight === true && expiresAtMs > nowMs) {
+        return false;
+      }
+      tx.set(lockRef, {
+        inFlight: true,
+        owner: lockOwner,
+        acquiredAtMs: nowMs,
+        expiresAtMs: nowMs + LEASE_TTL_MS,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return true;
+    });
+
+    if (acquired) break;
+    await new Promise((resolve) => setTimeout(resolve, 1000 + Math.floor(Math.random() * 500)));
+  }
+
+  if (!acquired) {
+    console.warn(`[syncProfileMilestoneAndTrust] Lock busy for ${userId}; skipping duplicate concurrent sync.`);
+    return { success: true, skippedDuplicate: true };
+  }
+
+  try {
+    return await fn();
+  } finally {
+    try {
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(lockRef);
+        if (snap.exists && snap.data()?.owner === lockOwner) {
+          tx.set(
+            lockRef,
+            {
+              inFlight: false,
+              owner: null,
+              expiresAtMs: 0,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          );
+        }
+      });
+    } catch (releaseErr) {
+      console.warn(`[syncProfileMilestoneAndTrust] Lock release warning for ${userId}: ${releaseErr.message}`);
+    }
+  }
+}
+
 /**
  * syncProfileMilestoneAndTrust — Server-authoritative evaluation of all 7
  * Proof of Humanity (PoH) Genesis Milestones (+10,000 DSP & +10 PCT each),
  * continuous HTS deltas (QR 11+, net vouches, seniority, event attendance, penalties),
  * and full projection sync to trust_data, trust_scores, user_points, and governance.
- * Idempotent: safe to call from any trigger or callable.
+ * Idempotent & serialized per user via withPohSyncLock.
  */
 async function syncProfileMilestoneAndTrust(userId) {
   if (!userId) return { success: false, reason: "missing_userId" };
+  return await withPohSyncLock(userId, () => syncProfileMilestoneAndTrustUnlocked(userId));
+}
 
+async function syncProfileMilestoneAndTrustUnlocked(userId) {
   const [
     userDoc,
     privateDoc,
@@ -4216,11 +4369,17 @@ async function syncProfileMilestoneAndTrust(userId) {
 
   // ── Milestone 1: Profile Completion (First 10 fields -> 1,000 DSP + 1 PCT + immediate 100% $DIASPORA each; 11+ -> 1,000 DSP each for TDE) ──
   const pohConversionReasons = [];
-  const prevProfileFromLifetime = Math.floor(Number(lifetimeEarnings.profile_completion || 0) / 1000);
-  let prevProfileDspCount = Math.max(
-    Number(ledger.Profile_dsp_count || 0),
-    prevProfileFromLifetime,
-    completedExplorationActions.has("milestone_10_profile_fields") ? 10 : 0
+  const prevProfileFromLifetime = Math.min(
+    totalFields,
+    Math.floor(Number(lifetimeEarnings.profile_completion || 0) / 1000)
+  );
+  let prevProfileDspCount = Math.min(
+    totalFields,
+    Math.max(
+      Number(ledger.Profile_dsp_count || 0),
+      prevProfileFromLifetime,
+      completedExplorationActions.has("milestone_10_profile_fields") ? 10 : 0
+    )
   );
   if (completedFields >= 10) {
     milestones.add("Profile");
@@ -4642,7 +4801,27 @@ async function syncProfileMilestoneAndTrust(userId) {
     cityVisibilityPoCT >= 10;
 
   const isDdiEligible = isPoHComplete && daysActive >= 100 && finalTrustScore >= 91;
-  const isCouncilEligible = Boolean(trustData.isCouncilEligible) || (isDdiEligible && Boolean(userData.isAdminOfLargeGroup));
+  // Council eligibility is recomputed from server-verifiable facts every time.
+  // It must NOT be sticky on the stored `trust_data.isCouncilEligible`, which
+  // clients could previously write directly.
+  let isAdminOfLargeGroup = false;
+  if (isDdiEligible) {
+    try {
+      const adminChats = await db.collection("chats")
+        .where("admins", "array-contains", userId)
+        .limit(200)
+        .get();
+      isAdminOfLargeGroup = adminChats.docs.some((doc) => {
+        const chat = doc.data() || {};
+        const members = Number(chat.memberCount) ||
+          (Array.isArray(chat.participants) ? chat.participants.length : 0);
+        return chat.type === "group" && members >= 100;
+      });
+    } catch (err) {
+      console.warn(`[syncProfileMilestoneAndTrust] large-group check failed for ${userId}: ${err.message}`);
+    }
+  }
+  const isCouncilEligible = isDdiEligible && isAdminOfLargeGroup;
 
   // ── Immediate 100% PoH $DIASPORA Conversion (Locked until 10 QR Exchanges) ──
   // First 10 steps of Profile/Family/Friend/QR/Verified (1,000 DSP each) + Location Transparency (10,000 DSP)
@@ -4912,9 +5091,121 @@ exports.distributeUbuntuMatchingSupply = distributeUbuntuMatchingSupply;
  * or trust refreshes to ensure profile completion rewards (+1,000 DSP and +1 PCT per field for first 10, +1,000 DSP for 11+)
  * and immediate 100% PoH $DIASPORA conversions are evaluated and synced by the server.
  */
+/**
+ * reconcileOnChainTgeState — Admin-only callable to restore DiasporaTGEControllerV2
+ * epoch / event / accounting counters via adminReconcileState(...) using the
+ * mounted BACKEND_SIGNER_PRIVATE_KEY (which holds TGE_ORACLE_ROLE).
+ */
+exports.reconcileOnChainTgeState = functions
+  .runWith({ timeoutSeconds: 120, memory: "256MB", secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
+  .https.onCall(async (data, context) => {
+    requireAppCheck(context);
+    const callerId = requireAdmin(context);
+
+    const { backendSignerKey, tgeControllerAddress } = assertOnChainConfig(
+      "reconcileOnChainTgeState",
+      ["backendSignerKey", "tgeControllerAddress"]
+    );
+
+    const provider = new ethers.JsonRpcProvider(
+      process.env.RPC_URL || "https://mainnet.base.org",
+      8453,
+      { staticNetwork: true }
+    );
+    const signer = new ethers.Wallet(backendSignerKey, provider);
+    const tge = new ethers.Contract(tgeControllerAddress, TGE_CONTROLLER_ABI, signer);
+
+    const [statsBefore, epLockedBefore, epDistBefore, maxGenBefore, lockedBal] = await Promise.all([
+      tge.getStats(),
+      tge.epochLockedSupply(),
+      tge.epochDistributed(),
+      tge.maxGenesisDistribution(),
+      tge.getLockedBalance(),
+    ]);
+
+    const dryRun = data && data.dryRun === true;
+    const parseOptWei = (val, fallbackWei) =>
+      val !== undefined && val !== null ? ethers.parseUnits(String(val), 18) : fallbackWei;
+
+    const targetEpoch = BigInt(data && data.currentEpoch !== undefined ? data.currentEpoch : statsBefore[0]);
+    const targetEvent = BigInt(data && data.currentTgeEvent !== undefined ? data.currentTgeEvent : statsBefore[1]);
+    const targetMinted = parseOptWei(data && data.totalMintedTokens, statsBefore[2]);
+    const targetDistributed = parseOptWei(data && data.totalDistributedTokens, statsBefore[3]);
+    const targetBurned = parseOptWei(data && data.totalBurnedTokens, statsBefore[4]);
+    const targetTgeCount = BigInt(data && data.tgeCount !== undefined ? data.tgeCount : statsBefore[5]);
+    const targetEpochLocked = parseOptWei(data && data.epochLockedSupplyTokens, epLockedBefore);
+    const targetEpochDistributed = parseOptWei(data && data.epochDistributedTokens, epDistBefore);
+    const targetWelcomeBonuses = parseOptWei(data && data.totalWelcomeBonusesTokens, statsBefore[6]);
+    const targetMaxGenesis = parseOptWei(data && data.maxGenesisDistributionTokens, maxGenBefore);
+
+    const statsTuple = [
+      targetEpoch,
+      targetEvent,
+      targetMinted,
+      targetDistributed,
+      targetBurned,
+      targetTgeCount,
+      targetEpochLocked,
+      targetEpochDistributed,
+      targetWelcomeBonuses,
+      targetMaxGenesis,
+    ];
+
+    const genesisUsers = Array.isArray(data && data.genesisUsers) ? data.genesisUsers : [];
+    const genesisAmounts = Array.isArray(data && data.genesisAmountsTokens)
+      ? data.genesisAmountsTokens.map((v) => ethers.parseUnits(String(v), 18))
+      : [];
+
+    if (genesisUsers.length !== genesisAmounts.length) {
+      throw new functions.https.HttpsError("invalid-argument", "genesisUsers and genesisAmountsTokens length mismatch.");
+    }
+
+    const summary = {
+      callerId,
+      dryRun,
+      lockedBalanceTokens: ethers.formatUnits(lockedBal, 18),
+      before: {
+        currentEpoch: Number(statsBefore[0]),
+        currentTgeEvent: Number(statsBefore[1]),
+        totalMintedTokens: ethers.formatUnits(statsBefore[2], 18),
+        totalDistributedTokens: ethers.formatUnits(statsBefore[3], 18),
+        totalBurnedTokens: ethers.formatUnits(statsBefore[4], 18),
+        tgeCount: Number(statsBefore[5]),
+        epochLockedSupplyTokens: ethers.formatUnits(epLockedBefore, 18),
+        epochDistributedTokens: ethers.formatUnits(epDistBefore, 18),
+        totalWelcomeBonusesTokens: ethers.formatUnits(statsBefore[6], 18),
+        maxGenesisDistributionTokens: ethers.formatUnits(maxGenBefore, 18),
+      },
+      after: {
+        currentEpoch: Number(targetEpoch),
+        currentTgeEvent: Number(targetEvent),
+        totalMintedTokens: ethers.formatUnits(targetMinted, 18),
+        totalDistributedTokens: ethers.formatUnits(targetDistributed, 18),
+        totalBurnedTokens: ethers.formatUnits(targetBurned, 18),
+        tgeCount: Number(targetTgeCount),
+        epochLockedSupplyTokens: ethers.formatUnits(targetEpochLocked, 18),
+        epochDistributedTokens: ethers.formatUnits(targetEpochDistributed, 18),
+        totalWelcomeBonusesTokens: ethers.formatUnits(targetWelcomeBonuses, 18),
+        maxGenesisDistributionTokens: ethers.formatUnits(targetMaxGenesis, 18),
+      },
+    };
+
+    if (dryRun) {
+      return { success: true, ...summary };
+    }
+
+    const nonce = await provider.getTransactionCount(signer.address, "pending");
+    const tx = await tge.adminReconcileState(statsTuple, genesisUsers, genesisAmounts, { nonce });
+    const receipt = await tx.wait();
+    console.log(`[reconcileOnChainTgeState] Reconciled TGE state by ${callerId}: ${receipt.hash}`);
+    return { success: true, txHash: receipt.hash, ...summary };
+  });
+
 exports.evaluateProfileMilestone = functions
   .runWith({ secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
   .https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  requireAuth(context);
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "User must be authenticated.");
   }

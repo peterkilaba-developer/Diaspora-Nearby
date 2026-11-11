@@ -129,7 +129,7 @@ class SavedListingsScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              childAspectRatio: 0.68,
+              childAspectRatio: 0.62,
               crossAxisSpacing: 10,
               mainAxisSpacing: 10,
             ),

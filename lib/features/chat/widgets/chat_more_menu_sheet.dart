@@ -191,61 +191,91 @@ class ChatMoreMenuSheet extends ConsumerWidget {
     final isChamber = chat.isOrganization && chat.id.startsWith('org_chamber_');
 
     if (isAiAgent) {
-      return Container(
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                margin: const EdgeInsets.symmetric(vertical: 12),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.onSurfaceVariant.withValues(
-                    alpha: 0.2,
+      final cachedMatch = ref
+          .read(chatRepositoryProvider)
+          .cachedChats
+          .where((c) => c.id == chat.id)
+          .firstOrNull;
+      final isCurrentlyPinned = cachedMatch?.isPinned ?? chat.isPinned;
+
+      return BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  margin: const EdgeInsets.symmetric(vertical: 12),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.onSurfaceVariant.withValues(
+                      alpha: 0.2,
+                    ),
+                    borderRadius: BorderRadius.circular(2),
                   ),
-                  borderRadius: BorderRadius.circular(2),
                 ),
-              ),
-              Flexible(
-                child: ListView(
-                  shrinkWrap: true,
-                  physics: const BouncingScrollPhysics(),
-                  children: [
-                    AppBottomSheetItem(
-                      icon: LucideIcons.globe,
-                      iconColor: Colors.teal.shade600,
-                      iconBgColor: Colors.teal.withValues(alpha: 0.12),
-                      title: 'Change Language / Badili Lugha',
-                      subtitle:
-                          'Languages spoken in your home & host countries or search all',
-                      onTap: () {
-                        final rootCtx = Navigator.of(
-                          context,
-                          rootNavigator: true,
-                        ).context;
-                        Navigator.pop(context);
-                        _showLanguagePickerModal(rootCtx);
-                      },
-                    ),
-                    AppBottomSheetItem(
-                      icon: LucideIcons.eraser,
-                      iconColor: Colors.orange.shade700,
-                      iconBgColor: Colors.orange.withValues(alpha: 0.12),
-                      title: 'Clear chat',
-                      subtitle: 'Clear conversation history',
-                      onTap: onClearChat,
-                    ),
-                    const SizedBox(height: 20),
-                  ],
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    physics: const BouncingScrollPhysics(),
+                    children: [
+                      AppBottomSheetItem(
+                        icon: isCurrentlyPinned
+                            ? LucideIcons.pinOff
+                            : LucideIcons.pin,
+                        iconColor: AppTheme.accent,
+                        iconBgColor: AppTheme.accent.withValues(alpha: 0.12),
+                        title: isCurrentlyPinned
+                            ? 'Unpin from Top'
+                            : 'Pin to Top',
+                        subtitle: isCurrentlyPinned
+                            ? 'Allow Diaspora AI Agent chat to move naturally by latest message'
+                            : 'Keep Diaspora AI Agent anchored at the top of your chats',
+                        onTap: () async {
+                          final nextPin = !isCurrentlyPinned;
+                          Navigator.pop(context);
+                          await ref
+                              .read(chatRepositoryProvider)
+                              .togglePin(chat.id, nextPin);
+                        },
+                      ),
+                      AppBottomSheetItem(
+                        icon: LucideIcons.globe,
+                        iconColor: Colors.teal.shade600,
+                        iconBgColor: Colors.teal.withValues(alpha: 0.12),
+                        title: 'Change Language / Badili Lugha',
+                        subtitle:
+                            'Languages spoken in your home & host countries or search all',
+                        onTap: () {
+                          final rootCtx = Navigator.of(
+                            context,
+                            rootNavigator: true,
+                          ).context;
+                          Navigator.pop(context);
+                          _showLanguagePickerModal(rootCtx);
+                        },
+                      ),
+                      AppBottomSheetItem(
+                        icon: LucideIcons.eraser,
+                        iconColor: Colors.orange.shade700,
+                        iconBgColor: Colors.orange.withValues(alpha: 0.12),
+                        title: 'Clear chat',
+                        subtitle: 'Clear conversation history',
+                        onTap: onClearChat,
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       );

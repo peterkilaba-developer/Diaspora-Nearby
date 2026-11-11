@@ -577,8 +577,7 @@ class MarketplaceRepository {
   Future<void> saveListing(String listingId, String userId) async {
     _savedListingIdsCache.add(listingId);
     final cached = _listingsByIdCache[listingId];
-    if (cached != null &&
-        !_savedListingsCache.any((l) => l.id == listingId)) {
+    if (cached != null && !_savedListingsCache.any((l) => l.id == listingId)) {
       _savedListingsCache = [cached, ..._savedListingsCache];
     }
     await _functions.httpsCallable('setListingSaved').call({
@@ -746,22 +745,6 @@ class MarketplaceRepository {
       debugPrint('Error checking listing interaction: $e');
       return false;
     }
-  }
-
-  /// Record a first-time interaction with a listing (DSP was deducted)
-  Future<void> recordListingInteraction(
-    String listingId,
-    String userId, {
-    String? interactionType,
-  }) async {
-    await _listingsRef
-        .doc(listingId)
-        .collection('interactions')
-        .doc(userId)
-        .set({
-          'interactedAt': FieldValue.serverTimestamp(),
-          'type': interactionType ?? 'contact_seller',
-        });
   }
 
   /// Report a listing

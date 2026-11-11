@@ -42,6 +42,12 @@ final discoverableChatsProvider = FutureProvider.family<List<Chat>, String>((
 class ChatsListScreen extends ConsumerStatefulWidget {
   const ChatsListScreen({super.key});
 
+  static String buildLocalAiAgentWelcomeText([ProfileData? profile]) =>
+      _ChatsListScreenState.buildLocalAiAgentWelcomeText(profile);
+
+  static List<Map<String, dynamic>> buildLocalWelcomeAiActions() =>
+      _ChatsListScreenState.buildLocalWelcomeAiActions();
+
   @override
   ConsumerState<ChatsListScreen> createState() => _ChatsListScreenState();
 }
@@ -112,52 +118,45 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
     final firstName = (profile?.firstName ?? '').trim();
     final greeting = _resolveNativeGreeting(profile);
     final namePart = firstName.isNotEmpty ? ', $firstName' : '';
+    final homeCountry = (profile?.homeCountry ?? '').trim();
+    final hostCity = (profile?.hostLocation.city ?? '').trim();
+    final corridorNote = homeCountry.isNotEmpty && hostCity.isNotEmpty
+        ? ' connecting your $homeCountry roots with $hostCity and the global diaspora'
+        : '';
     return '$greeting$namePart!\n\n'
-        'I am Diaspora AI Agent, your 24/7 personal concierge on Diaspora Nearby.\n\n'
-        'Any Language: Speak to me in English, Kiswahili, Français, العربية, Español, 中文, हिन्दी, Yoruba, Igbo, Hausa, Amharic, or any language you prefer.\n\n'
-        'Here is what I can do for you right here in chat:\n'
-        '• Flights, Hotels & Car Rentals: Search live flights, hotels, stays & peer car rentals or list your own car/stay.\n'
-        '• Jobs & Marketplace: Find jobs, products, services & real estate — or tell me the details and I\'ll generate an instant Publish button right in chat.\n'
-        '• Diaspora Utilities: Ask me anything about Nearby Discovery, Live Homeland Radio, Ubuntu Emergency Fund, DDI Loans, or \$DIASPORA.\n\n'
-        'What can I help you find or post today?';
+        'I am **Diaspora AI Agent**, your 24/7 personal concierge on Diaspora Nearby$corridorNote. Speak or write to me in **any language** — I have full access to platform information and can complete tasks directly for you right here in chat.\n\n'
+        '**Your Proof of Humanity (PoH) & \$DIASPORA Rewards**:\n'
+        '• **Proof of Humanity (PoH)**: Earn up to **70,000 \$DIASPORA** across 7 PoH pillars, where your earned DSP converts immediately at **100% 1:1 efficiency** into on-chain **\$DIASPORA** tokens in your smart wallet.\n'
+        '• **Fill Your 12 Profile Fields (+10,000 DSP -> 10,000 \$DIASPORA Immediately)**: Completing your **12 profile fields** earns **1,000 DSP per field** — your first **10,000 DSP is immediately converted 1:1 into 10,000 \$DIASPORA tokens** right away (plus +2,000 DSP bonus on fields 11 and 12). **Want me to help fill out all 12 fields for you right here in chat?** Just reply or tap the button below and we will complete them together in minutes!\n'
+        '• **QR EXCHANGE to Unlock Your Tokens (Crucial)**: Complete **10 in-person QR Exchanges** with fellow diaspora members to earn another **+10,000 \$DIASPORA** (+1,000 per scan) **AND unlock all your minted \$DIASPORA tokens** in your wallet for peer transfers and Token Distribution Events.\n\n'
+        '**Everything Else I Can Do For You**:\n'
+        '• Search live **Flights, Hotels, Stays & Car Rentals**, find or publish **Jobs, Marketplace & Real Estate** listings, connect with **Nearby Compatriots**, stream **Live Homeland Radio**, or access the **Ubuntu Emergency Fund & DDI Loans**.\n\n'
+        'Would you like me to help fill out your 12 profile fields now to claim your **10,000 \$DIASPORA**, or what task can I complete for you today?';
   }
 
   static List<Map<String, dynamic>> buildLocalWelcomeAiActions() {
     return <Map<String, dynamic>>[
       <String, dynamic>{
-        'id': 'welcome_flights',
-        'type': 'navigate',
-        'label': 'Search Flights',
-        'route': '/dsp/travel/flights',
-        'icon': 'flight',
-      },
-      <String, dynamic>{
-        'id': 'welcome_hotels',
-        'type': 'navigate',
-        'label': 'Find Hotels',
-        'route': '/dsp/travel/hotels',
-        'icon': 'hotel',
-      },
-      <String, dynamic>{
-        'id': 'welcome_cars',
-        'type': 'navigate',
-        'label': 'Car Rentals',
-        'route': '/dsp/travel/car-rental',
-        'icon': 'car',
-      },
-      <String, dynamic>{
-        'id': 'welcome_jobs',
-        'type': 'navigate',
-        'label': 'Browse Jobs',
-        'route': '/marketplace?type=job',
-        'icon': 'briefcase',
-      },
-      <String, dynamic>{
-        'id': 'welcome_post_job',
+        'id': 'welcome_fill_12_fields',
         'type': 'prompt',
-        'label': 'Post a Job in Chat',
-        'prompt': 'I want to post a job listing.',
-        'icon': 'plus',
+        'label': r'Fill My 12 Profile Fields (+10,000 $DIASPORA)',
+        'prompt':
+            r'Help me fill out my 12 profile fields right here in chat so I can earn my 10,000 DSP immediately converted to $DIASPORA tokens.',
+        'icon': 'sparkles',
+      },
+      <String, dynamic>{
+        'id': 'welcome_qr_exchange',
+        'type': 'navigate',
+        'label': r'Open QR Exchange (Unlock $DIASPORA)',
+        'route': '/profile?showQr=true',
+        'icon': 'check',
+      },
+      <String, dynamic>{
+        'id': 'welcome_poh_hub',
+        'type': 'navigate',
+        'label': r'PoH & $DIASPORA Hub',
+        'route': '/dsp/points',
+        'icon': 'wallet',
       },
       <String, dynamic>{
         'id': 'welcome_nearby',
@@ -165,6 +164,20 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
         'label': 'Explore Nearby',
         'route': '/nearby',
         'icon': 'compass',
+      },
+      <String, dynamic>{
+        'id': 'welcome_flights',
+        'type': 'navigate',
+        'label': 'Flights & Hotels',
+        'route': '/dsp/travel/flights',
+        'icon': 'flight',
+      },
+      <String, dynamic>{
+        'id': 'welcome_jobs',
+        'type': 'navigate',
+        'label': 'Jobs & Marketplace',
+        'route': '/marketplace',
+        'icon': 'briefcase',
       },
     ];
   }
@@ -183,6 +196,7 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
       createdAt: nowMs,
       updatedAt: nowMs,
       unreadCount: 1,
+      isPinned: true,
       metadata: const <String, dynamic>{'isAiAgent': true},
       lastMessage: LastMessage(
         id: 'welcome_from_ai_agent',

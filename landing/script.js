@@ -625,8 +625,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (valSpend) valSpend.textContent = '$' + spend.toLocaleString('en-US');
 
         // Calculation Model:
-        // Base Genesis PoH = up to 70,000 DSP (prorated 7k per verified connection)
-        let baseDSP = Math.min(connections * 7000, 70000);
+        // Base Genesis PoH = up to 70,000 DSP (prorated 7k per verified connection step)
+        const pohDSP = Math.min(connections * 7000, 70000);
+        let baseDSP = pohDSP;
         if (connections > 10) {
             baseDSP += (connections - 10) * 1000;
         }
@@ -634,8 +635,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const spendDSP = spend * 1;
         const totalDSP = baseDSP + trustDSP + spendDSP;
 
-        // On-chain $DIASPORA unlocked: 7,000 minted on Base when 10 connections complete
-        const tokensMinted = connections >= 10 ? 7000 : Math.round(connections * 700);
+        // Immediate 1:1 PoH Genesis $DIASPORA minted on Base (up to 70,000 $DIASPORA; unlocked at 10 QR scans)
+        const tokensMinted = pohDSP;
 
         // Projected PCT Score
         let pctScore = Math.min(connections * 7, 70) + Math.floor(trustInteractions / 2) + (spend > 0 ? 5 : 0);
@@ -1326,7 +1327,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div class="lang-modal-icon">🌐</div>
                             <div>
                                 <h3 class="lang-modal-title" id="lang-modal-title">Select World Language</h3>
-                                <p class="lang-modal-subtitle">All main official languages of every country in the world</p>
                             </div>
                         </div>
                         <button type="button" class="lang-modal-close" id="lang-modal-close" aria-label="Close">✕</button>

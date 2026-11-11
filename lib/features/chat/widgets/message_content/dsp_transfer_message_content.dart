@@ -21,6 +21,39 @@ class DSPTransferMessageContent extends StatelessWidget {
     return s.replaceAllMapped(reg, (Match m) => '${m[1]},');
   }
 
+  Widget _buildMarkdownRichText(String rawText, TextStyle? baseStyle) {
+    final effectiveStyle = baseStyle ?? const TextStyle(fontSize: 13);
+    final boldStyle = effectiveStyle.copyWith(fontWeight: FontWeight.w700);
+    final spans = <InlineSpan>[];
+    final pattern = RegExp(r'\*\*(.+?)\*\*');
+    int lastEnd = 0;
+
+    for (final match in pattern.allMatches(rawText)) {
+      if (match.start > lastEnd) {
+        spans.add(
+          TextSpan(
+            text: rawText.substring(lastEnd, match.start),
+            style: effectiveStyle,
+          ),
+        );
+      }
+      spans.add(TextSpan(text: match.group(1) ?? '', style: boldStyle));
+      lastEnd = match.end;
+    }
+
+    if (lastEnd < rawText.length) {
+      spans.add(
+        TextSpan(text: rawText.substring(lastEnd), style: effectiveStyle),
+      );
+    }
+
+    if (spans.isEmpty) {
+      return Text(rawText, style: effectiveStyle);
+    }
+
+    return Text.rich(TextSpan(children: spans));
+  }
+
   @override
   Widget build(BuildContext context) {
     final metadata = message.metadata ?? {};
@@ -61,7 +94,7 @@ class DSPTransferMessageContent extends StatelessWidget {
         : (isConversion ? '100% PoH Conversion Confirmed' : 'Transfer Confirmed');
 
     return Container(
-      width: hasRichConversionBody ? 292 : 240,
+      width: hasRichConversionBody ? 324 : 240,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isOwn
@@ -208,9 +241,9 @@ class DSPTransferMessageContent extends StatelessWidget {
 
           if (explanationText != null && explanationText.trim().isNotEmpty) ...[
             const SizedBox(height: 12),
-            Text(
+            _buildMarkdownRichText(
               explanationText.trim(),
-              style: theme.textTheme.bodyMedium?.copyWith(
+              theme.textTheme.bodyMedium?.copyWith(
                 color: isOwn
                     ? colorScheme.onPrimaryContainer
                     : colorScheme.onSurface,
@@ -254,9 +287,9 @@ class DSPTransferMessageContent extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 6),
-                  Text(
+                  _buildMarkdownRichText(
                     nextTaskBody.trim(),
-                    style: theme.textTheme.bodySmall?.copyWith(
+                    theme.textTheme.bodySmall?.copyWith(
                       color: colorScheme.onSurface,
                       height: 1.4,
                     ),

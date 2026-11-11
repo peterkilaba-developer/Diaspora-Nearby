@@ -871,10 +871,23 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Colors.grey)),
-          Text(
-            value,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.grey),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.end,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
           ),
         ],
       ),
@@ -1021,7 +1034,13 @@ class _ClaimsTabState extends ConsumerState<_ClaimsTab> {
                     children: [
                       Icon(LucideIcons.megaphone, size: 18),
                       SizedBox(width: 8),
-                      Text('Broadcast Announcement'),
+                      Flexible(
+                        child: Text(
+                          'Broadcast Announcement',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ],
                   ),
                 ),

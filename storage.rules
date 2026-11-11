@@ -16,11 +16,30 @@ service firebase.storage {
       return isSignedIn() &&
         'admin' in request.auth.token && request.auth.token.admin == true;
     }
+    // Cross-service checks against Firestore (mirrors isChatParticipant in
+    // firestore.rules). Previously these only required a signed-in user, so
+    // anyone could read or overwrite any chat's media or any event's image.
+    function chatDoc(chatId) {
+      return /databases/(default)/documents/chats/$(chatId);
+    }
     function isChatParticipant(chatId) {
-      return isSignedIn() && chatId.size() > 0;
+      return isSignedIn() && chatId.size() > 0 && (
+        firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)/userChats/$(chatId)) ||
+        (
+          firestore.exists(chatDoc(chatId)) && (
+            request.auth.uid in firestore.get(chatDoc(chatId)).data.get('participants', []) ||
+            firestore.get(chatDoc(chatId)).data.get('type', '') == 'community' ||
+            firestore.get(chatDoc(chatId)).data.get('isPublic', false) == true
+          )
+        )
+      );
     }
     function isEventOwner(eventId) {
-      return isSignedIn() && eventId.size() > 0;
+      return isSignedIn() && eventId.size() > 0 &&
+        firestore.exists(/databases/(default)/documents/events/$(eventId)) && (
+          firestore.get(/databases/(default)/documents/events/$(eventId)).data.get('creatorId', '') == request.auth.uid ||
+          firestore.get(/databases/(default)/documents/events/$(eventId)).data.get('createdBy', '') == request.auth.uid
+        );
     }
 
     // --- Profile Photos & Business Logos ---
@@ -44,7 +63,7 @@ service firebase.storage {
     // --- Chat/Group Media ---
     // Path: groups/{chatId}/... or chat_media/...
     match /groups/{chatId}/{allPaths=**} {
-      allow read: if isSignedIn();
+      allow read: if isChatParticipant(chatId) || isAdmin();
       allow write: if isChatParticipant(chatId) &&
         (request.resource == null || (isImage() && isSmallEnough()));
     }
@@ -55,13 +74,13 @@ service firebase.storage {
 
     // [NEW] Explicit rules for folders used by ChatMessagingService
     match /chat_images/{chatId}/{allPaths=**} {
-      allow read: if isSignedIn();
+      allow read: if isChatParticipant(chatId) || isAdmin();
       allow write: if isChatParticipant(chatId) &&
         (request.resource == null || (isImage() && isSmallEnough()));
     }
 
     match /chat_videos/{chatId}/{allPaths=**} {
-      allow read: if isSignedIn();
+      allow read: if isChatParticipant(chatId) || isAdmin();
       allow write: if isChatParticipant(chatId) &&
         (request.resource == null || (
           request.resource.contentType.matches('video/.*') &&
@@ -70,7 +89,7 @@ service firebase.storage {
     }
 
     match /chat_voices/{chatId}/{allPaths=**} {
-      allow read: if isSignedIn();
+      allow read: if isChatParticipant(chatId) || isAdmin();
       allow write: if isChatParticipant(chatId) &&
         (request.resource == null || (
           request.resource.contentType.matches('audio/.*') &&
@@ -79,7 +98,7 @@ service firebase.storage {
     }
 
     match /chat_documents/{chatId}/{allPaths=**} {
-      allow read: if isSignedIn();
+      allow read: if isChatParticipant(chatId) || isAdmin();
       allow write: if isChatParticipant(chatId) &&
         (request.resource == null || (
           !request.resource.contentType.matches('text/html') &&

@@ -189,6 +189,13 @@ exports.completeQrHandshake = functions
     console.warn(`[completeQrHandshake] Reward distribution warning: ${rewardErr.message}`);
   }
 
+  try {
+    const { notifyQrConnection } = require("./engagement_notifications");
+    await notifyQrConnection(scannerUid, peerUid);
+  } catch (notifErr) {
+    console.warn(`[completeQrHandshake] Notification warning: ${notifErr.message}`);
+  }
+
   return { success: true, peerUid, earnedPoints: QR_EXCHANGE_REWARD };
 });
 
@@ -307,6 +314,12 @@ exports.verifyChatSolution = functions.https.onCall(async (data, context) => {
     } catch (err) {
       console.warn(`[verifyChatSolution] Reward warning: ${err.message}`);
     }
+    try {
+      const { notifySolutionVerified } = require("./engagement_notifications");
+      await notifySolutionVerified(reporterId, senderId, chatId, messageId);
+    } catch (notifErr) {
+      console.warn(`[verifyChatSolution] Notification warning: ${notifErr.message}`);
+    }
   }
 
   return {success: true, alreadyVerified, senderId};
@@ -379,6 +392,12 @@ exports.onFieldVerificationWrite = functions
             await distributeUbuntuMatchingSupply(rewardBatch, uid, REWARD, now, `${action}_match`);
           }
           await rewardBatch.commit();
+          try {
+            const { notifyFieldVerification } = require("./engagement_notifications");
+            await notifyFieldVerification(fromUserId, toUserId);
+          } catch (notifErr) {
+            console.warn(`[onFieldVerificationWrite] Notification warning: ${notifErr.message}`);
+          }
         } catch (rewardErr) {
           console.warn(`[onFieldVerificationWrite] Reward warning: ${rewardErr.message}`);
         }

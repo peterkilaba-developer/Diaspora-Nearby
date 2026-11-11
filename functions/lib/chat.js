@@ -1340,6 +1340,15 @@ exports.completeEventCheckIn = functions.https.onCall(async (data, context) => {
     console.warn(`[completeEventCheckIn] Reward warning: ${rewardErr.message}`);
   }
 
+  if (hostUid && validUid(hostUid) && hostUid !== uid) {
+    try {
+      const { notifyEventCheckIn } = require("./engagement_notifications");
+      await notifyEventCheckIn(hostUid, uid, eventId);
+    } catch (notifErr) {
+      console.warn(`[completeEventCheckIn] Notification warning: ${notifErr.message}`);
+    }
+  }
+
   return { success: true };
 });
 
@@ -1390,6 +1399,7 @@ exports.manageChatMembers = functions.https.onCall(async (data, context) => {
     );
   }
   const ref = db.collection("chats").doc(chatId);
+  let invitationChatName = null;
   await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists) throw new functions.https.HttpsError("not-found", "Chat not found.");
@@ -1441,6 +1451,7 @@ exports.manageChatMembers = functions.https.onCall(async (data, context) => {
         updatedAt: Date.now(),
         unreadCount: admin.firestore.FieldValue.increment(1),
       }, { merge: true });
+      invitationChatName = String(chat.name || "Group");
       return;
     }
     transaction.update(ref, {
@@ -1451,6 +1462,14 @@ exports.manageChatMembers = functions.https.onCall(async (data, context) => {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
   });
+  if (inviteUserId && invitationChatName !== null) {
+    try {
+      const { notifyGroupInvitation } = require("./engagement_notifications");
+      await notifyGroupInvitation(callerUid, targetUid, chatId, invitationChatName);
+    } catch (notifErr) {
+      console.warn(`[manageChatMembers] Invitation notification warning: ${notifErr.message}`);
+    }
+  }
   return { success: true };
 });
 

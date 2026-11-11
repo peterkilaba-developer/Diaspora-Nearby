@@ -18,6 +18,7 @@ import 'package:diaspora_nearby/features/trust/models/trust_data.dart';
 import 'package:diaspora_nearby/features/shared/utils/search_highlight_utils.dart';
 import 'package:diaspora_nearby/features/shared/widgets/shimmer_effect.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 
 class UserCardView extends ConsumerStatefulWidget {
   final ProfileData user;
@@ -86,11 +87,13 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
   }
 
   Widget _buildHighlightedName(String name, String? query, ThemeData theme) {
-    return SearchHighlightUtils.highlightText(
-      name,
-      query,
-      theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-      context,
+    return NoTranslate(
+      child: SearchHighlightUtils.highlightText(
+        name,
+        query,
+        theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+        context,
+      ),
     );
   }
 
@@ -791,12 +794,16 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                                   ),
                                   const SizedBox(width: 6),
                                 ],
-                                Text(
-                                  proximityLevel,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: proximityColor,
+                                Flexible(
+                                  child: Text(
+                                    proximityLevel,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: proximityColor,
+                                    ),
                                   ),
                                 ),
                                 // Show city when we have something to display —

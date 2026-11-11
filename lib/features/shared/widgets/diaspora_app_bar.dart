@@ -10,6 +10,7 @@ import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart'; // [NEW]
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW]
 import 'package:diaspora_nearby/features/notifications/providers/notification_count_provider.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 
 class DiasporaAppBar extends ConsumerStatefulWidget
     implements PreferredSizeWidget {
@@ -41,7 +42,7 @@ class DiasporaAppBar extends ConsumerStatefulWidget
   static void _defaultOnSearchClear() {}
 
   @override
-  Size get preferredSize => Size.fromHeight(showSearchField ? 128 : 64);
+  Size get preferredSize => Size.fromHeight(showSearchField ? 132 : 66);
 
   @override
   ConsumerState<DiasporaAppBar> createState() => _DiasporaAppBarState();
@@ -96,10 +97,11 @@ class _DiasporaAppBarState extends ConsumerState<DiasporaAppBar> {
       child: SafeArea(
         bottom: false,
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             // AppBar Section with Communities, Radio, More buttons
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
               child: Row(
                 children: [
                   // Logo (Interactive Toggle if Search Hidden)
@@ -129,6 +131,8 @@ class _DiasporaAppBarState extends ConsumerState<DiasporaAppBar> {
                   Expanded(
                     child: Text(
                       'Diaspora Nearby',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w600,
                         fontSize: 18,
@@ -184,7 +188,7 @@ class _DiasporaAppBarState extends ConsumerState<DiasporaAppBar> {
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
-                  vertical: 8,
+                  vertical: 6,
                 ),
                 child: GlassContainer(
                   borderRadius: BorderRadius.circular(
@@ -197,7 +201,12 @@ class _DiasporaAppBarState extends ConsumerState<DiasporaAppBar> {
                     autofocus: false, // [FIX] Disable auto-focus
                     onChanged: widget.onSearchChange,
                     decoration: InputDecoration(
-                      hintText: _getPlaceholder(isGlobalView),
+                      isDense: true,
+                      hintText: AppLocalizations.tr(
+                        ref,
+                        _getPlaceholder(isGlobalView),
+                      ),
+                      hintMaxLines: 1,
                       prefixIcon: const Icon(LucideIcons.search, size: 20),
                       suffixIcon: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -237,7 +246,7 @@ class _DiasporaAppBarState extends ConsumerState<DiasporaAppBar> {
                       focusedBorder: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 16,
-                        vertical: 12,
+                        vertical: 10,
                       ),
                     ),
                   ),

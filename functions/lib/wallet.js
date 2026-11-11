@@ -66,7 +66,7 @@ function getSmartWalletInfra() {
     "backendSignerKey",
     "rpcUrl",
   ]);
-  const provider = new ethers.JsonRpcProvider(cfg.rpcUrl);
+  const provider = new ethers.JsonRpcProvider(cfg.rpcUrl, 8453, { staticNetwork: true });
   const signer = new ethers.Wallet(cfg.backendSignerKey, provider);
   const factory = new ethers.Contract(cfg.walletFactoryAddress, WALLET_FACTORY_ABI, signer);
   return { provider, signer, factory };
@@ -308,6 +308,55 @@ exports.onCommunityWrite = functions
     }
   });
 
+// Fields written back to `users/{userId}` by server-side sync / wallet / referral jobs.
+// If ONLY these fields changed in an `onUserWrite` event, skip re-running
+// `syncProfileMilestoneAndTrust` to prevent recursive trigger loops.
+const SERVER_MANAGED_USER_FIELDS = new Set([
+  "trustScore",
+  "pohTokensTarget",
+  "pohTokensMintedOnChain",
+  "pohTokensPending",
+  "pohTokensUnlocked",
+  "tokenWelcomeBonusSent",
+  "tokenGenesisDistributionSent",
+  "tokenWelcomeBonusPending",
+  "tokenWelcomeBonusTx",
+  "tokenWelcomeBonusError",
+  "tokenWelcomeBonusErrorAt",
+  "walletGeneratedAt",
+  "walletType",
+  "walletPhoneHash",
+  "walletSaltVersion",
+  "walletDeploymentPending",
+  "walletDeploymentError",
+  "walletDeploymentErrorAt",
+  "walletDeploymentRetriedAt",
+  "referralCode",
+  "lastSeen",
+  "isOnline",
+  "fcmToken",
+  "fcmTokens",
+  "apnsToken",
+]);
+
+function shouldSyncMilestonesOnUserWrite(beforeData, afterData) {
+  if (!beforeData) return true; // document creation
+  const walletNewlyAssigned = !beforeData.walletAddress && Boolean(afterData.walletAddress);
+  if (walletNewlyAssigned) return true;
+
+  const allKeys = new Set([
+    ...Object.keys(beforeData),
+    ...Object.keys(afterData),
+  ]);
+  for (const key of allKeys) {
+    if (key === "walletAddress" || SERVER_MANAGED_USER_FIELDS.has(key)) continue;
+    if (JSON.stringify(beforeData[key]) !== JSON.stringify(afterData[key])) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // ── 2. Auto-create Smart Wallet & Sync City-Level Location for Users ──
 exports.onUserWrite = functions
   .runWith({ secrets: ["BACKEND_SIGNER_PRIVATE_KEY", "WALLET_ID_PEPPER"] })
@@ -316,6 +365,7 @@ exports.onUserWrite = functions
   .onWrite(async (change, context) => {
     if (!change.after.exists) return null;
 
+    const beforeData = change.before.exists ? (change.before.data() || {}) : null;
     const newData = change.after.data() || {};
     const userId = context.params.userId;
 
@@ -400,11 +450,12 @@ exports.onUserWrite = functions
     }
 
     // 2b. Evaluate Profile Completion Milestone (+10,000 DSP & +10 PCT), sync trust projections,
-    // and ensure the user's single signup referral code exists.
+    // and ensure the user's single signup referral code exists (skipping server-only self-writes).
     try {
       const { syncProfileMilestoneAndTrust, ensureUserReferralCode } = require("./dsp");
+      const shouldSync = shouldSyncMilestonesOnUserWrite(beforeData, newData);
       await Promise.all([
-        syncProfileMilestoneAndTrust(userId),
+        shouldSync ? syncProfileMilestoneAndTrust(userId) : Promise.resolve(null),
         newData.firstName && !newData.referralCode ?
           ensureUserReferralCode(userId, newData) :
           Promise.resolve(null),

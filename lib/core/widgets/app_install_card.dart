@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:diaspora_nearby/theme/app_theme.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 import 'package:diaspora_nearby/core/providers/theme_provider.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/core/services/pwa_install_service.dart';
@@ -178,16 +179,21 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
                 colors: [AppTheme.accent, AppTheme.accentDark],
               ),
             ),
-            child: const Row(
+            child: Row(
               children: [
-                Icon(LucideIcons.download, color: Colors.white, size: 18),
-                SizedBox(width: 8),
-                Text(
-                  'Get Diaspora Nearby on Your Device',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
+                const Icon(LucideIcons.download, color: Colors.white, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    AppLocalizations.tr(
+                      ref,
+                      'Get Diaspora Nearby on Your Device',
+                    ),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
                   ),
                 ),
               ],
@@ -270,10 +276,19 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
 
   Widget _buildTesterSection(ThemeData theme) {
     final platformHint = _isIOS
-        ? 'Get early access to the iOS app via TestFlight'
+        ? AppLocalizations.tr(
+            ref,
+            'Get early access to the iOS app via TestFlight',
+          )
         : _detectedPlatform == 'android'
-        ? 'Get early access to the Android app via Google Play'
-        : 'Get early access to the native app before public launch';
+        ? AppLocalizations.tr(
+            ref,
+            'Get early access to the Android app via Google Play',
+          )
+        : AppLocalizations.tr(
+            ref,
+            'Get early access to the native app before public launch',
+          );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -286,12 +301,14 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
               color: Colors.deepPurple,
             ),
             const SizedBox(width: 6),
-            Text(
-              'Become a Native App Tester',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-                color: theme.colorScheme.onSurface,
+            Expanded(
+              child: Text(
+                AppLocalizations.tr(ref, 'Become a Native App Tester'),
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                  color: theme.colorScheme.onSurface,
+                ),
               ),
             ),
           ],
@@ -316,9 +333,12 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
                 ),
               ),
               icon: const Icon(LucideIcons.externalLink, size: 14),
-              label: const Text(
-                'Open in TestFlight (No Code Needed)',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              label: Text(
+                AppLocalizations.tr(ref, 'Open in TestFlight (No Code Needed)'),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
               ),
               onPressed: _openTestFlight,
             ),
@@ -331,14 +351,21 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
               color: AppTheme.accent.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Row(
+            child: Row(
               children: [
-                Icon(LucideIcons.checkCircle, size: 18, color: AppTheme.accent),
-                SizedBox(width: 8),
+                const Icon(
+                  LucideIcons.checkCircle,
+                  size: 18,
+                  color: AppTheme.accent,
+                ),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'You\'re signed up as a tester! We\'ll email your invite soon.',
-                    style: TextStyle(
+                    AppLocalizations.tr(
+                      ref,
+                      'You\'re signed up as a tester! We\'ll email your invite soon.',
+                    ),
+                    style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
                       color: AppTheme.accent,
@@ -373,7 +400,9 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
                 borderRadius: BorderRadius.circular(10),
                 borderSide: BorderSide.none,
               ),
-              errorText: _showEmailError ? 'Please enter a valid email' : null,
+              errorText: _showEmailError
+                  ? AppLocalizations.tr(ref, 'Please enter a valid email')
+                  : null,
               errorStyle: const TextStyle(fontSize: 11),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 12,
@@ -406,7 +435,10 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
                     )
                   : const Icon(LucideIcons.download, size: 14),
               label: Text(
-                _submitting ? 'Setting Up...' : 'Install PWA & Sign Me Up',
+                AppLocalizations.tr(
+                  ref,
+                  _submitting ? 'Setting Up...' : 'Install PWA & Sign Me Up',
+                ),
                 style: const TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 13,

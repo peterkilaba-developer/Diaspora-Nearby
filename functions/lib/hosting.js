@@ -319,7 +319,7 @@ exports.updateHostingSessionState = functions.https.onCall(async (data, context)
     if (session.status !== "confirmed") {
       throw new functions.https.HttpsError("failed-precondition", "Only an unstarted stay can be cancelled.");
     }
-    transaction.update(sessionRef, {status: "cancelled", updatedAt: now});
+    transaction.update(sessionRef, {status: "cancelled", cancelledBy: uid, updatedAt: now});
     transaction.update(requestRef, {
       status: "pending",
       matchedHostId: null,

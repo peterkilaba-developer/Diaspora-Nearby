@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:diaspora_nearby/features/events/widgets/event_venue_card.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/core/utils/location_utils.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 
 class EventCard extends ConsumerWidget {
   final Event event;
@@ -261,28 +262,33 @@ class EventCard extends ConsumerWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primary.withValues(
-                                alpha: 0.1,
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
                               ),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              event.category.toUpperCase(),
-                              style: TextStyle(
-                                color: theme.colorScheme.primary,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.5,
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.primary.withValues(
+                                  alpha: 0.1,
+                                ),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                event.category.toUpperCase(),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: theme.colorScheme.primary,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.5,
+                                ),
                               ),
                             ),
                           ),
-                          _buildStatusBadge(context),
+                          const SizedBox(width: 8),
+                          Flexible(child: _buildStatusBadge(context)),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -290,14 +296,16 @@ class EventCard extends ConsumerWidget {
                       // Title
                       Padding(
                         padding: const EdgeInsets.only(left: 8),
-                        child: SearchHighlightUtils.highlightText(
-                          event.title,
-                          searchQuery,
-                          theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -0.5,
+                        child: NoTranslate(
+                          child: SearchHighlightUtils.highlightText(
+                            event.title,
+                            searchQuery,
+                            theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.5,
+                            ),
+                            context,
                           ),
-                          context,
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -319,13 +327,17 @@ class EventCard extends ConsumerWidget {
                               ),
                             ),
                             const SizedBox(width: 6),
-                            Text(
-                              '${event.attendeeCount ?? event.attendees?.length ?? 0}${event.maxAttendees != null ? " / ${event.maxAttendees}" : ""} going \u2022 ${event.interested?.length ?? 0} interested',
-                              style: theme.textTheme.labelMedium?.copyWith(
-                                color: theme.colorScheme.onSurface.withValues(
-                                  alpha: 0.6,
+                            Flexible(
+                              child: Text(
+                                '${event.attendeeCount ?? event.attendees?.length ?? 0}${event.maxAttendees != null ? " / ${event.maxAttendees}" : ""} going \u2022 ${event.interested?.length ?? 0} interested',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: theme.colorScheme.onSurface.withValues(
+                                    alpha: 0.6,
+                                  ),
+                                  fontWeight: FontWeight.w500,
                                 ),
-                                fontWeight: FontWeight.w500,
                               ),
                             ),
                           ],

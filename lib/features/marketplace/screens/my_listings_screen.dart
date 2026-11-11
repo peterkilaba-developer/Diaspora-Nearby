@@ -219,18 +219,22 @@ class MyListingsScreen extends ConsumerWidget {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: SizedBox(
-                height: 118,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 118),
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Top row: status chip
                     Row(
                       children: [
-                        _buildStatusChip(
-                          listing.status,
-                          listing.listingType,
-                          isDark,
+                        Flexible(
+                          child: _buildStatusChip(
+                            listing.status,
+                            listing.listingType,
+                            isDark,
+                          ),
                         ),
                       ],
                     ),
@@ -246,7 +250,7 @@ class MyListingsScreen extends ConsumerWidget {
                         height: 1.3,
                       ),
                     ),
-                    const Spacer(),
+                    const SizedBox(height: 4),
                     LocalPriceRow(
                       listing: listing,
                       viewerCountryCode: ref
@@ -254,7 +258,7 @@ class MyListingsScreen extends ConsumerWidget {
                           .value
                           ?.hostCountryCode,
                     ),
-                    const Spacer(),
+                    const SizedBox(height: 4),
                     QuickSpecs(listing: listing),
                     const SizedBox(height: 4),
                     MarketplaceCardFooter(listing: listing, showStats: true),

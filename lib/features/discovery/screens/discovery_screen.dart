@@ -13,6 +13,7 @@ import 'package:diaspora_nearby/features/chat/screens/chats_list_screen.dart';
 import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 
 // Providers
 
@@ -88,14 +89,20 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                   color: Theme.of(context).colorScheme.primary,
                 ),
                 const SizedBox(height: 16),
-                const Text(
-                  'All Nearby Members Connected',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                Text(
+                  AppLocalizations.tr(ref, 'All Nearby Members Connected'),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'You are already in active chats with all nearby community members in your area.',
+                  AppLocalizations.tr(
+                    ref,
+                    'You are already in active chats with all nearby community members in your area.',
+                  ),
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Theme.of(context).hintColor),
                 ),
@@ -104,7 +111,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                   style: OutlinedButton.styleFrom(side: BorderSide.none),
                   onPressed: () => context.go('/chats'),
                   icon: const Icon(LucideIcons.messageSquare, size: 18),
-                  label: const Text('View Active Chats'),
+                  label: Text(AppLocalizations.tr(ref, 'View Active Chats')),
                 ),
               ],
             ),
@@ -125,7 +132,10 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
               ),
               const SizedBox(height: 16),
               Text(
-                'There are no other community members from $homeCountry nearby',
+                AppLocalizations.tr(
+                  ref,
+                  'There are no other community members from $homeCountry nearby',
+                ),
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 15),
               ),
@@ -135,7 +145,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                   ref.invalidate(nearbyUsersStreamProvider);
                 },
                 icon: const Icon(LucideIcons.refreshCw, size: 16),
-                label: const Text('Refresh Location'),
+                label: Text(AppLocalizations.tr(ref, 'Refresh Location')),
               ),
             ],
           ),

@@ -90,6 +90,7 @@ class TrustService {
 
   static final Map<String, String?> _verificationEligibilityCache = {};
   static final Map<String, Set<String>> _verifiedFieldsCache = {};
+  static final Map<String, Future<void>> _inFlightMilestoneSyncs = {};
 
   bool hasCachedVerificationEligibility(String fromUserId, String toUserId) =>
       _verificationEligibilityCache.containsKey('${fromUserId}_$toUserId');
@@ -152,14 +153,18 @@ class TrustService {
     return trustData?.trustScore ?? 0.0;
   }
 
-  /// Helper to fetch data and recalculate
+  /// Helper to fetch data and recalculate (coalesced per userId)
   Future<void> updateTrustForUser(String userId) async {
     // Recalculation used to fan out across relationships, ratings, chats,
     // verifications, and communities before attempting writes denied by the
     // production rules. Refresh the server-authored projection instead.
     if (FirebaseAuth.instance.currentUser?.uid == userId) {
-      unawaited(
-        FirebaseFunctions.instance
+      final existing = _inFlightMilestoneSyncs[userId];
+      if (existing != null) {
+        unawaited(existing);
+      } else {
+        late final Future<void> syncFuture;
+        syncFuture = FirebaseFunctions.instance
             .httpsCallable('evaluateProfileMilestone')
             .call<Map<String, dynamic>>({'userId': userId})
             .then((_) {
@@ -168,8 +173,15 @@ class TrustService {
             })
             .catchError((Object e) {
               debugPrint('evaluateProfileMilestone sync note: $e');
-            }),
-      );
+            })
+            .whenComplete(() {
+              if (identical(_inFlightMilestoneSyncs[userId], syncFuture)) {
+                _inFlightMilestoneSyncs.remove(userId);
+              }
+            });
+        _inFlightMilestoneSyncs[userId] = syncFuture;
+        unawaited(syncFuture);
+      }
     }
     _ref.invalidate(userTrustProvider(userId));
     _ref.invalidate(userPointsProvider(userId));

@@ -14,6 +14,7 @@ import 'package:diaspora_nearby/config/app_environment.dart';
 import 'package:diaspora_nearby/config/environment_firebase_options.dart';
 import 'package:diaspora_nearby/features/notifications/services/push_notification_service.dart';
 import 'package:diaspora_nearby/features/shared/screens/splash_screen.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 import 'package:diaspora_nearby/core/providers/locale_provider.dart';
 import 'package:diaspora_nearby/core/providers/theme_provider.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
@@ -401,6 +402,7 @@ class _MyAppState extends ConsumerState<MyApp> {
   Widget build(BuildContext context) {
     final themeMode = ref.watch(themeProvider);
     final currentLang = ref.watch(currentWorldLanguageProvider);
+    final revision = ref.watch(translationRevisionProvider);
     final router = ref.watch(routerProvider);
 
     return MaterialApp.router(
@@ -411,13 +413,17 @@ class _MyAppState extends ConsumerState<MyApp> {
       themeMode: themeMode,
       routerConfig: router,
       builder: (context, child) {
-        final app = Directionality(
-          textDirection: currentLang.isRtl
-              ? TextDirection.rtl
-              : TextDirection.ltr,
-          child: ConfettiOverlay(
-            key: confettiOverlayKey,
-            child: child ?? const SizedBox(),
+        final app = GlobalTranslationScope(
+          langCode: currentLang.code,
+          revision: revision,
+          child: Directionality(
+            textDirection: currentLang.isRtl
+                ? TextDirection.rtl
+                : TextDirection.ltr,
+            child: ConfettiOverlay(
+              key: confettiOverlayKey,
+              child: child ?? const SizedBox(),
+            ),
           ),
         );
         if (AppEnvironmentConfig.isProduction) {

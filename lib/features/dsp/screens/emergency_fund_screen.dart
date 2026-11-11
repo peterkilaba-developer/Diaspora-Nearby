@@ -24,6 +24,7 @@ import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:diaspora_nearby/features/dsp/services/smart_wallet_service.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 
 final _emergencyFundEligibilityProvider =
     FutureProvider.family<EligibilityResult, String>((ref, userId) {
@@ -104,16 +105,16 @@ class _EmergencyFundScreenState extends ConsumerState<EmergencyFundScreen>
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
           SliverAppBar(
-            title: const Text('Ubuntu Emergency Fund'),
+            title: Text(AppLocalizations.tr(ref, 'Ubuntu Emergency Fund')),
             centerTitle: true,
             pinned: true,
             floating: true,
             bottom: TabBar(
               controller: _tabController,
-              tabs: const [
-                Tab(text: 'Overview'),
-                Tab(text: 'Membership'),
-                Tab(text: 'Support'),
+              tabs: [
+                Tab(text: AppLocalizations.tr(ref, 'Overview')),
+                Tab(text: AppLocalizations.tr(ref, 'Membership')),
+                Tab(text: AppLocalizations.tr(ref, 'Support')),
               ],
             ),
           ),
@@ -347,6 +348,8 @@ class _OverviewTab extends StatelessWidget {
         children: [
           Text(
             value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: Theme.of(context).colorScheme.onSurface,
               fontWeight: FontWeight.bold,
@@ -355,6 +358,7 @@ class _OverviewTab extends StatelessWidget {
           ),
           Text(
             label,
+            maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: Theme.of(
@@ -386,9 +390,13 @@ class _OverviewTab extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Text(
-            title,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+            ),
           ),
         ],
       ),
@@ -913,20 +921,29 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
           color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
         ),
         const SizedBox(width: 10),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+        Expanded(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 13,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
           ),
         ),
-        const Spacer(),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: theme.colorScheme.onSurface,
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.end,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.onSurface,
+            ),
           ),
         ),
       ],
@@ -1315,7 +1332,7 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
         crossAxisCount: 2,
         mainAxisSpacing: 12,
         crossAxisSpacing: 10,
-        childAspectRatio: 1.4,
+        childAspectRatio: 1.18,
       ),
       itemCount: types.length,
       itemBuilder: (context, index) {
@@ -1393,7 +1410,11 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                               value: 'submit',
                               child: ListTile(
                                 leading: Icon(LucideIcons.send),
-                                title: Text('Submit Request'),
+                                title: Text(
+                                  'Submit Request',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                                 dense: true,
                                 contentPadding: EdgeInsets.zero,
                               ),
@@ -1406,6 +1427,8 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                   const SizedBox(height: 8),
                   Text(
                     st.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -1413,11 +1436,15 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                     ),
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    st.subtitle,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.8),
-                      fontSize: 11,
+                  Flexible(
+                    child: Text(
+                      st.subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.8),
+                        fontSize: 11,
+                      ),
                     ),
                   ),
                 ],

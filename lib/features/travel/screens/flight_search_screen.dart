@@ -14,6 +14,7 @@ import 'package:diaspora_nearby/features/travel/services/amadeus_service.dart';
 import 'package:diaspora_nearby/features/travel/screens/flight_detail_screen.dart';
 import 'package:diaspora_nearby/features/travel/widgets/smart_date_picker.dart';
 import 'package:diaspora_nearby/features/travel/widgets/travel_skeleton_loader.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 import 'package:intl/intl.dart';
 
 class FlightSearchScreen extends ConsumerStatefulWidget {
@@ -1033,7 +1034,7 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
         resizeToAvoidBottomInset: false,
         appBar: AppBar(
           titleSpacing: 0,
-          title: const Text('Flight Search'),
+          title: Text(AppLocalizations.tr(ref, 'Flight Search')),
           elevation: 0,
           backgroundColor: Colors.transparent,
           actions: const [TravelManagementMenu(category: 'Flight')],
@@ -1060,7 +1061,7 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
           resizeToAvoidBottomInset: false,
           appBar: AppBar(
             titleSpacing: 0,
-            title: const Text('Flight Search'),
+            title: Text(AppLocalizations.tr(ref, 'Flight Search')),
             elevation: 0,
             backgroundColor: Colors.transparent,
             actions: [
@@ -1087,7 +1088,7 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
         resizeToAvoidBottomInset: false,
         appBar: AppBar(
           titleSpacing: 0,
-          title: const Text('Flight Search'),
+          title: Text(AppLocalizations.tr(ref, 'Flight Search')),
           elevation: 0,
           backgroundColor: Colors.transparent,
           actions: [
@@ -1132,7 +1133,7 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
         resizeToAvoidBottomInset: false,
         appBar: AppBar(
           titleSpacing: 0,
-          title: const Text('Flight Search'),
+          title: Text(AppLocalizations.tr(ref, 'Flight Search')),
           elevation: 0,
           backgroundColor: Colors.transparent,
           actions: [

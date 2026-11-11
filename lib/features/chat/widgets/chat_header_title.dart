@@ -10,6 +10,7 @@ import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:diaspora_nearby/features/chat/models/chat.dart';
 import 'package:diaspora_nearby/config/env.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 
 class ChatHeaderTitle extends StatefulWidget {
   final ProfileData? profile;
@@ -395,15 +396,29 @@ class _ChatHeaderTitleState extends State<ChatHeaderTitle> {
                       const SizedBox(width: 6),
                     ],
                     Flexible(
-                      child: material.Text(
-                        fullName,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                          height: 1.1,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      child:
+                          (widget.profile != null &&
+                              fullName != 'Diaspora AI Agent')
+                          ? NoTranslate(
+                              child: material.Text(
+                                fullName,
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                  height: 1.1,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            )
+                          : material.Text(
+                              fullName,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 16,
+                                height: 1.1,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                     ),
                   ],
                 ),
@@ -460,12 +475,16 @@ class _ChatHeaderTitleState extends State<ChatHeaderTitle> {
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
                       const SizedBox(width: 4),
-                      material.Text(
-                        '${widget.memberCount} ${widget.memberLabel}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                          fontSize: 12,
-                          height: 1.1,
+                      Flexible(
+                        child: material.Text(
+                          '${widget.memberCount} ${widget.memberLabel}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontSize: 12,
+                            height: 1.1,
+                          ),
                         ),
                       ),
                     ],

@@ -206,51 +206,38 @@ function buildAiAgentWelcomeText(profile = {}) {
     "";
 
   return `${greeting}${namePart}!\n\n` +
-    `I am **Diaspora AI Agent**, your 24/7 personal concierge on Diaspora Nearby${corridorNote}.\n\n` +
-    `**Any Language**: Speak to me in English, Kiswahili, Français, العربية, Español, 中文, हिन्दी, Yoruba, Igbo, Hausa, Amharic, or any language you prefer.\n\n` +
-    `Here is what I can do for you right here in chat:\n` +
-    `• **Flights, Hotels & Car Rentals**: Search live flights, hotels, stays & peer car rentals or list your own car/stay.\n` +
-    `• **Jobs & Marketplace**: Find jobs, products, services & real estate — or tell me the details and I'll generate an instant **Publish** button right in chat.\n` +
-    `• **Diaspora Utilities**: Ask me anything about Nearby Discovery, Live Homeland Radio, Ubuntu Emergency Fund, DDI Loans, or $DIASPORA.\n\n` +
-    `What can I help you find or post today?`;
+    `I am **Diaspora AI Agent**, your 24/7 personal concierge on Diaspora Nearby${corridorNote}. Speak or write to me in **any language** — I have full access to platform information and can complete tasks directly for you right here in chat.\n\n` +
+    `**Your Proof of Humanity (PoH) & $DIASPORA Rewards**:\n` +
+    `• **Proof of Humanity (PoH)**: Earn up to **70,000 $DIASPORA** across 7 PoH pillars, where your earned DSP converts immediately at **100% 1:1 efficiency** into on-chain **$DIASPORA** tokens in your smart wallet.\n` +
+    `• **Fill Your 12 Profile Fields (+10,000 DSP -> 10,000 $DIASPORA Immediately)**: Completing your **12 profile fields** earns **1,000 DSP per field** — your first **10,000 DSP is immediately converted 1:1 into 10,000 $DIASPORA tokens** right away (plus +2,000 DSP bonus on fields 11 and 12). **Want me to help fill out all 12 fields for you right here in chat?** Just reply or tap the button below and we will complete them together in minutes!\n` +
+    `• **QR EXCHANGE to Unlock Your Tokens (Crucial)**: Complete **10 in-person QR Exchanges** with fellow diaspora members to earn another **+10,000 $DIASPORA** (+1,000 per scan) **AND unlock all your minted $DIASPORA tokens** in your wallet for peer transfers and Token Distribution Events.\n\n` +
+    `**Everything Else I Can Do For You**:\n` +
+    `• Search live **Flights, Hotels, Stays & Car Rentals**, find or publish **Jobs, Marketplace & Real Estate** listings, connect with **Nearby Compatriots**, stream **Live Homeland Radio**, or access the **Ubuntu Emergency Fund & DDI Loans**.\n\n` +
+    `Would you like me to help fill out your 12 profile fields now to claim your **10,000 $DIASPORA**, or what task can I complete for you today?`;
 }
 
 function buildWelcomeAiActions() {
   return [
     {
-      id: "welcome_flights",
-      type: "navigate",
-      label: "Search Flights",
-      route: "/dsp/travel/flights",
-      icon: "flight",
-    },
-    {
-      id: "welcome_hotels",
-      type: "navigate",
-      label: "Find Hotels",
-      route: "/dsp/travel/hotels",
-      icon: "hotel",
-    },
-    {
-      id: "welcome_cars",
-      type: "navigate",
-      label: "Car Rentals",
-      route: "/dsp/travel/car-rental",
-      icon: "car",
-    },
-    {
-      id: "welcome_jobs",
-      type: "navigate",
-      label: "Browse Jobs",
-      route: "/marketplace?type=job",
-      icon: "briefcase",
-    },
-    {
-      id: "welcome_post_job",
+      id: "welcome_fill_12_fields",
       type: "prompt",
-      label: "Post a Job in Chat",
-      prompt: "I want to post a job listing.",
-      icon: "plus",
+      label: "Fill My 12 Profile Fields (+10,000 $DIASPORA)",
+      prompt: "Help me fill out my 12 profile fields right here in chat so I can earn my 10,000 DSP immediately converted to $DIASPORA tokens.",
+      icon: "sparkles",
+    },
+    {
+      id: "welcome_qr_exchange",
+      type: "navigate",
+      label: "Open QR Exchange (Unlock $DIASPORA)",
+      route: "/profile?showQr=true",
+      icon: "check",
+    },
+    {
+      id: "welcome_poh_hub",
+      type: "navigate",
+      label: "PoH & $DIASPORA Hub",
+      route: "/dsp/points",
+      icon: "wallet",
     },
     {
       id: "welcome_nearby",
@@ -258,6 +245,20 @@ function buildWelcomeAiActions() {
       label: "Explore Nearby",
       route: "/nearby",
       icon: "compass",
+    },
+    {
+      id: "welcome_flights",
+      type: "navigate",
+      label: "Flights & Hotels",
+      route: "/dsp/travel/flights",
+      icon: "flight",
+    },
+    {
+      id: "welcome_jobs",
+      type: "navigate",
+      label: "Jobs & Marketplace",
+      route: "/marketplace",
+      icon: "briefcase",
     },
   ];
 }
@@ -2799,16 +2800,41 @@ async function executeHostingRequestTool(args = {}, userProfile = {}) {
   };
 }
 
+function _extractLatLng(profileObj = {}) {
+  const curr = profileObj?.currentLocation?.geometry?.location;
+  if (curr && Number.isFinite(Number(curr.lat)) && Number.isFinite(Number(curr.lng))) {
+    return {lat: Number(curr.lat), lng: Number(curr.lng)};
+  }
+  const host = profileObj?.hostLocation?.geometry?.location;
+  if (host && Number.isFinite(Number(host.lat)) && Number.isFinite(Number(host.lng))) {
+    return {lat: Number(host.lat), lng: Number(host.lng)};
+  }
+  return null;
+}
+
+function _haversineKm(a, b) {
+  if (!a || !b) return null;
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const sinLat = Math.sin(dLat / 2);
+  const sinLng = Math.sin(dLng / 2);
+  const h = sinLat * sinLat + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * sinLng * sinLng;
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h)) * 10) / 10;
+}
+
 async function executeSearchCompatriotsAndMembersTool(args = {}, userProfile = {}) {
   const uid = String(userProfile.uid || "").trim();
   const queryText = String(args.query || args.name || args.profession || "").trim().toLowerCase();
   const cityFilter = String(args.city || "").trim().toLowerCase();
   const countryFilter = String(args.homeCountry || "").trim().toLowerCase();
+  const callerCoords = _extractLatLng(userProfile);
 
-  const snap = await db.collection("users").limit(80).get();
+  const snap = await db.collection("users").limit(200).get();
   let members = snap.docs
       .map((d) => ({uid: d.id, ...d.data()}))
-      .filter((u) => u.uid !== uid && u.uid !== DIASPORA_AI_AGENT_UID && u.isDiscoverable !== false);
+      .filter((u) => u.uid !== uid && u.uid !== DIASPORA_AI_AGENT_UID && !u.isAiAgent && u.isDiscoverable !== false && !u.isBanned);
 
   if (countryFilter) {
     const byCountry = members.filter((u) =>
@@ -2817,9 +2843,14 @@ async function executeSearchCompatriotsAndMembersTool(args = {}, userProfile = {
     if (byCountry.length > 0) members = byCountry;
   }
   if (cityFilter) {
-    const byCity = members.filter((u) =>
-      String(u.hostCity || u.currentCity || u.homeCity || u.hostLocation?.city || "").toLowerCase().includes(cityFilter),
-    );
+    const byCity = members.filter((u) => {
+      const visibleCurrentCity = u.showCurrentLocationName !== false ?
+        (u.currentCity || u.currentLocation?.city || "") :
+        "";
+      return String(u.hostCity || visibleCurrentCity || u.homeCity || u.hostLocation?.city || "")
+          .toLowerCase()
+          .includes(cityFilter);
+    });
     if (byCity.length > 0) members = byCity;
   }
   if (queryText) {
@@ -2831,20 +2862,40 @@ async function executeSearchCompatriotsAndMembersTool(args = {}, userProfile = {
         u.occupation,
         u.bio,
         ...(Array.isArray(u.profession) ? u.profession : []),
+        ...(Array.isArray(u.industry) ? u.industry : []),
         ...(Array.isArray(u.servicesOffered) ? u.servicesOffered : []),
+        ...(Array.isArray(u.interests) ? u.interests : []),
       ].filter(Boolean).join(" ").toLowerCase();
       return hay.includes(queryText);
     });
     if (byQuery.length > 0) members = byQuery;
   }
 
-  const top = members.slice(0, 5).map((u) => ({
-    uid: u.uid,
-    fullName: u.fullName || `${u.firstName || ""} ${u.lastName || ""}`.trim() || "Diaspora Member",
-    occupation: u.occupation || (Array.isArray(u.profession) ? u.profession[0] : "") || "",
-    homeCountry: u.homeCountry || u.homeLocation?.country || "",
-    currentCity: u.hostCity || u.currentCity || u.hostLocation?.city || "",
-  }));
+  const enriched = members.map((u) => {
+    const memberCoords = u.showCurrentLocationName !== false ? _extractLatLng(u) : null;
+    const distanceKm = (callerCoords && memberCoords) ? _haversineKm(callerCoords, memberCoords) : null;
+    const visibleCity = u.showCurrentLocationName !== false ?
+      (u.currentCity || u.currentLocation?.city || u.hostCity || u.hostLocation?.city || "") :
+      (u.hostCity || u.hostLocation?.city || "");
+    return {
+      uid: u.uid,
+      fullName: u.fullName || `${u.firstName || ""} ${u.lastName || ""}`.trim() || "Diaspora Member",
+      occupation: u.occupation || (Array.isArray(u.profession) ? u.profession[0] : "") || "",
+      homeCountry: u.homeCountry || u.homeLocation?.country || "",
+      currentCity: visibleCity,
+      ...(distanceKm !== null ? {distanceKm} : {}),
+    };
+  });
+
+  if (callerCoords) {
+    enriched.sort((a, b) => {
+      const da = typeof a.distanceKm === "number" ? a.distanceKm : Number.POSITIVE_INFINITY;
+      const dbDist = typeof b.distanceKm === "number" ? b.distanceKm : Number.POSITIVE_INFINITY;
+      return da - dbDist;
+    });
+  }
+
+  const top = enriched.slice(0, 6);
 
   const actions = [];
   if (top.length > 0) {
@@ -3062,47 +3113,213 @@ async function executeJoinOrCreateGroupOrChamberTool(args = {}, userProfile = {}
   };
 }
 
+const AI_PROFILE_MILESTONE_FIELDS = [
+  {key: "bio", label: "Bio"},
+  {key: "occupation", label: "Occupation"},
+  {key: "yearsInHostCountry", label: "Years in Host Country"},
+  {key: "industry", label: "Industry"},
+  {key: "profession", label: "Profession"},
+  {key: "languages", label: "Languages"},
+  {key: "meetingPreferences", label: "Meeting Preferences"},
+  {key: "availability", label: "Availability"},
+  {key: "interests", label: "Interests"},
+  {key: "servicesOffered", label: "Services Offered"},
+  {key: "lookingFor", label: "Looking For"},
+  {key: "education", label: "Education"},
+];
+
+function inspectProfileMilestones(userData = {}) {
+  const completedFields = [];
+  const missingFields = [];
+  for (const field of AI_PROFILE_MILESTONE_FIELDS) {
+    const val = userData ? userData[field.key] : undefined;
+    let isFilled = false;
+    if (Array.isArray(val)) {
+      isFilled = val.length > 0;
+    } else if (typeof val === "string") {
+      isFilled = val.trim().length > 0;
+    } else if (val != null) {
+      isFilled = true;
+    }
+    if (isFilled) {
+      completedFields.push(field.label);
+    } else {
+      missingFields.push(field.label);
+    }
+  }
+  return {
+    completedCount: completedFields.length,
+    totalCount: AI_PROFILE_MILESTONE_FIELDS.length,
+    completedFields,
+    missingFields,
+  };
+}
+
+function _normalizeStringListArg(val) {
+  if (Array.isArray(val)) {
+    return val.map((s) => String(s || "").trim()).filter(Boolean);
+  }
+  if (typeof val === "string" && val.trim().length > 0) {
+    return val.split(/[,;/|]+/).map((s) => s.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function _normalizeEducationArg(val) {
+  if (!val) return [];
+  const items = Array.isArray(val) ? val : [val];
+  const normalized = [];
+  for (const item of items) {
+    if (item && typeof item === "object" && !Array.isArray(item)) {
+      const institution = String(item.institution || item.school || item.university || "").trim();
+      const degree = String(item.degree || item.program || item.qualification || "Degree / Diploma").trim();
+      const graduationYear = String(item.graduationYear || item.year || "Completed").trim();
+      if (institution) {
+        normalized.push({institution, degree, graduationYear});
+      }
+    } else if (typeof item === "string" && item.trim().length > 0) {
+      const raw = item.trim();
+      const yearMatch = raw.match(/\b(19\d{2}|20\d{2})\b/);
+      const graduationYear = yearMatch ? yearMatch[1] : "Completed";
+      const parts = raw.replace(/\(\s*(19\d{2}|20\d{2})\s*\)/, "").split(/\s*[-–—|@]\s*/).filter(Boolean);
+      const institution = (parts[0] || raw).trim();
+      const degree = (parts[1] || "Degree / Studies").trim();
+      normalized.push({institution, degree, graduationYear});
+    }
+  }
+  return normalized;
+}
+
 async function executeUpdateMyProfileTool(args = {}, userProfile = {}) {
   const uid = String(userProfile.uid || "").trim();
   if (!uid) return {error: "User authentication required."};
 
+  const prevInspection = inspectProfileMilestones(userProfile);
   const updates = {};
-  if (args.bio) updates.bio = String(args.bio).trim().slice(0, 600);
-  if (args.occupation) updates.occupation = String(args.occupation).trim().slice(0, 120);
-  if (args.yearsInHostCountry) updates.yearsInHostCountry = String(args.yearsInHostCountry).trim();
-  if (Array.isArray(args.languages) && args.languages.length > 0) {
-    updates.languages = args.languages.map((s) => String(s).trim()).filter(Boolean);
+
+  if (typeof args.bio === "string" && args.bio.trim()) {
+    updates.bio = args.bio.trim().slice(0, 600);
   }
-  if (Array.isArray(args.interests) && args.interests.length > 0) {
-    updates.interests = args.interests.map((s) => String(s).trim()).filter(Boolean);
+  if (typeof args.occupation === "string" && args.occupation.trim()) {
+    updates.occupation = args.occupation.trim().slice(0, 120);
   }
-  if (Array.isArray(args.servicesOffered) && args.servicesOffered.length > 0) {
-    updates.servicesOffered = args.servicesOffered.map((s) => String(s).trim()).filter(Boolean);
+  if (args.yearsInHostCountry != null && String(args.yearsInHostCountry).trim()) {
+    updates.yearsInHostCountry = String(args.yearsInHostCountry).trim().slice(0, 60);
   }
-  if (Array.isArray(args.lookingFor) && args.lookingFor.length > 0) {
-    updates.lookingFor = args.lookingFor.map((s) => String(s).trim()).filter(Boolean);
+
+  const listFieldKeys = [
+    "industry",
+    "profession",
+    "languages",
+    "meetingPreferences",
+    "availability",
+    "interests",
+    "servicesOffered",
+    "lookingFor",
+  ];
+  for (const key of listFieldKeys) {
+    const arr = _normalizeStringListArg(args[key]);
+    if (arr.length > 0) {
+      updates[key] = arr;
+    }
+  }
+
+  const eduList = _normalizeEducationArg(args.education);
+  if (eduList.length > 0) {
+    updates.education = eduList;
+  }
+
+  if (args.socialLinks && typeof args.socialLinks === "object") {
+    const existingSocial = (userProfile.socialLinks && typeof userProfile.socialLinks === "object") ?
+      userProfile.socialLinks :
+      {};
+    const nextSocial = {...existingSocial};
+    for (const k of ["linkedin", "instagram", "twitter", "facebook"]) {
+      if (typeof args.socialLinks[k] === "string" && args.socialLinks[k].trim()) {
+        nextSocial[k] = args.socialLinks[k].trim();
+      }
+    }
+    if (Object.keys(nextSocial).length > 0) {
+      updates.socialLinks = nextSocial;
+    }
   }
 
   if (Object.keys(updates).length === 0) {
     return {
       success: false,
-      message: "Provide at least one profile field to update (bio, occupation, languages, interests, servicesOffered, lookingFor).",
+      completedFields: prevInspection.completedCount,
+      totalFields: prevInspection.totalCount,
+      missingFields: prevInspection.missingFields,
+      message:
+        "Provide at least one profile field to update (any of the 12 milestone fields: bio, occupation, yearsInHostCountry, industry, profession, languages, meetingPreferences, availability, interests, servicesOffered, lookingFor, education).",
     };
   }
 
+  const updatedFieldKeys = Object.keys(updates);
   updates.updatedAt = admin.firestore.FieldValue.serverTimestamp();
   await db.collection("users").doc(uid).set(updates, {merge: true});
 
+  // Update in-memory userProfile so chained tool calls in the same turn see the latest values
+  for (const k of updatedFieldKeys) {
+    userProfile[k] = updates[k];
+  }
+
+  // If BACKEND_SIGNER_PRIVATE_KEY is mounted in this runtime, evaluate & mint synchronously;
+  // otherwise onUserWrite (which always mounts BACKEND_SIGNER_PRIVATE_KEY) triggers immediately
+  // in the background to mint $DIASPORA on-chain and post the conversion card!
+  if (process.env.BACKEND_SIGNER_PRIVATE_KEY) {
+    try {
+      const {syncProfileMilestoneAndTrust} = require("./dsp");
+      await syncProfileMilestoneAndTrust(uid);
+    } catch (syncErr) {
+      console.warn(`[AI Agent] syncProfileMilestoneAndTrust warning after profile update for ${uid}:`, syncErr.message);
+    }
+  }
+
+  const nextInspection = inspectProfileMilestones(userProfile);
+  const newlyCompletedCount = Math.max(0, nextInspection.completedCount - prevInspection.completedCount);
+  const newlyAwardedDsp = newlyCompletedCount * 1000;
+  const newlyConvertedDiaspora = Math.max(
+      0,
+      Math.min(10, nextInspection.completedCount) - Math.min(10, prevInspection.completedCount),
+  ) * 1000;
+  const fieldsLeftFor10k = Math.max(0, 10 - nextInspection.completedCount);
+
   return {
     success: true,
-    updatedFields: Object.keys(updates).filter((k) => k !== "updatedAt"),
-    aiAction: {
-      id: `view_my_profile_${Date.now()}`,
-      type: "navigate",
-      label: "View My Profile",
-      route: `/profile/${uid}`,
-      icon: "users",
-    },
+    updatedFields: updatedFieldKeys,
+    completedFields: nextInspection.completedCount,
+    totalFields: nextInspection.totalCount,
+    completedFieldNames: nextInspection.completedFields,
+    missingFieldNames: nextInspection.missingFields,
+    newlyAwardedDsp,
+    newlyConvertedDiaspora,
+    remainingImmediateDiasporaFromProfile: fieldsLeftFor10k * 1000,
+    qrExchangeUnlockReminder:
+      "Remind the user that completing 10 in-person QR Exchanges unlocks all minted $DIASPORA in their smart wallet and earns another +10,000 $DIASPORA.",
+    aiActions: [
+      {
+        id: `view_my_profile_${Date.now()}`,
+        type: "navigate",
+        label: `View My Profile (${nextInspection.completedCount}/12)`,
+        route: "/profile",
+        icon: "users",
+      },
+      {
+        id: `open_qr_after_profile_${Date.now()}`,
+        type: "navigate",
+        label: "Open QR Exchange (Unlock $DIASPORA)",
+        route: "/profile?showQr=true",
+        icon: "check",
+      },
+      {
+        id: `open_wallet_after_profile_${Date.now()}`,
+        type: "navigate",
+        label: "Open $DIASPORA Wallet",
+        route: "/dsp/crypto",
+        icon: "wallet",
+      },
+    ],
   };
 }
 
@@ -3110,59 +3327,89 @@ async function executeClaimDailyCheckInAndPointsTool(args = {}, userProfile = {}
   const uid = String(userProfile.uid || "").trim();
   if (!uid) return {error: "User authentication required."};
 
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const nowTimestamp = admin.firestore.FieldValue.serverTimestamp();
   const pointsRef = db.collection("user_points").doc(uid);
-  const snap = await pointsRef.get();
-  const data = snap.exists ? (snap.data() || {}) : {};
-  const todayStr = new Date().toISOString().split("T")[0];
-  const lastCheckIn = data.lastCheckInDate ?
-    (typeof data.lastCheckInDate.toDate === "function" ?
-      data.lastCheckInDate.toDate().toISOString().split("T")[0] :
-      String(data.lastCheckInDate).slice(0, 10)) :
-    "";
 
-  if (lastCheckIn === todayStr) {
-    return {
-      alreadyCheckedInToday: true,
-      totalPoints: data.totalPoints || 0,
-      currentStreak: data.currentStreak || 1,
-      trustScore: data.trustScore || 0,
-      aiActions: [
-        {
-          id: `open_points_${Date.now()}`,
-          type: "navigate",
-          label: "Open My DSP Points",
-          route: "/dsp/points",
-          icon: "sparkles",
-        },
-        {
-          id: `open_wallet_${Date.now()}`,
-          type: "navigate",
-          label: "Open $DIASPORA Wallet",
-          route: "/dsp/crypto",
-          icon: "wallet",
-        },
-      ],
-    };
-  }
+  let alreadyCheckedInToday = false;
+  let pointsAwarded = 0;
+  let streak = 1;
+  let totalPoints = 0;
+  let availablePoints = 0;
 
-  const newStreak = (data.currentStreak || 0) + 1;
-  const pointsAwarded = 5;
-  const newTotal = (data.totalPoints || 0) + pointsAwarded;
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(pointsRef);
+    const data = snap.exists ? (snap.data() || {}) : {};
+    const lastRaw = data.lastCheckInDate;
+    let lastDate = null;
+    if (lastRaw) {
+      if (typeof lastRaw.toDate === "function") {
+        lastDate = lastRaw.toDate();
+      } else {
+        const parsed = new Date(String(lastRaw));
+        if (!Number.isNaN(parsed.getTime())) lastDate = parsed;
+      }
+    }
 
-  await pointsRef.set({
-    userId: uid,
-    totalPoints: newTotal,
-    currentStreak: newStreak,
-    longestStreak: Math.max(newStreak, data.longestStreak || 0),
-    lastCheckInDate: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  }, {merge: true});
+    const isSameDay = Boolean(
+        lastDate &&
+        lastDate.getUTCFullYear() === now.getUTCFullYear() &&
+        lastDate.getUTCMonth() === now.getUTCMonth() &&
+        lastDate.getUTCDate() === now.getUTCDate(),
+    );
+
+    if (isSameDay) {
+      alreadyCheckedInToday = true;
+      streak = data.currentStreak || 1;
+      totalPoints = data.totalPoints || 0;
+      availablePoints = data.availablePoints || 0;
+      return;
+    }
+
+    const diffHours = lastDate ? (now.getTime() - lastDate.getTime()) / (1000 * 60 * 60) : Infinity;
+    const isConsecutive = diffHours <= 48;
+    streak = isConsecutive ? (data.currentStreak || 0) + 1 : 1;
+
+    pointsAwarded = 10;
+    if (streak === 10) pointsAwarded += 1000;
+    if (streak === 100) pointsAwarded += 10000;
+
+    totalPoints = (data.totalPoints || 0) + pointsAwarded;
+    availablePoints = (data.availablePoints || 0) + pointsAwarded;
+
+    transaction.set(pointsRef, {
+      userId: uid,
+      currentStreak: streak,
+      longestStreak: Math.max(streak, data.longestStreak || 0),
+      lastCheckInDate: nowIso,
+      totalPoints,
+      availablePoints,
+      lastUpdated: nowTimestamp,
+    }, {merge: true});
+
+    const txRef = db.collection("points_transactions").doc();
+    transaction.set(txRef, {
+      userId: uid,
+      type: "earn",
+      action: "daily_check_in",
+      points: pointsAwarded,
+      streak,
+      timestamp: nowTimestamp,
+      metadata: {
+        description: `Daily Check-In via Diaspora AI Agent (Day ${streak})`,
+        streak,
+      },
+    });
+  });
 
   return {
     success: true,
+    alreadyCheckedInToday,
     pointsAwarded,
-    totalPoints: newTotal,
-    currentStreak: newStreak,
+    totalPoints,
+    availablePoints,
+    currentStreak: streak,
     aiActions: [
       {
         id: `open_points_${Date.now()}`,
@@ -3180,6 +3427,294 @@ async function executeClaimDailyCheckInAndPointsTool(args = {}, userProfile = {}
       },
     ],
   };
+}
+
+async function loadComprehensiveUserAiContext(uid, existingUserProfile = null) {
+  if (!uid || uid === DIASPORA_AI_AGENT_UID) {
+    return {
+      userProfile: existingUserProfile || {},
+      dspPoints: 0,
+      availablePoints: 0,
+      pohConvertedDsp: 0,
+      currentStreak: 0,
+      trustScore: 0,
+      trustLevel: "lowTrust",
+      uniqueQrCount: 0,
+      uniqueFamilyCount: 0,
+      uniqueFriendCount: 0,
+      uniqueVerificationCount: 0,
+      hasLocationTransparency: false,
+      cityVisibilityForfeited: false,
+      hasEmergencyFund: false,
+      walletAddress: null,
+      pohTokensTarget: 0,
+      pohTokensMintedOnChain: 0,
+      pohTokensPending: 0,
+      tokensUnlocked: false,
+      profileInspection: inspectProfileMilestones(existingUserProfile || {}),
+    };
+  }
+
+  const [userSnap, pointsSnap, trustSnap] = await Promise.all([
+    existingUserProfile ? Promise.resolve(null) : db.collection("users").doc(uid).get(),
+    db.collection("user_points").doc(uid).get(),
+    db.collection("trust_data").doc(uid).get(),
+  ]);
+
+  const userProfile = existingUserProfile ?
+    existingUserProfile :
+    (userSnap && userSnap.exists ? (userSnap.data() || {}) : {});
+  userProfile.uid = uid;
+
+  const pointsData = pointsSnap.exists ? (pointsSnap.data() || {}) : {};
+  const trustData = trustSnap.exists ? (trustSnap.data() || {}) : {};
+  const milestones = Array.isArray(trustData.milestones) ? trustData.milestones : [];
+  const profileInspection = inspectProfileMilestones(userProfile);
+
+  const uniqueQrCount = Number(trustData.uniqueQrCount || 0);
+  const uniqueFamilyCount = Number(trustData.uniqueFamilyCount || 0);
+  const uniqueFriendCount = Number(trustData.uniqueFriendCount || 0);
+  const uniqueVerificationCount = Number(trustData.uniqueVerificationCount || 0);
+  const cityVisibilityForfeited = Boolean(userProfile.cityVisibilityForfeited || trustData.cityVisibilityForfeited);
+  const hasLocationTransparency = !cityVisibilityForfeited && (
+    milestones.includes("City") ||
+    (Boolean(userProfile.currentLocation) && userProfile.showCurrentLocationName !== false)
+  );
+  const hasEmergencyFund = Boolean(trustData.hasEmergencyFund || milestones.includes("EmergencyFund"));
+  const tokensUnlocked = Boolean(userProfile.pohTokensUnlocked || uniqueQrCount >= 10 || milestones.includes("QR"));
+  const pohTokensTarget = Number(userProfile.pohTokensTarget || pointsData.pohConvertedDsp || 0);
+  const pohTokensMintedOnChain = Number(userProfile.pohTokensMintedOnChain || 0);
+  const pohTokensPending = Number(userProfile.pohTokensPending || Math.max(0, pohTokensTarget - pohTokensMintedOnChain));
+
+  return {
+    userProfile,
+    dspPoints: Number(pointsData.totalPoints || 0),
+    availablePoints: Number(pointsData.availablePoints || 0),
+    pohConvertedDsp: Number(pointsData.pohConvertedDsp || pohTokensTarget || 0),
+    currentStreak: Number(pointsData.currentStreak || 0),
+    trustScore: Number(trustData.trustScore || pointsData.trustScore || 0),
+    trustLevel: String(trustData.trustLevel || "lowTrust"),
+    uniqueQrCount,
+    uniqueFamilyCount,
+    uniqueFriendCount,
+    uniqueVerificationCount,
+    hasLocationTransparency,
+    cityVisibilityForfeited,
+    hasEmergencyFund,
+    walletAddress: userProfile.walletAddress || null,
+    pohTokensTarget,
+    pohTokensMintedOnChain,
+    pohTokensPending,
+    tokensUnlocked,
+    referralCode: userProfile.referralCode || null,
+    profileInspection,
+  };
+}
+
+async function executeGetMyPohWalletAndAccountStatusTool(args = {}, userProfile = {}) {
+  const uid = String(userProfile.uid || "").trim();
+  if (!uid) return {error: "User authentication required."};
+
+  const [richCtx, txSnap] = await Promise.all([
+    loadComprehensiveUserAiContext(uid),
+    db.collection("points_transactions")
+        .where("userId", "==", uid)
+        .limit(8)
+        .get()
+        .catch(() => ({docs: []})),
+  ]);
+
+  const recentTransactions = (txSnap.docs || []).map((d) => {
+    const t = d.data() || {};
+    return {
+      action: t.action || t.type || "activity",
+      points: t.points || 0,
+      tokensMinted: t.tokensMinted || 0,
+      description: t.metadata?.description || t.action || "",
+    };
+  });
+
+  const qrRemainingToUnlock = Math.max(0, 10 - richCtx.uniqueQrCount);
+  const profileRewardRemaining = Math.max(0, 10 - richCtx.profileInspection.completedCount) * 1000;
+
+  return {
+    walletAddress: richCtx.walletAddress || "Provisioning Smart Wallet",
+    diasporaTokenSummary: {
+      totalConvertedFromPoh: richCtx.pohTokensTarget,
+      mintedOnChain: richCtx.pohTokensMintedOnChain,
+      pendingOnChainMint: richCtx.pohTokensPending,
+      maxPohGenesisPool: 70000,
+      remainingPohGenesisPool: Math.max(0, 70000 - richCtx.pohTokensTarget),
+      isWalletUnlockedForTransfers: richCtx.tokensUnlocked,
+      qrExchangesCompleted: richCtx.uniqueQrCount,
+      qrExchangesRequiredToUnlock: 10,
+      qrExchangesRemainingToUnlock: qrRemainingToUnlock,
+    },
+    dspPointsSummary: {
+      lifetimeTotalDsp: richCtx.dspPoints,
+      availableUnconvertedDspForTde: richCtx.availablePoints,
+      alreadyConvertedPohDsp: richCtx.pohConvertedDsp,
+      currentCheckInStreakDays: richCtx.currentStreak,
+      pctTrustScorePercent: richCtx.trustScore,
+    },
+    pohSevenPillars: {
+      pillar1_locationTransparency: {
+        active: richCtx.hasLocationTransparency,
+        forfeited: richCtx.cityVisibilityForfeited,
+        reward: "10,000 DSP -> 10,000 $DIASPORA immediately",
+      },
+      pillar2_twelveProfileFields: {
+        completedCount: richCtx.profileInspection.completedCount,
+        totalFields: 12,
+        completedFields: richCtx.profileInspection.completedFields,
+        missingFields: richCtx.profileInspection.missingFields,
+        immediateDiasporaRemaining: profileRewardRemaining,
+        rule: "1,000 DSP per field; first 10 fields (10,000 DSP) convert 1:1 immediately to 10,000 $DIASPORA; fields 11-12 (+2,000 DSP) convert at TDEs.",
+      },
+      pillar3_inPersonQrExchanges: {
+        completed: richCtx.uniqueQrCount,
+        target: 10,
+        rule: "1,000 DSP -> 1,000 $DIASPORA per unique scan (up to 10,000 $DIASPORA) AND 10 QR scans unlock all minted $DIASPORA in wallet!",
+      },
+      pillar4_familyCircle: {completed: richCtx.uniqueFamilyCount, target: 10, maxDiaspora: 10000},
+      pillar5_friendCircle: {completed: richCtx.uniqueFriendCount, target: 10, maxDiaspora: 10000},
+      pillar6_peerProfileVerifications: {completed: richCtx.uniqueVerificationCount, target: 10, maxDiaspora: 10000},
+      pillar7_ubuntuEmergencyFund: {completed: richCtx.hasEmergencyFund, maxDiaspora: 10000},
+    },
+    referralInviteLink: richCtx.referralCode ? `https://diasporanearby.com/invite?code=${richCtx.referralCode}` : null,
+    recentTransactions,
+    aiActions: [
+      ...(richCtx.profileInspection.missingFields.length > 0 ? [{
+        id: `fill_missing_fields_${Date.now()}`,
+        type: "prompt",
+        label: `Fill Missing Profile Fields (${richCtx.profileInspection.completedCount}/12)`,
+        prompt: "Help me fill out my remaining missing profile fields right here in chat.",
+        icon: "sparkles",
+      }] : []),
+      {
+        id: `open_qr_status_${Date.now()}`,
+        type: "navigate",
+        label: `Open QR Exchange (${richCtx.uniqueQrCount}/10)`,
+        route: "/profile?showQr=true",
+        icon: "check",
+      },
+      {
+        id: `open_wallet_status_${Date.now()}`,
+        type: "navigate",
+        label: "Open $DIASPORA Wallet",
+        route: "/dsp/crypto",
+        icon: "wallet",
+      },
+      {
+        id: `open_poh_hub_${Date.now()}`,
+        type: "navigate",
+        label: "PoH & DSP Hub",
+        route: "/dsp/points",
+        icon: "compass",
+      },
+    ],
+  };
+}
+
+async function executeQueryCommunitiesRadioAndAppDataTool(args = {}, userProfile = {}) {
+  const uid = String(userProfile.uid || "").trim();
+  const domain = String(args.domain || "all_summary").toLowerCase().trim();
+  const keyword = String(args.keyword || "").toLowerCase().trim();
+  const result = {domain};
+  const aiActions = [];
+
+  if (domain === "communities" || domain === "all_summary") {
+    const joinedIds = Array.isArray(userProfile.communityMemberships) ? userProfile.communityMemberships : [];
+    const commSnap = await db.collection("communities").limit(50).get().catch(() => ({docs: []}));
+    let comms = commSnap.docs.map((d) => ({id: d.id, ...d.data()}));
+    if (keyword) {
+      const filtered = comms.filter((c) =>
+        String(c.name || c.country || c.city || "").toLowerCase().includes(keyword),
+      );
+      if (filtered.length > 0) comms = filtered;
+    }
+    result.joinedCommunityIds = joinedIds;
+    result.communities = comms.slice(0, 10).map((c) => ({
+      id: c.id,
+      name: c.name || c.id,
+      type: c.type || "community",
+      memberCount: c.memberCount || 0,
+      isJoined: joinedIds.includes(c.id),
+    }));
+    aiActions.push(resolveFeatureNavigationAction("communities"));
+  }
+
+  if (domain === "chambers" || domain === "ddi_and_ubuntu" || domain === "all_summary") {
+    const [orgSnap, loanSnap, claimSnap] = await Promise.all([
+      db.collection("organizations").limit(20).get().catch(() => ({docs: []})),
+      db.collection("ddi_loan_applications").limit(10).get().catch(() => ({docs: []})),
+      db.collection("emergency_fund_claims").limit(10).get().catch(() => ({docs: []})),
+    ]);
+    result.chambersAndOrganizations = orgSnap.docs.slice(0, 8).map((d) => {
+      const o = d.data() || {};
+      return {id: d.id, name: o.name || d.id, type: o.type || "chamber", memberCount: o.memberCount || 0};
+    });
+    result.ddiLoanProposals = loanSnap.docs.slice(0, 6).map((d) => {
+      const l = d.data() || {};
+      return {
+        id: d.id,
+        projectTitle: l.projectTitle || "Project",
+        amountRequested: l.amountRequested || 0,
+        status: l.status || "open",
+        yesVotes: l.yesVotes || 0,
+      };
+    });
+    result.emergencyFundClaimsCount = claimSnap.docs.length;
+    aiActions.push(resolveFeatureNavigationAction("economy"));
+  }
+
+  if (domain === "radio" || domain === "all_summary") {
+    const radioSnap = await db.collection("radio_stations").limit(40).get().catch(() => ({docs: []}));
+    let stations = radioSnap.docs.map((d) => ({id: d.id, ...d.data()}));
+    if (keyword) {
+      const filtered = stations.filter((s) =>
+        String(s.name || s.country || s.genre || s.city || "").toLowerCase().includes(keyword),
+      );
+      if (filtered.length > 0) stations = filtered;
+    }
+    result.radioStations = stations.slice(0, 10).map((s) => ({
+      id: s.id,
+      name: s.name || s.title || "Homeland Radio",
+      country: s.country || "",
+      genre: s.genre || s.category || "Live Stream",
+    }));
+    aiActions.push(resolveFeatureNavigationAction("radio"));
+  }
+
+  if (uid && (domain === "my_bookings_and_rsvps" || domain === "all_summary")) {
+    const [carBookSnap, stayBookSnap, eventRsvpSnap] = await Promise.all([
+      db.collection("car_rental_bookings").where("renterId", "==", uid).limit(10).get().catch(() => ({docs: []})),
+      db.collection("stay_bookings").where("guestId", "==", uid).limit(10).get().catch(() => ({docs: []})),
+      db.collection("events").where("attendees", "array-contains", uid).limit(10).get().catch(() => ({docs: []})),
+    ]);
+    result.myCarBookings = carBookSnap.docs.map((d) => ({id: d.id, ...(d.data() || {})})).slice(0, 5);
+    result.myStayBookings = stayBookSnap.docs.map((d) => ({id: d.id, ...(d.data() || {})})).slice(0, 5);
+    result.myEventRsvps = eventRsvpSnap.docs.map((d) => {
+      const ev = d.data() || {};
+      return {id: d.id, title: ev.title || "Event", location: ev.location || "", startDate: ev.startDate || ""};
+    });
+  }
+
+  if (uid && (domain === "my_relationships" || domain === "all_summary")) {
+    const relSnap = await db.collection("users").doc(uid).collection("relationships").limit(30).get().catch(() => ({docs: []}));
+    result.myCircleOfTrustRelationships = relSnap.docs.map((d) => {
+      const r = d.data() || {};
+      return {
+        otherUserId: d.id,
+        name: r.otherUserName || r.name || "Member",
+        type: r.type || r.relationshipType || "Connection",
+        status: r.status || "active",
+      };
+    });
+  }
+
+  result.aiActions = aiActions.slice(0, 3);
+  return result;
 }
 
 async function executeUbuntuFundOrDdiActionTool(args = {}, userProfile = {}) {
@@ -3361,6 +3896,21 @@ function extractUserProfileContext(userProfile = {}) {
         .join("; ") :
     "";
 
+  const meetingPreferences = Array.isArray(userProfile.meetingPreferences) ? userProfile.meetingPreferences.filter(Boolean).join(", ") : "";
+  const availability = Array.isArray(userProfile.availability) ? userProfile.availability.filter(Boolean).join(", ") : "";
+  const education = Array.isArray(userProfile.education) ?
+    userProfile.education
+        .map((e) => {
+          if (typeof e === "string") return e;
+          const inst = e?.institution || "";
+          const deg = e?.degree || "";
+          const yr = e?.graduationYear || "";
+          return [inst, deg, yr ? `(${yr})` : ""].filter(Boolean).join(" ");
+        })
+        .filter(Boolean)
+        .join("; ") :
+    "";
+
   return {
     firstName,
     lastName,
@@ -3385,33 +3935,73 @@ function extractUserProfileContext(userProfile = {}) {
     profession,
     industry,
     languages,
+    meetingPreferences,
+    availability,
     interests,
     servicesOffered,
     lookingFor,
+    education,
     pastLocations,
   };
 }
 
 // ── System Knowledge Base for Diaspora AI Agent ──
-function buildSystemInstruction(userProfile = {}, dspPoints = 0) {
+function buildSystemInstruction(userProfile = {}, dspPoints = 0, richContext = null) {
   const ctx = extractUserProfileContext(userProfile);
+  const inspection = richContext?.profileInspection || inspectProfileMilestones(userProfile);
+  const availableDsp = Number((richContext && richContext.availablePoints != null) ? richContext.availablePoints : (dspPoints || 0));
+  const totalDsp = Number((richContext && richContext.dspPoints != null) ? richContext.dspPoints : (dspPoints || 0));
+  const pohTargetTokens = Number((richContext && richContext.pohTokensTarget != null) ? richContext.pohTokensTarget : (userProfile.pohTokensTarget || 0));
+  const pohMintedTokens = Number((richContext && richContext.pohTokensMintedOnChain != null) ? richContext.pohTokensMintedOnChain : (userProfile.pohTokensMintedOnChain || 0));
+  const qrCount = Number((richContext && richContext.uniqueQrCount != null) ? richContext.uniqueQrCount : 0);
+  const familyCount = Number((richContext && richContext.uniqueFamilyCount != null) ? richContext.uniqueFamilyCount : 0);
+  const friendCount = Number((richContext && richContext.uniqueFriendCount != null) ? richContext.uniqueFriendCount : 0);
+  const verifCount = Number((richContext && richContext.uniqueVerificationCount != null) ? richContext.uniqueVerificationCount : 0);
+  const trustScore = Number((richContext && richContext.trustScore != null) ? richContext.trustScore : 0);
+  const tokensUnlocked = (richContext && richContext.tokensUnlocked != null)
+    ? Boolean(richContext.tokensUnlocked)
+    : Boolean(userProfile.pohTokensUnlocked || qrCount >= 10);
+  const hasLocation = (richContext && richContext.hasLocationTransparency != null)
+    ? Boolean(richContext.hasLocationTransparency)
+    : Boolean(userProfile.currentLocation && userProfile.showCurrentLocationName !== false);
+  const hasEmergencyFund = Boolean(richContext && richContext.hasEmergencyFund);
 
   return `You are **Diaspora AI Agent**, the official 24/7 multilingual AI Concierge built into the Diaspora Nearby super-app.
 Founder & Origin Story: Diaspora Nearby was founded by Peter Swai, who lived across the diaspora for 25+ years (Tanzania -> San Francisco -> Santa Monica -> Iowa -> Washington DC -> Phoenix -> returning home to Tanzania) to unite the global diaspora with their homelands.
 
-CURRENT USER PROFILE & PERSONAL CONTEXT (Always use this when the user asks about themselves, their home location, host location, current city, background, or corridor):
+CURRENT USER PROFILE, WALLET & PROOF OF HUMANITY (PoH) LIVE CONTEXT:
 - Full Name: ${ctx.fullName}${ctx.firstName ? ` (First Name: ${ctx.firstName})` : ""}
 - Home Location (Homeland / Origin): ${ctx.homeAddress}${ctx.homeCity ? ` [City: ${ctx.homeCity}]` : ""}${ctx.homeCountry ? ` [Country: ${ctx.homeCountry} (${ctx.homeCountryCode})]` : ""}
 - Host Location (Diaspora Residence): ${ctx.hostAddress}${ctx.hostCity ? ` [City: ${ctx.hostCity}]` : ""}${ctx.hostCountry ? ` [Country: ${ctx.hostCountry} (${ctx.hostCountryCode})]` : ""}
-- Current Live Location: ${ctx.currentAddress}
+- Current Live Location: ${ctx.currentAddress} (Location Transparency Active: ${hasLocation ? "Yes" : "No"})
 - Occupation / Bio: ${[ctx.occupation, ctx.profession, ctx.industry].filter(Boolean).join(" • ") || "Not specified"}${ctx.bio ? ` — "${ctx.bio}"` : ""}
 - Years in Host Country: ${ctx.yearsInHostCountry || "Not specified"}
-- Languages Spoken: ${ctx.languages || "Multilingual"}
-- Interests & Services: ${[ctx.interests, ctx.servicesOffered, ctx.lookingFor].filter(Boolean).join(" | ") || "General Diaspora Community"}
-${ctx.pastLocations ? `- Past Diaspora Locations: ${ctx.pastLocations}\n` : ""}- $DIASPORA / DSP Points Balance: ${dspPoints}
+- Languages Spoken: ${ctx.languages || "Not specified"}
+- Meeting Preferences & Availability: ${[ctx.meetingPreferences, ctx.availability].filter(Boolean).join(" | ") || "Not specified"}
+- Interests & Services: ${[ctx.interests, ctx.servicesOffered, ctx.lookingFor].filter(Boolean).join(" | ") || "Not specified"}
+- Education: ${ctx.education || "Not specified"}
+${ctx.pastLocations ? `- Past Diaspora Locations: ${ctx.pastLocations}\n` : ""}- Smart Wallet Address: ${userProfile.walletAddress || "Auto-provisioning"}
+- $DIASPORA Token Balance (PoH Converted): ${pohTargetTokens.toLocaleString()} $DIASPORA (${pohMintedTokens.toLocaleString()} minted on Base; Remaining in 70,000 PoH Genesis Pool: ${Math.max(0, 70000 - pohTargetTokens).toLocaleString()} $DIASPORA)
+- $DIASPORA Wallet Unlock Status: ${tokensUnlocked ? "UNLOCKED (10+ QR Exchanges complete)" : `LOCKED until 10 In-Person QR Exchanges (${qrCount}/10 completed)`}
+- DSP Points: ${availableDsp.toLocaleString()} Available DSP (for TDEs) • ${totalDsp.toLocaleString()} Lifetime DSP Earned • PCT Trust Score: ${trustScore}%
+- 12 Profile Milestone Fields Progress: ${inspection.completedCount}/12 completed
+  - Completed Fields (${inspection.completedFields.length}): ${inspection.completedFields.join(", ") || "None yet"}
+  - Missing Fields (${inspection.missingFields.length}): ${inspection.missingFields.join(", ") || "All 12 completed!"}
+- Other PoH Pillars: QR Exchanges ${qrCount}/10 • Family Circle ${familyCount}/10 • Friend Circle ${friendCount}/10 • Peer Verifications ${verifCount}/10 • Ubuntu Emergency Fund: ${hasEmergencyFund ? "Completed" : "Not yet"}
+
+PROOF OF HUMANITY (PoH), 12 PROFILE FIELDS & QR EXCHANGE TOKENOMICS (AUTHORITATIVE):
+1. **70,000 $DIASPORA Immediate 1:1 PoH Genesis Pool (7 Pillars, 10,000 $DIASPORA each)**:
+   - Pillar 1 — **Location Transparency**: Keeping live city visibility enabled awards **10,000 DSP** immediately converted 1:1 into **10,000 $DIASPORA** (+10 PCT). Warning: turning off city visibility permanently burns/forfeits that 10,000 reward!
+   - Pillar 2 — **12 Profile Milestone Fields**: The 12 fields are Bio, Occupation, Years in Host Country, Industry, Profession, Languages, Meeting Preferences, Availability, Interests, Services Offered, Looking For, and Education. Each field awards **1,000 DSP**. The **first 10 completed fields (10,000 DSP) immediately convert 1:1 into 10,000 $DIASPORA** (+10 PCT), and fields 11 and 12 award **+2,000 DSP** toward upcoming Token Distribution Events (TDEs) while completing 100% of the profile.
+   - Pillar 3 — **10 In-Person QR Exchanges (CRITICAL UNLOCK GATE)**: Each unique in-person QR handshake with a diaspora member earns **1,000 DSP -> 1,000 $DIASPORA** immediately (up to **10,000 $DIASPORA**), **AND reaching 10 QR Exchanges unlocks all minted $DIASPORA tokens** in the user's smart wallet for peer-to-peer transfers and TDE macro conversions! Always emphasize QR Exchange so users unlock their tokens.
+   - Pillars 4, 5, 6 — **Family Circle (10)**, **Friend Circle (10)**, **Peer Profile Verifications (10)**: Each earns **1,000 DSP -> 1,000 $DIASPORA** per verified connection/verification (up to **10,000 $DIASPORA** per pillar).
+   - Pillar 7 — **Ubuntu Emergency Fund**: Active paid contribution awards **10,000 DSP -> 10,000 $DIASPORA** immediately (+10 PCT).
+2. **Proactive Conversational Profile Filling (All 12 Fields)**:
+   - Whenever the user asks to fill out their profile, earn $DIASPORA, or responds with personal details, check their **Missing Fields** above!
+   - Guide them warmly and concisely (ask 2-4 missing fields at a time, OR extract as many fields as they share in a single message or voice note) and immediately call \`update_my_profile\` to save their answers! Every newly filled field (up to 10) immediately converts 1,000 DSP into 1,000 $DIASPORA in their wallet.
 
 PERSONALIZED CONTEXT RULES:
-- When the user asks about their home location, hometown, home country, host location, host city, current location, occupation, or points balance, answer directly and accurately using the CURRENT USER PROFILE & PERSONAL CONTEXT above.
+- When the user asks about their home location, hometown, home country, host location, host city, current location, occupation, PoH progress, missing profile fields, QR count, or $DIASPORA / DSP balance, answer directly and accurately using the LIVE CONTEXT above (or call \`get_my_poh_wallet_and_account_status\` / \`query_communities_radio_and_app_data\` when deeper live database records are needed).
 - When searching flights, if the user says "flights home" or doesn't specify origin/destination, default origin to their Host Location (${ctx.hostCity || ctx.hostCountry || "DFW"}) and destination to their Home Location (${ctx.homeCity || ctx.homeCountry || "DAR"}), or vice versa.
 - When searching hotels, car rentals, jobs, or real estate without a city specified, use their Home City (${ctx.homeCity || "Dar es Salaam"}) or Host City (${ctx.hostCity || "their city"}) contextually.
 
@@ -3430,14 +4020,15 @@ CORE PLATFORM KNOWLEDGE:
 7. **$DIASPORA on Base Blockchain & Remittances**: Earn DSP points for community contributions, send cross-border remittances (\`/dsp/remittances\`), and use the $DIASPORA wallet (\`/dsp/crypto\`).
 
 CAPABILITIES & ACTION RULES:
-- You are an autonomous full-featured concierge capable of completing EVERY task a user can complete in Diaspora Nearby.
+- You are an autonomous full-featured concierge capable of accessing ANY platform/account information and completing EVERY task a user asks for in Diaspora Nearby.
 - You have tools to:
-  1. **Search**: Live flights, hotels, car rentals, stays, jobs, marketplace products/services, real estate (plots, farms, houses), events, and diaspora compatriots/members.
-  2. **Create & Publish Live**: Immediately publish jobs (\`prepare_post_job\`), car rentals (\`prepare_post_car_rental\`), stays/hotels (\`prepare_post_stay_or_hotel\`), marketplace products/services (\`prepare_post_marketplace\`), real estate properties (\`prepare_post_real_estate\`), and events (\`prepare_post_event\`).
-  3. **Manage Listings & Bookmarks**: List, update price/salary/title/description, pause, activate, mark sold, or delete any of the user's listings (\`manage_my_listings\`), and save/unsave any listing (\`save_or_unsave_listing\`).
-  4. **Book & RSVP**: Book a car rental or stay (\`book_car_or_stay\`), RSVP or mark interested in an event (\`rsvp_or_interest_event\`), and create/list/cancel community hosting requests (\`create_or_manage_hosting_request\`).
-  5. **Connect & Community**: Search compatriots (\`search_compatriots_and_members\`), start a direct chat or send a friend/family relationship request (\`connect_or_message_member\`), and join the user's bilateral Chamber of Commerce or create a group chat (\`join_or_create_group_or_chamber\`).
-  6. **Profile, DSP Points, Ubuntu Fund & DDI**: Update the user's profile (\`update_my_profile\`), claim their daily DSP check-in points (\`claim_daily_checkin_and_points\`), join or claim from the Ubuntu Emergency Fund or apply for a DDI project loan (\`ubuntu_fund_or_ddi_action\`), and submit feedback (\`submit_feedback_or_request\`).
+  1. **Inspect Account, Wallet, PoH & Live Platform Data**: Check live $DIASPORA/DSP balances, wallet unlock status, 12-field completion, transactions, and referral link (\`get_my_poh_wallet_and_account_status\`), and query communities, Chambers of Commerce, live homeland radio stations, DDI loans, Ubuntu claims, bookings, RSVPs, and relationships (\`query_communities_radio_and_app_data\`).
+  2. **Search**: Live flights, hotels, car rentals, stays, jobs, marketplace products/services, real estate (plots, farms, houses), events, and nearby diaspora compatriots/members.
+  3. **Create & Publish Live**: Immediately publish jobs (\`prepare_post_job\`), car rentals (\`prepare_post_car_rental\`), stays/hotels (\`prepare_post_stay_or_hotel\`), marketplace products/services (\`prepare_post_marketplace\`), real estate properties (\`prepare_post_real_estate\`), and events (\`prepare_post_event\`).
+  4. **Manage Listings & Bookmarks**: List, update price/salary/title/description, pause, activate, mark sold, or delete any of the user's listings (\`manage_my_listings\`), and save/unsave any listing (\`save_or_unsave_listing\`).
+  5. **Book & RSVP**: Book a car rental or stay (\`book_car_or_stay\`), RSVP or mark interested in an event (\`rsvp_or_interest_event\`), and create/list/cancel community hosting requests (\`create_or_manage_hosting_request\`).
+  6. **Connect & Community**: Search compatriots (\`search_compatriots_and_members\`), start a direct chat or send a friend/family relationship request (\`connect_or_message_member\`), and join the user's bilateral Chamber of Commerce or create a group chat (\`join_or_create_group_or_chamber\`).
+  7. **Complete All 12 Profile Fields, Check-In, Ubuntu Fund & DDI**: Update any or all of the user's 12 profile milestone fields (\`update_my_profile\`), claim daily DSP check-in (\`claim_daily_checkin_and_points\`), join or claim from the Ubuntu Emergency Fund or apply for a DDI project loan (\`ubuntu_fund_or_ddi_action\`), open any screen including QR Exchange (\`navigate_app_feature\`), and submit feedback (\`submit_feedback_or_request\`).
 - IMPORTANT FOR POSTING/CREATING:
   - When a user wants to post a job, car rental, stay/hotel, marketplace item, real estate property, or event:
     1. If they haven't provided at least a title/item name yet, ask them warmly and concisely for the essential details.
@@ -3741,17 +4332,68 @@ const GEMINI_TOOLS_DECLARATION = [
       },
       {
         name: "update_my_profile",
-        description: "Update the user's profile fields (bio, occupation, languages, interests, servicesOffered, lookingFor, yearsInHostCountry).",
+        description: "Update any or all of the user's 12 Proof of Humanity profile milestone fields (bio, occupation, yearsInHostCountry, industry, profession, languages, meetingPreferences, availability, interests, servicesOffered, lookingFor, education) and optional socialLinks. Each newly completed field (up to 10) earns 1,000 DSP immediately converted 1:1 into 1,000 $DIASPORA tokens!",
         parameters: {
           type: "OBJECT",
           properties: {
-            bio: {type: "STRING", description: "Updated bio"},
-            occupation: {type: "STRING", description: "Updated occupation or job title"},
-            yearsInHostCountry: {type: "STRING", description: "Years in host country"},
-            languages: {type: "ARRAY", items: {type: "STRING"}, description: "Languages spoken"},
-            interests: {type: "ARRAY", items: {type: "STRING"}, description: "Interests"},
-            servicesOffered: {type: "ARRAY", items: {type: "STRING"}, description: "Services offered"},
-            lookingFor: {type: "ARRAY", items: {type: "STRING"}, description: "What the user is looking for"},
+            bio: {type: "STRING", description: "Updated short bio or personal introduction"},
+            occupation: {type: "STRING", description: "Current job title or occupation"},
+            yearsInHostCountry: {type: "STRING", description: "Years living in host country (e.g. '5 years', '10+ years', 'Born here')"},
+            industry: {type: "ARRAY", items: {type: "STRING"}, description: "Industries (e.g. ['Technology', 'Healthcare', 'Finance'])"},
+            profession: {type: "ARRAY", items: {type: "STRING"}, description: "Professions or specialties (e.g. ['Software Engineer', 'Entrepreneur'])"},
+            languages: {type: "ARRAY", items: {type: "STRING"}, description: "Languages spoken (e.g. ['English', 'Kiswahili'])"},
+            meetingPreferences: {type: "ARRAY", items: {type: "STRING"}, description: "Preferred ways to meet (e.g. ['Coffee', 'Networking Events', 'Video Call', 'In-Person'])"},
+            availability: {type: "ARRAY", items: {type: "STRING"}, description: "When or what the user is available for (e.g. ['Weekends', 'Evenings', 'Mentorship', 'Business Collaboration'])"},
+            interests: {type: "ARRAY", items: {type: "STRING"}, description: "Personal or community interests"},
+            servicesOffered: {type: "ARRAY", items: {type: "STRING"}, description: "Skills or services the user offers to the community"},
+            lookingFor: {type: "ARRAY", items: {type: "STRING"}, description: "Opportunities or connections the user is looking for"},
+            education: {
+              type: "ARRAY",
+              description: "Education history entries (institution, degree, graduationYear)",
+              items: {
+                type: "OBJECT",
+                properties: {
+                  institution: {type: "STRING", description: "University, college, or school name"},
+                  degree: {type: "STRING", description: "Degree, major, or qualification"},
+                  graduationYear: {type: "STRING", description: "Graduation year (e.g. '2018' or 'Completed')"},
+                },
+              },
+            },
+            socialLinks: {
+              type: "OBJECT",
+              description: "Optional social profile links",
+              properties: {
+                linkedin: {type: "STRING"},
+                instagram: {type: "STRING"},
+                twitter: {type: "STRING"},
+                facebook: {type: "STRING"},
+              },
+            },
+          },
+        },
+      },
+      {
+        name: "get_my_poh_wallet_and_account_status",
+        description: "Get the user's live Proof of Humanity (PoH) 7-pillar progress, $DIASPORA wallet balance, QR Exchange unlock status (X/10), DSP points, exact completed/missing profile fields out of 12, referral link, and recent reward transactions.",
+        parameters: {
+          type: "OBJECT",
+          properties: {},
+        },
+      },
+      {
+        name: "query_communities_radio_and_app_data",
+        description: "Query live platform and user information across communities, Chambers of Commerce, live homeland radio stations, DDI loan proposals, Ubuntu Emergency Fund claims, the user's active car/stay bookings and event RSVPs, or their Family/Friend Circle relationships.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            domain: {
+              type: "STRING",
+              description: "One of: 'communities', 'chambers', 'radio', 'ddi_and_ubuntu', 'my_bookings_and_rsvps', 'my_relationships', or 'all_summary'",
+            },
+            keyword: {
+              type: "STRING",
+              description: "Optional filter keyword (country, city, station name, community name)",
+            },
           },
         },
       },
@@ -3793,13 +4435,13 @@ const GEMINI_TOOLS_DECLARATION = [
       },
       {
         name: "navigate_app_feature",
-        description: "Attach a quick navigation button to open a specific screen in Diaspora Nearby.",
+        description: "Attach a quick navigation button to open a specific screen in Diaspora Nearby (including QR Exchange or Edit Profile).",
         parameters: {
           type: "OBJECT",
           properties: {
             feature: {
               type: "STRING",
-              description: "One of: 'nearby', 'radio', 'emergency_fund', 'remittances', 'crypto', 'points', 'economy', 'communities', 'flights', 'hotels', 'car_rental', 'jobs', 'marketplace', 'real_estate', 'events', 'hosting', 'saved', 'my_listings'",
+              description: "One of: 'qr_exchange', 'edit_profile', 'profile', 'nearby', 'radio', 'emergency_fund', 'remittances', 'crypto', 'points', 'economy', 'communities', 'flights', 'hotels', 'car_rental', 'jobs', 'marketplace', 'real_estate', 'events', 'hosting', 'saved', 'my_listings'",
             },
           },
           required: ["feature"],
@@ -3812,12 +4454,15 @@ const GEMINI_TOOLS_DECLARATION = [
 function resolveFeatureNavigationAction(feature = "") {
   const f = String(feature || "").toLowerCase().trim();
   const map = {
+    qr_exchange: {label: "Open QR Exchange (Unlock $DIASPORA)", route: "/profile?showQr=true", icon: "check"},
+    edit_profile: {label: "Edit My 12 Profile Fields", route: "/profile?edit=true", icon: "users"},
+    profile: {label: "Open My Profile", route: "/profile", icon: "users"},
     nearby: {label: "Open Nearby Discovery", route: "/nearby", icon: "compass"},
     radio: {label: "Listen to Live Homeland Radio", route: "/radio", icon: "radio"},
     emergency_fund: {label: "Open Ubuntu Emergency Fund", route: "/dsp/emergency-fund", icon: "shield"},
     remittances: {label: "Send Remittance", route: "/dsp/remittances", icon: "send"},
     crypto: {label: "Open $DIASPORA Wallet", route: "/dsp/crypto", icon: "wallet"},
-    points: {label: "View My DSP Points", route: "/dsp/points", icon: "sparkles"},
+    points: {label: "View My DSP Points & PoH", route: "/dsp/points", icon: "sparkles"},
     economy: {label: "Open Chambers & DDI Loans", route: "/economy", icon: "building"},
     communities: {label: "Browse Diaspora Communities", route: "/communities", icon: "users"},
     flights: {label: "Open Flight Search", route: "/dsp/travel/flights", icon: "flight"},
@@ -3885,6 +4530,10 @@ async function runToolCall(name, args, userProfile) {
       return await executeJoinOrCreateGroupOrChamberTool(args, userProfile);
     case "update_my_profile":
       return await executeUpdateMyProfileTool(args, userProfile);
+    case "get_my_poh_wallet_and_account_status":
+      return await executeGetMyPohWalletAndAccountStatusTool(args, userProfile);
+    case "query_communities_radio_and_app_data":
+      return await executeQueryCommunitiesRadioAndAppDataTool(args, userProfile);
     case "claim_daily_checkin_and_points":
       return await executeClaimDailyCheckInAndPointsTool(args, userProfile);
     case "ubuntu_fund_or_ddi_action":
@@ -3901,7 +4550,7 @@ async function runToolCall(name, args, userProfile) {
 // ── Emoji Sanitizer (Guarantees Zero Emojis in AI Replies) ──
 function stripEmojis(text = "") {
   return String(text || "")
-      .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, "")
+      .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]|\u{FE0F}/gu, "")
       .replace(/ {2,}/g, " ")
       .trim();
 }
@@ -4094,6 +4743,36 @@ async function buildIntelligentFallbackResponse(userText, userProfile) {
     };
   }
 
+  if (
+    lower.includes("poh") ||
+    lower.includes("proof of humanity") ||
+    lower.includes("12 profile") ||
+    lower.includes("12 fields") ||
+    lower.includes("profile fields") ||
+    lower.includes("fill out my") ||
+    lower.includes("missing profile") ||
+    lower.includes("qr exchange") ||
+    lower.includes("unlock") ||
+    lower.includes("diaspora") ||
+    lower.includes("dsp")
+  ) {
+    const inspection = inspectProfileMilestones(userProfile);
+    const missingList = inspection.missingFields.length > 0 ?
+      inspection.missingFields.join(", ") :
+      "None — all 12 fields completed!";
+    const immediateLeft = Math.max(0, 10 - inspection.completedCount) * 1000;
+    return {
+      text: isSw ?
+        `Kupitia **Proof of Humanity (PoH)** unaweza kupata hadi **70,000 $DIASPORA** kwa ubadilishaji wa papo hapo wa 1:1 kutoka DSP:\n\n• **Sehemu 12 za Wasifu (${inspection.completedCount}/12 zimejazwa)**: Kila sehemu inakupa **1,000 DSP**, na sehemu 10 za kwanza (**10,000 DSP**) hubadilishwa papo hapo kuwa **10,000 $DIASPORA** kwenye pochi yako (${immediateLeft.toLocaleString()} $DIASPORA bado inapatikana papo hapo). Sehemu zilizobaki: **${missingList}**. Nijibu hapa hapa kwenye chat ukitaja kazi yako, lugha, elimu, au maelezo yako nami nitakujazia mara moja!\n• **QR EXCHANGE Kufungua Tokeni Zako**: Hakikisha unafanya **QR Exchanges 10 za ana kwa ana** na wanadiaspora wenzako ili kupata **+10,000 $DIASPORA** zaidi na **kufungua (unlock) tokeni zako zote za $DIASPORA** kwenye pochi yako!` :
+        `With **Proof of Humanity (PoH)**, you can earn up to **70,000 $DIASPORA** converted immediately 1:1 from DSP:\n\n• **12 Profile Fields (${inspection.completedCount}/12 completed)**: Each field earns **1,000 DSP**, and your first **10,000 DSP is immediately converted 1:1 into 10,000 $DIASPORA tokens** (${immediateLeft.toLocaleString()} $DIASPORA still available immediately). Missing fields: **${missingList}**. Reply right here with your bio, occupation, years in host country, industry, profession, languages, meeting preferences, availability, interests, services, what you are looking for, or education — and I will update them for you right now!\n• **QR EXCHANGE to Unlock Your Tokens**: Complete **10 in-person QR Exchanges** with fellow diaspora members to earn another **+10,000 $DIASPORA** AND **unlock all your minted $DIASPORA tokens** in your smart wallet!`,
+      aiActions: [
+        resolveFeatureNavigationAction("qr_exchange"),
+        resolveFeatureNavigationAction("edit_profile"),
+        resolveFeatureNavigationAction("crypto"),
+      ],
+    };
+  }
+
   if (lower.includes("ubuntu") || lower.includes("emergency") || lower.includes("msiba") || lower.includes("dharura")) {
     return {
       text: isSw ?
@@ -4105,8 +4784,8 @@ async function buildIntelligentFallbackResponse(userText, userProfile) {
 
   return {
     text: isSw ?
-      `Karibu! Nipo hapa saa 24 kukuhudumia kwa Kiswahili au lugha yoyote unayopenda.\n\nUnaweza kuniomba:\n• **Kutafuta ndege** (mfano: *"Natafuta ndege kutoka Houston kwenda Dar es Salaam mwezi ujao"*)\n• **Kutafuta hoteli au kukodisha gari** (mfano: *"Natafuta hoteli Zanzibar"* au *"Post gari langu Toyota Prado 2021 kwa $60/siku Arusha"*)\n• **Kutafuta au kupost kazi** (mfano: *"Tangaza kazi ya Sales Manager Dar es Salaam mshahara $1,200/mwezi"*)\n• **Kufungua huduma yoyote** (Nearby Discovery, Live Radio, Ubuntu Emergency Fund, DDI Loans, au Real Estate).` :
-      `I am here 24/7 in any language you prefer.\n\nYou can ask me to:\n• **Search flights** (e.g., *"Find flights from Houston to Dar es Salaam next month"*)\n• **Find hotels or car rentals** (e.g., *"Find hotels in Zanzibar"* or *"List my 2021 Toyota Prado for $60/day in Arusha"*)\n• **Find or post a job** (e.g., *"Post a full-time Sales Manager job in Dar es Salaam paying $1,200/mo"*)\n• **Open any feature** (Nearby Discovery, Live Radio, Ubuntu Emergency Fund, DDI Loans, or Real Estate).`,
+      `Karibu! Nipo hapa saa 24 kukuhudumia kwa Kiswahili au lugha yoyote unayopenda.\n\nUnaweza kuniomba:\n• **Kukujazia Sehemu 12 za Wasifu wako** ili upate **10,000 DSP -> 10,000 $DIASPORA** papo hapo (na kufanya **QR Exchange 10** kufungua tokeni zako)\n• **Kutafuta ndege, hoteli, au kukodisha gari**\n• **Kutafuta au kupost kazi, bidhaa, au nyumba/viwanja**\n• **Kufungua huduma yoyote** (Nearby Discovery, Live Radio, Ubuntu Emergency Fund, DDI Loans, au QR Exchange).` :
+      `I am here 24/7 in any language you prefer.\n\nYou can ask me to:\n• **Help fill out your 12 profile fields right in chat** to earn **10,000 DSP -> 10,000 $DIASPORA** immediately (and open **QR Exchange** to complete your 10 scans and unlock your tokens)\n• **Search flights, hotels, stays, or car rentals**\n• **Find or publish jobs, marketplace listings, events, or real estate**\n• **Access any information or feature** (Nearby Discovery, Communities, Chambers, Live Radio, Ubuntu Emergency Fund, or DDI Loans).`,
     aiActions: buildWelcomeAiActions().slice(0, 4),
   };
 }
@@ -4225,11 +4904,12 @@ async function generateAiAgentResponse({
   historyMessages = [],
   userProfile = {},
   dspPoints = 0,
+  richContext = null,
 }) {
   await ensureAiConfigEnv();
   const geminiKey = process.env.GEMINI_API_KEY;
   const nvidiaKey = process.env.NVIDIA_API_KEY;
-  const baseInstruction = buildSystemInstruction(userProfile, dspPoints);
+  const baseInstruction = buildSystemInstruction(userProfile, dspPoints, richContext);
   const systemInstruction = isVoiceMode ?
     `${baseInstruction}\n\nNATURAL VOICE CONVERSATION MODE ACTIVE:\n- You are currently in a live, natural spoken conversation with the user.\n- Keep your response warm, natural, conversational, and concise (1 to 3 sentences) so it sounds like a natural face-to-face conversation when spoken aloud.\n- Do NOT use bullet points, numbered lists, or markdown formatting.\n- Never say you cannot listen to voice; you CAN hear the user's spoken voice directly.` :
     baseInstruction;
@@ -4302,93 +4982,82 @@ async function generateAiAgentResponse({
           });
         }
 
-        const firstPayload = {
-          systemInstruction: {
-            parts: [{text: systemInstruction}],
-          },
-          contents,
-          tools: GEMINI_TOOLS_DECLARATION,
-          generationConfig: {
-            temperature: 0.4,
-            maxOutputTokens: isVoiceMode ? 280 : 1024,
-            ...(isVoiceMode && geminiModel.startsWith("gemini-2.5") ? {
-              thinkingConfig: {thinkingBudget: 0},
-            } : {}),
-          },
+        const generationConfig = {
+          temperature: 0.4,
+          maxOutputTokens: isVoiceMode ? 280 : 1024,
+          ...(isVoiceMode && geminiModel.startsWith("gemini-2.5") ? {
+            thinkingConfig: {thinkingBudget: 0},
+          } : {}),
         };
 
-        const firstRes = await axios.post(url, firstPayload, {timeout: 20000});
-        const candidate = firstRes.data?.candidates?.[0];
-        const parts = candidate?.content?.parts || [];
-        const functionCalls = parts.filter((p) => p.functionCall).map((p) => p.functionCall);
+        const MAX_TOOL_ROUNDS = 3;
+        let roundContents = [...contents];
+        let finalReplyText = "";
 
-        if (functionCalls.length > 0) {
-          const functionResponseParts = [];
-          for (const fc of functionCalls) {
-            const toolResult = await runToolCall(fc.name, fc.args || {}, userProfile);
-            if (toolResult?.draftAction) {
-              collectedActions.push(toolResult.draftAction);
-            }
-            if (toolResult?.aiAction) {
-              collectedActions.push(toolResult.aiAction);
-            }
-            if (Array.isArray(toolResult?.aiActions)) {
-              collectedActions.push(...toolResult.aiActions);
-            }
-            functionResponseParts.push({
-              functionResponse: {
-                name: fc.name,
-                response: {result: toolResult},
-              },
-            });
-          }
-
-          const secondContents = [
-            ...contents,
-            candidate.content,
-            {
-              role: "function",
-              parts: functionResponseParts,
+        for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
+          const allowMoreTools = round < MAX_TOOL_ROUNDS;
+          const payload = {
+            systemInstruction: {
+              parts: [{text: systemInstruction}],
             },
-          ];
+            contents: roundContents,
+            ...(allowMoreTools ? {tools: GEMINI_TOOLS_DECLARATION} : {}),
+            generationConfig,
+          };
 
-          const secondRes = await axios.post(
-              url,
+          const roundRes = await axios.post(url, payload, {timeout: 20000});
+          const candidate = roundRes.data?.candidates?.[0];
+          const parts = candidate?.content?.parts || [];
+          const functionCalls = parts.filter((p) => p.functionCall).map((p) => p.functionCall);
+
+          if (functionCalls.length > 0 && allowMoreTools) {
+            const functionResponseParts = [];
+            for (const fc of functionCalls) {
+              const toolResult = await runToolCall(fc.name, fc.args || {}, userProfile);
+              if (toolResult?.draftAction) {
+                collectedActions.push(toolResult.draftAction);
+              }
+              if (toolResult?.aiAction) {
+                collectedActions.push(toolResult.aiAction);
+              }
+              if (Array.isArray(toolResult?.aiActions)) {
+                collectedActions.push(...toolResult.aiActions);
+              }
+              functionResponseParts.push({
+                functionResponse: {
+                  name: fc.name,
+                  response: {result: toolResult},
+                },
+              });
+            }
+
+            roundContents = [
+              ...roundContents,
+              candidate.content,
               {
-                systemInstruction: {
-                  parts: [{text: systemInstruction}],
-                },
-                contents: secondContents,
-                generationConfig: {
-                  temperature: 0.4,
-                  maxOutputTokens: isVoiceMode ? 280 : 1024,
-                  ...(isVoiceMode && geminiModel.startsWith("gemini-2.5") ? {
-                    thinkingConfig: {thinkingBudget: 0},
-                  } : {}),
-                },
+                role: "function",
+                parts: functionResponseParts,
               },
-              {timeout: 20000},
-          );
-
-          const finalText = secondRes.data?.candidates?.[0]?.content?.parts
-              ?.map((p) => p.text || "")
-              .join("")
-              .trim();
-
-          if (finalText) {
-            return {
-              text: stripEmojis(finalText),
-              aiActions: collectedActions,
-            };
+            ];
+            continue;
           }
-        } else {
-          const directText = parts.map((p) => p.text || "").join("").trim();
-          if (directText) {
-            return {
-              text: stripEmojis(directText),
-              aiActions: collectedActions,
-            };
-          }
+
+          finalReplyText = parts.map((p) => p.text || "").join("").trim();
+          break;
+        }
+
+        if (finalReplyText) {
+          const seenIds = new Set();
+          const dedupedActions = collectedActions.filter((a) => {
+            const key = `${a.type || ""}:${a.route || a.prompt || a.id || ""}`;
+            if (seenIds.has(key)) return false;
+            seenIds.add(key);
+            return true;
+          });
+          return {
+            text: stripEmojis(finalReplyText),
+            aiActions: dedupedActions,
+          };
         }
       } catch (gErr) {
         console.warn(`[AI Agent] Gemini (${geminiModel}) call failed, trying next engine:`, gErr.message);
@@ -4486,9 +5155,8 @@ async function handleUserMessageToAiAgent({chatId, messageId, message, userId}) 
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    const [userSnap, pointsSnap, historySnap] = await Promise.all([
-      db.collection("users").doc(userId).get(),
-      db.collection("user_points").doc(userId).get(),
+    const [richContext, historySnap] = await Promise.all([
+      loadComprehensiveUserAiContext(userId),
       db.collection("chats")
           .doc(chatId)
           .collection("messages")
@@ -4497,9 +5165,8 @@ async function handleUserMessageToAiAgent({chatId, messageId, message, userId}) 
           .get(),
     ]);
 
-    const userProfile = userSnap.exists ? (userSnap.data() || {}) : {};
-    userProfile.uid = userId;
-    const dspPoints = pointsSnap.exists ? (pointsSnap.data()?.totalPoints || 0) : 0;
+    const userProfile = richContext.userProfile;
+    const dspPoints = richContext.dspPoints;
     const historyMessages = historySnap.docs
         .map((d) => d.data())
         .reverse();
@@ -4520,6 +5187,7 @@ async function handleUserMessageToAiAgent({chatId, messageId, message, userId}) 
       historyMessages,
       userProfile,
       dspPoints,
+      richContext,
     });
 
     const nowMs = Date.now();
@@ -4738,9 +5406,8 @@ exports.converseAiAgentVoice = functions.https.onCall(async (data, context) => {
     healLegacyAiAgentDocs(),
   ]);
 
-  const [userSnap, pointsSnap, historySnap] = await Promise.all([
-    db.collection("users").doc(uid).get(),
-    db.collection("user_points").doc(uid).get(),
+  const [richContext, historySnap] = await Promise.all([
+    loadComprehensiveUserAiContext(uid),
     validId(chatId) ?
       db.collection("chats")
           .doc(chatId)
@@ -4751,9 +5418,8 @@ exports.converseAiAgentVoice = functions.https.onCall(async (data, context) => {
       Promise.resolve({docs: []}),
   ]);
 
-  const userProfile = userSnap.exists ? (userSnap.data() || {}) : {};
-  userProfile.uid = uid;
-  const dspPoints = pointsSnap.exists ? (pointsSnap.data()?.totalPoints || 0) : 0;
+  const userProfile = richContext.userProfile;
+  const dspPoints = richContext.dspPoints;
   const historyMessages = (historySnap.docs || []).map((d) => d.data()).reverse();
 
   const aiResult = await generateAiAgentResponse({
@@ -4764,6 +5430,7 @@ exports.converseAiAgentVoice = functions.https.onCall(async (data, context) => {
     historyMessages,
     userProfile,
     dspPoints,
+    richContext,
   });
 
   const replyText = String(aiResult.text || "").trim();
@@ -4837,8 +5504,14 @@ async function resolveOrEnsureAiAgentChatForUser(userId, userProfile = {}) {
   }
 
   const users = [userId, agentUid].sort();
-  const chatSnap = await chatRef.get();
+  const userChatRef = db.collection("users").doc(userId).collection("userChats").doc(chatRef.id);
+  const [chatSnap, userChatSnap] = await db.getAll(chatRef, userChatRef);
   if (!chatSnap.exists) {
+    const existingUserChatData = userChatSnap.exists ? (userChatSnap.data() || {}) : {};
+    const shouldDefaultPin = !userChatSnap.exists || (
+      typeof existingUserChatData.pinned !== "boolean" &&
+      typeof existingUserChatData.isPinned !== "boolean"
+    );
     const now = admin.firestore.FieldValue.serverTimestamp();
     const nowMs = Date.now();
     const welcomeContent = buildAiAgentWelcomeText(userProfile);
@@ -4893,7 +5566,7 @@ async function resolveOrEnsureAiAgentChatForUser(userId, userProfile = {}) {
       },
     });
     batch.set(
-        db.collection("users").doc(userId).collection("userChats").doc(chatRef.id),
+        userChatRef,
         {
           chatId: chatRef.id,
           type: "direct",
@@ -4906,6 +5579,7 @@ async function resolveOrEnsureAiAgentChatForUser(userId, userProfile = {}) {
           unreadCount: 1,
           unreadNotificationLines: [welcomeContent.slice(0, 500)],
           isDeleted: false,
+          ...(shouldDefaultPin ? {pinned: true, pinnedBottom: false} : {}),
         },
         {merge: true},
     );
@@ -4949,7 +5623,7 @@ function buildNextPohTaskRecommendation({
     return {
       nextTaskTitle: "Next PoH Task: Enable Location Transparency (+10,000 $DIASPORA)",
       nextTaskBody:
-        `Turn on your live city visibility so nearby compatriots can connect with you and immediately convert **+10,000 DSP → 10,000 $DIASPORA** at 100% efficiency (${remainingPool.toLocaleString()} $DIASPORA still available in your 70,000 PoH Genesis pool).`,
+        `Turn on your live city visibility so nearby compatriots can connect with you and immediately convert **+10,000 DSP -> 10,000 $DIASPORA** at 100% efficiency (${remainingPool.toLocaleString()} $DIASPORA still available in your 70,000 PoH Genesis pool).`,
       aiActions: [
         {
           id: "poh_next_location",
@@ -4959,10 +5633,10 @@ function buildNextPohTaskRecommendation({
           icon: "compass",
         },
         {
-          id: "poh_view_wallet",
+          id: "poh_open_qr",
           type: "navigate",
-          label: "View $DIASPORA Wallet",
-          route: "/dsp/points",
+          label: `Open QR Exchange (${uniqueQrCount}/10)`,
+          route: "/profile?showQr=true",
           icon: "check",
         },
       ],
@@ -4973,23 +5647,30 @@ function buildNextPohTaskRecommendation({
     const fieldsLeftFor10k = Math.max(1, 10 - completedFields);
     const rewardLeft = fieldsLeftFor10k * 1000;
     return {
-      nextTaskTitle: `Next PoH Task: Complete Profile Fields (+${rewardLeft.toLocaleString()} $DIASPORA left)`,
+      nextTaskTitle: `Next PoH Task: Fill Your 12 Profile Fields (+${rewardLeft.toLocaleString()} $DIASPORA) & QR Exchange`,
       nextTaskBody:
-        `You have completed **${completedFields}/${totalFields}** profile fields. Complete **${fieldsLeftFor10k} more field${fieldsLeftFor10k === 1 ? "" : "s"}** on your profile to earn **+1,000 $DIASPORA per field** (up to **+${rewardLeft.toLocaleString()} $DIASPORA** converted immediately at 100% efficiency!).`,
+        `You have completed **${completedFields}/${totalFields}** profile fields. Complete **${fieldsLeftFor10k} more field${fieldsLeftFor10k === 1 ? "" : "s"}** to earn **+1,000 DSP per field** immediately converted 1:1 into **+${rewardLeft.toLocaleString()} $DIASPORA** (I can fill all 12 fields for you right here in chat!). Remember: complete **10 in-person QR Exchanges** (**${uniqueQrCount}/10**) to **unlock your minted $DIASPORA tokens**!`,
       aiActions: [
         {
-          id: "poh_next_profile",
+          id: "poh_fill_profile_ai",
+          type: "prompt",
+          label: `Fill My 12 Fields with AI (+${rewardLeft.toLocaleString()} $DIASPORA)`,
+          prompt: "Help me fill out my 12 profile fields right here in chat so I can earn my 10,000 DSP immediately converted to $DIASPORA tokens.",
+          icon: "sparkles",
+        },
+        {
+          id: "poh_open_qr",
           type: "navigate",
-          label: `Complete Profile (+${rewardLeft.toLocaleString()} $DIASPORA)`,
-          route: "/profile",
+          label: `Open QR Exchange (${uniqueQrCount}/10 to Unlock)`,
+          route: "/profile?showQr=true",
           icon: "check",
         },
         {
-          id: "poh_view_wallet",
+          id: "poh_next_profile",
           type: "navigate",
-          label: "View $DIASPORA Wallet",
-          route: "/dsp/points",
-          icon: "compass",
+          label: "Edit Profile Manually",
+          route: "/profile?edit=true",
+          icon: "users",
         },
       ],
     };
@@ -4999,23 +5680,23 @@ function buildNextPohTaskRecommendation({
     const qrLeft = Math.max(1, 10 - uniqueQrCount);
     const qrRewardLeft = qrLeft * 1000;
     return {
-      nextTaskTitle: `Next PoH Task: Scan ${qrLeft} More In-Person QR Code${qrLeft === 1 ? "" : "s"} (+${qrRewardLeft.toLocaleString()} $DIASPORA & Unlock Wallet)`,
+      nextTaskTitle: `Unlock Your Tokens: ${qrLeft} More In-Person QR Exchange${qrLeft === 1 ? "" : "s"} (+${qrRewardLeft.toLocaleString()} $DIASPORA)`,
       nextTaskBody:
-        `You have **${uniqueQrCount}/10** in-person QR handshakes. Every QR handshake with a diaspora member converts **+1,000 DSP → 1,000 $DIASPORA** immediately, and reaching **10 QR exchanges unlocks all your minted $DIASPORA** for peer transfers and TDE macro distributions!`,
+        `You have **${uniqueQrCount}/10** in-person QR Exchanges. Every QR Exchange with a diaspora member converts **+1,000 DSP -> 1,000 $DIASPORA** immediately, and reaching **10 QR Exchanges unlocks all your minted $DIASPORA tokens** in your wallet for peer transfers and TDE macro distributions!`,
       aiActions: [
-        {
-          id: "poh_next_qr",
-          type: "navigate",
-          label: `Find Nearby Members (${uniqueQrCount}/10 QR)`,
-          route: "/nearby",
-          icon: "compass",
-        },
         {
           id: "poh_open_profile_qr",
           type: "navigate",
-          label: "Open My QR Code",
-          route: "/profile",
+          label: `Open QR Exchange (${uniqueQrCount}/10 to Unlock)`,
+          route: "/profile?showQr=true",
           icon: "check",
+        },
+        {
+          id: "poh_next_qr",
+          type: "navigate",
+          label: "Find Nearby Compatriots",
+          route: "/nearby",
+          icon: "compass",
         },
       ],
     };
@@ -5103,7 +5784,7 @@ function buildNextPohTaskRecommendation({
     return {
       nextTaskTitle: "Final PoH Pillar: Ubuntu Emergency Fund (+10,000 $DIASPORA)",
       nextTaskBody:
-        "Complete your 7th Proof of Humanity pillar by contributing to the **Ubuntu Emergency Fund** to immediately convert **+10,000 DSP → 10,000 $DIASPORA** at 100% efficiency and reach the full **70,000 $DIASPORA** PoH Genesis target!",
+        "Complete your 7th Proof of Humanity pillar by contributing to the **Ubuntu Emergency Fund** to immediately convert **+10,000 DSP -> 10,000 $DIASPORA** at 100% efficiency and reach the full **70,000 $DIASPORA** PoH Genesis target!",
       aiActions: [
         {
           id: "poh_next_emergency_fund",
@@ -5146,6 +5827,96 @@ function buildNextPohTaskRecommendation({
   };
 }
 
+function buildLocationTransparencyDistributionPayload({
+  userProfile = {},
+  amount = 10000,
+  reasonStr = "enabling Location Transparency (+10,000 DSP)",
+  txHash = null,
+  pohState = {},
+}) {
+  const firstName = String(userProfile.firstName || "").trim();
+  const greetingName = firstName ? `, ${firstName}` : "";
+  const completedFields = Number(pohState.completedFields ?? inspectProfileMilestones(userProfile).completedCount);
+  const totalFields = Number(pohState.totalFields || 12);
+  const fieldsLeftFor10k = Math.max(0, 10 - completedFields);
+  const profileRewardLeft = fieldsLeftFor10k > 0 ? fieldsLeftFor10k * 1000 : 10000;
+  const qrCount = Number(pohState.uniqueQrCount || 0);
+  const isUnlocked = Boolean(pohState.tokensUnlocked || qrCount >= 10);
+  const totalConvertedSoFar = Number(pohState.pohTargetDsp || amount);
+
+  const headerLabel = "Location Transparency • DSP Converted to $DIASPORA";
+  const footerLabel = txHash ?
+    (isUnlocked ? "100% PoH On-Chain Mint • Unlocked" : `On-Chain in Wallet • Unlocks at 10 QR (${qrCount}/10)`) :
+    (isUnlocked ? "100% PoH Conversion Confirmed" : `100% PoH Conversion • Unlocks at 10 QR (${qrCount}/10)`);
+
+  const profileOfferText = completedFields < 12 ?
+    `• **Fill Your 12 Profile Fields (+10,000 DSP -> 10,000 $DIASPORA Immediately)**: Complete your **${totalFields} profile fields** (**${completedFields}/${totalFields}** completed so far) to earn **10,000 DSP** that is **immediately converted 1:1 into 10,000 $DIASPORA tokens** right away (plus +2,000 DSP bonus on fields 11 and 12). **I can help fill out all 12 fields for you right here in chat** — just reply with your details or tap **Fill My 12 Fields with AI** below!` :
+    `• **12 Profile Fields Completed**: You have already completed all **12/12** profile fields and earned your **10,000 $DIASPORA** profile reward!`;
+
+  const qrUnlockText = isUnlocked ?
+    `• **QR EXCHANGE Unlocked**: You have completed **${qrCount}/10** in-person QR Exchanges — your **$DIASPORA** tokens are unlocked in your wallet!` :
+    `• **QR EXCHANGE to Unlock Your Tokens (Important)**: Your minted **$DIASPORA** (${totalConvertedSoFar.toLocaleString()} / 70,000 PoH $DIASPORA converted so far) is held safely in your smart wallet and **unlocks once you complete 10 in-person QR Exchanges** (**${qrCount}/10 completed**). Every QR Exchange with a fellow diaspora member also converts **+1,000 DSP -> 1,000 $DIASPORA** immediately (+10,000 $DIASPORA total)!`;
+
+  const explanationText =
+    `Congratulations${greetingName}! You just received **+${amount.toLocaleString()} $DIASPORA** from **${reasonStr}** — your earned DSP was immediately converted at **100% efficiency** into **$DIASPORA** tokens!\n\n` +
+    `**Welcome to Proof of Humanity (PoH)**:\n` +
+    `PoH rewards verified diaspora members with up to **70,000 $DIASPORA** converted immediately 1:1 from DSP across 7 community pillars (keep live city visibility enabled so this Location Transparency reward is never forfeited).\n\n` +
+    `${profileOfferText}\n\n` +
+    `${qrUnlockText}`;
+
+  const nextTaskTitle = completedFields < 10 ?
+    `Earn +${profileRewardLeft.toLocaleString()} $DIASPORA (12 Profile Fields) & Unlock via QR Exchange` :
+    `Unlock Your $DIASPORA via In-Person QR Exchange (${qrCount}/10)`;
+
+  const nextTaskBody = completedFields < 10 ?
+    `Tap **Fill My 12 Fields with AI** below so I can help complete your 12 profile fields right here in chat for **+10,000 DSP -> 10,000 $DIASPORA**, and scan **10 in-person QR codes** (**${qrCount}/10**) via **QR Exchange** to **unlock all your tokens**!` :
+    `Meet fellow diaspora members in person and scan **10 QR codes** (**${qrCount}/10**) via **QR Exchange** to earn **+1,000 $DIASPORA per scan** and **unlock all your minted $DIASPORA tokens**!`;
+
+  const aiActions = [
+    ...(completedFields < 12 ? [{
+      id: "loc_dist_fill_12_fields_ai",
+      type: "prompt",
+      label: `Fill My 12 Fields with AI (+${profileRewardLeft.toLocaleString()} $DIASPORA)`,
+      prompt: "Help me fill out my 12 profile fields right here in chat so I can earn my 10,000 DSP immediately converted to $DIASPORA tokens.",
+      icon: "sparkles",
+    }] : []),
+    {
+      id: "loc_dist_open_qr_exchange",
+      type: "navigate",
+      label: `Open QR Exchange (${qrCount}/10 to Unlock)`,
+      route: "/profile?showQr=true",
+      icon: "check",
+    },
+    ...(completedFields < 12 ? [{
+      id: "loc_dist_edit_profile",
+      type: "navigate",
+      label: "Edit Profile Manually",
+      route: "/profile?edit=true",
+      icon: "users",
+    }] : []),
+    {
+      id: "loc_dist_open_wallet",
+      type: "navigate",
+      label: "View $DIASPORA Wallet",
+      route: "/dsp/crypto",
+      icon: "wallet",
+    },
+  ];
+
+  const pushSummaryText =
+    `+${amount.toLocaleString()} $DIASPORA from Location Transparency! Fill your 12 profile fields with AI (+10,000 $DIASPORA) & complete 10 QR Exchanges to unlock your tokens.`;
+
+  return {
+    headerLabel,
+    footerLabel,
+    explanationText,
+    pushSummaryText,
+    nextTaskTitle,
+    nextTaskBody,
+    aiActions,
+  };
+}
+
 async function sendAiAgentTokenConversionMessage({
   userId,
   userProfile = {},
@@ -5172,6 +5943,7 @@ async function sendAiAgentTokenConversionMessage({
     let footerLabel = "100% PoH Conversion Confirmed";
     let explanationText = "";
     let pushSummaryText = "";
+    let nextTask = buildNextPohTaskRecommendation(pohState);
 
     if (conversionKind === "tde_conversion" && tdeDetails) {
       const epochNum = Number(tdeDetails.epoch || 1);
@@ -5190,22 +5962,42 @@ async function sendAiAgentTokenConversionMessage({
       const reasonStr = cleanReasons.length > 0
         ? cleanReasons.join(", ")
         : "completing a Proof of Humanity (PoH) milestone";
-      const totalConvertedSoFar = Number(pohState.pohTargetDsp || amount);
-      const isUnlocked = Boolean(pohState.tokensUnlocked);
-      const qrCount = Number(pohState.uniqueQrCount || 0);
-      const lockNote = isUnlocked
-        ? "Your $DIASPORA wallet is unlocked and active on-chain!"
-        : `Your minted $DIASPORA is held safely in your smart wallet (${totalConvertedSoFar.toLocaleString()} / 70,000 PoH $DIASPORA converted so far) and unlocks for transfers once you complete 10 in-person QR exchanges (${qrCount}/10 completed).`;
+      const isLocationTransparencyDist = cleanReasons.some((r) => /location transparency/i.test(r));
 
-      headerLabel = "DSP Converted to $DIASPORA";
-      footerLabel = txHash ? "100% PoH On-Chain Mint Confirmed" : "100% PoH Conversion Confirmed";
-      explanationText =
-        `Congratulations${greetingName}! You just received **+${amount.toLocaleString()} $DIASPORA** because your earned DSP from **${reasonStr}** automatically converted at **100% efficiency** into $DIASPORA tokens.\n\n${lockNote}`;
-      pushSummaryText =
-        `+${amount.toLocaleString()} $DIASPORA converted from DSP (${reasonStr})! Tap to see how to earn more.`;
+      if (isLocationTransparencyDist) {
+        const locPayload = buildLocationTransparencyDistributionPayload({
+          userProfile,
+          amount,
+          reasonStr,
+          txHash,
+          pohState,
+        });
+        headerLabel = locPayload.headerLabel;
+        footerLabel = locPayload.footerLabel;
+        explanationText = locPayload.explanationText;
+        pushSummaryText = locPayload.pushSummaryText;
+        nextTask = {
+          nextTaskTitle: locPayload.nextTaskTitle,
+          nextTaskBody: locPayload.nextTaskBody,
+          aiActions: locPayload.aiActions,
+        };
+      } else {
+        const totalConvertedSoFar = Number(pohState.pohTargetDsp || amount);
+        const isUnlocked = Boolean(pohState.tokensUnlocked);
+        const qrCount = Number(pohState.uniqueQrCount || 0);
+        const lockNote = isUnlocked
+          ? "Your $DIASPORA wallet is unlocked and active on-chain!"
+          : `Your minted **$DIASPORA** is held safely in your smart wallet (**${totalConvertedSoFar.toLocaleString()} / 70,000** PoH $DIASPORA converted so far) and **unlocks via QR Exchange** once you complete **10 in-person QR Exchanges** (**${qrCount}/10 completed**).`;
+
+        headerLabel = "DSP Converted to $DIASPORA";
+        footerLabel = txHash ? "100% PoH On-Chain Mint Confirmed" : "100% PoH Conversion Confirmed";
+        explanationText =
+          `Congratulations${greetingName}! You just received **+${amount.toLocaleString()} $DIASPORA** because your earned DSP from **${reasonStr}** automatically converted at **100% efficiency** into **$DIASPORA** tokens.\n\n${lockNote}`;
+        pushSummaryText =
+          `+${amount.toLocaleString()} $DIASPORA converted from DSP (${reasonStr})! Tap to see how to earn more.`;
+      }
     }
 
-    const nextTask = buildNextPohTaskRecommendation(pohState);
     const nowMs = Date.now() + 2500;
     const msgRef = db.collection("chats").doc(chatId).collection("messages").doc();
 
@@ -5246,8 +6038,14 @@ async function sendAiAgentTokenConversionMessage({
 exports.DIASPORA_AI_AGENT_UID = DIASPORA_AI_AGENT_UID;
 exports.DIASPORA_AI_AGENT_NAME = DIASPORA_AI_AGENT_NAME;
 exports.DIASPORA_AI_AGENT_AVATAR = DIASPORA_AI_AGENT_AVATAR;
+exports.AI_PROFILE_MILESTONE_FIELDS = AI_PROFILE_MILESTONE_FIELDS;
+exports.inspectProfileMilestones = inspectProfileMilestones;
 exports.ensureAiAgentProfile = ensureAiAgentProfile;
 exports.buildAiAgentWelcomeText = buildAiAgentWelcomeText;
 exports.buildWelcomeAiActions = buildWelcomeAiActions;
+exports.buildLocationTransparencyDistributionPayload = buildLocationTransparencyDistributionPayload;
+exports.buildNextPohTaskRecommendation = buildNextPohTaskRecommendation;
+exports.buildSystemInstruction = buildSystemInstruction;
+exports.executeUpdateMyProfileTool = executeUpdateMyProfileTool;
 exports.handleUserMessageToAiAgent = handleUserMessageToAiAgent;
 exports.sendAiAgentTokenConversionMessage = sendAiAgentTokenConversionMessage;

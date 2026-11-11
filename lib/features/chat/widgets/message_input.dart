@@ -992,14 +992,18 @@ class _MessageInputState extends ConsumerState<MessageInput>
                   children: [
                     const Icon(LucideIcons.mic, color: Colors.red, size: 20),
                     const SizedBox(width: 8),
-                    Text(
-                      'Recording... ${_formatDuration(_recordDurationSeconds)}',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: Colors.red,
-                        fontWeight: FontWeight.bold,
+                    Expanded(
+                      child: Text(
+                        'Recording... ${_formatDuration(_recordDurationSeconds)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: Colors.red,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                    const Spacer(),
+                    const SizedBox(width: 8),
                     GestureDetector(
                       onTap: _cancelRecording,
                       child: Text('Cancel', style: theme.textTheme.bodySmall),
@@ -1451,11 +1455,15 @@ class _MessageInputState extends ConsumerState<MessageInput>
                         color: theme.colorScheme.primary,
                       ),
                       const SizedBox(width: 4),
-                      Text(
-                        'Replying to ${replyingTo.senderName}',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.w600,
+                      Flexible(
+                        child: Text(
+                          'Replying to ${replyingTo.senderName}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ],
@@ -2035,12 +2043,16 @@ class _AttachmentPickerModalState
                                 color: activeColor,
                               ),
                               const SizedBox(width: 4),
-                              Text(
-                                'Base Smart Wallet • Gasless Zero-Fee Transfer',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  fontSize: 10,
-                                  color: activeColor,
-                                  fontWeight: FontWeight.w500,
+                              Flexible(
+                                child: Text(
+                                  'Base Smart Wallet • Gasless Zero-Fee Transfer',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    fontSize: 10,
+                                    color: activeColor,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ),
                             ],
@@ -2352,19 +2364,28 @@ class _AttachmentPickerModalState
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Exchange Rate: 1 $currencyCode = ${CurrencyHelper.formatFiatAmount(exchangeRate, forceDecimals: true)} $receiverCurrencyCode',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontSize: 10,
-                        color: theme.colorScheme.onSurfaceVariant,
+                    Expanded(
+                      child: Text(
+                        'Exchange Rate: 1 $currencyCode = ${CurrencyHelper.formatFiatAmount(exchangeRate, forceDecimals: true)} $receiverCurrencyCode',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontSize: 10,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ),
-                    Text(
-                      'Instant Settlement',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontSize: 10,
-                        color: Colors.green.shade700,
-                        fontWeight: FontWeight.w500,
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'Instant Settlement',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontSize: 10,
+                          color: Colors.green.shade700,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ],

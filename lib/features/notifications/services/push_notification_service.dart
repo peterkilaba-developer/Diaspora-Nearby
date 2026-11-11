@@ -15,8 +15,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http; // [NEW]
 import 'package:path_provider/path_provider.dart'; // [NEW]
-import 'package:diaspora_nearby/features/notifications/models/notification_item.dart';
-import 'package:diaspora_nearby/features/notifications/repository/notifications_repository.dart';
 
 /// Represents a single message line inside a grouped chat push notification container.
 class ChatNotificationLine {
@@ -144,34 +142,6 @@ class PushNotificationService {
   static final Map<String, bool> _mutedChatCache = {};
 
   bool _isInitialized = false;
-  StreamSubscription<QuerySnapshot>?
-  _relationshipSubscription; // Listener for requests
-  StreamSubscription<QuerySnapshot>?
-  _acceptedSentRequestsSubscription; // Listener for accepted sent requests
-  StreamSubscription<QuerySnapshot>?
-  _proxyRequestSubscription; // Listener for proxy requests
-  StreamSubscription<QuerySnapshot>?
-  _hostingInterestSubscription; // Listener for hosting interest
-  StreamSubscription<QuerySnapshot>?
-  _hostingSelectionSubscription; // Listener for host selection
-  StreamSubscription<QuerySnapshot>?
-  _travelerSessionStatusSubscription; // Traveler-side session listener
-  StreamSubscription<QuerySnapshot>?
-  _hostSessionStatusSubscription; // Host-side session listener
-
-  // ── New feature listeners ──────────────────────────────────────────
-  StreamSubscription<QuerySnapshot>?
-  _bookingRequestSubscription; // Listener for peer booking requests
-  StreamSubscription<QuerySnapshot>?
-  _bookingStatusSubscription; // Listener for booking status changes
-  StreamSubscription<QuerySnapshot>?
-  _eventSubscription; // Listener for event changes
-  StreamSubscription<QuerySnapshot>?
-  _electionSubscription; // Listener for new elections
-  StreamSubscription<QuerySnapshot>?
-  _trustVerificationSubscription; // Listener for trust verifications
-  StreamSubscription<QuerySnapshot>?
-  _trustVouchSubscription; // Listener for trust vouches
 
   // Track processed messages for client-side listener too
   final Set<String> _processedMessageIds = {};
@@ -303,43 +273,6 @@ class PushNotificationService {
     }
   }
 
-  /// Persist a notification to Firestore so it appears in the Notifications hub.
-  Future<void> _persistNotification({
-    required NotificationType type,
-    required String title,
-    required String body,
-    Map<String, dynamic> payload = const {},
-    bool actionRequired = false,
-    String? dedupKey,
-  }) async {
-    final userId = _activeUserId;
-    if (userId == null) return;
-
-    final item = NotificationItem(
-      id: '', // Firestore auto-generates
-      type: type,
-      title: title,
-      body: body,
-      payload: payload,
-      actionRequired: actionRequired,
-      createdAt: DateTime.now(),
-    );
-
-    final ref = _ref;
-    if (ref == null) return;
-    final repo = ref.read(notificationsRepositoryProvider);
-
-    if (dedupKey != null) {
-      await repo.addIfNotDuplicate(
-        userId: userId,
-        dedupKey: dedupKey,
-        item: item,
-      );
-    } else {
-      await repo.addNotification(userId, item);
-    }
-  }
-
   /// Initialize notifications (call once on app start)
   Future<void> initialize() async {
     if (_isInitialized) {
@@ -386,7 +319,8 @@ class PushNotificationService {
           }
         } else {
           debugPrint('PushNotificationService: User signed out.');
-          _cancelAllSubscriptions();
+          _chatNotificationMessages.clear();
+          _processedMessageIds.clear();
         }
       });
     }
@@ -398,38 +332,59 @@ class PushNotificationService {
     }
   }
 
-  /// Called when user logs in
-  Future<void> registerForUser(String userId) async {
-    // Start Firestore listeners immediately on frame 0 without blocking on FCM/permission prompts
-    _listenForRelationshipRequests(userId);
-    _listenForAcceptedSentRequests(userId);
-    _listenForProxyRequests(userId);
-    _listenForHostingInterest(userId);
-    _listenForHostSelection(userId);
-    _listenForSessionStatusChanges(userId);
-    _listenForBookingRequests(userId);
-    _listenForBookingStatusChanges(userId);
-    _listenForEventChanges(userId);
-    _listenForElections(userId);
-    _listenForTrustVerifications(userId);
-    _listenForTrustVouches(userId);
-
-    // Run FCM token registration and permission + topic subscription concurrently
-    await Future.wait([
-      registerFCMToken(userId).catchError((Object e) {
-        debugPrint('Error registering FCM token: $e');
-      }),
-      () async {
-        try {
-          final granted = await requestPermission();
-          if (granted) {
-            await subscribeToTopics(userId);
-          }
-        } catch (e) {
-          debugPrint('Error subscribing to topics: $e');
+  /// Called when user logs in.
+  ///
+  /// Engagement notifications (relationship requests, bookings, hosting,
+  /// events, elections, trust) are delivered server-side via FCM by Cloud
+  /// Functions (`functions/lib/engagement_notifications.js`), so they reach the
+  /// user even when the app is closed. The client only needs a valid token.
+  Future<void> registerForUser(
+    String userId, {
+    bool userInitiated = false,
+  }) async {
+    // Respect an explicit opt-out: automatic (app start / sign-in) registration
+    // must not silently re-enable notifications the user turned off. Only the
+    // settings toggle (userInitiated) may turn them back on.
+    if (!userInitiated) {
+      try {
+        final privateDoc = await _firestore
+            .collection('user_private')
+            .doc(userId)
+            .get();
+        if (privateDoc.data()?['notificationsEnabled'] == false) {
+          debugPrint(
+            'PushNotificationService: Notifications disabled by user; skipping registration.',
+          );
+          return;
         }
-      }(),
-    ]);
+      } catch (e) {
+        debugPrint('PushNotificationService: Could not read opt-out state: $e');
+      }
+    }
+
+    bool granted = false;
+    try {
+      granted = await requestPermission();
+    } catch (e) {
+      debugPrint('Error requesting notification permission: $e');
+    }
+
+    // Register the token after the permission prompt resolves: on iOS the
+    // APNs token (required for an FCM token) only exists once permission has
+    // been handled, so registering concurrently could silently save nothing.
+    try {
+      await registerFCMToken(userId);
+    } catch (e) {
+      debugPrint('Error registering FCM token: $e');
+    }
+
+    if (granted) {
+      try {
+        await subscribeToTopics(userId);
+      } catch (e) {
+        debugPrint('Error subscribing to topics: $e');
+      }
+    }
   }
 
   /// Request notification permission
@@ -441,7 +396,8 @@ class PushNotificationService {
       provisional: false,
     );
 
-    return settings.authorizationStatus == AuthorizationStatus.authorized;
+    return settings.authorizationStatus == AuthorizationStatus.authorized ||
+        settings.authorizationStatus == AuthorizationStatus.provisional;
   }
 
   /// Initialize local notifications for foreground display
@@ -487,7 +443,6 @@ class PushNotificationService {
 
   /// Disable notifications
   Future<void> disableNotifications(String userId) async {
-    _cancelAllSubscriptions();
     try {
       await Future.wait([
         _fcm.deleteToken(),
@@ -500,36 +455,6 @@ class PushNotificationService {
     } catch (e) {
       // Error disabling notifications
     }
-  }
-
-  /// Cancels all active Firestore notification subscriptions
-  void _cancelAllSubscriptions() {
-    _relationshipSubscription?.cancel();
-    _relationshipSubscription = null;
-    _acceptedSentRequestsSubscription?.cancel();
-    _acceptedSentRequestsSubscription = null;
-    _proxyRequestSubscription?.cancel();
-    _proxyRequestSubscription = null;
-    _hostingInterestSubscription?.cancel();
-    _hostingInterestSubscription = null;
-    _hostingSelectionSubscription?.cancel();
-    _hostingSelectionSubscription = null;
-    _travelerSessionStatusSubscription?.cancel();
-    _travelerSessionStatusSubscription = null;
-    _hostSessionStatusSubscription?.cancel();
-    _hostSessionStatusSubscription = null;
-    _bookingRequestSubscription?.cancel();
-    _bookingRequestSubscription = null;
-    _bookingStatusSubscription?.cancel();
-    _bookingStatusSubscription = null;
-    _eventSubscription?.cancel();
-    _eventSubscription = null;
-    _electionSubscription?.cancel();
-    _electionSubscription = null;
-    _trustVerificationSubscription?.cancel();
-    _trustVerificationSubscription = null;
-    _trustVouchSubscription?.cancel();
-    _trustVouchSubscription = null;
   }
 
   /// Setup FCM message handlers
@@ -602,7 +527,8 @@ class PushNotificationService {
     final String msgContent = (data['content'] ?? data['body'] ?? '')
         .toString();
 
-    final bool isAiAgentSender = data['senderId']?.toString() == 'diaspora_ai_agent';
+    final bool isAiAgentSender =
+        data['senderId']?.toString() == 'diaspora_ai_agent';
     if (!isAiAgentSender &&
         (rawType == 'dsp_transfer' ||
             rawType == 'points_update' ||
@@ -612,6 +538,16 @@ class PushNotificationService {
         '🔕 [PushNotificationService] Skipping DSP transfer/reward foreground notification (handled by backend or silenced)',
       );
       return;
+    }
+
+    // City-topic "new event" broadcasts also reach the organizer; don't
+    // announce someone's own event back to them.
+    if (rawType == 'event_new' && data['creatorId'] != null) {
+      String? me = currentUserIdOverride ?? _activeUserId;
+      try {
+        me ??= FirebaseAuth.instance.currentUser?.uid;
+      } catch (_) {}
+      if (me != null && data['creatorId'].toString() == me) return;
     }
 
     // Apply strict formatting based on message type
@@ -811,18 +747,33 @@ class PushNotificationService {
 
   /// Register FCM token and save to Firestore
   Future<void> registerFCMToken(String userId) async {
-    try {
-      final token = await _fcm.getToken(vapidKey: kIsWeb ? _webVapidKey : null);
-      if (token != null) {
-        debugPrint(
-          'PushNotificationService: Obtained FCM token, saving to Firestore...',
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        // On iOS/macOS an FCM token can only be minted once APNs has issued
+        // its device token, which may lag a moment behind the permission
+        // prompt. Wait for it instead of failing silently.
+        if (!kIsWeb && (Platform.isIOS || Platform.isMacOS)) {
+          final apnsToken = await _fcm.getAPNSToken();
+          if (apnsToken == null) {
+            await Future<void>.delayed(Duration(seconds: 2 * (attempt + 1)));
+            continue;
+          }
+        }
+        final token = await _fcm.getToken(
+          vapidKey: kIsWeb ? _webVapidKey : null,
         );
-        await _saveTokenToFirestore(userId, token);
-      } else {
+        if (token != null) {
+          debugPrint(
+            'PushNotificationService: Obtained FCM token, saving to Firestore...',
+          );
+          await _saveTokenToFirestore(userId, token);
+          return;
+        }
         debugPrint('PushNotificationService: FCM token was null');
+      } catch (e) {
+        debugPrint('PushNotificationService: Failed to get FCM token: $e');
       }
-    } catch (e) {
-      debugPrint('PushNotificationService: Failed to get FCM token: $e');
+      await Future<void>.delayed(Duration(seconds: 2 * (attempt + 1)));
     }
   }
 
@@ -831,6 +782,8 @@ class PushNotificationService {
     await _firestore.collection('user_private').doc(userId).set({
       'fcmToken': token,
       'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
+      'fcmTokenRevoked': false,
+      'fcmPlatform': kIsWeb ? 'web' : Platform.operatingSystem,
       'notificationsEnabled': true,
     }, SetOptions(merge: true));
   }
@@ -896,6 +849,14 @@ class PushNotificationService {
   static String resolveTargetRouteForData(Map<String, dynamic> data) {
     final type = data['type'];
 
+    // Server-provided deep link (engagement notifications set this explicitly).
+    final explicitRoute = data['route']?.toString().trim();
+    if (explicitRoute != null &&
+        explicitRoute.startsWith('/') &&
+        !explicitRoute.startsWith('//')) {
+      return explicitRoute;
+    }
+
     if ((type == 'direct_message' ||
             type == 'chat_message' ||
             type == 'group_mention' ||
@@ -930,9 +891,10 @@ class PushNotificationService {
     } else if (type == 'proxy_request') {
       return '/dsp/emergency-fund';
     } else if ((type == 'hosting_interest_chat' ||
-            type == 'hosting_interest') &&
+            type == 'hosting_interest' ||
+            type == 'hosting_request_new') &&
         data['requestId'] != null) {
-      return '/notifications';
+      return '/hosting/request/${data['requestId']}';
     } else if (type == 'hosting_session_chat' && data['chatId'] != null) {
       return '/chats/${data['chatId']}';
     } else if (type == 'hosting_session') {
@@ -943,13 +905,16 @@ class PushNotificationService {
             type == 'travel_booking_confirmed' ||
             type == 'travel_booking_declined' ||
             type == 'travel_booking_cancelled' ||
+            type == 'travel_booking_completed' ||
             type == 'travel_trip_reminder') &&
-        data['chatId'] != null) {
+        data['chatId'] != null &&
+        data['chatId'].toString().isNotEmpty) {
       return '/chats/${data['chatId']}';
     } else if (type == 'travel_booking_request' ||
         type == 'travel_booking_confirmed' ||
         type == 'travel_booking_declined' ||
         type == 'travel_booking_cancelled' ||
+        type == 'travel_booking_completed' ||
         type == 'travel_trip_reminder') {
       return '/dsp/travel/stays';
 
@@ -957,7 +922,11 @@ class PushNotificationService {
     } else if ((type == 'event_new' ||
             type == 'event_update' ||
             type == 'event_cancelled' ||
-            type == 'event_new_attendee') &&
+            type == 'event_new_attendee' ||
+            type == 'event_checkin' ||
+            type == 'eventNew' ||
+            type == 'eventUpdate' ||
+            type == 'eventCancelled') &&
         data['eventId'] != null) {
       return '/events/${data['eventId']}';
     } else if (type == 'event_new' ||
@@ -969,6 +938,10 @@ class PushNotificationService {
     } else if (type == 'election_started' ||
         type == 'election_ending_soon' ||
         type == 'election_results') {
+      final communityId = data['communityId']?.toString();
+      if (communityId != null && communityId.isNotEmpty) {
+        return '/communities/$communityId';
+      }
       return '/communities';
 
       // ── Marketplace ─────────────────────────────────────────────────
@@ -993,6 +966,8 @@ class PushNotificationService {
       // ── Trust & Verification ────────────────────────────────────────
     } else if (type == 'trust_peer_verified' ||
         type == 'trust_peer_vouched' ||
+        type == 'trust_qr_connected' ||
+        type == 'referral_joined' ||
         type == 'trust_full_trust_received' ||
         type == 'trust_no_trust_received' ||
         type == 'trust_stake_consensus_agree' ||
@@ -1077,452 +1052,6 @@ class PushNotificationService {
 
   String _encodePayload(Map<String, dynamic> data) {
     return jsonEncode(data);
-  }
-
-  /// [NEW] Listen for incoming relationship requests and trigger local notification
-  void _listenForRelationshipRequests(String userId) {
-    debugPrint(
-      '🔔 [PushNotificationService] Starting relationship request listener for user: $userId',
-    );
-    _relationshipSubscription?.cancel();
-
-    _relationshipSubscription = _firestore
-        .collection('relationship_requests')
-        .where('toUserId', isEqualTo: userId)
-        .where('status', isEqualTo: 'pending')
-        .limit(100)
-        .snapshots()
-        .listen(
-          (snapshot) {
-            debugPrint(
-              '🔔 [PushNotificationService] Relationship Listener Update:',
-            );
-            debugPrint('   - Listening for toUserId: $userId');
-            debugPrint('   - Snapshot docs count: ${snapshot.docs.length}');
-            debugPrint('   - DocChanges count: ${snapshot.docChanges.length}');
-
-            for (final change in snapshot.docChanges) {
-              if (change.type == DocumentChangeType.added) {
-                final data = change.doc.data();
-                if (data != null) {
-                  debugPrint(
-                    '🔔 [PushNotificationService] New relationship request detected: ${change.doc.id}',
-                  );
-
-                  final fromName = data['fromUserName'] ?? 'Someone';
-                  final relType = data['relationshipType'] ?? 'relative';
-                  final requestId = change.doc.id;
-                  final fromUserId = data['fromUserId'];
-
-                  _showRelationshipNotification(
-                    fromName,
-                    relType,
-                    fromUserId,
-                    requestId,
-                  );
-                }
-              }
-            }
-          },
-          onError: (e) {
-            debugPrint(
-              '❌ [PushNotificationService] Error in relationship listener: $e',
-            );
-          },
-        );
-  }
-
-  Future<void> _showRelationshipNotification(
-    String fromName,
-    String relType,
-    String? fromUserId,
-    String requestId,
-  ) async {
-    debugPrint(
-      '🔔 [PushNotificationService] Showing local notification for request: $requestId',
-    );
-
-    // Show local notification (native only — not available on web)
-    if (!kIsWeb) {
-      try {
-        const androidDetails = AndroidNotificationDetails(
-          'high_importance_channel',
-          'High Importance Notifications',
-          importance: Importance.max,
-          priority: Priority.high,
-        );
-        const details = NotificationDetails(android: androidDetails);
-
-        await _localNotifications.show(
-          id: requestId.hashCode,
-          title: 'New Relationship Request',
-          body: '$fromName wants to add you as their $relType',
-          notificationDetails: details,
-          payload: jsonEncode({
-            'type': 'relationship_request',
-            'fromUserId': fromUserId,
-            'requestId': requestId,
-            'action': 'review',
-          }),
-        );
-      } catch (e) {
-        debugPrint(
-          '⚠️ [PushNotificationService] Local notification failed: $e',
-        );
-      }
-    }
-
-    // Persist to Notifications hub (always — works on all platforms)
-    await _persistNotification(
-      type: NotificationType.relationshipRequest,
-      title: 'New Relationship Request',
-      body: '$fromName wants to add you as their $relType',
-      payload: {'fromUserId': fromUserId ?? '', 'requestId': requestId},
-      actionRequired: true,
-      dedupKey: 'relationship_$requestId',
-    );
-  }
-
-  /// [NEW] Listen for when our sent relationship requests get accepted
-  /// Shows a notification to the sender and directs them to the new DM chat
-  void _listenForAcceptedSentRequests(String userId) {
-    debugPrint(
-      '🔔 [PushNotificationService] Starting accepted sent requests listener for user: $userId',
-    );
-    _acceptedSentRequestsSubscription?.cancel();
-
-    // Track already-known accepted request IDs to avoid notifying on initial load
-    final Set<String> knownAcceptedIds = {};
-    bool isFirstLoad = true;
-
-    _acceptedSentRequestsSubscription = _firestore
-        .collection('relationship_requests')
-        .where('fromUserId', isEqualTo: userId)
-        .where('status', isEqualTo: 'accepted')
-        .limit(100)
-        .snapshots()
-        .listen(
-          (snapshot) {
-            if (isFirstLoad) {
-              // On first load, record all existing accepted requests without notifying
-              for (final doc in snapshot.docs) {
-                knownAcceptedIds.add(doc.id);
-              }
-              isFirstLoad = false;
-              debugPrint(
-                '🔔 [PushNotificationService] Accepted requests initial load: ${knownAcceptedIds.length} existing',
-              );
-              return;
-            }
-
-            for (final change in snapshot.docChanges) {
-              if (change.type == DocumentChangeType.added ||
-                  change.type == DocumentChangeType.modified) {
-                final docId = change.doc.id;
-                if (knownAcceptedIds.contains(docId)) continue;
-                knownAcceptedIds.add(docId);
-
-                final data = change.doc.data();
-                if (data == null) continue;
-
-                final toUserName = data['toUserName'] ?? 'Someone';
-                final chatId = data['chatId'] as String?;
-                final relType = data['relationshipType'] ?? 'connection';
-
-                debugPrint(
-                  '🔔 [PushNotificationService] Relationship accepted! $toUserName accepted as $relType. ChatId: $chatId',
-                );
-
-                _showAcceptedNotification(toUserName, relType, chatId, docId);
-              }
-            }
-          },
-          onError: (e) {
-            debugPrint(
-              '❌ [PushNotificationService] Error in accepted requests listener: $e',
-            );
-          },
-        );
-  }
-
-  Future<void> _showAcceptedNotification(
-    String toUserName,
-    String relType,
-    String? chatId,
-    String requestId,
-  ) async {
-    debugPrint(
-      '🔔 [PushNotificationService] Showing acceptance notification for: $toUserName',
-    );
-
-    // Show local notification (native only — not available on web)
-    if (!kIsWeb) {
-      try {
-        const androidDetails = AndroidNotificationDetails(
-          'high_importance_channel',
-          'High Importance Notifications',
-          importance: Importance.max,
-          priority: Priority.high,
-        );
-        const details = NotificationDetails(android: androidDetails);
-
-        await _localNotifications.show(
-          id: 'accepted_$requestId'.hashCode,
-          title: 'Relationship Accepted!',
-          body:
-              '$toUserName accepted your $relType request. Tap to start chatting!',
-          notificationDetails: details,
-          payload: jsonEncode({
-            'type': 'relationship_accepted',
-            'chatId': chatId,
-            'requestId': requestId,
-          }),
-        );
-      } catch (e) {
-        debugPrint(
-          '⚠️ [PushNotificationService] Local notification failed: $e',
-        );
-      }
-    }
-
-    // Persist to Notifications hub (always — works on all platforms)
-    await _persistNotification(
-      type: NotificationType.relationshipAccepted,
-      title: 'Relationship Accepted!',
-      body:
-          '$toUserName accepted your $relType request. Tap to start chatting!',
-      payload: {'chatId': chatId ?? '', 'requestId': requestId},
-      actionRequired: true,
-      dedupKey: 'accepted_$requestId',
-    );
-  }
-
-  /// [NEW] Listen for incoming proxy requests (emergency fund)
-  void _listenForProxyRequests(String userId) {
-    debugPrint(
-      '🔔 [PushNotificationService] Starting proxy request listener for user: $userId',
-    );
-    _proxyRequestSubscription?.cancel();
-
-    final Set<String> knownProxyRequestIds = {};
-    bool isFirstLoad = true;
-
-    _proxyRequestSubscription = _firestore
-        .collection('proxy_requests')
-        .where('toUserId', isEqualTo: userId)
-        .where('status', isEqualTo: 'pending')
-        .limit(100)
-        .snapshots()
-        .listen(
-          (snapshot) {
-            if (isFirstLoad) {
-              for (final doc in snapshot.docs) {
-                knownProxyRequestIds.add(doc.id);
-              }
-              isFirstLoad = false;
-              debugPrint(
-                '🔔 [PushNotificationService] Proxy requests initial load: ${knownProxyRequestIds.length} existing',
-              );
-              return;
-            }
-
-            for (final change in snapshot.docChanges) {
-              if (change.type == DocumentChangeType.added) {
-                final docId = change.doc.id;
-                if (knownProxyRequestIds.contains(docId)) continue;
-                knownProxyRequestIds.add(docId);
-
-                final data = change.doc.data();
-                if (data == null) continue;
-
-                final fromName = data['fromUserName'] ?? 'Someone';
-
-                debugPrint(
-                  '🔔 [PushNotificationService] New proxy request from: $fromName',
-                );
-
-                _showProxyRequestNotification(fromName, docId);
-              }
-            }
-          },
-          onError: (e) {
-            debugPrint(
-              '❌ [PushNotificationService] Error in proxy request listener: $e',
-            );
-          },
-        );
-  }
-
-  /// Listen for hosting requests where the current user is the traveler.
-  /// When a new host shows interest, show a local notification.
-  void _listenForHostingInterest(String userId) {
-    debugPrint(
-      '🔔 [PushNotificationService] Starting hosting interest listener for user: $userId',
-    );
-    _hostingInterestSubscription?.cancel();
-
-    // Track known interested host IDs per request to detect new additions
-    final Map<String, Set<String>> knownInterestIds = {};
-    bool isFirstLoad = true;
-
-    _hostingInterestSubscription = _firestore
-        .collection('hosting_requests')
-        .where('travelerId', isEqualTo: userId)
-        .where('status', isEqualTo: 'pending')
-        .limit(100)
-        .snapshots()
-        .listen(
-          (snapshot) {
-            if (isFirstLoad) {
-              // On first load, just record counts without notifying
-              for (final doc in snapshot.docs) {
-                final data = doc.data();
-                final ids = (data['interestedHostIds'] as List<dynamic>?) ?? [];
-                knownInterestIds[doc.id] = ids.map((e) => e.toString()).toSet();
-              }
-              isFirstLoad = false;
-              debugPrint(
-                '🔔 [PushNotificationService] Hosting interest initial load: ${knownInterestIds.length} requests tracked',
-              );
-              return;
-            }
-
-            for (final change in snapshot.docChanges) {
-              if (change.type == DocumentChangeType.modified) {
-                final doc = change.doc;
-                final data = doc.data();
-                if (data == null) continue;
-
-                final ids = (data['interestedHostIds'] as List<dynamic>?) ?? [];
-                final currentIds = ids.map((e) => e.toString()).toSet();
-                final previousIds = knownInterestIds[doc.id] ?? <String>{};
-
-                // Find newly added host IDs
-                final newHostIds = currentIds.difference(previousIds);
-
-                if (newHostIds.isNotEmpty) {
-                  // New interest detected!
-                  final communityName =
-                      data['communityName'] as String? ?? 'a community';
-                  final newHostId =
-                      newHostIds.last; // The latest host who showed interest
-
-                  debugPrint(
-                    '🔔 [PushNotificationService] New hosting interest from $newHostId for request ${doc.id}',
-                  );
-
-                  _showHostingInterestNotification(
-                    communityName: communityName,
-                    requestId: doc.id,
-                    hostId: newHostId,
-                    interestedCount: currentIds.length,
-                  );
-                }
-
-                knownInterestIds[doc.id] = currentIds;
-              } else if (change.type == DocumentChangeType.added) {
-                final addedData = change.doc.data();
-                if (addedData != null) {
-                  final ids =
-                      (addedData['interestedHostIds'] as List<dynamic>?) ?? [];
-                  knownInterestIds[change.doc.id] = ids
-                      .map((e) => e.toString())
-                      .toSet();
-                }
-              }
-            }
-          },
-          onError: (e) {
-            debugPrint(
-              '❌ [PushNotificationService] Error in hosting interest listener: $e',
-            );
-          },
-        );
-  }
-
-  Future<void> _showHostingInterestNotification({
-    required String communityName,
-    required String requestId,
-    required String hostId,
-    int interestedCount = 1,
-  }) async {
-    debugPrint(
-      '🔔 [PushNotificationService] Showing hosting interest notification for request: $requestId, host: $hostId',
-    );
-
-    final hostName = await _lookupUserName(hostId, fallback: 'A host');
-
-    final titleText = '$hostName wants to host you!';
-    final bodyText = interestedCount > 1
-        ? '$hostName and ${interestedCount - 1} other${interestedCount > 2 ? 's' : ''} want to host you in $communityName! Tap to review.'
-        : '$hostName wants to host you in $communityName! Tap to review.';
-
-    await _showRichNotification(
-      id: 'hosting_interest_${requestId}_$hostId'.hashCode,
-      title: titleText,
-      body: bodyText,
-      payload: jsonEncode({
-        'type': 'hosting_interest',
-        'requestId': requestId,
-        'hostId': hostId,
-        'hostName': hostName,
-      }),
-    );
-
-    // Persist to Notifications hub
-    await _persistNotification(
-      type: NotificationType.hostingInterest,
-      title: titleText,
-      body: bodyText,
-      payload: {'requestId': requestId, 'hostId': hostId, 'hostName': hostName},
-      actionRequired: true,
-      dedupKey: 'hosting_interest_${requestId}_$hostId',
-    );
-  }
-
-  Future<void> _showProxyRequestNotification(
-    String fromName,
-    String requestId,
-  ) async {
-    // Show local notification (native only — not available on web)
-    if (!kIsWeb) {
-      try {
-        const androidDetails = AndroidNotificationDetails(
-          'high_importance_channel',
-          'High Importance Notifications',
-          importance: Importance.max,
-          priority: Priority.high,
-        );
-        const details = NotificationDetails(android: androidDetails);
-
-        await _localNotifications.show(
-          id: 'proxy_$requestId'.hashCode,
-          title: 'Proxy Request',
-          body:
-              '$fromName wants you to be their emergency fund proxy. Tap to respond.',
-          notificationDetails: details,
-          payload: jsonEncode({
-            'type': 'proxy_request',
-            'requestId': requestId,
-          }),
-        );
-      } catch (e) {
-        debugPrint(
-          '⚠️ [PushNotificationService] Local notification failed: $e',
-        );
-      }
-    }
-
-    // Persist to Notifications hub (always — works on all platforms)
-    await _persistNotification(
-      type: NotificationType.proxyRequest,
-      title: 'Proxy Request',
-      body:
-          '$fromName wants you to be their emergency fund proxy. Tap to respond.',
-      payload: {'requestId': requestId},
-      actionRequired: true,
-      dedupKey: 'proxy_$requestId',
-    );
   }
 
   /// Appends a message to the per-chat notification buffer and returns the
@@ -1762,758 +1291,5 @@ class PushNotificationService {
       debugPrint('Error checking mute status: $e');
       return false;
     }
-  }
-
-  /// Look up user's full name from their profile
-  Future<String> _lookupUserName(
-    String userId, {
-    String fallback = 'A peer',
-  }) async {
-    final cachedProfile = _ref
-        ?.read(profileRepositoryProvider)
-        .getCachedProfile(userId);
-    if (cachedProfile != null && cachedProfile.fullName.trim().isNotEmpty) {
-      return cachedProfile.fullName.trim();
-    }
-    try {
-      final userDoc = await _firestore.collection('users').doc(userId).get();
-      if (userDoc.exists) {
-        final data = userDoc.data();
-        final first = data?['firstName'] as String? ?? '';
-        final last = data?['lastName'] as String? ?? '';
-        final combined = '$first $last'.trim();
-        if (combined.isNotEmpty) {
-          return combined;
-        }
-      }
-    } catch (e) {
-      debugPrint('❌ [PushNotificationService] Error looking up user name: $e');
-    }
-    return fallback;
-  }
-
-  // =========================================================================
-  // [NEW] Hosting Session Notifications
-  // =========================================================================
-
-  /// Listen for new hosting sessions where the current user is the host.
-  /// When a traveler selects this user as their host, show a notification.
-  void _listenForHostSelection(String userId) {
-    debugPrint(
-      '🔔 [PushNotificationService] Starting host selection listener for user: $userId',
-    );
-    _hostingSelectionSubscription?.cancel();
-
-    final Set<String> knownSessionIds = {};
-    bool isFirstLoad = true;
-
-    _hostingSelectionSubscription = _firestore
-        .collection('hosting_sessions')
-        .where('hostId', isEqualTo: userId)
-        .limit(100)
-        .snapshots()
-        .listen(
-          (snapshot) {
-            if (isFirstLoad) {
-              // Record existing sessions without notifying
-              for (final doc in snapshot.docs) {
-                knownSessionIds.add(doc.id);
-              }
-              isFirstLoad = false;
-              debugPrint(
-                '🔔 [PushNotificationService] Host selection initial load: ${knownSessionIds.length} sessions tracked',
-              );
-              return;
-            }
-
-            for (final change in snapshot.docChanges) {
-              if (change.type == DocumentChangeType.added &&
-                  !knownSessionIds.contains(change.doc.id)) {
-                final data = change.doc.data();
-                if (data == null) continue;
-
-                knownSessionIds.add(change.doc.id);
-
-                final travelerName =
-                    data['travelerName'] as String? ?? 'A traveler';
-                final communityName =
-                    data['communityName'] as String? ?? 'a community';
-                final chatId = data['chatId'] as String?;
-
-                debugPrint(
-                  '🔔 [PushNotificationService] Host selected! Traveler: $travelerName, session: ${change.doc.id}',
-                );
-
-                _showRichNotification(
-                  id: 'host_selected_${change.doc.id}'.hashCode,
-                  title: 'You\'ve Been Selected as Host!',
-                  body:
-                      '$travelerName chose you as their host in $communityName. '
-                      'Tap to view the arrangement details.',
-                  payload: jsonEncode({
-                    'type': chatId != null
-                        ? 'hosting_session_chat'
-                        : 'hosting_session',
-                    'chatId': chatId,
-                    'sessionId': change.doc.id,
-                    'travelerId': data['travelerId'],
-                  }),
-                );
-
-                // Persist to Notifications hub
-                _persistNotification(
-                  type: NotificationType.hostingSelected,
-                  title: 'You\'ve Been Selected as Host!',
-                  body:
-                      '$travelerName chose you as their host in $communityName. '
-                      'Tap to view the arrangement details.',
-                  payload: {
-                    'chatId': chatId,
-                    'sessionId': change.doc.id,
-                    'travelerId': data['travelerId'] as String? ?? '',
-                  },
-                  actionRequired: true,
-                  dedupKey: 'host_selected_${change.doc.id}',
-                );
-              }
-            }
-          },
-          onError: (e) {
-            debugPrint(
-              '❌ [PushNotificationService] Error in host selection listener: $e',
-            );
-          },
-        );
-  }
-
-  /// Listen for hosting session status changes.
-  /// Notifies the other party about check-in, end-stay requests, and settlement.
-  void _listenForSessionStatusChanges(String userId) {
-    debugPrint(
-      '🔔 [PushNotificationService] Starting session status listener for user: $userId',
-    );
-    _travelerSessionStatusSubscription?.cancel();
-    _hostSessionStatusSubscription?.cancel();
-
-    // Track known statuses to detect changes
-    final Map<String, String> knownStatuses = {};
-
-    void handleSnapshot(QuerySnapshot<Map<String, dynamic>> snapshot) {
-      for (final change in snapshot.docChanges) {
-        final data = change.doc.data();
-        if (data == null) continue;
-
-        final travelerId = data['travelerId'] as String?;
-        final hostId = data['hostId'] as String?;
-
-        // Only process sessions where the current user is a participant
-        if (travelerId != userId && hostId != userId) continue;
-
-        final currentStatus = data['status'] as String? ?? 'unknown';
-        final previousStatus = knownStatuses[change.doc.id];
-
-        if (change.type == DocumentChangeType.added) {
-          knownStatuses[change.doc.id] = currentStatus;
-          continue;
-        }
-
-        // Only notify on actual status changes
-        if (previousStatus == currentStatus) continue;
-        knownStatuses[change.doc.id] = currentStatus;
-
-        final travelerName = data['travelerName'] as String? ?? 'Traveler';
-        final hostName = data['hostName'] as String? ?? 'Host';
-        final communityName =
-            data['communityName'] as String? ?? 'the community';
-        final endRequestedBy = data['endRequestedBy'] as String?;
-        final chatId = data['chatId'] as String?;
-        final isHost = userId == hostId;
-        final otherPartyName = isHost ? travelerName : hostName;
-
-        String? title;
-        String? body;
-
-        switch (currentStatus) {
-          case 'active':
-            // Check-in happened
-            if (previousStatus == 'confirmed') {
-              title = 'Check-in Confirmed!';
-              body =
-                  'Hosting session with $otherPartyName in $communityName is now active.';
-            }
-            break;
-
-          case 'endRequested':
-            // One party requested to end
-            if (endRequestedBy != null && endRequestedBy != userId) {
-              title = 'End Stay Requested';
-              body =
-                  '$otherPartyName has requested to end the hosting session in $communityName. '
-                  'Please confirm to complete the session.';
-            }
-            break;
-
-          case 'settled':
-            title = 'Session Complete';
-            body = isHost
-                ? 'Your hosting of $travelerName in $communityName is complete!'
-                : 'Your stay with $hostName in $communityName is complete!';
-            break;
-        }
-
-        if (title != null && body != null) {
-          debugPrint(
-            '🔔 [PushNotificationService] Session status change: ${change.doc.id} -> $currentStatus',
-          );
-
-          _showRichNotification(
-            id: 'session_${change.doc.id}_$currentStatus'.hashCode,
-            title: title,
-            body: body,
-            payload: jsonEncode({
-              'type': chatId != null
-                  ? 'hosting_session_chat'
-                  : 'hosting_session',
-              'chatId': chatId,
-              'sessionId': change.doc.id,
-            }),
-          );
-
-          // Persist to Notifications hub
-          _persistNotification(
-            type: NotificationType.hostingSessionEvent,
-            title: title,
-            body: body,
-            payload: {
-              'chatId': chatId,
-              'sessionId': change.doc.id,
-              'status': currentStatus,
-            },
-            actionRequired: currentStatus == 'endRequested',
-            dedupKey: 'session_${change.doc.id}_$currentStatus',
-          );
-        }
-      }
-    }
-
-    const activeStatuses = ['confirmed', 'active', 'endRequested', 'settled'];
-    void onError(Object error) => debugPrint(
-      '❌ [PushNotificationService] Error in session status listener: $error',
-    );
-    _travelerSessionStatusSubscription = _firestore
-        .collection('hosting_sessions')
-        .where('travelerId', isEqualTo: userId)
-        .where('status', whereIn: activeStatuses)
-        .limit(100)
-        .snapshots()
-        .listen(handleSnapshot, onError: onError);
-    _hostSessionStatusSubscription = _firestore
-        .collection('hosting_sessions')
-        .where('hostId', isEqualTo: userId)
-        .where('status', whereIn: activeStatuses)
-        .limit(100)
-        .snapshots()
-        .listen(handleSnapshot, onError: onError);
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════
-  // TRAVEL / PEER BOOKING LISTENERS
-  // ═══════════════════════════════════════════════════════════════════════
-
-  /// Listen for new booking requests where the current user is the host
-  void _listenForBookingRequests(String userId) {
-    debugPrint(
-      '🔔 [PushNotificationService] Starting booking request listener for user: $userId',
-    );
-    _bookingRequestSubscription?.cancel();
-
-    final Set<String> knownBookingIds = {};
-    bool isFirstLoad = true;
-
-    _bookingRequestSubscription = _firestore
-        .collection('peer_bookings')
-        .where('hostId', isEqualTo: userId)
-        .where('status', isEqualTo: 'pending')
-        .limit(100)
-        .snapshots()
-        .listen(
-          (snapshot) {
-            if (isFirstLoad) {
-              for (final doc in snapshot.docs) {
-                knownBookingIds.add(doc.id);
-              }
-              isFirstLoad = false;
-              return;
-            }
-
-            for (final change in snapshot.docChanges) {
-              if (change.type == DocumentChangeType.added) {
-                final docId = change.doc.id;
-                if (knownBookingIds.contains(docId)) continue;
-                knownBookingIds.add(docId);
-
-                final data = change.doc.data();
-                if (data == null) continue;
-
-                final guestName = data['guestName'] as String? ?? 'A guest';
-                final listingTitle =
-                    data['listingTitle'] as String? ?? 'your listing';
-                final chatId = data['chatId'] as String?;
-
-                _showRichNotification(
-                  id: 'booking_request_$docId'.hashCode,
-                  title: 'New Booking Request',
-                  body: '$guestName wants to book $listingTitle',
-                  payload: jsonEncode({
-                    'type': 'travel_booking_request',
-                    'bookingId': docId,
-                    'chatId': chatId,
-                  }),
-                );
-
-                _persistNotification(
-                  type: NotificationType.travelBookingRequest,
-                  title: 'New Booking Request',
-                  body: '$guestName wants to book $listingTitle',
-                  payload: {
-                    'bookingId': docId,
-                    'guestId': data['guestId'] ?? '',
-                    'chatId': chatId ?? '',
-                    'listingId': data['listingId'] ?? '',
-                  },
-                  actionRequired: true,
-                  dedupKey: 'booking_request_$docId',
-                );
-              }
-            }
-          },
-          onError: (e) {
-            debugPrint(
-              '❌ [PushNotificationService] Error in booking request listener: $e',
-            );
-          },
-        );
-  }
-
-  /// Listen for booking status changes for bookings made by the current user
-  void _listenForBookingStatusChanges(String userId) {
-    debugPrint(
-      '🔔 [PushNotificationService] Starting booking status listener for user: $userId',
-    );
-    _bookingStatusSubscription?.cancel();
-
-    final Map<String, String> knownStatuses = {};
-    bool isFirstLoad = true;
-
-    _bookingStatusSubscription = _firestore
-        .collection('peer_bookings')
-        .where('guestId', isEqualTo: userId)
-        .limit(100)
-        .snapshots()
-        .listen(
-          (snapshot) {
-            for (final change in snapshot.docChanges) {
-              final data = change.doc.data();
-              if (data == null) continue;
-
-              final currentStatus = data['status'] as String? ?? 'pending';
-              final previousStatus = knownStatuses[change.doc.id];
-
-              if (isFirstLoad || change.type == DocumentChangeType.added) {
-                knownStatuses[change.doc.id] = currentStatus;
-                if (isFirstLoad) continue;
-              }
-
-              if (previousStatus == currentStatus) continue;
-              knownStatuses[change.doc.id] = currentStatus;
-
-              final hostName = data['hostName'] as String? ?? 'The host';
-              final listingTitle =
-                  data['listingTitle'] as String? ?? 'your booking';
-              final chatId = data['chatId'] as String?;
-
-              String? title;
-              String? body;
-              NotificationType? notifType;
-              bool actionRequired = false;
-
-              switch (currentStatus) {
-                case 'confirmed':
-                  title = 'Booking Confirmed!';
-                  body = '$hostName confirmed your booking for $listingTitle';
-                  notifType = NotificationType.travelBookingConfirmed;
-                  break;
-                case 'declined':
-                  title = 'Booking Declined';
-                  body = '$hostName declined your booking for $listingTitle';
-                  notifType = NotificationType.travelBookingDeclined;
-                  break;
-                case 'cancelled':
-                  title = 'Booking Cancelled';
-                  body = 'Your booking for $listingTitle has been cancelled';
-                  notifType = NotificationType.travelBookingCancelled;
-                  break;
-              }
-
-              if (title != null && body != null && notifType != null) {
-                _showRichNotification(
-                  id: 'booking_status_${change.doc.id}_$currentStatus'.hashCode,
-                  title: title,
-                  body: body,
-                  payload: jsonEncode({
-                    'type': 'travel_booking_$currentStatus',
-                    'bookingId': change.doc.id,
-                    'chatId': chatId,
-                  }),
-                );
-
-                _persistNotification(
-                  type: notifType,
-                  title: title,
-                  body: body,
-                  payload: {
-                    'bookingId': change.doc.id,
-                    'chatId': chatId ?? '',
-                    'listingId': data['listingId'] ?? '',
-                  },
-                  actionRequired: actionRequired,
-                  dedupKey: 'booking_${change.doc.id}_$currentStatus',
-                );
-              }
-            }
-
-            if (isFirstLoad) isFirstLoad = false;
-          },
-          onError: (e) {
-            debugPrint(
-              '❌ [PushNotificationService] Error in booking status listener: $e',
-            );
-          },
-        );
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════
-  // EVENT LISTENERS
-  // ═══════════════════════════════════════════════════════════════════════
-
-  /// Listen for events the user has joined where status changes (cancelled/updated)
-  void _listenForEventChanges(String userId) {
-    debugPrint(
-      '🔔 [PushNotificationService] Starting event changes listener for user: $userId',
-    );
-    _eventSubscription?.cancel();
-
-    final Map<String, Map<String, dynamic>> knownEventData = {};
-    bool isFirstLoad = true;
-
-    _eventSubscription = _firestore
-        .collection('events')
-        .where('attendees', arrayContains: userId)
-        .limit(100)
-        .snapshots()
-        .listen(
-          (snapshot) {
-            for (final change in snapshot.docChanges) {
-              final data = change.doc.data();
-              if (data == null) continue;
-
-              final eventId = change.doc.id;
-              final currentStatus = data['status'] as String? ?? 'active';
-              final eventTitle = data['title'] as String? ?? 'An event';
-              final organizerId = data['organizerId'] as String?;
-
-              // Skip events the user organized (they know about their own changes)
-              if (organizerId == userId) {
-                knownEventData[eventId] = data;
-                continue;
-              }
-
-              if (isFirstLoad || change.type == DocumentChangeType.added) {
-                knownEventData[eventId] = data;
-                if (isFirstLoad) continue;
-                if (change.type == DocumentChangeType.added && !isFirstLoad) {
-                  continue; // User joined themselves, no notification needed
-                }
-              }
-
-              final previousData = knownEventData[eventId];
-              final previousStatus =
-                  previousData?['status'] as String? ?? 'active';
-              knownEventData[eventId] = data;
-
-              String? title;
-              String? body;
-              NotificationType? notifType;
-
-              if (currentStatus == 'cancelled' &&
-                  previousStatus != 'cancelled') {
-                title = 'Event Cancelled';
-                body = '"$eventTitle" has been cancelled by the organizer.';
-                notifType = NotificationType.eventCancelled;
-              } else if (change.type == DocumentChangeType.modified &&
-                  currentStatus == previousStatus) {
-                final prevTime = previousData?['startTime'];
-                final currTime = data['startTime'];
-                final prevLocation = previousData?['location'];
-                final currLocation = data['location'];
-
-                if (prevTime != currTime || prevLocation != currLocation) {
-                  title = 'Event Updated';
-                  body =
-                      '"$eventTitle" details have been updated. Check for changes.';
-                  notifType = NotificationType.eventUpdate;
-                }
-              }
-
-              if (title != null && body != null && notifType != null) {
-                _showRichNotification(
-                  id: 'event_${eventId}_$currentStatus'.hashCode,
-                  title: title,
-                  body: body,
-                  payload: jsonEncode({
-                    'type': notifType.name,
-                    'eventId': eventId,
-                  }),
-                );
-
-                _persistNotification(
-                  type: notifType,
-                  title: title,
-                  body: body,
-                  payload: {'eventId': eventId},
-                  dedupKey:
-                      'event_${eventId}_${currentStatus}_${DateTime.now().millisecondsSinceEpoch ~/ 60000}',
-                );
-              }
-            }
-
-            if (isFirstLoad) isFirstLoad = false;
-          },
-          onError: (e) {
-            debugPrint(
-              '❌ [PushNotificationService] Error in event listener: $e',
-            );
-          },
-        );
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════
-  // GOVERNANCE / ELECTION LISTENERS
-  // ═══════════════════════════════════════════════════════════════════════
-
-  /// Listen for new elections in communities the user belongs to
-  void _listenForElections(String userId) {
-    debugPrint(
-      '🔔 [PushNotificationService] Starting election listener for user: $userId',
-    );
-    _electionSubscription?.cancel();
-
-    final Set<String> knownElectionIds = {};
-    bool isFirstLoad = true;
-
-    _electionSubscription = _firestore
-        .collection('governance')
-        .where('status', isEqualTo: 'active')
-        .limit(100)
-        .snapshots()
-        .listen(
-          (snapshot) {
-            if (isFirstLoad) {
-              for (final doc in snapshot.docs) {
-                knownElectionIds.add(doc.id);
-              }
-              isFirstLoad = false;
-              return;
-            }
-
-            for (final change in snapshot.docChanges) {
-              if (change.type == DocumentChangeType.added) {
-                final docId = change.doc.id;
-                if (knownElectionIds.contains(docId)) continue;
-                knownElectionIds.add(docId);
-
-                final data = change.doc.data();
-                if (data == null) continue;
-
-                final communityName =
-                    data['communityName'] as String? ?? 'your community';
-                final electionTitle =
-                    data['title'] as String? ?? 'Leadership Election';
-
-                _showRichNotification(
-                  id: 'election_$docId'.hashCode,
-                  title: 'Election Started',
-                  body:
-                      '$electionTitle has started in $communityName. Cast your vote!',
-                  payload: jsonEncode({
-                    'type': 'election_started',
-                    'electionId': docId,
-                    'communityId': data['communityId'] ?? '',
-                  }),
-                );
-
-                _persistNotification(
-                  type: NotificationType.electionStarted,
-                  title: 'Election Started',
-                  body:
-                      '$electionTitle has started in $communityName. Cast your vote!',
-                  payload: {
-                    'electionId': docId,
-                    'communityId': data['communityId'] ?? '',
-                  },
-                  actionRequired: true,
-                  dedupKey: 'election_$docId',
-                );
-              }
-            }
-          },
-          onError: (e) {
-            debugPrint(
-              '❌ [PushNotificationService] Error in election listener: $e',
-            );
-          },
-        );
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════
-  // TRUST & VERIFICATION LISTENERS
-  // ═══════════════════════════════════════════════════════════════════════
-
-  /// Listen for when other users verify this user's identity
-  void _listenForTrustVerifications(String userId) {
-    debugPrint(
-      '🔔 [PushNotificationService] Starting trust verification listener for user: $userId',
-    );
-    _trustVerificationSubscription?.cancel();
-
-    final Set<String> knownVerificationIds = {};
-    bool isFirstLoad = true;
-
-    _trustVerificationSubscription = _firestore
-        .collection('field_verifications')
-        .where('toUserId', isEqualTo: userId)
-        .limit(100)
-        .snapshots()
-        .listen(
-          (snapshot) async {
-            if (isFirstLoad) {
-              for (final doc in snapshot.docs) {
-                knownVerificationIds.add(doc.id);
-              }
-              isFirstLoad = false;
-              return;
-            }
-
-            for (final change in snapshot.docChanges) {
-              if (change.type == DocumentChangeType.added) {
-                final docId = change.doc.id;
-                if (knownVerificationIds.contains(docId)) continue;
-                knownVerificationIds.add(docId);
-
-                final data = change.doc.data();
-                if (data == null) continue;
-
-                final verifierId = data['fromUserId'] as String?;
-                final verifierName = verifierId != null
-                    ? await _lookupUserName(verifierId, fallback: 'A peer')
-                    : 'A peer';
-
-                _showRichNotification(
-                  id: 'trust_verify_$docId'.hashCode,
-                  title: 'Identity Verified',
-                  body:
-                      '$verifierName has verified your identity. Your PCT score increased!',
-                  payload: jsonEncode({
-                    'type': 'trust_peer_verified',
-                    'fromUserId': verifierId,
-                  }),
-                );
-
-                _persistNotification(
-                  type: NotificationType.trustPeerVerified,
-                  title: 'Identity Verified',
-                  body:
-                      '$verifierName has verified your identity. Your PCT score increased!',
-                  payload: {'fromUserId': verifierId ?? ''},
-                  dedupKey: 'trust_verify_$docId',
-                );
-              }
-            }
-          },
-          onError: (e) {
-            debugPrint(
-              '❌ [PushNotificationService] Error in trust verification listener: $e',
-            );
-          },
-        );
-  }
-
-  /// Listen for when other users vouch for this user
-  void _listenForTrustVouches(String userId) {
-    debugPrint(
-      '🔔 [PushNotificationService] Starting trust vouch listener for user: $userId',
-    );
-    _trustVouchSubscription?.cancel();
-
-    final Set<String> knownVouchIds = {};
-    bool isFirstLoad = true;
-
-    _trustVouchSubscription = _firestore
-        .collection('vouches')
-        .where('toUserId', isEqualTo: userId)
-        .limit(100)
-        .snapshots()
-        .listen(
-          (snapshot) async {
-            if (isFirstLoad) {
-              for (final doc in snapshot.docs) {
-                knownVouchIds.add(doc.id);
-              }
-              isFirstLoad = false;
-              return;
-            }
-
-            for (final change in snapshot.docChanges) {
-              if (change.type == DocumentChangeType.added) {
-                final docId = change.doc.id;
-                if (knownVouchIds.contains(docId)) continue;
-                knownVouchIds.add(docId);
-
-                final data = change.doc.data();
-                if (data == null) continue;
-
-                final voucherId = data['fromUserId'] as String?;
-                final voucherName = voucherId != null
-                    ? await _lookupUserName(voucherId, fallback: 'A peer')
-                    : 'A peer';
-
-                _showRichNotification(
-                  id: 'trust_vouch_$docId'.hashCode,
-                  title: 'Peer Vouch Received',
-                  body:
-                      '$voucherName vouched for you. Your trust in the community grows!',
-                  payload: jsonEncode({
-                    'type': 'trust_peer_vouched',
-                    'fromUserId': voucherId,
-                  }),
-                );
-
-                _persistNotification(
-                  type: NotificationType.trustPeerVouched,
-                  title: 'Peer Vouch Received',
-                  body:
-                      '$voucherName vouched for you. Your trust in the community grows!',
-                  payload: {'fromUserId': voucherId ?? ''},
-                  dedupKey: 'trust_vouch_$docId',
-                );
-              }
-            }
-          },
-          onError: (e) {
-            debugPrint(
-              '❌ [PushNotificationService] Error in trust vouch listener: $e',
-            );
-          },
-        );
   }
 }

@@ -156,10 +156,14 @@ class _ForwardChatSelectionScreenState
         title: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'Forward message to...',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
+            Expanded(
+              child: Text(
+                'Forward message to...',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
             IconButton(
@@ -169,15 +173,16 @@ class _ForwardChatSelectionScreenState
           ],
         ),
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
+          preferredSize: const Size.fromHeight(64),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             // Removed border: Border(bottom: ...)
             // Glassmorphism usually relies on shadow or subtle color diff, or just clean space
             child: TextField(
               controller: _searchController,
               onChanged: (value) => setState(() => _searchQuery = value),
               decoration: InputDecoration(
+                isDense: true,
                 hintText: 'Search chats...',
                 hintStyle: TextStyle(color: theme.colorScheme.onSurfaceVariant),
                 prefixIcon: const Icon(LucideIcons.search, size: 20),

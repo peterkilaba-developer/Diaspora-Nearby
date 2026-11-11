@@ -41,9 +41,9 @@ class OrganizationRepository {
   static final Map<String, List<Map<String, dynamic>>> _userOrgsCache = {};
   static List<Map<String, dynamic>>? _allOrgsCache;
   static final Map<String, List<ChamberLeadershipRequest>>
-      _myLeadershipRequestsCache = {};
+  _myLeadershipRequestsCache = {};
   static final Map<String, List<ChamberLeadershipRequest>>
-      _pendingLeadershipRequestsCache = {};
+  _pendingLeadershipRequestsCache = {};
 
   OrganizationRepository(Ref ref) : _localService = OrganizationLocalService();
 
@@ -128,11 +128,7 @@ class OrganizationRepository {
           results[2] as QuerySnapshot<Map<String, dynamic>>;
       final cachedOrgs = results[3] as List<Map<String, dynamic>>;
 
-      for (final query in [
-        adminsQuery,
-        superAdminsQuery,
-        pendingAdminsQuery,
-      ]) {
+      for (final query in [adminsQuery, superAdminsQuery, pendingAdminsQuery]) {
         for (var doc in query.docs) {
           final data = doc.data();
           data['id'] = doc.id;
@@ -466,41 +462,12 @@ class OrganizationRepository {
       throw StateError('Not a chamber: $orgId');
     }
     final chatId = initialSnap.data()?['chatId'] as String? ?? orgId;
-    try {
-      await FirebaseFunctions.instanceFor(
-        region: 'us-central1',
-      ).httpsCallable('joinChamber').call<void>({'chatId': chatId});
-    } catch (_) {
-      // Direct Firestore transaction fallback
-      final batch = _firestore.batch();
-      final orgData = initialSnap.data() ?? {};
-      final members = List<String>.from(orgData['members'] as List? ?? []);
-      if (!members.contains(userId)) members.add(userId);
-
-      batch.update(orgRef, {
-        'members': FieldValue.arrayUnion([userId]),
-        'followers': FieldValue.arrayUnion([userId]),
-        'memberCount': members.length,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-      final userChatRef = _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('userChats')
-          .doc(chatId);
-      batch.set(userChatRef, {
-        'chatId': chatId,
-        'accessLevel': 'member',
-        'isDeleted': false,
-        'updatedAt': DateTime.now().millisecondsSinceEpoch,
-        'lastRead': DateTime.now().millisecondsSinceEpoch,
-      }, SetOptions(merge: true));
-      final userRef = _firestore.collection('users').doc(userId);
-      batch.set(userRef, {
-        'organizationMemberships': FieldValue.arrayUnion([orgId]),
-      }, SetOptions(merge: true));
-      await batch.commit();
-    }
+    // Membership grants posting rights and is eligibility-checked
+    // server-side. There is deliberately no client-side fallback: a direct
+    // write would bypass those checks (and is denied by firestore.rules).
+    await FirebaseFunctions.instanceFor(
+      region: 'us-central1',
+    ).httpsCallable('joinChamber').call<void>({'chatId': chatId});
   }
 
   /// Step down from full membership. Demotes a member back to follower

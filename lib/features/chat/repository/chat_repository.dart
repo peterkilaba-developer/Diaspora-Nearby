@@ -2293,8 +2293,28 @@ class ChatRepository {
 
   Future<int> getUnreadCount(String chatId) async => 0;
 
+  Future<String> _resolveCanonicalPreferenceChatId(String chatId) async {
+    if (!chatId.startsWith('ai_agent_')) return chatId;
+    try {
+      final res = await FirebaseFunctions.instance
+          .httpsCallable('ensureDirectChat')
+          .call<Map<String, dynamic>>({
+            'otherUserId': ProfileData.aiAgentUid,
+            'isAiAgentWelcome': true,
+          });
+      final canonical = res.data['chatId']?.toString();
+      if (canonical != null &&
+          canonical.isNotEmpty &&
+          !canonical.startsWith('ai_agent_')) {
+        return canonical;
+      }
+    } catch (_) {}
+    return chatId;
+  }
+
   Future<void> toggleMute(String chatId, bool mute) async {
     if (currentUserId == null) return;
+    final uid = currentUserId!;
     final idx = _chatsCache.indexWhere((c) => c.id == chatId);
     if (idx >= 0) {
       _chatsCache[idx] = _chatsCache[idx].copyWith(isMuted: mute);
@@ -2302,11 +2322,15 @@ class ChatRepository {
         _chatsController.add(_sortedChatsList());
       }
     }
-    await _userChatsCol(currentUserId!).doc(chatId).update({'muted': mute});
+    final targetId = await _resolveCanonicalPreferenceChatId(chatId);
+    await _userChatsCol(
+      uid,
+    ).doc(targetId).set({'muted': mute}, SetOptions(merge: true));
   }
 
   Future<void> togglePin(String chatId, bool pin) async {
     if (currentUserId == null) return;
+    final uid = currentUserId!;
     final idx = _chatsCache.indexWhere((c) => c.id == chatId);
     if (idx >= 0) {
       _chatsCache[idx] = _chatsCache[idx].copyWith(
@@ -2317,13 +2341,30 @@ class ChatRepository {
         _chatsController.add(_sortedChatsList());
       }
     }
-    await _userChatsCol(
-      currentUserId!,
-    ).doc(chatId).update({'pinned': pin, if (pin) 'pinnedBottom': false});
+    final targetId = await _resolveCanonicalPreferenceChatId(chatId);
+    if (targetId != chatId) {
+      final canonicalIdx = _chatsCache.indexWhere((c) => c.id == targetId);
+      if (canonicalIdx >= 0) {
+        _chatsCache[canonicalIdx] = _chatsCache[canonicalIdx].copyWith(
+          isPinned: pin,
+          isPinnedBottom: pin
+              ? false
+              : _chatsCache[canonicalIdx].isPinnedBottom,
+        );
+        if (!_chatsController.isClosed) {
+          _chatsController.add(_sortedChatsList());
+        }
+      }
+    }
+    await _userChatsCol(uid).doc(targetId).set({
+      'pinned': pin,
+      if (pin) 'pinnedBottom': false,
+    }, SetOptions(merge: true));
   }
 
   Future<void> togglePinBottom(String chatId, bool pin) async {
     if (currentUserId == null) return;
+    final uid = currentUserId!;
     final idx = _chatsCache.indexWhere((c) => c.id == chatId);
     if (idx >= 0) {
       _chatsCache[idx] = _chatsCache[idx].copyWith(
@@ -2334,9 +2375,23 @@ class ChatRepository {
         _chatsController.add(_sortedChatsList());
       }
     }
-    await _userChatsCol(
-      currentUserId!,
-    ).doc(chatId).update({'pinnedBottom': pin, if (pin) 'pinned': false});
+    final targetId = await _resolveCanonicalPreferenceChatId(chatId);
+    if (targetId != chatId) {
+      final canonicalIdx = _chatsCache.indexWhere((c) => c.id == targetId);
+      if (canonicalIdx >= 0) {
+        _chatsCache[canonicalIdx] = _chatsCache[canonicalIdx].copyWith(
+          isPinnedBottom: pin,
+          isPinned: pin ? false : _chatsCache[canonicalIdx].isPinned,
+        );
+        if (!_chatsController.isClosed) {
+          _chatsController.add(_sortedChatsList());
+        }
+      }
+    }
+    await _userChatsCol(uid).doc(targetId).set({
+      'pinnedBottom': pin,
+      if (pin) 'pinned': false,
+    }, SetOptions(merge: true));
   }
 
   Future<void> deleteChat(String chatId) async {

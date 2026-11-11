@@ -264,20 +264,28 @@ class HotelResultCard extends StatelessWidget {
               child: Row(
                 children: [
                   // Bed info
-                  _infoChip(context, LucideIcons.bedDouble, cheapest.bedInfo),
+                  Flexible(
+                    child: _infoChip(
+                      context,
+                      LucideIcons.bedDouble,
+                      cheapest.bedInfo,
+                    ),
+                  ),
                   const SizedBox(width: 12),
                   // Board type
-                  _infoChip(
-                    context,
-                    cheapest.boardType == 'BREAKFAST' ||
-                            cheapest.boardType == 'HALF_BOARD' ||
-                            cheapest.boardType == 'FULL_BOARD' ||
-                            cheapest.boardType == 'ALL_INCLUSIVE'
-                        ? LucideIcons.coffee
-                        : LucideIcons.doorOpen,
-                    cheapest.boardTypeDisplay,
+                  Flexible(
+                    child: _infoChip(
+                      context,
+                      cheapest.boardType == 'BREAKFAST' ||
+                              cheapest.boardType == 'HALF_BOARD' ||
+                              cheapest.boardType == 'FULL_BOARD' ||
+                              cheapest.boardType == 'ALL_INCLUSIVE'
+                          ? LucideIcons.coffee
+                          : LucideIcons.doorOpen,
+                      cheapest.boardTypeDisplay,
+                    ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 8),
                   // Per night price (when multiple nights)
                   if (nights > 1)
                     Text(
@@ -317,31 +325,39 @@ class HotelResultCard extends StatelessWidget {
                         : theme.colorScheme.onSurface.withValues(alpha: 0.4),
                   ),
                   const SizedBox(width: 4),
-                  Text(
-                    cheapest.cancellationDeadline != null
-                        ? 'Free cancellation'
-                        : 'Non-refundable',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: cheapest.cancellationDeadline != null
-                          ? FontWeight.w600
-                          : FontWeight.normal,
-                      color: cheapest.cancellationDeadline != null
-                          ? Colors.green.shade600
-                          : theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                    ),
-                  ),
-                  const Spacer(),
-                  // Payment type
-                  if (cheapest.paymentType != null)
-                    Text(
-                      cheapest.paymentType == 'GUARANTEE'
-                          ? 'Pay at hotel  \$${cheapest.totalPrice.toStringAsFixed(0)}'
-                          : 'Pay now  \$${cheapest.totalPrice.toStringAsFixed(0)}',
+                  Expanded(
+                    child: Text(
+                      cheapest.cancellationDeadline != null
+                          ? 'Free cancellation'
+                          : 'Non-refundable',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 11,
-                        color: theme.colorScheme.onSurface.withValues(
-                          alpha: 0.4,
+                        fontWeight: cheapest.cancellationDeadline != null
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                        color: cheapest.cancellationDeadline != null
+                            ? Colors.green.shade600
+                            : theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Payment type
+                  if (cheapest.paymentType != null)
+                    Flexible(
+                      child: Text(
+                        cheapest.paymentType == 'GUARANTEE'
+                            ? 'Pay at hotel  \$${cheapest.totalPrice.toStringAsFixed(0)}'
+                            : 'Pay now  \$${cheapest.totalPrice.toStringAsFixed(0)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.4,
+                          ),
                         ),
                       ),
                     ),
@@ -373,11 +389,15 @@ class HotelResultCard extends StatelessWidget {
           color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
         ),
         const SizedBox(width: 4),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 12,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
+            ),
           ),
         ),
       ],

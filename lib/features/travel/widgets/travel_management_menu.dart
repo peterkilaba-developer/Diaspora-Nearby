@@ -213,7 +213,7 @@ class _MenuRow extends StatelessWidget {
           color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
         ),
         const SizedBox(width: 12),
-        Text(label, style: const TextStyle(fontSize: 14)),
+        Flexible(child: Text(label, style: const TextStyle(fontSize: 14))),
       ],
     );
   }

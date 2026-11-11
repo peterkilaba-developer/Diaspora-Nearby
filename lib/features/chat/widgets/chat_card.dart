@@ -15,6 +15,7 @@ import 'package:diaspora_nearby/features/organization/repository/organization_re
 import 'package:diaspora_nearby/features/shared/models/location.dart'; // [NEW] Needed for UserLocationGeometry
 import 'package:intl/intl.dart';
 import 'package:diaspora_nearby/features/shared/utils/search_highlight_utils.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 
 /// Provider for other user's profile in direct chats (or Organization details)
 /// Provider for chat partner profile (User or Organization)
@@ -203,11 +204,15 @@ class ChatCard extends ConsumerWidget {
             color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
           ),
           const SizedBox(width: 4),
-          Text(
-            'Message deleted',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-              fontStyle: FontStyle.italic,
+          Flexible(
+            child: Text(
+              'Message deleted',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                fontStyle: FontStyle.italic,
+              ),
             ),
           ),
         ],
@@ -393,15 +398,27 @@ class ChatCard extends ConsumerWidget {
           const SizedBox(width: 4),
         ],
         Flexible(
-          child: SearchHighlightUtils.highlightText(
-            text,
-            searchQuery,
-            theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              fontWeight: chat.unreadCount > 0 ? FontWeight.w600 : null,
-            ),
-            context,
-          ),
+          child: (lastMessage.type != 'system' && !isMedia)
+              ? NoTranslate(
+                  child: SearchHighlightUtils.highlightText(
+                    text,
+                    searchQuery,
+                    theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontWeight: chat.unreadCount > 0 ? FontWeight.w600 : null,
+                    ),
+                    context,
+                  ),
+                )
+              : SearchHighlightUtils.highlightText(
+                  text,
+                  searchQuery,
+                  theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: chat.unreadCount > 0 ? FontWeight.w600 : null,
+                  ),
+                  context,
+                ),
         ),
       ],
     );
@@ -962,11 +979,22 @@ class ChatCard extends ConsumerWidget {
                                     ),
                                   ),
                                 Flexible(
-                                  child: _buildHighlightedName(
-                                    displayName,
-                                    theme,
-                                    context,
-                                  ),
+                                  child:
+                                      (!isAiAgent &&
+                                          !chat.isCommunity &&
+                                          !displayName.startsWith('Bereaving '))
+                                      ? NoTranslate(
+                                          child: _buildHighlightedName(
+                                            displayName,
+                                            theme,
+                                            context,
+                                          ),
+                                        )
+                                      : _buildHighlightedName(
+                                          displayName,
+                                          theme,
+                                          context,
+                                        ),
                                 ),
                                 if (chat.isMuted) ...[
                                   const SizedBox(width: 4),

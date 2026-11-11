@@ -228,7 +228,20 @@ describe("Non-chamber chat posting (legacy rule)", () => {
     );
     batch.set(
       db.doc(`users/${legacyUid}/userChats/${chatId}`),
-      { chatId, updatedAt: 1 },
+      // Mirrors ChatMessagingService.sendTextMessage: an updatedAt bump on the
+      // index must accompany lastMessage (bare bumps are rejected so a
+      // refresh cannot reorder the chat list).
+      {
+        chatId,
+        updatedAt: 1,
+        lastMessage: {
+          id: messageRef.id,
+          senderId: legacyUid,
+          content: "sparse batch message",
+          type: "text",
+          timestamp: 1,
+        },
+      },
       { merge: true }
     );
 
@@ -1306,5 +1319,50 @@ describe("peer bookings are server-authoritative", () => {
       bookingId: "server-booking",
     }));
     await assertFails(dbFor(host).doc("peer_booking_slots/forged").get());
+  });
+});
+
+// ─── Governance is server-authoritative ─────────────────────────────────────
+
+describe("governance is server-authoritative", () => {
+  const member = "gov-member-1";
+  const unitId = "home_country_ng";
+
+  beforeEach(async () => {
+    await seed(async (db) => {
+      await db.doc(`governance/${unitId}`).set({
+        communityId: unitId,
+        roleCandidates: {president: []},
+        councilMembers: [],
+        councilRoles: {},
+        treasuryBalance: 1000,
+      });
+    });
+  });
+
+  test("members can read governance units", async () => {
+    await assertSucceeds(dbFor(member).doc(`governance/${unitId}`).get());
+  });
+
+  test("clients cannot nominate, seat council members or touch the treasury", async () => {
+    const db = dbFor(member);
+    await assertFails(db.doc(`governance/${unitId}`).update({
+      "roleCandidates.president": [member],
+    }));
+    await assertFails(db.doc(`governance/${unitId}`).update({
+      councilMembers: [member],
+      [`councilRoles.${member}`]: "president",
+    }));
+    await assertFails(db.doc(`governance/${unitId}`).update({treasuryBalance: 999999}));
+    await assertFails(db.doc("governance/forged_unit").set({communityId: "x"}));
+  });
+
+  test("votes and election history can only be written by the server", async () => {
+    const db = dbFor(member);
+    await assertFails(db.doc("governance_votes/stuffed-vote").set({
+      unitId, voterId: member, candidateId: "someone", role: "president", verdict: "yay",
+    }));
+    await assertFails(db.doc("governance_history/forged").set({unitId, winners: [member]}));
+    await assertSucceeds(db.doc("governance_votes/missing").get());
   });
 });

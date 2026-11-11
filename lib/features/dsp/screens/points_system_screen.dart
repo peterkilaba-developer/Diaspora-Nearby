@@ -22,6 +22,20 @@ import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart'
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 import 'package:diaspora_nearby/features/dsp/services/epoch_service.dart';
 import 'package:diaspora_nearby/features/dsp/providers/dsp_valuation_provider.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
+
+/// True when the signed-in user carries the platform `admin` custom claim
+/// (the same claim the Cloud Functions `requireAdmin` guard checks).
+final _isPlatformAdminProvider = FutureProvider.autoDispose<bool>((ref) async {
+  final user = ref.watch(authRepositoryProvider).currentUser;
+  if (user == null) return false;
+  try {
+    final token = await user.getIdTokenResult();
+    return token.claims?['admin'] == true;
+  } catch (_) {
+    return false;
+  }
+});
 
 final referralStatsProvider =
     FutureProvider.family<Map<String, dynamic>?, String>((ref, userId) async {
@@ -197,9 +211,9 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
         ), // Keep Hero Sage for brand identity
         elevation: 0,
         leading: const BackButton(color: Colors.white),
-        title: const Text(
-          'DSP - Diaspora Social Points',
-          style: TextStyle(
+        title: Text(
+          AppLocalizations.tr(ref, 'DSP - Diaspora Social Points'),
+          style: const TextStyle(
             color: Colors.white,
             fontSize: 16,
             fontWeight: FontWeight.bold,
@@ -855,8 +869,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             _buildTrustCard(
               context,
               title: 'Vouch for Peer',
-              subtitle:
-                  'You vouching for someone else via the Trust Slider.',
+              subtitle: 'You vouching for someone else via the Trust Slider.',
               amount: 'Peer Trust Signal',
               standing: '-- Given',
             ),
@@ -2960,42 +2973,46 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
           ),
           const SizedBox(height: 24),
 
-          // Admin Task: Sync Balances
-          Center(
-            child: TextButton.icon(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Syncing treasury balances in background...'),
-                  ),
-                );
-                unawaited(
-                  ref
-                      .read(pointsServiceProvider)
-                      .syncTreasuryBalances()
-                      .then((_) {
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Treasury balances synchronized!'),
-                          ),
-                        );
-                      })
-                      .catchError((Object e) {
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error syncing: $e')),
-                        );
-                      }),
-                );
-              },
-              icon: const Icon(LucideIcons.refreshCw, size: 16),
-              label: const Text('Sync Treasury Balances'),
-              style: TextButton.styleFrom(
-                foregroundColor: AppTheme.accent.withValues(alpha: 0.7),
+          // Admin Task: Sync Balances (server enforces the admin claim; hide
+          // the control for everyone else so it never fails for members).
+          if (ref.watch(_isPlatformAdminProvider).value == true)
+            Center(
+              child: TextButton.icon(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Syncing treasury balances in background...',
+                      ),
+                    ),
+                  );
+                  unawaited(
+                    ref
+                        .read(pointsServiceProvider)
+                        .syncTreasuryBalances()
+                        .then((_) {
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Treasury balances synchronized!'),
+                            ),
+                          );
+                        })
+                        .catchError((Object e) {
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Error syncing: $e')),
+                          );
+                        }),
+                  );
+                },
+                icon: const Icon(LucideIcons.refreshCw, size: 16),
+                label: const Text('Sync Treasury Balances'),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppTheme.accent.withValues(alpha: 0.7),
+                ),
               ),
             ),
-          ),
           const SizedBox(height: 32),
 
           // Leaderboard Section
@@ -3350,7 +3367,8 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
         (userProfile?.homeCountryCode != null &&
             userProfile!.homeCountryCode!.isNotEmpty);
 
-    final completedProfileFields = userProfile?.completedMilestoneFieldCount ?? 0;
+    final completedProfileFields =
+        userProfile?.completedMilestoneFieldCount ?? 0;
     final isProfileComplete =
         userProfile?.isComplete == true || completedProfileFields >= 10;
 

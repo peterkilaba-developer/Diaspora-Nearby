@@ -30,6 +30,9 @@ Generate an EXTENDED, COMPREHENSIVE, UNHURRIED Video Overview that runs for AT L
 - Devote AT LEAST 1.5 to 2 minutes (and 2 to 4 dedicated visual slides) to EACH of the 8 chapters below.
 - For every single feature, walk through concrete, relatable real-life diaspora stories, step-by-step user journeys, and detailed comparisons against WhatsApp and Facebook so the viewer truly feels and understands every mechanism.
 
+FIRST-PERSON FOUNDER VOICE MANDATE (SPEAK AS ME, PETER SWAI — NOT A THIRD-PARTY NARRATOR):
+Narrate the entire presentation in the FIRST PERSON ("I", "my", "we") directly as Founder and Architect Peter Swai speaking personally to my fellow diaspora brothers and sisters—NEVER in the third person ("Peter moved...", "He built...", "The founder...") as if someone else is speaking for me! Open by introducing yourself directly: "I am Peter Swai, Founder and Architect of Diaspora Nearby..." and tell my 25-year journey and the platform architecture in my own voice.
+
 CRITICAL NARRATIVE ORDER:
 Do NOT start the video with cryptocurrency, blockchain, or tokenomics! You MUST begin with the most obvious, relatable everyday human features in this exact order:
 1. Dual Geographic Identity (Home + Host + "Also Lived In")
@@ -56,11 +59,11 @@ Take a full 2 minutes to open the video with the universal human truth of the gl
   Walk through all the people who live this Dual Geographic Identity every day: expats and diplomats on foreign postings, international students and researchers arriving at a new university, travelers and digital nomads, refugees and settled immigrant families, returning diaspora preparing to move back home, WhatsApp/Facebook community leaders, AND internal city-to-city migrants (because whenever you have a hometown like Kilimanjaro or Arusha and move to another city within the same country temporarily or permanently, you are living the diaspora experience!).
 
 - SLIDE 3 — FOUNDER PETER SWAI'S 25-YEAR ODYSSEY & RETURN HOME:
-  Tell founder and architect Peter Swai's complete real-life story without rushing:
-  * In 1998, Peter moved from Tanzania to the United States, landing first in San Francisco, California with two friends. Within months, without a job, the crushing cost of living and college tuition became completely unaffordable.
-  * He relocated south to Santa Monica in Southern California, where living costs were equally overwhelming, before his search for stability took him to Iowa, then to Washington, D.C., then to Phoenix, Arizona, and eventually back to Iowa, where he lives today.
-  * Across every single relocation, his social circle reset to zero—no local network, no portable community trust, and no easy way to find verified people from home.
-  * And now, after more than 25 years in the United States, Peter is actively preparing his return home to Tanzania—facing the other half of the diaspora dilemma, where childhood friends have scattered and returning home often feels like starting from zero all over again. Explain that Peter built Diaspora Nearby (https://diasporanearby.com) so no newcomer abroad and no returnee heading home ever starts from zero again.
+  Tell my complete real-life story as founder and architect Peter Swai without rushing:
+  * In 1998, I moved from Tanzania to the United States, landing first in San Francisco, California. Within months, without a job, the crushing cost of living and college tuition became completely unaffordable.
+  * I relocated south to Santa Monica in Southern California, where living costs were equally overwhelming, before my search for stability took me to Iowa, then to Washington, D.C., then to Phoenix, Arizona, and eventually back to Iowa, where I live today.
+  * Across every single relocation, my social circle reset to zero—no local network, no portable community trust, and no easy way to find verified people from home.
+  * And now, after more than 25 years in the United States, I am actively preparing my return home to Tanzania—facing the other half of the diaspora dilemma, where childhood friends have scattered and returning home often feels like starting from zero all over again. Explain that I built Diaspora Nearby (https://diasporanearby.com) so no newcomer abroad and no returnee heading home ever starts from zero again.
 
 ====================================================================
 CHAPTER 2 (MINUTES 2:00 – 4:00 | 3 SLIDES): COMMUNITY CHATS BASED ON DUAL GEOGRAPHIC IDENTITY
@@ -85,7 +88,7 @@ CHAPTER 3 (MINUTES 4:00 – 6:00 | 3 SLIDES): NEARBY DISCOVERY & REAL-TIME PROXI
 Devote a full 2 minutes with rich, relatable everyday stories to show how Dual Geographic Identity brings people together face-to-face in the real world:
 
 - SLIDE 7 — NEARBY DISCOVERY BASED ON DUAL GEOGRAPHIC IDENTITY:
-  Walk through a concrete scenario: Imagine you just landed in a new city for university, a hospital residency, or a new job—just like Peter Swai landing in San Francisco or Iowa. On WhatsApp or Facebook, you sit alone in your apartment because you don't know anyone's phone number yet.
+  Walk through a concrete scenario: Imagine you just landed in a new city for university, a hospital residency, or a new job—just like when I landed in San Francisco, Santa Monica, or Iowa. On WhatsApp or Facebook, you sit alone in your apartment because you don't know anyone's phone number yet.
   * On Diaspora Nearby, you open Nearby Discovery and filter by your Dual Geographic Identity: you immediately see fellow community members from your exact Home Country or Home City who live, study, or work right around you!
   * Emphasize Privacy-First Geohash Location Matching: explain clearly that the platform shows approximate distance (such as "0.8 miles away") so you can connect safely without EVER exposing anyone's exact street address or private home location.
 
@@ -194,7 +197,7 @@ Spend a full 2 minutes showing how individual social rewards automatically build
   * Host Country & Home Country DDI (Loans of $1,000,000+): Approved by a 67% supermajority vote (100-day window) to acquire major commercial real estate and profitable enterprises in your Host Country, or build large-scale agriculture, healthcare, energy, and manufacturing back in your Home Country!
   * Upward Cascading Liquidity Protocol: If a local Town Treasury doesn't have enough liquidity for an approved loan yet, funding automatically cascades upward: Town DDI -> State Reserve -> Country DDI -> Global Reserve!
   * Open-Market DEX Buybacks: Every loan repayment and project profit executes automated open-market buybacks of $DIASPORA on Aerodrome DEX, driving continuous buying pressure for the entire community.
-  * Tie this back to Founder Peter Swai's return home: whether you are building in your Host City today or returning home to Tanzania after 25+ years, your Home Town and Home Country DDI treasuries and Bilateral Chambers of Commerce (e.g., the TZ - US Chamber of Commerce) are ready to fund your return!
+  * Tie this back to my own return home: whether you are building in your Host City today or—like me—preparing to return home to Tanzania after 25+ years abroad, your Home Town and Home Country DDI treasuries and Bilateral Chambers of Commerce (e.g., the TZ - US Chamber of Commerce) are ready to fund your return!
 
 - SLIDE 20 — CONTINENTAL SOVEREIGN BONDS & SALARIED COUNCILS FOR GROUP ADMINS:
   * Continental Treasuries (The 100% Sovereign Bond Engine): 100% of Home and Host Continental Treasuries purchase sovereign government bonds and T-Bills pro-rata by country contribution (e.g., Tanzania's share in the African Home Treasury buys Bank of Tanzania government bonds; host funds buy US Treasuries). The bond yield funds Diaspora Nearby sustainably without ads while turning central banks into active partners integrating national payment switches like TIPS and FedNow!

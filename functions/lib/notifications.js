@@ -107,7 +107,10 @@ exports.manageUserFCMTopics = functions.firestore
     // accidentally serialized `fcmToken: null` into user_private/{userId} while
     // notifications were NOT explicitly disabled (notificationsEnabled !== false),
     // restore the previous valid fcmToken immediately so push notifications keep working.
-    if (!newToken && oldToken && afterData.notificationsEnabled !== false) {
+    // Intentional removals (sign-out, dead-token pruning, token moved to another
+    // account) set `fcmTokenRevoked: true` and must NOT be restored.
+    if (!newToken && oldToken && afterData.notificationsEnabled !== false &&
+        afterData.fcmTokenRevoked !== true) {
       console.log(`[FCM] Restoring accidentally nulled fcmToken for user ${context.params.userId}`);
       await change.after.ref.set({
         fcmToken: oldToken,
@@ -116,33 +119,68 @@ exports.manageUserFCMTopics = functions.firestore
       newToken = oldToken;
     }
 
+    if (!newToken) return null;
+
+    // [SINGLE OWNER] A device token belongs to whoever is signed in on that
+    // device right now. If another account still holds this token (shared
+    // device / account switch), detach it there so that account's private
+    // pushes (DMs, requests) are never shown to the current user.
+    if (newToken !== oldToken) {
+      try {
+        const holders = await db.collection('user_private')
+          .where('fcmToken', '==', newToken)
+          .limit(10)
+          .get();
+        await Promise.all(holders.docs
+          .filter((doc) => doc.id !== context.params.userId)
+          .map((doc) => {
+            console.log(`[FCM] Detaching shared device token from previous account ${doc.id}`);
+            return doc.ref.set({
+              fcmToken: admin.firestore.FieldValue.delete(),
+              fcmTokenRevoked: true,
+              fcmTokenRevokedReason: 'claimed_by_other_account',
+              fcmTokenUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+          }));
+      } catch (e) {
+        console.warn(`[FCM] Shared-token cleanup failed: ${e.message}`);
+      }
+    }
+
     // Country check
     const profile = await db.collection('users').doc(context.params.userId).get();
-    const oldCountry = null;
-    const newCountry = profile.exists ? profile.data().homeCountryCode : null;
+    const newCountry = profile.exists && profile.data().homeCountryCode ?
+      String(profile.data().homeCountryCode).toLowerCase() : null;
+    const subscribedToken = afterData.fcmServerTopicsToken || null;
+    const subscribedCountry = afterData.fcmServerCountryTopic || null;
 
-    if (!newToken) return null;
+    // Nothing changed since the last server-side subscription → no API calls.
+    if (subscribedToken === newToken && subscribedCountry === newCountry) return null;
 
     const promises = [];
 
-    // 1. Subscribe to Global (Always)
-    // Only if token changed or it's a new user
-    if (newToken !== oldToken) {
+    // 1. Subscribe to Global (Always) when the token is new to us.
+    if (subscribedToken !== newToken) {
       promises.push(admin.messaging().subscribeToTopic(newToken, 'global'));
     }
 
     // 2. Handle Country Change
-    if (oldCountry !== newCountry || oldToken !== newToken) {
-      if (oldCountry && oldToken && oldToken === newToken) {
-        // Unsubscribe specific token from old country topic ONLY if token matches 
-        // (If token changed, the old one is dead anyway, no need to unsub)
-        promises.push(admin.messaging().unsubscribeFromTopic(oldToken, `country_${oldCountry}`));
-      }
-      if (newCountry) {
-        promises.push(admin.messaging().subscribeToTopic(newToken, `country_${newCountry}`));
-      }
+    if (subscribedCountry && subscribedCountry !== newCountry && subscribedToken === newToken) {
+      promises.push(admin.messaging().unsubscribeFromTopic(newToken, `country_${subscribedCountry}`));
+    }
+    if (newCountry) {
+      promises.push(admin.messaging().subscribeToTopic(newToken, `country_${newCountry}`));
     }
 
-    await Promise.all(promises);
+    try {
+      await Promise.all(promises);
+      // Record what we subscribed so subsequent unrelated writes are no-ops.
+      await change.after.ref.set({
+        fcmServerTopicsToken: newToken,
+        fcmServerCountryTopic: newCountry,
+      }, { merge: true });
+    } catch (e) {
+      console.warn(`[FCM] Topic subscription failed for ${context.params.userId}: ${e.message}`);
+    }
     return null;
   });

@@ -17,6 +17,7 @@ import 'package:diaspora_nearby/features/hosting/widgets/request_host_dialog.dar
 import 'package:diaspora_nearby/core/providers/global_feature_provider.dart';
 import 'package:diaspora_nearby/core/providers/view_mode_provider.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 
 class CommunitiesScreen extends ConsumerStatefulWidget {
   const CommunitiesScreen({super.key});
@@ -81,9 +82,12 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              searchQuery.isNotEmpty
-                  ? 'No communities match your search.'
-                  : 'No communities found.',
+              AppLocalizations.tr(
+                ref,
+                searchQuery.isNotEmpty
+                    ? 'No communities match your search.'
+                    : 'No communities found.',
+              ),
               style: TextStyle(color: Theme.of(context).hintColor),
             ),
             if (searchQuery.isNotEmpty) ...[
@@ -92,7 +96,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen> {
               const SizedBox(height: 8),
               ElevatedButton(
                 onPressed: () => ref.refresh(communityHierarchyProvider),
-                child: const Text('Retry'),
+                child: Text(AppLocalizations.tr(ref, 'Retry')),
               ),
             ],
           ],
@@ -247,10 +251,14 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
                                     color: Theme.of(context).hintColor,
                                   ),
                                   const SizedBox(width: 4),
-                                  Text(
-                                    '${item.totalMembers} members worldwide',
-                                    style: TextStyle(
-                                      color: Theme.of(context).hintColor,
+                                  Flexible(
+                                    child: Text(
+                                      '${item.totalMembers} members worldwide',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: Theme.of(context).hintColor,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -360,9 +368,13 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
                   color: Theme.of(context).hintColor,
                 ),
                 const SizedBox(width: 4),
-                Text(
-                  '${item.totalMembers} members',
-                  style: TextStyle(color: Theme.of(context).hintColor),
+                Flexible(
+                  child: Text(
+                    '${item.totalMembers} members',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Theme.of(context).hintColor),
+                  ),
                 ),
               ],
             ),

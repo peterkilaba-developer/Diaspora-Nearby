@@ -25,6 +25,7 @@ import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart'
 import '../widgets/user_profile_view.dart';
 import '../widgets/user_profile_editor.dart';
 import '../widgets/complete_profile_modal.dart';
+import '../widgets/profile_qr_code_dialog.dart';
 
 class UserProfileScreen extends ConsumerStatefulWidget {
   final String userId;
@@ -51,6 +52,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
   // UI State
   bool _showPermissionWarning = false;
   bool _isEditing = false;
+  bool _didAutoOpenQr = false;
   List<String>? _initialHighlightFields;
   String? _src;
 
@@ -113,9 +115,34 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     if (!mounted) return;
 
     final state = GoRouterState.of(context);
+    final showQr = state.uri.queryParameters['showQr'] == 'true';
     final src = state.uri.queryParameters['src'];
     final handshakeToken = state.uri.queryParameters['qrToken'];
     final user = ref.read(authRepositoryProvider).currentUser;
+
+    if (showQr && !_didAutoOpenQr && user != null) {
+      _didAutoOpenQr = true;
+      ProfileData? myProfile =
+          (widget.userId == user.uid ? _profile : null) ??
+          ref.read(userProfileProvider).value ??
+          ref.read(profileRepositoryProvider).getCachedProfile(user.uid);
+      myProfile ??= await ref
+          .read(profileRepositoryProvider)
+          .getUserProfile(user.uid);
+      if (mounted && myProfile != null) {
+        final resolvedProfile = myProfile;
+        unawaited(
+          showDialog<void>(
+            context: context,
+            useRootNavigator: true,
+            builder: (dialogContext) => BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: ProfileQRCodeDialog(profile: resolvedProfile),
+            ),
+          ),
+        );
+      }
+    }
 
     if (src == 'qr' &&
         handshakeToken != null &&

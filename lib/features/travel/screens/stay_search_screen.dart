@@ -17,6 +17,7 @@ import 'package:diaspora_nearby/features/travel/screens/my_listings_screen.dart'
 import 'package:diaspora_nearby/features/travel/screens/create_stay_listing_screen.dart';
 import 'package:diaspora_nearby/features/travel/widgets/travel_skeleton_loader.dart';
 import 'package:diaspora_nearby/features/travel/utils/geo_utils.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 
 class StaySearchScreen extends ConsumerStatefulWidget {
   const StaySearchScreen({super.key});
@@ -249,7 +250,7 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
       backgroundColor: Colors.transparent,
       titleSpacing: 0,
       title: Text(
-        'Find a Stay',
+        AppLocalizations.tr(ref, 'Find a Stay'),
         style: TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.bold,
@@ -285,7 +286,7 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
                     color: theme.colorScheme.onSurface,
                   ),
                   const SizedBox(width: 10),
-                  const Text('Saved Stays'),
+                  const Flexible(child: Text('Saved Stays')),
                 ],
               ),
             ),
@@ -300,7 +301,7 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
                     color: theme.colorScheme.onSurface,
                   ),
                   const SizedBox(width: 10),
-                  const Text('My Stays'),
+                  const Flexible(child: Text('My Stays')),
                 ],
               ),
             ),
@@ -315,7 +316,7 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
                     color: theme.colorScheme.onSurface,
                   ),
                   const SizedBox(width: 10),
-                  const Text('Post Stay'),
+                  const Flexible(child: Text('Post Stay')),
                 ],
               ),
             ),

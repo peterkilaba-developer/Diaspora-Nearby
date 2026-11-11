@@ -22,6 +22,7 @@ import 'package:diaspora_nearby/features/travel/models/peer_listing.dart';
 import 'package:diaspora_nearby/features/travel/services/peer_listing_repository.dart';
 import 'package:diaspora_nearby/features/travel/widgets/peer_listing_card.dart';
 import 'package:diaspora_nearby/features/travel/screens/peer_listing_detail_screen.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 
 class HotelSearchScreen extends ConsumerStatefulWidget {
   const HotelSearchScreen({super.key});
@@ -829,7 +830,7 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
         resizeToAvoidBottomInset: false,
         appBar: AppBar(
           titleSpacing: 0,
-          title: const Text('Hotel Search'),
+          title: Text(AppLocalizations.tr(ref, 'Hotel Search')),
           elevation: 0,
           backgroundColor: Colors.transparent,
           actions: [

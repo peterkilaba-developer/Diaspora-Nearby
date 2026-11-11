@@ -798,4 +798,94 @@ void main() {
       },
     );
   });
+
+  group('Server Engagement Notification Routing Tests', () {
+    String route(Map<String, dynamic> data) =>
+        PushNotificationService.resolveTargetRouteForData(data);
+
+    test('explicit server route wins and unsafe routes are ignored', () {
+      expect(
+        route({'type': 'referral_joined', 'route': '/profile/u1'}),
+        '/profile/u1',
+      );
+      expect(
+        route({'type': 'streak_reminder', 'route': '/dsp/points'}),
+        '/dsp/points',
+      );
+      expect(
+        route({'type': 'unknown', 'route': '//evil.example.com'}),
+        '/notifications',
+      );
+      expect(
+        route({'type': 'unknown', 'route': 'https://evil.example.com'}),
+        '/notifications',
+      );
+    });
+
+    test('hosting, booking, event and election types deep-link correctly', () {
+      expect(
+        route({'type': 'hosting_interest', 'requestId': 'r1'}),
+        '/hosting/request/r1',
+      );
+      expect(
+        route({'type': 'hosting_request_new', 'requestId': 'r2'}),
+        '/hosting/request/r2',
+      );
+      expect(
+        route({'type': 'travel_booking_declined', 'chatId': ''}),
+        '/dsp/travel/stays',
+      );
+      expect(
+        route({'type': 'travel_booking_confirmed', 'chatId': 'c1'}),
+        '/chats/c1',
+      );
+      expect(route({'type': 'event_new', 'eventId': 'e1'}), '/events/e1');
+      expect(route({'type': 'event_checkin', 'eventId': 'e2'}), '/events/e2');
+      expect(
+        route({'type': 'election_started', 'communityId': 'home_country_ng'}),
+        '/communities/home_country_ng',
+      );
+      expect(
+        route({'type': 'trust_qr_connected', 'fromUserId': 'peer1'}),
+        '/profile/peer1',
+      );
+    });
+
+    test(
+      'city-topic event broadcast is not shown to its own organizer',
+      () async {
+        final localNotifications = FakeLocalNotifications();
+        final pushService = PushNotificationService(
+          null,
+          localNotifications: localNotifications,
+          firestore: fakeFirestore,
+        );
+        await pushService.handleIncomingMessage(
+          messageId: 'evt_self',
+          notificationTitle: 'New event in Houston: Jollof Night',
+          notificationBody: 'Nov 12 at 18:30',
+          currentUserIdOverride: 'organizer_1',
+          data: {
+            'type': 'event_new',
+            'eventId': 'e1',
+            'creatorId': 'organizer_1',
+          },
+        );
+        expect(localNotifications.shownCalls, isEmpty);
+
+        await pushService.handleIncomingMessage(
+          messageId: 'evt_other',
+          notificationTitle: 'New event in Houston: Jollof Night',
+          notificationBody: 'Nov 12 at 18:30',
+          currentUserIdOverride: 'someone_else',
+          data: {
+            'type': 'event_new',
+            'eventId': 'e1',
+            'creatorId': 'organizer_1',
+          },
+        );
+        expect(localNotifications.shownCalls, hasLength(1));
+      },
+    );
+  });
 }

@@ -352,11 +352,6 @@ class GovernanceService {
     await Future.wait(futures);
   }
 
-  Future<void> startElection(String unitId, {int durationDays = 7}) async {
-    final repo = _ref.read(governanceRepositoryProvider);
-    await repo.startElection(unitId, durationDays);
-  }
-
   /// [LEGACY] castVote — redirects to new role-based system.
   Future<void> castVote({
     required String unitId,

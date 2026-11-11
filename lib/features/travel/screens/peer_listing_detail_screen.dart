@@ -1450,13 +1450,18 @@ class _PeerListingDetailScreenState
             children: [
               Icon(icon, size: 20, color: c),
               const SizedBox(height: 6),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: c,
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: c,
+                  ),
                 ),
               ),
             ],
@@ -1811,19 +1816,26 @@ class _PeerListingDetailScreenState
                                   child: Text(
                                     _guestAddressCountry?.name ??
                                         _guestAddressCountryCode,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       fontSize: 13,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                 ),
-                                Text(
-                                  'Change Country',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppTheme.accent.withValues(
-                                      alpha: 0.85,
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: Text(
+                                    'Change Country',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppTheme.accent.withValues(
+                                        alpha: 0.85,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -2052,14 +2064,18 @@ class _PeerListingDetailScreenState
                   color: AppTheme.accent,
                 ),
                 const SizedBox(width: 6),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: value == 'Select'
-                        ? theme.colorScheme.onSurface.withValues(alpha: 0.4)
-                        : theme.colorScheme.onSurface,
+                Expanded(
+                  child: Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: value == 'Select'
+                          ? theme.colorScheme.onSurface.withValues(alpha: 0.4)
+                          : theme.colorScheme.onSurface,
+                    ),
                   ),
                 ),
               ],
@@ -2079,24 +2095,34 @@ class _PeerListingDetailScreenState
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: isBold ? 15 : 13,
-            fontWeight: isBold ? FontWeight.w800 : FontWeight.w500,
-            color: isBold
-                ? theme.colorScheme.onSurface
-                : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: isBold ? 15 : 13,
+              fontWeight: isBold ? FontWeight.w800 : FontWeight.w500,
+              color: isBold
+                  ? theme.colorScheme.onSurface
+                  : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
           ),
         ),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: isBold ? 16 : 13,
-            fontWeight: isBold ? FontWeight.w800 : FontWeight.w500,
-            color: isBold
-                ? AppTheme.accent
-                : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.end,
+            style: TextStyle(
+              fontSize: isBold ? 16 : 13,
+              fontWeight: isBold ? FontWeight.w800 : FontWeight.w500,
+              color: isBold
+                  ? AppTheme.accent
+                  : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
           ),
         ),
       ],
@@ -2145,12 +2171,16 @@ class _PeerListingDetailScreenState
                             ),
                             const SizedBox(width: 6),
                           ],
-                          Text(
-                            a,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: theme.colorScheme.onSurface.withValues(
-                                alpha: 0.6,
+                          Flexible(
+                            child: Text(
+                              a,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.6,
+                                ),
                               ),
                             ),
                           ),
