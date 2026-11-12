@@ -85,21 +85,14 @@ class CommunityShareCard extends StatelessWidget {
                         width: 80,
                         height: 80,
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: Colors.white.withValues(alpha: 0.14),
                           shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.1),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
                         ),
                         child: Center(
                           child: Padding(
-                            padding: const EdgeInsets.all(12),
+                            padding: const EdgeInsets.all(10),
                             child: Image.asset(
-                              'assets/icons/logo-sage-green-clean.png',
+                              'assets/icons/logo-white-128.png',
                               fit: BoxFit.contain,
                             ),
                           ),

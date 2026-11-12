@@ -289,20 +289,11 @@ class EventShareCard extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Container(
-                      width: 24,
-                      height: 24,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white,
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(2),
-                        child: Image.asset(
-                          'assets/icons/logo-sage-green-clean.png',
-                          fit: BoxFit.contain,
-                        ),
-                      ),
+                    Image.asset(
+                      'assets/icons/logo-transparent-48.png',
+                      width: 22,
+                      height: 22,
+                      fit: BoxFit.contain,
                     ),
                     const SizedBox(width: 8),
                     Text(

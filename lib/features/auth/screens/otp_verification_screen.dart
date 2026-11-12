@@ -6,7 +6,6 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:sms_autofill/sms_autofill.dart';
 import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform;
-import 'package:url_launcher/url_launcher.dart';
 import 'auth_controller.dart';
 
 class OTPVerificationScreen extends ConsumerStatefulWidget {
@@ -28,6 +27,8 @@ class OTPVerificationScreen extends ConsumerStatefulWidget {
 
 class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
     with CodeAutoFill, WidgetsBindingObserver, SingleTickerProviderStateMixin {
+  static const bool _showSmsOption = false;
+
   String _otpCode = '';
   bool _isListening = false;
   bool _autoDetected = false;
@@ -589,45 +590,7 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
                           ),
                   ),
 
-                  if (isWhatsApp) ...[
-                    const SizedBox(height: 12),
-                    Center(
-                      child: OutlinedButton.icon(
-                        onPressed: () async {
-                          final uri = Uri.parse('https://wa.me/16413020012');
-                          try {
-                            await launchUrl(
-                              uri,
-                              mode: LaunchMode.externalApplication,
-                            );
-                          } catch (e) {
-                            debugPrint('Could not launch WhatsApp: $e');
-                          }
-                        },
-                        icon: const Icon(
-                          LucideIcons.messageSquare,
-                          size: 16,
-                          color: Colors.green,
-                        ),
-                        label: const Text(
-                          'Open WhatsApp App',
-                          style: TextStyle(
-                            color: Colors.green,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide.none,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 10,
-                          ),
-                        ),
-                      ),
-                    ),
+                  if (isWhatsApp && _showSmsOption) ...[
                     const SizedBox(height: 8),
                     Center(
                       child: TextButton.icon(
@@ -652,7 +615,7 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
                     ),
                   ],
 
-                  if (!isWhatsApp) ...[
+                  if (!isWhatsApp && _showSmsOption) ...[
                     const SizedBox(height: 8),
                     Center(
                       child: TextButton.icon(

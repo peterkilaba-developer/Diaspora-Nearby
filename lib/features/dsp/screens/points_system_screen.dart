@@ -2944,17 +2944,11 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             epochLabel: CommunityChatUtils.generateTreasuryRoleLabel(
               unitId: 'founders',
             ),
-            avatarWidget: Container(
+            avatarWidget: Image.asset(
+              'assets/icons/logo-transparent-48.png',
               width: 20,
               height: 20,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppTheme.accent.withValues(alpha: 0.1),
-              ),
-              child: Image.asset(
-                'assets/icons/logo-original.png',
-                fit: BoxFit.contain,
-              ),
+              fit: BoxFit.contain,
             ),
           ),
           const SizedBox(height: 12),
