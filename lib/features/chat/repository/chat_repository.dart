@@ -5,6 +5,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:diaspora_nearby/core/utils/media_upload_helper.dart';
 import 'package:diaspora_nearby/features/chat/services/chat_local_service.dart';
 import 'package:diaspora_nearby/features/chat/services/chamber_service.dart';
 
@@ -1326,6 +1327,8 @@ class ChatRepository {
     XFile audioFile, {
     String? caption,
     String? replyToMessageId,
+    void Function(Message confirmedMessage)? onConfirmed,
+    void Function(String error)? onError,
     String? senderIdOverride,
     String? senderNameOverride,
     String? senderImageOverride,
@@ -1339,6 +1342,8 @@ class ChatRepository {
           audioFile,
           caption: caption,
           replyToMessageId: replyToMessageId,
+          onConfirmed: onConfirmed,
+          onError: onError,
           senderIdOverride: senderIdOverride,
           senderNameOverride: senderNameOverride,
           senderImageOverride: senderImageOverride,
@@ -1774,11 +1779,15 @@ class ChatRepository {
 
   Future<String> uploadGroupImage(String chatId, XFile image) async {
     final now = DateTime.now().millisecondsSinceEpoch;
-    final fileName = 'group_icon_$now.jpg';
+    final mediaInfo = MediaUploadHelper.resolve(image, 'image');
+    final fileName = 'group_icon_$now${mediaInfo.extension}';
     final storageRef = _storage.ref().child('groups/$chatId/$fileName');
 
-    final metadata = SettableMetadata(cacheControl: 'public, max-age=31536000');
-    if (kIsWeb) {
+    final metadata = SettableMetadata(
+      contentType: mediaInfo.contentType,
+      cacheControl: 'public, max-age=31536000',
+    );
+    if (kIsWeb || image.path.isEmpty) {
       final bytes = await image.readAsBytes();
       await storageRef.putData(bytes, metadata);
     } else {
@@ -2293,6 +2302,9 @@ class ChatRepository {
 
   Future<int> getUnreadCount(String chatId) async => 0;
 
+  Future<String> resolveCanonicalChatId(String chatId) =>
+      _resolveCanonicalPreferenceChatId(chatId);
+
   Future<String> _resolveCanonicalPreferenceChatId(String chatId) async {
     if (!chatId.startsWith('ai_agent_')) return chatId;
     try {
@@ -2566,8 +2578,9 @@ class ChatRepository {
   }) async {
     final service = _ref.read(chatMessagingServiceProvider);
     await Future.wait(
-      targetChatIds.map((chatId) async {
-        final cachedChat = getCachedChat(chatId);
+      targetChatIds.map((rawChatId) async {
+        final chatId = await resolveCanonicalChatId(rawChatId);
+        final cachedChat = getCachedChat(chatId) ?? getCachedChat(rawChatId);
         final msg = await service.forwardMessage(
           chatId,
           message,

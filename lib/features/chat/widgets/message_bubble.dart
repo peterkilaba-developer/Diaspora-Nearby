@@ -482,10 +482,12 @@ class MessageBubble extends ConsumerWidget {
                                     ),
                                   ),
 
-                                  // Loading Overlay (only for heavy file uploads: image, video, document)
+                                  // Loading Overlay (for media & document uploads)
                                   if (message.status == 'sending' &&
                                       (message.type == 'image' ||
                                           message.type == 'video' ||
+                                          message.type == 'audio' ||
+                                          message.type == 'audio_file' ||
                                           message.type == 'document'))
                                     Positioned.fill(
                                       child: IgnorePointer(

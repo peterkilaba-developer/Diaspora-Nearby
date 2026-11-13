@@ -9,7 +9,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import '../models/message.dart';
 
+import 'package:diaspora_nearby/core/utils/media_upload_helper.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
+import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 
 final chatMessagingServiceProvider = Provider<ChatMessagingService>((ref) {
@@ -99,6 +101,29 @@ class ChatMessagingService {
       _chatsCol.doc(chatId).collection('messages');
   CollectionReference<Map<String, dynamic>> _userChatsCol(String uid) =>
       _firestore.collection('users').doc(uid).collection('userChats');
+
+  /// Resolves synthetic `ai_agent_<uid>` chat IDs to canonical `direct_<hash>`
+  /// chat IDs so Storage and Firestore rules evaluate against the real chat doc.
+  Future<String> _resolveCanonicalChatIdIfNeeded(String chatId) async {
+    if (!chatId.startsWith('ai_agent_')) return chatId;
+    try {
+      final res = await FirebaseFunctions.instance
+          .httpsCallable('ensureDirectChat')
+          .call<Map<String, dynamic>>({
+            'otherUserId': ProfileData.aiAgentUid,
+            'isAiAgentWelcome': true,
+          });
+      final canonical = res.data['chatId']?.toString();
+      if (canonical != null &&
+          canonical.isNotEmpty &&
+          !canonical.startsWith('ai_agent_')) {
+        return canonical;
+      }
+    } catch (e) {
+      debugPrint('Could not resolve canonical AI agent chatId ($chatId): $e');
+    }
+    return chatId;
+  }
 
   // ============================================
   // TEXT MESSAGING
@@ -269,6 +294,7 @@ class ChatMessagingService {
   }) async {
     if (currentUserId == null) return null;
 
+    final resolvedChatId = await _resolveCanonicalChatIdIfNeeded(targetChatId);
     final now = DateTime.now().millisecondsSinceEpoch;
     final userData = await _getSenderData();
 
@@ -278,7 +304,7 @@ class ChatMessagingService {
     final hostCountryCode = userData?['hostCountryCode'] as String?;
     final homeCountryCode = userData?['homeCountryCode'] as String?;
 
-    final messageData = {
+    final messageData = <String, dynamic>{
       'senderId': senderIdOverride ?? currentUserId,
       'senderName': senderNameOverride ?? '$firstName $lastName'.trim(),
       'senderImage': senderImageOverride ?? profileImage,
@@ -303,6 +329,8 @@ class ChatMessagingService {
           originalMessage.senderHomeCountryCode,
       'originalTimestamp':
           originalMessage.originalTimestamp ?? originalMessage.timestamp,
+      if (originalMessage.metadata != null)
+        'metadata': Map<String, dynamic>.from(originalMessage.metadata!),
     };
 
     if (originalMessage.imageUrl != null) {
@@ -321,11 +349,7 @@ class ChatMessagingService {
       messageData['audioDuration'] = originalMessage.audioDuration;
     }
     if (originalMessage.location != null) {
-      messageData['location'] = {
-        'latitude': originalMessage.location!.lat,
-        'longitude': originalMessage.location!.lng,
-        'address': originalMessage.location!.address,
-      };
+      messageData['location'] = originalMessage.location!.toFirestore();
     }
 
     if (senderIdOverride != null) {
@@ -334,14 +358,14 @@ class ChatMessagingService {
     }
 
     try {
-      final newMsgRef = _messagesCol(targetChatId).doc();
+      final newMsgRef = _messagesCol(resolvedChatId).doc();
 
       String lastMessageContent = originalMessage.content;
       if (lastMessageContent.isEmpty) {
         lastMessageContent = _getMessageTypeLabel(originalMessage.type);
       }
 
-      final lastMessageData = {
+      final lastMessageData = <String, dynamic>{
         'id': newMsgRef.id,
         'content': lastMessageContent,
         'timestamp': now,
@@ -354,14 +378,14 @@ class ChatMessagingService {
 
       final batch = _firestore.batch();
       batch.set(newMsgRef, messageData);
-      batch.set(_chatsCol.doc(targetChatId), {
+      batch.set(_chatsCol.doc(resolvedChatId), {
         'lastMessage': lastMessageData,
         'updatedAt': now,
       }, SetOptions(merge: true));
 
       if (currentUserId != null) {
-        batch.set(_userChatsCol(currentUserId!).doc(targetChatId), {
-          'chatId': targetChatId,
+        batch.set(_userChatsCol(currentUserId!).doc(resolvedChatId), {
+          'chatId': resolvedChatId,
           'lastMessage': lastMessageData,
           'updatedAt': now,
           'isDeleted': false,
@@ -370,10 +394,14 @@ class ChatMessagingService {
 
       await batch.commit();
 
-      return Message.fromFirestoreData(newMsgRef.id, targetChatId, messageData);
+      return Message.fromFirestoreData(
+        newMsgRef.id,
+        resolvedChatId,
+        messageData,
+      );
     } catch (e) {
       debugPrint('Error forwarding message: $e');
-      return null;
+      rethrow;
     }
   }
 
@@ -604,6 +632,8 @@ class ChatMessagingService {
     XFile audioFile, {
     String? caption,
     String? replyToMessageId,
+    void Function(Message confirmedMessage)? onConfirmed,
+    void Function(String error)? onError,
     String? senderIdOverride,
     String? senderNameOverride,
     String? senderImageOverride,
@@ -616,6 +646,8 @@ class ChatMessagingService {
       audioFile,
       caption: caption,
       replyToMessageId: replyToMessageId,
+      onConfirmed: onConfirmed,
+      onError: onError,
       senderIdOverride: senderIdOverride,
       senderNameOverride: senderNameOverride,
       senderImageOverride: senderImageOverride,
@@ -648,6 +680,7 @@ class ChatMessagingService {
     final firstName = userData?['firstName'] as String? ?? '';
     final lastName = userData?['lastName'] as String? ?? '';
     final profileImage = userData?['profileImage'] as String?;
+    final mediaInfo = MediaUploadHelper.resolve(file, 'document');
 
     final optimisticMessage = Message(
       id: tempId,
@@ -658,6 +691,7 @@ class ChatMessagingService {
       content: caption?.trim() ?? '',
       type: 'document',
       documentUrl: file.path,
+      documentName: mediaInfo.cleanFileName,
       timestamp: now,
       status: 'sending',
       replyTo: replyToMessageId,
@@ -704,6 +738,7 @@ class ChatMessagingService {
     String? replyToSenderId,
   }) async {
     if (currentUserId == null) return null;
+    final resolvedChatId = await _resolveCanonicalChatIdIfNeeded(chatId);
     final now = DateTime.now().millisecondsSinceEpoch;
 
     final userData = await _getSenderData();
@@ -737,7 +772,7 @@ class ChatMessagingService {
     }
 
     try {
-      final newMsgRef = _messagesCol(chatId).doc();
+      final newMsgRef = _messagesCol(resolvedChatId).doc();
       final lastMessageData = <String, dynamic>{
         'id': newMsgRef.id,
         'content': caption?.trim().isNotEmpty == true
@@ -752,13 +787,13 @@ class ChatMessagingService {
 
       final batch = _firestore.batch();
       batch.set(newMsgRef, messageData);
-      batch.set(_chatsCol.doc(chatId), {
+      batch.set(_chatsCol.doc(resolvedChatId), {
         'lastMessage': lastMessageData,
         'updatedAt': now,
       }, SetOptions(merge: true));
       if (currentUserId != null) {
-        batch.set(_userChatsCol(currentUserId!).doc(chatId), {
-          'chatId': chatId,
+        batch.set(_userChatsCol(currentUserId!).doc(resolvedChatId), {
+          'chatId': resolvedChatId,
           'lastMessage': lastMessageData,
           'updatedAt': now,
           'isDeleted': false,
@@ -766,7 +801,11 @@ class ChatMessagingService {
       }
       await batch.commit();
 
-      return Message.fromFirestoreData(newMsgRef.id, chatId, messageData);
+      return Message.fromFirestoreData(
+        newMsgRef.id,
+        resolvedChatId,
+        messageData,
+      );
     } catch (e) {
       debugPrint('Error sending location message: $e');
       rethrow;
@@ -794,6 +833,7 @@ class ChatMessagingService {
     Map<String, dynamic>? metadata,
   }) async {
     try {
+      final targetChatId = await _resolveCanonicalChatIdIfNeeded(chatId);
       final resolvedSenderData = senderData ?? await _getSenderData();
       final folder = type == 'image'
           ? 'chat_images'
@@ -802,59 +842,33 @@ class ChatMessagingService {
           : (type == 'audio' || type == 'audio_file')
           ? 'chat_voices'
           : 'chat_documents';
-      String mimeType = 'application/octet-stream';
-      String ext = '';
-      if (type == 'image') {
-        ext = '.jpg';
-        mimeType = 'image/jpeg';
-      } else if (type == 'video') {
-        ext = '.mp4';
-        mimeType = 'video/mp4';
-      } else if (type == 'audio' || type == 'audio_file') {
-        final path = file.path.toLowerCase();
-        if (path.endsWith('.m4a')) {
-          ext = '.m4a';
-          mimeType = 'audio/mp4';
-        } else if (path.endsWith('.mp3')) {
-          ext = '.mp3';
-          mimeType = 'audio/mpeg';
-        } else if (path.endsWith('.aac')) {
-          ext = '.aac';
-          mimeType = 'audio/aac';
-        } else if (path.endsWith('.wav')) {
-          ext = '.wav';
-          mimeType = 'audio/wav';
-        } else {
-          final dotIndex = file.path.lastIndexOf('.');
-          if (dotIndex != -1) {
-            ext = file.path.substring(dotIndex);
-          } else {
-            ext = '.m4a';
-          }
-          mimeType = 'audio/mpeg';
-        }
-      } else {
-        ext = '_${file.name}';
-      }
 
-      final fileName = '${now}_$type$ext';
-      final storageRef = _storage.ref().child('$folder/$chatId/$fileName');
+      final mediaInfo = MediaUploadHelper.resolve(file, type);
+      final fileName = type == 'document'
+          ? '${now}_${mediaInfo.storageSafeBaseName}'
+          : '${now}_$type${mediaInfo.extension}';
+      final storageRef = _storage.ref().child(
+        '$folder/$targetChatId/$fileName',
+      );
 
       final storageMetadata = SettableMetadata(
-        contentType: mimeType,
+        contentType: mediaInfo.contentType,
         cacheControl: 'public, max-age=31536000',
-        customMetadata: {'ownerUid': ?currentUserId, 'chatId': chatId},
+        customMetadata: {'ownerUid': ?currentUserId, 'chatId': targetChatId},
       );
 
       UploadTask uploadTask;
-      if (kIsWeb) {
+      int? fileSizeBytes;
+      if (kIsWeb || file.path.isEmpty) {
         final bytes = await file.readAsBytes();
+        fileSizeBytes = bytes.length;
         uploadTask = storageRef.putData(bytes, storageMetadata);
       } else {
         final ioFile = File(file.path);
         if (!ioFile.existsSync()) {
           throw Exception('File does not exist at path: ${file.path}');
         }
+        fileSizeBytes = await ioFile.length();
         uploadTask = storageRef.putFile(ioFile, storageMetadata);
       }
 
@@ -890,9 +904,15 @@ class ChatMessagingService {
       } else if (type == 'audio' || type == 'audio_file') {
         messageData['documentUrl'] = derivedUrl;
         if (duration != null) messageData['audioDuration'] = duration;
+        if (type == 'audio_file') {
+          messageData['documentName'] = mediaInfo.cleanFileName;
+        }
       } else if (type == 'document') {
         messageData['documentUrl'] = derivedUrl;
-        messageData['documentName'] = fileName;
+        messageData['documentName'] = mediaInfo.cleanFileName;
+        if (fileSizeBytes > 0) {
+          messageData['documentSize'] = fileSizeBytes;
+        }
       }
 
       if (senderIdOverride != null) {
@@ -903,7 +923,7 @@ class ChatMessagingService {
         messageData['replyTo'] = replyToMessageId;
       }
 
-      final newMsgRef = _messagesCol(chatId).doc();
+      final newMsgRef = _messagesCol(targetChatId).doc();
 
       String icon = type == 'image'
           ? 'Photo'
@@ -913,7 +933,7 @@ class ChatMessagingService {
           ? 'Voice message'
           : type == 'audio_file'
           ? 'Audio'
-          : 'Document';
+          : mediaInfo.cleanFileName;
 
       final lastMessageData = <String, dynamic>{
         'id': newMsgRef.id,
@@ -928,13 +948,13 @@ class ChatMessagingService {
 
       final batch = _firestore.batch();
       batch.set(newMsgRef, messageData);
-      batch.set(_chatsCol.doc(chatId), {
+      batch.set(_chatsCol.doc(targetChatId), {
         'lastMessage': lastMessageData,
         'updatedAt': now,
       }, SetOptions(merge: true));
       if (currentUserId != null) {
-        batch.set(_userChatsCol(currentUserId!).doc(chatId), {
-          'chatId': chatId,
+        batch.set(_userChatsCol(currentUserId!).doc(targetChatId), {
+          'chatId': targetChatId,
           'lastMessage': lastMessageData,
           'updatedAt': now,
           'isDeleted': false,
@@ -944,7 +964,7 @@ class ChatMessagingService {
 
       if (onConfirmed != null) {
         onConfirmed(
-          Message.fromFirestoreData(newMsgRef.id, chatId, messageData),
+          Message.fromFirestoreData(newMsgRef.id, targetChatId, messageData),
         );
       }
     } catch (e, stack) {

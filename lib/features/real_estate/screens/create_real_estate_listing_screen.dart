@@ -1,6 +1,8 @@
 import 'dart:async';
-import 'dart:io';
+import 'package:universal_io/io.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:diaspora_nearby/core/utils/media_upload_helper.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:diaspora_nearby/config/env.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -542,11 +544,20 @@ class _CreateRealEstateListingScreenState
           final timestamp = DateTime.now().millisecondsSinceEpoch;
           final newImageUrls = await Future.wait(
             List.generate(imagesToUpload.length, (i) async {
-              final file = File(imagesToUpload[i].path);
+              final xfile = imagesToUpload[i];
+              final mediaInfo = MediaUploadHelper.resolve(xfile, 'image');
               final storageRef = FirebaseStorage.instance.ref().child(
-                'real_estate/${user.uid}/${timestamp}_$i.jpg',
+                'real_estate/${user.uid}/${timestamp}_$i${mediaInfo.extension}',
               );
-              await storageRef.putFile(file);
+              final metadata = SettableMetadata(
+                contentType: mediaInfo.contentType,
+                cacheControl: 'public, max-age=31536000',
+              );
+              if (kIsWeb || xfile.path.isEmpty) {
+                await storageRef.putData(await xfile.readAsBytes(), metadata);
+              } else {
+                await storageRef.putFile(File(xfile.path), metadata);
+              }
               return storageRef.getDownloadURL();
             }),
           );

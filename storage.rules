@@ -16,29 +16,53 @@ service firebase.storage {
       return isSignedIn() &&
         'admin' in request.auth.token && request.auth.token.admin == true;
     }
-    // Cross-service checks against Firestore (mirrors isChatParticipant in
-    // firestore.rules). Previously these only required a signed-in user, so
-    // anyone could read or overwrite any chat's media or any event's image.
+    // Null-safe helpers (in CEL, map.get(key, default) returns null if key is present with value null!)
+    function listOrEmpty(data, key) {
+      return data.get(key, []) is list ? data.get(key, []) : [];
+    }
+    function stringOrDefault(data, key, defaultVal) {
+      return data.get(key, defaultVal) is string ? data.get(key, defaultVal) : defaultVal;
+    }
+    function boolOrDefault(data, key, defaultVal) {
+      return data.get(key, defaultVal) is bool ? data.get(key, defaultVal) : defaultVal;
+    }
+    // Cross-service checks against Firestore (mirrors isChatParticipant /
+    // chamber post-gating in firestore.rules) with cross-service IAM role enabled.
     function chatDoc(chatId) {
       return /databases/(default)/documents/chats/$(chatId);
     }
+    function userChatDoc(chatId) {
+      return /databases/(default)/documents/users/$(request.auth.uid)/userChats/$(chatId);
+    }
+    function isChamberChat(chatId) {
+      return firestore.exists(chatDoc(chatId)) &&
+        stringOrDefault(firestore.get(chatDoc(chatId)).data, 'subtype', '') == 'corridor_chamber';
+    }
+    function isChamberMember(chatId) {
+      return isSignedIn() &&
+        firestore.exists(userChatDoc(chatId)) &&
+        stringOrDefault(firestore.get(userChatDoc(chatId)).data, 'accessLevel', '') == 'member';
+    }
     function isChatParticipant(chatId) {
       return isSignedIn() && chatId.size() > 0 && (
-        firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)/userChats/$(chatId)) ||
+        firestore.exists(userChatDoc(chatId)) ||
         (
           firestore.exists(chatDoc(chatId)) && (
-            request.auth.uid in firestore.get(chatDoc(chatId)).data.get('participants', []) ||
-            firestore.get(chatDoc(chatId)).data.get('type', '') == 'community' ||
-            firestore.get(chatDoc(chatId)).data.get('isPublic', false) == true
+            request.auth.uid in listOrEmpty(firestore.get(chatDoc(chatId)).data, 'participants') ||
+            stringOrDefault(firestore.get(chatDoc(chatId)).data, 'type', '') == 'community' ||
+            boolOrDefault(firestore.get(chatDoc(chatId)).data, 'isPublic', false) == true
           )
         )
       );
     }
+    function canPostChatMedia(chatId) {
+      return isChatParticipant(chatId) && (!isChamberChat(chatId) || isChamberMember(chatId));
+    }
     function isEventOwner(eventId) {
       return isSignedIn() && eventId.size() > 0 &&
         firestore.exists(/databases/(default)/documents/events/$(eventId)) && (
-          firestore.get(/databases/(default)/documents/events/$(eventId)).data.get('creatorId', '') == request.auth.uid ||
-          firestore.get(/databases/(default)/documents/events/$(eventId)).data.get('createdBy', '') == request.auth.uid
+          stringOrDefault(firestore.get(/databases/(default)/documents/events/$(eventId)).data, 'creatorId', '') == request.auth.uid ||
+          stringOrDefault(firestore.get(/databases/(default)/documents/events/$(eventId)).data, 'createdBy', '') == request.auth.uid
         );
     }
 
@@ -64,7 +88,7 @@ service firebase.storage {
     // Path: groups/{chatId}/... or chat_media/...
     match /groups/{chatId}/{allPaths=**} {
       allow read: if isChatParticipant(chatId) || isAdmin();
-      allow write: if isChatParticipant(chatId) &&
+      allow write: if (canPostChatMedia(chatId) || isAdmin()) &&
         (request.resource == null || (isImage() && isSmallEnough()));
     }
     
@@ -75,13 +99,13 @@ service firebase.storage {
     // [NEW] Explicit rules for folders used by ChatMessagingService
     match /chat_images/{chatId}/{allPaths=**} {
       allow read: if isChatParticipant(chatId) || isAdmin();
-      allow write: if isChatParticipant(chatId) &&
+      allow write: if (canPostChatMedia(chatId) || isAdmin()) &&
         (request.resource == null || (isImage() && isSmallEnough()));
     }
 
     match /chat_videos/{chatId}/{allPaths=**} {
       allow read: if isChatParticipant(chatId) || isAdmin();
-      allow write: if isChatParticipant(chatId) &&
+      allow write: if (canPostChatMedia(chatId) || isAdmin()) &&
         (request.resource == null || (
           request.resource.contentType.matches('video/.*') &&
           request.resource.size < 100 * 1024 * 1024
@@ -90,7 +114,7 @@ service firebase.storage {
 
     match /chat_voices/{chatId}/{allPaths=**} {
       allow read: if isChatParticipant(chatId) || isAdmin();
-      allow write: if isChatParticipant(chatId) &&
+      allow write: if (canPostChatMedia(chatId) || isAdmin()) &&
         (request.resource == null || (
           request.resource.contentType.matches('audio/.*') &&
           request.resource.size < 25 * 1024 * 1024
@@ -99,7 +123,7 @@ service firebase.storage {
 
     match /chat_documents/{chatId}/{allPaths=**} {
       allow read: if isChatParticipant(chatId) || isAdmin();
-      allow write: if isChatParticipant(chatId) &&
+      allow write: if (canPostChatMedia(chatId) || isAdmin()) &&
         (request.resource == null || (
           !request.resource.contentType.matches('text/html') &&
           !request.resource.contentType.matches('image/svg\\+xml') &&

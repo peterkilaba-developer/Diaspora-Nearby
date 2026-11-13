@@ -497,26 +497,48 @@ class _MessageInputState extends ConsumerState<MessageInput>
       setState(() => _isProcessingAttachment = true);
 
       try {
+        final ext = content.mimeType.split('/').last.split(';').first;
+        final stamp = DateTime.now().millisecondsSinceEpoch;
         if (content.data != null) {
-          final tempDir = await getTemporaryDirectory();
-          final ext = content.mimeType.split('/').last;
-          final path =
-              '${tempDir.path}/${DateTime.now().millisecondsSinceEpoch}.$ext';
-          final f = File(path);
-          await f.writeAsBytes(content.data!);
-          file = XFile(path);
+          if (kIsWeb) {
+            file = XFile.fromData(
+              content.data!,
+              mimeType: content.mimeType,
+              name: 'paste_$stamp.$ext',
+            );
+          } else {
+            final tempDir = await getTemporaryDirectory();
+            final path = '${tempDir.path}/$stamp.$ext';
+            final f = File(path);
+            await f.writeAsBytes(content.data!);
+            file = XFile(
+              path,
+              mimeType: content.mimeType,
+              name: 'paste_$stamp.$ext',
+            );
+          }
         } else if (content.uri.isNotEmpty) {
           final uri = Uri.parse(content.uri);
           if (uri.scheme == 'http' || uri.scheme == 'https') {
             final response = await http.get(uri);
             if (response.statusCode == 200) {
-              final tempDir = await getTemporaryDirectory();
-              final ext = content.mimeType.split('/').last;
-              final path =
-                  '${tempDir.path}/${DateTime.now().millisecondsSinceEpoch}.$ext';
-              final f = File(path);
-              await f.writeAsBytes(response.bodyBytes);
-              file = XFile(path);
+              if (kIsWeb) {
+                file = XFile.fromData(
+                  response.bodyBytes,
+                  mimeType: content.mimeType,
+                  name: 'paste_$stamp.$ext',
+                );
+              } else {
+                final tempDir = await getTemporaryDirectory();
+                final path = '${tempDir.path}/$stamp.$ext';
+                final f = File(path);
+                await f.writeAsBytes(response.bodyBytes);
+                file = XFile(
+                  path,
+                  mimeType: content.mimeType,
+                  name: 'paste_$stamp.$ext',
+                );
+              }
             }
           } else {
             debugPrint(
@@ -775,24 +797,39 @@ class _MessageInputState extends ConsumerState<MessageInput>
     try {
       final result = await fp.FilePicker.platform.pickFiles(
         type: fp.FileType.custom,
-        allowedExtensions: ['pdf', 'doc', 'docx', 'txt', 'xls', 'xlsx'],
+        allowedExtensions: ['pdf', 'doc', 'docx', 'txt', 'xls', 'xlsx', 'csv'],
+        withData: kIsWeb,
       );
-      if (result != null && mounted) {
+      if (result != null && result.files.isNotEmpty && mounted) {
+        final picked = result.files.single;
+        final inferredMime = _inferMimeFromFileName(picked.name);
         setState(() {
-          // Handle web (bytes) vs native (path)
-          if (kIsWeb && result.files.single.bytes != null) {
+          // Handle web / content-stream (bytes) vs native (path)
+          if (kIsWeb && picked.bytes != null) {
             _pendingAttachments = [
               XFile.fromData(
-                result.files.single.bytes!,
-                name: result.files.single.name,
+                picked.bytes!,
+                name: picked.name,
+                mimeType: inferredMime,
               ),
             ];
-          } else if (result.files.single.path != null) {
+          } else if (picked.path != null && picked.path!.isNotEmpty) {
             _pendingAttachments = [
-              XFile(result.files.single.path!, name: result.files.single.name),
+              XFile(
+                picked.path!,
+                name: picked.name,
+                mimeType: inferredMime,
+              ),
+            ];
+          } else if (picked.bytes != null) {
+            _pendingAttachments = [
+              XFile.fromData(
+                picked.bytes!,
+                name: picked.name,
+                mimeType: inferredMime,
+              ),
             ];
           } else {
-            // Neither bytes nor path available
             _isProcessingAttachment = false;
             return;
           }
@@ -815,20 +852,39 @@ class _MessageInputState extends ConsumerState<MessageInput>
     try {
       final result = await fp.FilePicker.platform.pickFiles(
         type: fp.FileType.audio,
+        withData: kIsWeb,
       );
-      if (result != null && result.files.single.path != null && mounted) {
+      if (result != null && result.files.isNotEmpty && mounted) {
+        final picked = result.files.single;
+        final inferredMime = _inferMimeFromFileName(picked.name);
         setState(() {
-          if (kIsWeb && result.files.single.bytes != null) {
+          if (kIsWeb && picked.bytes != null) {
             _pendingAttachments = [
               XFile.fromData(
-                result.files.single.bytes!,
-                name: result.files.single.name,
+                picked.bytes!,
+                name: picked.name,
+                mimeType: inferredMime,
+              ),
+            ];
+          } else if (picked.path != null && picked.path!.isNotEmpty) {
+            _pendingAttachments = [
+              XFile(
+                picked.path!,
+                name: picked.name,
+                mimeType: inferredMime,
+              ),
+            ];
+          } else if (picked.bytes != null) {
+            _pendingAttachments = [
+              XFile.fromData(
+                picked.bytes!,
+                name: picked.name,
+                mimeType: inferredMime,
               ),
             ];
           } else {
-            _pendingAttachments = [
-              XFile(result.files.single.path!, name: result.files.single.name),
-            ];
+            _isProcessingAttachment = false;
+            return;
           }
           _pendingAttachmentType = 'audio_file';
           _isProcessingAttachment = false;
@@ -840,6 +896,28 @@ class _MessageInputState extends ConsumerState<MessageInput>
       debugPrint('Error picking audio: $e');
       if (mounted) setState(() => _isProcessingAttachment = false);
     }
+  }
+
+  String? _inferMimeFromFileName(String fileName) {
+    final lower = fileName.trim().toLowerCase();
+    if (lower.endsWith('.pdf')) return 'application/pdf';
+    if (lower.endsWith('.doc')) return 'application/msword';
+    if (lower.endsWith('.docx')) {
+      return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    }
+    if (lower.endsWith('.xls')) return 'application/vnd.ms-excel';
+    if (lower.endsWith('.xlsx')) {
+      return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    }
+    if (lower.endsWith('.txt')) return 'text/plain';
+    if (lower.endsWith('.csv')) return 'text/csv';
+    if (lower.endsWith('.mp3')) return 'audio/mpeg';
+    if (lower.endsWith('.wav')) return 'audio/wav';
+    if (lower.endsWith('.aac')) return 'audio/aac';
+    if (lower.endsWith('.ogg') || lower.endsWith('.opus')) return 'audio/ogg';
+    if (lower.endsWith('.webm')) return 'audio/webm';
+    if (lower.endsWith('.m4a') || lower.endsWith('.mp4')) return 'audio/mp4';
+    return null;
   }
 
   @override

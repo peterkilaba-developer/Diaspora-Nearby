@@ -1,6 +1,8 @@
 import 'dart:async';
-import 'dart:io';
+import 'package:universal_io/io.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:diaspora_nearby/core/utils/media_upload_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:image_picker/image_picker.dart';
@@ -658,11 +660,20 @@ class _CreateHotelListingScreenState
           final timestamp = DateTime.now().millisecondsSinceEpoch;
           final uploadedUrls = await Future.wait(
             List.generate(imagesToUpload.length, (i) async {
-              final file = File(imagesToUpload[i].path);
+              final xfile = imagesToUpload[i];
+              final mediaInfo = MediaUploadHelper.resolve(xfile, 'image');
               final storageRef = FirebaseStorage.instance.ref().child(
-                'hotels/${user.uid}/${timestamp}_$i.jpg',
+                'hotels/${user.uid}/${timestamp}_$i${mediaInfo.extension}',
               );
-              await storageRef.putFile(file);
+              final metadata = SettableMetadata(
+                contentType: mediaInfo.contentType,
+                cacheControl: 'public, max-age=31536000',
+              );
+              if (kIsWeb || xfile.path.isEmpty) {
+                await storageRef.putData(await xfile.readAsBytes(), metadata);
+              } else {
+                await storageRef.putFile(File(xfile.path), metadata);
+              }
               return storageRef.getDownloadURL();
             }),
           );

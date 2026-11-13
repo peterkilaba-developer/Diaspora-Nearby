@@ -64,6 +64,7 @@ class _ShareChatSelectionScreenState
   Future<void> _handleSend() async {
     if (_isSending) return;
 
+    final chatRepo = ref.read(chatRepositoryProvider);
     final messagingService = ref.read(chatMessagingServiceProvider);
     final currentUser = ref.read(authRepositoryProvider).currentUser;
 
@@ -76,8 +77,13 @@ class _ShareChatSelectionScreenState
     setState(() => _isSending = true);
     ref.read(shareReceiverServiceProvider).clearPendingFiles();
     final messenger = ScaffoldMessenger.of(context);
+    final errorColor = Theme.of(context).colorScheme.error;
     messenger.showSnackBar(
-      const SnackBar(content: Text('Sent successfully!')),
+      SnackBar(
+        content: Text(
+          'Sending to ${targetChatIds.length} chat${targetChatIds.length > 1 ? 's' : ''}...',
+        ),
+      ),
     );
     if (context.canPop()) {
       context.pop();
@@ -85,10 +91,30 @@ class _ShareChatSelectionScreenState
       context.go('/chats');
     }
 
+    Future<void> awaitMediaSend(
+      Future<void> Function(
+        void Function(dynamic) onConfirmed,
+        void Function(String) onError,
+      )
+      dispatch,
+    ) async {
+      final completer = Completer<void>();
+      await dispatch(
+        (confirmed) {
+          if (!completer.isCompleted) completer.complete();
+        },
+        (err) {
+          if (!completer.isCompleted) completer.completeError(Exception(err));
+        },
+      );
+      await completer.future;
+    }
+
     unawaited(() async {
       try {
         await Future.wait(
-          targetChatIds.map((chatId) async {
+          targetChatIds.map((rawChatId) async {
+            final chatId = await chatRepo.resolveCanonicalChatId(rawChatId);
             for (final file in filesToSend) {
               final metadata = {'isShared': true};
               final caption = file.message?.trim();
@@ -97,19 +123,33 @@ class _ShareChatSelectionScreenState
 
               switch (file.type) {
                 case SharedMediaType.image:
-                  await messagingService.sendImageMessage(
-                    chatId,
-                    XFile(file.path),
-                    caption: nonEmptyCaption,
-                    metadata: metadata,
+                  await awaitMediaSend(
+                    (onConfirmed, onError) => messagingService.sendImageMessage(
+                      chatId,
+                      XFile(file.path),
+                      caption: nonEmptyCaption,
+                      metadata: metadata,
+                      onConfirmed: (msg) {
+                        chatRepo.updateChatCacheWithMessage(chatId, msg);
+                        onConfirmed(msg);
+                      },
+                      onError: onError,
+                    ),
                   );
                   break;
                 case SharedMediaType.video:
-                  await messagingService.sendVideoMessage(
-                    chatId,
-                    XFile(file.path),
-                    caption: nonEmptyCaption,
-                    metadata: metadata,
+                  await awaitMediaSend(
+                    (onConfirmed, onError) => messagingService.sendVideoMessage(
+                      chatId,
+                      XFile(file.path),
+                      caption: nonEmptyCaption,
+                      metadata: metadata,
+                      onConfirmed: (msg) {
+                        chatRepo.updateChatCacheWithMessage(chatId, msg);
+                        onConfirmed(msg);
+                      },
+                      onError: onError,
+                    ),
                   );
                   break;
                 case SharedMediaType.text:
@@ -118,11 +158,14 @@ class _ShareChatSelectionScreenState
                       ? file.path.trim()
                       : (nonEmptyCaption ?? '');
                   if (textContent.isNotEmpty) {
-                    await messagingService.sendTextMessage(
+                    final msg = await messagingService.sendTextMessage(
                       chatId,
                       textContent,
                       metadata: metadata,
                     );
+                    if (msg != null) {
+                      chatRepo.updateChatCacheWithMessage(chatId, msg);
+                    }
                   }
                   break;
                 case SharedMediaType.file:
@@ -130,25 +173,46 @@ class _ShareChatSelectionScreenState
                   if (path.endsWith('.mp3') ||
                       path.endsWith('.m4a') ||
                       path.endsWith('.wav') ||
-                      path.endsWith('.aac')) {
-                    await messagingService.sendAudioFileMessage(
-                      chatId,
-                      XFile(file.path),
-                      metadata: metadata,
+                      path.endsWith('.aac') ||
+                      path.endsWith('.ogg') ||
+                      path.endsWith('.opus')) {
+                    await awaitMediaSend(
+                      (onConfirmed, onError) =>
+                          messagingService.sendAudioFileMessage(
+                            chatId,
+                            XFile(file.path),
+                            metadata: metadata,
+                            onConfirmed: (msg) {
+                              chatRepo.updateChatCacheWithMessage(chatId, msg);
+                              onConfirmed(msg);
+                            },
+                            onError: onError,
+                          ),
                     );
                   } else {
-                    await messagingService.sendDocumentMessage(
-                      chatId,
-                      XFile(file.path),
-                      metadata: metadata,
+                    await awaitMediaSend(
+                      (onConfirmed, onError) =>
+                          messagingService.sendDocumentMessage(
+                            chatId,
+                            XFile(file.path),
+                            metadata: metadata,
+                            onConfirmed: (msg) {
+                              chatRepo.updateChatCacheWithMessage(chatId, msg);
+                              onConfirmed(msg);
+                            },
+                            onError: onError,
+                          ),
                     );
                   }
                   if (nonEmptyCaption != null) {
-                    await messagingService.sendTextMessage(
+                    final msg = await messagingService.sendTextMessage(
                       chatId,
                       nonEmptyCaption,
                       metadata: metadata,
                     );
+                    if (msg != null) {
+                      chatRepo.updateChatCacheWithMessage(chatId, msg);
+                    }
                   }
                   break;
               }
@@ -157,7 +221,14 @@ class _ShareChatSelectionScreenState
         );
       } catch (e) {
         debugPrint("Share Send Error: $e");
-        messenger.showSnackBar(SnackBar(content: Text('Error sending: $e')));
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'Error sending: ${e.toString().replaceAll('Exception: ', '')}',
+            ),
+            backgroundColor: errorColor,
+          ),
+        );
       }
     }());
   }

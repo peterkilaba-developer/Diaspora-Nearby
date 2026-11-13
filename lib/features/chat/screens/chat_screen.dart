@@ -15,6 +15,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:diaspora_nearby/core/services/background_location_service.dart';
+import 'package:diaspora_nearby/core/utils/media_upload_helper.dart';
 import 'package:diaspora_nearby/features/chat/screens/create_group_screen.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 import 'package:share_plus/share_plus.dart'; // [NEW]
@@ -793,12 +794,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     return ref.read(chatRepositoryProvider).getCachedChat(targetId)?.participants;
   }
 
-  /// Helper to ensure chat exists (creates it if pending)
+  /// Helper to ensure chat exists (creates it if pending, or canonicalizes synthetic `ai_agent_<uid>`)
   Future<String?> _ensureChatCreated() async {
-    if (_activeChatId != null) return _activeChatId;
+    final chatRepo = ref.read(chatRepositoryProvider);
+    if (_activeChatId != null) {
+      if (_activeChatId!.startsWith('ai_agent_')) {
+        final resolved = await chatRepo.resolveCanonicalChatId(_activeChatId!);
+        if (resolved != _activeChatId && mounted) {
+          setState(() {
+            _activeChatId = resolved;
+          });
+          _syncActiveChatNotificationState();
+        }
+        return resolved;
+      }
+      return _activeChatId;
+    }
     if (!_isPendingDM) return null;
 
-    final chatRepo = ref.read(chatRepositoryProvider);
     final existingCached = chatRepo.getCachedDirectChatWith(
       widget.pendingUserId!,
     );
@@ -873,6 +886,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     String? caption,
   ) async {
     final chatRepo = ref.read(chatRepositoryProvider);
+    final pendingNotifier = ref.read(pendingMessagesProvider.notifier);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final errorColor = Theme.of(context).colorScheme.error;
     final currentUserId = chatRepo.currentUserId;
     final replyToId = _replyingTo?.id;
     final replyToSenderId = _replyingTo?.senderId;
@@ -905,9 +921,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
           status: 'sending',
           replyTo: replyToId,
         );
-        ref
-            .read(pendingMessagesProvider.notifier)
-            .addMessage(initialKey, optimisticMessage);
+        pendingNotifier.addMessage(initialKey, optimisticMessage);
       }
       _scrollToBottom(false);
     }
@@ -915,11 +929,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     final chatId = await _ensureChatCreated();
     if (chatId == null) {
       for (final tempId in tempIds) {
-        ref
-            .read(pendingMessagesProvider.notifier)
-            .removeMessage(initialKey, tempId);
+        pendingNotifier.removeMessage(initialKey, tempId);
       }
       return;
+    }
+
+    if (chatId != initialKey) {
+      pendingNotifier.migrateMessages(initialKey, chatId);
     }
 
     final participants = _getParticipantsSync(chatId);
@@ -928,6 +944,34 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       List.generate(files.length, (index) async {
         final file = files[index];
         final tempId = index < tempIds.length ? tempIds[index] : null;
+        void handleConfirmed(Message confirmedMsg) {
+          chatRepo.updateChatCacheWithMessage(chatId, confirmedMsg);
+          if (tempId != null) {
+            pendingNotifier.removeMessage(chatId, tempId);
+            if (chatId != initialKey) {
+              pendingNotifier.removeMessage(initialKey, tempId);
+            }
+          }
+        }
+
+        void handleError(String error) {
+          debugPrint('❌ Media upload error ($type): $error');
+          if (tempId != null) {
+            pendingNotifier.updateMessageStatus(chatId, tempId, 'error');
+            if (chatId != initialKey) {
+              pendingNotifier.updateMessageStatus(initialKey, tempId, 'error');
+            }
+          }
+          messenger?.showSnackBar(
+            SnackBar(
+              content: Text(
+                'Failed to send $type: ${error.replaceAll('Exception: ', '')}',
+              ),
+              backgroundColor: errorColor,
+            ),
+          );
+        }
+
         try {
           if (type == 'video') {
             await chatRepo.sendVideoMessage(
@@ -935,6 +979,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
               file,
               caption: caption,
               replyToMessageId: replyToId,
+              onConfirmed: handleConfirmed,
+              onError: handleError,
               senderIdOverride: identity?['id'],
               senderNameOverride: identity?['name'],
               senderImageOverride: identity?['profileImage'],
@@ -947,6 +993,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
               file,
               caption: caption,
               replyToMessageId: replyToId,
+              onConfirmed: handleConfirmed,
+              onError: handleError,
               senderIdOverride: identity?['id'],
               senderNameOverride: identity?['name'],
               senderImageOverride: identity?['profileImage'],
@@ -955,23 +1003,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
             );
           }
         } catch (e) {
-          debugPrint('Error sending media: $e');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Failed to send media: ${e.toString()}')),
-            );
-          }
-        } finally {
-          if (tempId != null && mounted) {
-            ref
-                .read(pendingMessagesProvider.notifier)
-                .removeMessage(initialKey, tempId);
-            if (chatId != initialKey) {
-              ref
-                  .read(pendingMessagesProvider.notifier)
-                  .removeMessage(chatId, tempId);
-            }
-          }
+          handleError(e.toString());
         }
       }),
     );
@@ -1130,6 +1162,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       return;
     }
 
+    if (chatId != initialKey) {
+      ref
+          .read(pendingMessagesProvider.notifier)
+          .migrateMessages(initialKey, chatId);
+    }
+
     final participants = _getParticipantsSync(chatId);
 
     // Resolve reverse geocoding in background if address is empty
@@ -1191,6 +1229,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
 
   Future<void> _sendAudioFile(XFile file, String? caption) async {
     final chatRepo = ref.read(chatRepositoryProvider);
+    final pendingNotifier = ref.read(pendingMessagesProvider.notifier);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final errorColor = Theme.of(context).colorScheme.error;
     final currentUserId = chatRepo.currentUserId;
     final replyToId = _replyingTo?.id;
     final replyToSenderId = _replyingTo?.senderId;
@@ -1203,6 +1244,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     final initialKey = _pendingDmCacheKey;
     final now = DateTime.now().millisecondsSinceEpoch;
     final tempId = 'temp_audiofile_$now';
+    final mediaInfo = MediaUploadHelper.resolve(file, 'audio_file');
 
     if (currentUserId != null) {
       final optimisticMessage = Message(
@@ -1214,28 +1256,57 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         content: caption?.trim() ?? '',
         type: 'audio_file',
         documentUrl: file.path,
+        documentName: mediaInfo.cleanFileName,
         timestamp: now,
         status: 'sending',
         replyTo: replyToId,
       );
 
-      ref
-          .read(pendingMessagesProvider.notifier)
-          .addMessage(initialKey, optimisticMessage);
+      pendingNotifier.addMessage(initialKey, optimisticMessage);
       _scrollToBottom(false);
     }
 
     final chatId = await _ensureChatCreated();
     if (chatId == null) {
       if (currentUserId != null) {
-        ref
-            .read(pendingMessagesProvider.notifier)
-            .removeMessage(initialKey, tempId);
+        pendingNotifier.removeMessage(initialKey, tempId);
       }
       return;
     }
 
+    if (chatId != initialKey) {
+      pendingNotifier.migrateMessages(initialKey, chatId);
+    }
+
     final participants = _getParticipantsSync(chatId);
+
+    void handleConfirmed(Message confirmedMsg) {
+      chatRepo.updateChatCacheWithMessage(chatId, confirmedMsg);
+      if (currentUserId != null) {
+        pendingNotifier.removeMessage(chatId, tempId);
+        if (chatId != initialKey) {
+          pendingNotifier.removeMessage(initialKey, tempId);
+        }
+      }
+    }
+
+    void handleError(String error) {
+      debugPrint('❌ Audio file upload error: $error');
+      if (currentUserId != null) {
+        pendingNotifier.updateMessageStatus(chatId, tempId, 'error');
+        if (chatId != initialKey) {
+          pendingNotifier.updateMessageStatus(initialKey, tempId, 'error');
+        }
+      }
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to send audio file: ${error.replaceAll('Exception: ', '')}',
+          ),
+          backgroundColor: errorColor,
+        ),
+      );
+    }
 
     try {
       await chatRepo.sendAudioFileMessage(
@@ -1243,6 +1314,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         file,
         caption: caption,
         replyToMessageId: replyToId,
+        onConfirmed: handleConfirmed,
+        onError: handleError,
         senderIdOverride: identity?['id'],
         senderNameOverride: identity?['name'],
         senderImageOverride: identity?['profileImage'],
@@ -1250,23 +1323,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         replyToSenderId: replyToSenderId,
       );
     } catch (e) {
-      debugPrint('Error sending audio file: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to send audio file: ${e.toString()}')),
-        );
-      }
-    } finally {
-      if (currentUserId != null && mounted) {
-        ref
-            .read(pendingMessagesProvider.notifier)
-            .removeMessage(initialKey, tempId);
-        if (chatId != initialKey) {
-          ref
-              .read(pendingMessagesProvider.notifier)
-              .removeMessage(chatId, tempId);
-        }
-      }
+      handleError(e.toString());
     }
 
     _scrollToBottom();
@@ -1274,6 +1331,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
 
   Future<void> _sendAudio(XFile file, int duration, {String? caption}) async {
     final chatRepo = ref.read(chatRepositoryProvider);
+    final pendingNotifier = ref.read(pendingMessagesProvider.notifier);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final errorColor = Theme.of(context).colorScheme.error;
     final currentUserId = chatRepo.currentUserId;
     final replyToId = _replyingTo?.id;
     final replyToSenderId = _replyingTo?.senderId;
@@ -1303,23 +1363,51 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         replyTo: replyToId,
       );
 
-      ref
-          .read(pendingMessagesProvider.notifier)
-          .addMessage(initialKey, optimisticMessage);
+      pendingNotifier.addMessage(initialKey, optimisticMessage);
       _scrollToBottom(false);
     }
 
     final chatId = await _ensureChatCreated();
     if (chatId == null) {
       if (currentUserId != null) {
-        ref
-            .read(pendingMessagesProvider.notifier)
-            .removeMessage(initialKey, tempId);
+        pendingNotifier.removeMessage(initialKey, tempId);
       }
       return;
     }
 
+    if (chatId != initialKey) {
+      pendingNotifier.migrateMessages(initialKey, chatId);
+    }
+
     final participants = _getParticipantsSync(chatId);
+
+    void handleConfirmed(Message confirmedMsg) {
+      chatRepo.updateChatCacheWithMessage(chatId, confirmedMsg);
+      if (currentUserId != null) {
+        pendingNotifier.removeMessage(chatId, tempId);
+        if (chatId != initialKey) {
+          pendingNotifier.removeMessage(initialKey, tempId);
+        }
+      }
+    }
+
+    void handleError(String error) {
+      debugPrint('❌ Voice upload error: $error');
+      if (currentUserId != null) {
+        pendingNotifier.updateMessageStatus(chatId, tempId, 'error');
+        if (chatId != initialKey) {
+          pendingNotifier.updateMessageStatus(initialKey, tempId, 'error');
+        }
+      }
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to send voice message: ${error.replaceAll('Exception: ', '')}',
+          ),
+          backgroundColor: errorColor,
+        ),
+      );
+    }
 
     try {
       await chatRepo.sendAudioMessage(
@@ -1328,6 +1416,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         durationSeconds: duration,
         caption: caption,
         replyToMessageId: replyToId,
+        onConfirmed: handleConfirmed,
+        onError: handleError,
         senderIdOverride: identity?['id'],
         senderNameOverride: identity?['name'],
         senderImageOverride: identity?['profileImage'],
@@ -1335,25 +1425,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         replyToSenderId: replyToSenderId,
       );
     } catch (e) {
-      debugPrint('Error sending audio: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to send voice message: ${e.toString()}'),
-          ),
-        );
-      }
-    } finally {
-      if (currentUserId != null && mounted) {
-        ref
-            .read(pendingMessagesProvider.notifier)
-            .removeMessage(initialKey, tempId);
-        if (chatId != initialKey) {
-          ref
-              .read(pendingMessagesProvider.notifier)
-              .removeMessage(chatId, tempId);
-        }
-      }
+      handleError(e.toString());
     }
 
     _scrollToBottom();
@@ -1361,6 +1433,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
 
   Future<void> _sendDocument(XFile file, String? caption) async {
     final chatRepo = ref.read(chatRepositoryProvider);
+    final pendingNotifier = ref.read(pendingMessagesProvider.notifier);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final errorColor = Theme.of(context).colorScheme.error;
     final currentUserId = chatRepo.currentUserId;
     final replyToId = _replyingTo?.id;
     final replyToSenderId = _replyingTo?.senderId;
@@ -1373,6 +1448,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     final initialKey = _pendingDmCacheKey;
     final now = DateTime.now().millisecondsSinceEpoch;
     final tempId = 'temp_doc_$now';
+    final mediaInfo = MediaUploadHelper.resolve(file, 'document');
 
     if (currentUserId != null) {
       final optimisticMessage = Message(
@@ -1384,29 +1460,57 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         content: caption?.trim() ?? '',
         type: 'document',
         documentUrl: file.path,
-        documentName: file.path.split('/').last,
+        documentName: mediaInfo.cleanFileName,
         timestamp: now,
         status: 'sending',
         replyTo: replyToId,
       );
 
-      ref
-          .read(pendingMessagesProvider.notifier)
-          .addMessage(initialKey, optimisticMessage);
+      pendingNotifier.addMessage(initialKey, optimisticMessage);
       _scrollToBottom(false);
     }
 
     final chatId = await _ensureChatCreated();
     if (chatId == null) {
       if (currentUserId != null) {
-        ref
-            .read(pendingMessagesProvider.notifier)
-            .removeMessage(initialKey, tempId);
+        pendingNotifier.removeMessage(initialKey, tempId);
       }
       return;
     }
 
+    if (chatId != initialKey) {
+      pendingNotifier.migrateMessages(initialKey, chatId);
+    }
+
     final participants = _getParticipantsSync(chatId);
+
+    void handleConfirmed(Message confirmedMsg) {
+      chatRepo.updateChatCacheWithMessage(chatId, confirmedMsg);
+      if (currentUserId != null) {
+        pendingNotifier.removeMessage(chatId, tempId);
+        if (chatId != initialKey) {
+          pendingNotifier.removeMessage(initialKey, tempId);
+        }
+      }
+    }
+
+    void handleError(String error) {
+      debugPrint('❌ Document upload error: $error');
+      if (currentUserId != null) {
+        pendingNotifier.updateMessageStatus(chatId, tempId, 'error');
+        if (chatId != initialKey) {
+          pendingNotifier.updateMessageStatus(initialKey, tempId, 'error');
+        }
+      }
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to send document: ${error.replaceAll('Exception: ', '')}',
+          ),
+          backgroundColor: errorColor,
+        ),
+      );
+    }
 
     try {
       await chatRepo.sendDocumentMessage(
@@ -1414,6 +1518,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         file,
         caption: caption,
         replyToMessageId: replyToId,
+        onConfirmed: handleConfirmed,
+        onError: handleError,
         senderIdOverride: identity?['id'],
         senderNameOverride: identity?['name'],
         senderImageOverride: identity?['profileImage'],
@@ -1421,23 +1527,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         replyToSenderId: replyToSenderId,
       );
     } catch (e) {
-      debugPrint('Error sending document: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to send document: ${e.toString()}')),
-        );
-      }
-    } finally {
-      if (currentUserId != null && mounted) {
-        ref
-            .read(pendingMessagesProvider.notifier)
-            .removeMessage(initialKey, tempId);
-        if (chatId != initialKey) {
-          ref
-              .read(pendingMessagesProvider.notifier)
-              .removeMessage(chatId, tempId);
-        }
-      }
+      handleError(e.toString());
     }
 
     _scrollToBottom();
@@ -1449,25 +1539,65 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
 
     debugPrint('🔄 Retrying failed message: ${failedMessage.id}');
     final chatRepo = ref.read(chatRepositoryProvider);
+    final pendingNotifier = ref.read(pendingMessagesProvider.notifier);
 
-    // For text messages, resend with the same content
     if (failedMessage.type == 'text') {
+      pendingNotifier.removeMessage(_activeChatId!, failedMessage.id);
       await chatRepo.sendTextMessage(
         _activeChatId!,
         failedMessage.content,
         replyToMessageId: failedMessage.replyTo,
       );
+      return;
     }
-    // For other types, we'd need to handle differently since we may not have the file
-    // For now, show a snackbar for non-text messages
-    else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cannot retry media messages. Please send again.'),
-          ),
-        );
+
+    final localPath = failedMessage.type == 'image'
+        ? (failedMessage.imageUrl ?? failedMessage.documentUrl)
+        : failedMessage.documentUrl;
+
+    final canRetryFile =
+        localPath != null &&
+        localPath.isNotEmpty &&
+        !localPath.startsWith('http://') &&
+        !localPath.startsWith('https://') &&
+        (kIsWeb || uio.File(localPath).existsSync());
+
+    if (canRetryFile) {
+      pendingNotifier.removeMessage(_activeChatId!, failedMessage.id);
+      final retryFile = XFile(
+        localPath,
+        name: failedMessage.documentName,
+      );
+      final caption = failedMessage.content.isNotEmpty
+          ? failedMessage.content
+          : null;
+      switch (failedMessage.type) {
+        case 'image':
+        case 'video':
+          await _sendMedia([retryFile], failedMessage.type, caption);
+          return;
+        case 'audio':
+          await _sendAudio(
+            retryFile,
+            failedMessage.audioDuration ?? 0,
+            caption: caption,
+          );
+          return;
+        case 'audio_file':
+          await _sendAudioFile(retryFile, caption);
+          return;
+        case 'document':
+          await _sendDocument(retryFile, caption);
+          return;
       }
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot retry this attachment. Please pick it again.'),
+        ),
+      );
     }
   }
 

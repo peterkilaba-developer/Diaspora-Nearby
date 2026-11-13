@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:ui';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -13,7 +14,8 @@ import 'package:diaspora_nearby/features/marketplace/screens/marketplace_screen.
     show categoryIcon;
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'dart:io';
+import 'package:universal_io/io.dart';
+import 'package:diaspora_nearby/core/utils/media_upload_helper.dart';
 import 'package:diaspora_nearby/features/marketplace/data/vehicle_data.dart';
 import 'package:diaspora_nearby/features/marketplace/data/motorcycle_data.dart';
 import 'package:diaspora_nearby/features/marketplace/services/vin_decoder_service.dart';
@@ -3508,11 +3510,23 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           try {
             final uploadedUrls = await Future.wait(
               List.generate(selectedFiles.length, (i) async {
-                final file = File(selectedFiles[i].path);
+                final xfile = selectedFiles[i];
+                final mediaInfo = MediaUploadHelper.resolve(xfile, 'image');
                 final storageRef = FirebaseStorage.instance.ref().child(
-                  'marketplace/${user.uid}/${DateTime.now().millisecondsSinceEpoch}_$i.jpg',
+                  'marketplace/${user.uid}/${DateTime.now().millisecondsSinceEpoch}_$i${mediaInfo.extension}',
                 );
-                await storageRef.putFile(file);
+                final metadata = SettableMetadata(
+                  contentType: mediaInfo.contentType,
+                  cacheControl: 'public, max-age=31536000',
+                );
+                if (kIsWeb || xfile.path.isEmpty) {
+                  await storageRef.putData(
+                    await xfile.readAsBytes(),
+                    metadata,
+                  );
+                } else {
+                  await storageRef.putFile(File(xfile.path), metadata);
+                }
                 return storageRef.getDownloadURL();
               }),
             );
@@ -3548,11 +3562,23 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           try {
             final uploadedUrls = await Future.wait(
               List.generate(selectedFiles.length, (i) async {
-                final file = File(selectedFiles[i].path);
+                final xfile = selectedFiles[i];
+                final mediaInfo = MediaUploadHelper.resolve(xfile, 'image');
                 final storageRef = FirebaseStorage.instance.ref().child(
-                  'marketplace/${user.uid}/${DateTime.now().millisecondsSinceEpoch}_$i.jpg',
+                  'marketplace/${user.uid}/${DateTime.now().millisecondsSinceEpoch}_$i${mediaInfo.extension}',
                 );
-                await storageRef.putFile(file);
+                final metadata = SettableMetadata(
+                  contentType: mediaInfo.contentType,
+                  cacheControl: 'public, max-age=31536000',
+                );
+                if (kIsWeb || xfile.path.isEmpty) {
+                  await storageRef.putData(
+                    await xfile.readAsBytes(),
+                    metadata,
+                  );
+                } else {
+                  await storageRef.putFile(File(xfile.path), metadata);
+                }
                 return storageRef.getDownloadURL();
               }),
             );

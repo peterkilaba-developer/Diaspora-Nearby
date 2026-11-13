@@ -44,6 +44,28 @@ class PendingMessagesNotifier extends Notifier<Map<String, List<Message>>> {
 
     state = {...current, chatId: messages};
   }
+
+  /// Moves any optimistic pending messages keyed under [fromChatId] (e.g.
+  /// `'pending_dm_<uid>'` or `'ai_agent_<uid>'`) into [toChatId] when the
+  /// canonical chat ID is resolved, so bubbles never disappear mid-upload.
+  void migrateMessages(String fromChatId, String toChatId) {
+    if (fromChatId == toChatId) return;
+    final current = state;
+    final fromMessages = current[fromChatId];
+    if (fromMessages == null || fromMessages.isEmpty) return;
+
+    final existingTarget = current[toChatId] ?? const <Message>[];
+    final existingIds = existingTarget.map((m) => m.id).toSet();
+    final migrated = fromMessages
+        .where((m) => !existingIds.contains(m.id))
+        .map((m) => m.copyWith(chatId: toChatId))
+        .toList();
+
+    final newState = Map<String, List<Message>>.from(current);
+    newState.remove(fromChatId);
+    newState[toChatId] = [...existingTarget, ...migrated];
+    state = newState;
+  }
 }
 
 final pendingMessagesProvider =

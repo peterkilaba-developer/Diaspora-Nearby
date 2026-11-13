@@ -251,6 +251,9 @@ class _ForwardChatSelectionScreenState
                               final chatRepo = ref.read(chatRepositoryProvider);
                               final chats = _selectedChatIds.toList();
                               final messenger = ScaffoldMessenger.of(context);
+                              final errorColor = Theme.of(
+                                context,
+                              ).colorScheme.error;
 
                               // Pop immediately in 0ms and dispatch forwarding in background
                               context.pop();
@@ -263,16 +266,19 @@ class _ForwardChatSelectionScreenState
                               );
 
                               unawaited(
-                                Future.wait(
-                                  chats.map(
-                                    (chatId) => chatRepo.sendTextMessage(
-                                      chatId,
-                                      widget.message.content,
-                                      type: widget.message.type,
-                                      metadata: widget.message.metadata,
-                                    ),
-                                  ),
-                                ),
+                                chatRepo
+                                    .forwardMessage(widget.message, chats)
+                                    .catchError((Object e) {
+                                      debugPrint('Forward message error: $e');
+                                      messenger.showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Failed to forward message: ${e.toString().replaceAll('Exception: ', '')}',
+                                          ),
+                                          backgroundColor: errorColor,
+                                        ),
+                                      );
+                                    }),
                               );
                             },
                             style: ElevatedButton.styleFrom(

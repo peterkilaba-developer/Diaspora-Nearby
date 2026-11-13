@@ -4894,12 +4894,37 @@ async function synthesizeGeminiNaturalVoice(textToSpeak, voiceName = "Aoede") {
   return null;
 }
 
+// ── Multimodal MIME Type Helpers ──
+function inferAudioMimeType(urlOrHint, headerContentType) {
+  const header = String(headerContentType || "").split(";")[0].trim().toLowerCase();
+  if (header.startsWith("audio/")) return header;
+  const clean = String(urlOrHint || "").split("?")[0].toLowerCase();
+  if (clean.endsWith(".mp3")) return "audio/mpeg";
+  if (clean.endsWith(".wav")) return "audio/wav";
+  if (clean.endsWith(".aac")) return "audio/aac";
+  if (clean.endsWith(".ogg") || clean.endsWith(".opus")) return "audio/ogg";
+  if (clean.endsWith(".webm")) return "audio/webm";
+  return "audio/mp4";
+}
+
+function inferImageMimeType(urlOrHint, headerContentType) {
+  const header = String(headerContentType || "").split(";")[0].trim().toLowerCase();
+  if (header.startsWith("image/") && header !== "image/svg+xml") return header;
+  const clean = String(urlOrHint || "").split("?")[0].toLowerCase();
+  if (clean.endsWith(".png")) return "image/png";
+  if (clean.endsWith(".webp")) return "image/webp";
+  if (clean.endsWith(".gif")) return "image/gif";
+  if (clean.endsWith(".heic") || clean.endsWith(".heif")) return "image/heic";
+  return "image/jpeg";
+}
+
 // ── Main Conversational Orchestrator ──
 async function generateAiAgentResponse({
   userText,
   audioMediaUrl = null,
   audioBase64 = null,
   audioMimeType = "audio/mp4",
+  imageMediaUrl = null,
   isVoiceMode = false,
   historyMessages = [],
   userProfile = {},
@@ -4931,15 +4956,44 @@ async function generateAiAgentResponse({
       });
       const fetchedBase64 = Buffer.from(audioRes.data).toString("base64");
       if (fetchedBase64 && fetchedBase64.length < 15 * 1024 * 1024) {
+        const detectedAudioMime = inferAudioMimeType(
+            audioMediaUrl,
+            audioRes.headers?.["content-type"],
+        );
         inlineAudioPart = {
           inlineData: {
-            mimeType: audioMimeType || "audio/mp4",
+            mimeType: detectedAudioMime,
             data: fetchedBase64,
           },
         };
       }
     } catch (audioErr) {
       console.warn("[AI Agent] Could not download voice note for multimodal Gemini:", audioErr.message);
+    }
+  }
+
+  let inlineImagePart = null;
+  if (imageMediaUrl && typeof imageMediaUrl === "string" && imageMediaUrl.startsWith("https://")) {
+    try {
+      const imgRes = await axios.get(imageMediaUrl, {
+        responseType: "arraybuffer",
+        timeout: 12000,
+      });
+      const fetchedImgBase64 = Buffer.from(imgRes.data).toString("base64");
+      if (fetchedImgBase64 && fetchedImgBase64.length < 15 * 1024 * 1024) {
+        const detectedImageMime = inferImageMimeType(
+            imageMediaUrl,
+            imgRes.headers?.["content-type"],
+        );
+        inlineImagePart = {
+          inlineData: {
+            mimeType: detectedImageMime,
+            data: fetchedImgBase64,
+          },
+        };
+      }
+    } catch (imgErr) {
+      console.warn("[AI Agent] Could not download image for multimodal Gemini:", imgErr.message);
     }
   }
 
@@ -4968,6 +5022,13 @@ async function generateAiAgentResponse({
             text: userText && userText !== "Voice message" ?
               `Listen to this voice message and also consider the user note: "${userText}". Reply in the exact language spoken in the voice message.` :
               "Listen carefully to this voice message from the user and respond helpfully in the exact language spoken by the user.",
+          });
+        } else if (inlineImagePart) {
+          latestUserParts.push(inlineImagePart);
+          latestUserParts.push({
+            text: userText && userText !== "Photo" ?
+              `Examine this image and respond helpfully to the user's message: "${userText}".` :
+              "Examine this image sent by the user and describe or assist with what is shown helpfully.",
           });
         } else {
           latestUserParts.push({text: String(userText || "Hello").slice(0, 2000)});
@@ -5172,18 +5233,28 @@ async function handleUserMessageToAiAgent({chatId, messageId, message, userId}) 
         .reverse();
 
     const isAudioMessage = message.type === "audio" || message.type === "audio_file";
+    const isImageMessage = message.type === "image";
     const audioMediaUrl = isAudioMessage ?
       (message.documentUrl || message.mediaUrl || message.metadata?.mediaUrl || null) :
       null;
+    const imageMediaUrl = isImageMessage ?
+      (message.imageUrl || message.documentUrl || message.mediaUrl || null) :
+      null;
     const rawContent = String(message.content || "").trim();
-    const userText = (rawContent && rawContent !== "Voice message" && rawContent !== "Audio") ?
+    const userText = (rawContent &&
+        rawContent !== "Voice message" &&
+        rawContent !== "Audio" &&
+        rawContent !== "Photo") ?
       rawContent :
       (isAudioMessage ?
         "Please listen to my voice message and answer my spoken question directly in the language I spoke." :
+        isImageMessage ?
+        "Please inspect the image I shared and help me with what is shown." :
         "Hello");
     const aiResult = await generateAiAgentResponse({
       userText,
       audioMediaUrl,
+      imageMediaUrl,
       historyMessages,
       userProfile,
       dspPoints,
@@ -5391,7 +5462,7 @@ exports.converseAiAgentVoice = functions.https.onCall(async (data, context) => {
   const uid = requireAuth(context);
   await consumeRateLimit("ai-agent-voice", uid, 120, 60 * 60 * 1000);
 
-  const chatId = String(data?.chatId || `ai_agent_${uid}`).trim();
+  const rawChatId = String(data?.chatId || `ai_agent_${uid}`).trim();
   const audioBase64 = String(data?.audioBase64 || "").trim();
   const mimeType = String(data?.mimeType || "audio/mp4").trim();
   const voiceName = String(data?.voiceName || "Aoede").trim();
@@ -5406,20 +5477,26 @@ exports.converseAiAgentVoice = functions.https.onCall(async (data, context) => {
     healLegacyAiAgentDocs(),
   ]);
 
-  const [richContext, historySnap] = await Promise.all([
-    loadComprehensiveUserAiContext(uid),
-    validId(chatId) ?
-      db.collection("chats")
-          .doc(chatId)
-          .collection("messages")
-          .orderBy("timestamp", "desc")
-          .limit(10)
-          .get() :
-      Promise.resolve({docs: []}),
-  ]);
-
+  const richContext = await loadComprehensiveUserAiContext(uid);
   const userProfile = richContext.userProfile;
   const dspPoints = richContext.dspPoints;
+
+  let chatId = rawChatId;
+  if (!chatId || chatId.startsWith("ai_agent_")) {
+    const ensuredChatId = await resolveOrEnsureAiAgentChatForUser(uid, userProfile);
+    if (ensuredChatId) {
+      chatId = ensuredChatId;
+    }
+  }
+
+  const historySnap = validId(chatId) ?
+    await db.collection("chats")
+        .doc(chatId)
+        .collection("messages")
+        .orderBy("timestamp", "desc")
+        .limit(10)
+        .get() :
+    {docs: []};
   const historyMessages = (historySnap.docs || []).map((d) => d.data()).reverse();
 
   const aiResult = await generateAiAgentResponse({
