@@ -1556,27 +1556,22 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               supply,
               members,
             );
-            final prevEpoch = epochService.getPreviousCommunityEpoch(
-              epoch.level,
+            final int epochEarned = epoch.epochEarnedDsp(supply);
+
+            // 10x Epoch progress calculation (10M new DSP in Epoch 2, 1M per TDE)
+            final double supplyProgress = epoch.calculateProgress(
+              supply,
+              members,
+            );
+            final double memberProgress = (members / epoch.memberTarget).clamp(
+              0.0,
+              1.0,
             );
 
-            final int prevDspTarget = prevEpoch?.dspTarget ?? 0;
-            final int prevMemberTarget = prevEpoch?.memberTarget ?? 0;
-
-            // Range-based progress calculation
-            final double supplyProgress =
-                ((supply - prevDspTarget) / (epoch.dspTarget - prevDspTarget))
-                    .clamp(0.0, 1.0);
-            final double memberProgress =
-                ((members - prevMemberTarget) /
-                        (epoch.memberTarget - prevMemberTarget))
-                    .clamp(0.0, 1.0);
-
             // Calculate Total DSP Milestone Progress for this Epoch
-            final int dspRange = epoch.dspTarget - prevDspTarget;
-            final int stepSize = (dspRange / 10).round();
+            final int stepSize = (epoch.dspTarget / 10).round();
             final int completedSteps = stepSize > 0
-                ? ((supply - prevDspTarget) ~/ stepSize).clamp(0, 10)
+                ? (epochEarned ~/ stepSize).clamp(0, 10)
                 : 0;
             final double platformMilestoneDsp = (completedSteps * stepSize)
                 .toDouble();
@@ -1649,7 +1644,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                         ],
                       ),
                       Text(
-                        '${NumberFormat.compact().format(supply)} / ${NumberFormat.compact().format(epoch.dspTarget)}',
+                        '${NumberFormat.compact().format(epochEarned)} / ${NumberFormat.compact().format(epoch.dspTarget)}',
                         style: const TextStyle(
                           fontSize: 12,
                           color: AppTheme.accent,
@@ -1752,37 +1747,30 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
     int uniqueQrCount,
     double trustScore,
   ) {
-    final prevEpoch = epochService.getPreviousCommunityEpoch(epoch.level);
-    final int prevDspTarget = prevEpoch?.dspTarget ?? 0;
-    final int prevMemberTarget = prevEpoch?.memberTarget ?? 0;
-
-    final int dspRange = epoch.dspTarget - prevDspTarget;
-    final int memberRange = epoch.memberTarget - prevMemberTarget;
-
-    final int stepSize = (dspRange / 10).round();
-    final int memberStepSize = (memberRange / 10).round();
+    final int epochEarned = epoch.epochEarnedDsp(currentSupply);
+    final int stepSize = (epoch.dspTarget / 10).round();
+    final int memberStepSize = (epoch.memberTarget / 10).round();
     final int effectiveMemberStep = memberStepSize > 0 ? memberStepSize : 1;
 
     return Column(
       children: List.generate(10, (index) {
         final tdeNumber = index + 1;
 
-        final stepStart = prevDspTarget + (index * stepSize);
-        final stepTarget = prevDspTarget + ((index + 1) * stepSize);
+        final stepStart = index * stepSize;
+        final stepTarget = (index + 1) * stepSize;
 
-        final memberStart = prevMemberTarget + (index * effectiveMemberStep);
-        final memberTarget =
-            prevMemberTarget + ((index + 1) * effectiveMemberStep);
+        final memberStart = index * effectiveMemberStep;
+        final memberTarget = (index + 1) * effectiveMemberStep;
 
-        final bool isSupplyMet = currentSupply >= stepTarget;
+        final bool isSupplyMet = epochEarned >= stepTarget;
         final bool isCompleted = isSupplyMet;
-        final bool isActive = !isCompleted && currentSupply >= stepStart;
+        final bool isActive = !isCompleted && epochEarned >= stepStart;
 
         double supplyProgress = 0.0;
         double memberProgress = 0.0;
 
         if (isActive) {
-          supplyProgress = ((currentSupply - stepStart) / stepSize).clamp(
+          supplyProgress = ((epochEarned - stepStart) / stepSize).clamp(
             0.0,
             1.0,
           );
@@ -1892,7 +1880,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                '${NumberFormat.compact().format(currentSupply)} / ${NumberFormat.compact().format(stepTarget)} DSP',
+                                '${NumberFormat.compact().format(epochEarned)} / ${NumberFormat.compact().format(stepTarget)} DSP',
                                 style: const TextStyle(
                                   fontSize: 9,
                                   color: AppTheme.accent,

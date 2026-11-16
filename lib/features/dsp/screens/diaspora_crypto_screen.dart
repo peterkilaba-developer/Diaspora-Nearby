@@ -443,14 +443,22 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                 ),
               ),
               const SizedBox(width: 8),
-              // $DIASPORA Supply
+              // $DIASPORA Cap (active Epoch supply cap: 1M -> 10M -> 100M...)
               Expanded(
                 child: supplyAsync.when(
-                  data: (supply) => _buildStatCard(
-                    '\$DIASPORA Cap',
-                    NumberFormat.compact().format(supply),
-                    LucideIcons.coins,
-                  ),
+                  data: (supply) {
+                    final epoch = ref
+                        .read(epochServiceProvider)
+                        .getCurrentCommunityEpoch(
+                          supply,
+                          memberCountAsync.value ?? 0,
+                        );
+                    return _buildStatCard(
+                      '\$DIASPORA Cap',
+                      NumberFormat.compact().format(epoch.dspTarget),
+                      LucideIcons.coins,
+                    );
+                  },
                   loading: () =>
                       _buildStatCard('\$DIASPORA Cap', '—', LucideIcons.coins),
                   error: (_, _) =>
@@ -831,14 +839,11 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
               totalMinted,
               globalMembers,
             );
-            final prevEpoch = epochService.getPreviousCommunityEpoch(
-              epoch.level,
+            final int epochEarned = epoch.epochEarnedDsp(totalMinted);
+            final double progress = epoch.calculateProgress(
+              totalMinted,
+              globalMembers,
             );
-            final int prevDspTarget = prevEpoch?.dspTarget ?? 0;
-            final double target = epoch.dspTarget.toDouble();
-            final double progress =
-                ((totalMinted - prevDspTarget) / (target - prevDspTarget))
-                    .clamp(0.0, 1.0);
             return Container(
               margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
               padding: const EdgeInsets.all(16),
@@ -847,11 +852,11 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                 children: [
                   _buildSectionHeader(
                     'THE GREAT RESET',
-                    'Race to Epoch ${epoch.level}',
+                    'Epoch ${epoch.level} Progress',
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    '${NumberFormat('#,###').format(totalMinted)} / ${NumberFormat('#,###').format(epoch.dspTarget)} \$DIASPORA',
+                    '${NumberFormat('#,###').format(epochEarned)} / ${NumberFormat('#,###').format(epoch.dspTarget)} \$DIASPORA',
                     style: const TextStyle(
                       fontSize: 16,
                       color: AppTheme.accent,
@@ -1770,27 +1775,20 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
     int uniqueQrCount,
     double trustScore,
   ) {
-    final prevEpoch = epochService.getPreviousCommunityEpoch(epoch.level);
-    final int prevDspTarget = prevEpoch?.dspTarget ?? 0;
-    final int prevMemberTarget = prevEpoch?.memberTarget ?? 0;
-
-    final int dspRange = epoch.dspTarget - prevDspTarget;
-    final int memberRange = epoch.memberTarget - prevMemberTarget;
-
-    final int stepSize = (dspRange / 10).round();
-    final int memberStepSize = (memberRange / 10).round();
+    final int epochEarned = epoch.epochEarnedDsp(currentSupply);
+    final int stepSize = (epoch.dspTarget / 10).round();
+    final int memberStepSize = (epoch.memberTarget / 10).round();
     final int effectiveMemberStep = memberStepSize > 0 ? memberStepSize : 1;
 
     return Column(
       children: List.generate(10, (index) {
         final tdeNumber = index + 1;
 
-        final stepStart = prevDspTarget + (index * stepSize);
-        final stepTarget = prevDspTarget + ((index + 1) * stepSize);
+        final stepStart = index * stepSize;
+        final stepTarget = (index + 1) * stepSize;
 
-        final memberStart = prevMemberTarget + (index * effectiveMemberStep);
-        final memberTarget =
-            prevMemberTarget + ((index + 1) * effectiveMemberStep);
+        final memberStart = index * effectiveMemberStep;
+        final memberTarget = (index + 1) * effectiveMemberStep;
 
         // Logged-in user's personal $DIASPORA distribution record for this TDE
         final record = userPoints.tdeHistory.firstWhere(
@@ -1804,15 +1802,15 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
           ),
         );
 
-        final bool isSupplyMet = currentSupply >= stepTarget;
+        final bool isSupplyMet = epochEarned >= stepTarget;
         final bool isCompleted = isSupplyMet;
-        final bool isActive = !isCompleted && currentSupply >= stepStart;
+        final bool isActive = !isCompleted && epochEarned >= stepStart;
 
         double supplyProgress = 0.0;
         double memberProgress = 0.0;
 
         if (isActive) {
-          supplyProgress = ((currentSupply - stepStart) / stepSize).clamp(
+          supplyProgress = ((epochEarned - stepStart) / stepSize).clamp(
             0.0,
             1.0,
           );
@@ -1927,7 +1925,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                '${NumberFormat.compact().format(currentSupply)} / ${NumberFormat.compact().format(stepTarget)} Target',
+                                '${NumberFormat.compact().format(epochEarned)} / ${NumberFormat.compact().format(stepTarget)} Target',
                                 style: const TextStyle(
                                   fontSize: 9,
                                   color: AppTheme.accent,

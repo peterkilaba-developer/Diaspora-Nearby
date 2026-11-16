@@ -57,49 +57,74 @@ function calculateEfficiency(trustScore) {
 }
 
 // ── Epoch Schedule (mirrors EpochService in Dart) ──────────────────────
-// 10 Epochs, each with 10 TGE Events (10% of epoch target each)
+// 10 Epochs, each requiring 10x new DSP distributed within that Epoch
+// (e.g., Epoch 1 = 1M DSP [100K/TDE], Epoch 2 = 10M new DSP [1M/TDE, cumulative 1M->11M]).
 const EPOCH_SCHEDULE = [
-  { level: 1, dspTarget: 1000000 },       // 1M
-  { level: 2, dspTarget: 10000000 },      // 10M
-  { level: 3, dspTarget: 100000000 },     // 100M
-  { level: 4, dspTarget: 1000000000 },    // 1B
-  { level: 5, dspTarget: 10000000000 },   // 10B
-  { level: 6, dspTarget: 100000000000 },  // 100B
-  { level: 7, dspTarget: 1000000000000 }, // 1T
-  { level: 8, dspTarget: 10000000000000 },// 10T
-  { level: 9, dspTarget: 100000000000000 },// 100T
-  { level: 10, dspTarget: 1000000000000000 },// 1QD
+  { level: 1,  dspTarget: 1000000,          cumulativeStart: 0 },               // 1M (cum: 0 -> 1M)
+  { level: 2,  dspTarget: 10000000,         cumulativeStart: 1000000 },         // 10M (cum: 1M -> 11M)
+  { level: 3,  dspTarget: 100000000,        cumulativeStart: 11000000 },        // 100M (cum: 11M -> 111M)
+  { level: 4,  dspTarget: 1000000000,       cumulativeStart: 111000000 },       // 1B (cum: 111M -> 1.111B)
+  { level: 5,  dspTarget: 10000000000,      cumulativeStart: 1111000000 },      // 10B
+  { level: 6,  dspTarget: 100000000000,     cumulativeStart: 11111000000 },     // 100B
+  { level: 7,  dspTarget: 1000000000000,    cumulativeStart: 111111000000 },    // 1T
+  { level: 8,  dspTarget: 10000000000000,   cumulativeStart: 1111111000000 },   // 10T
+  { level: 9,  dspTarget: 100000000000000,  cumulativeStart: 11111111000000 },  // 100T
+  { level: 10, dspTarget: 1000000000000000, cumulativeStart: 111111111000000 }, // 1QD
 ];
 
 /**
- * Get the current epoch and completed TGE events based on cumulative DSP earnings.
- * Returns { epoch, completedEvents, nextMilestone }
+ * Get the current epoch and completed TDE events within that epoch based on cumulative DSP earnings.
+ * Returns { epoch, completedEvents, nextMilestone, dspStep, cumulativeStart, dspTarget }
  */
 function getEpochState(cumulativeEarnings) {
   let currentEpoch = EPOCH_SCHEDULE[EPOCH_SCHEDULE.length - 1];
   for (const epoch of EPOCH_SCHEDULE) {
-    if (cumulativeEarnings < epoch.dspTarget) {
+    if (cumulativeEarnings < epoch.cumulativeStart + epoch.dspTarget) {
       currentEpoch = epoch;
       break;
     }
   }
 
-  const prevEpoch = EPOCH_SCHEDULE.find(e => e.level === currentEpoch.level - 1);
-  const prevTarget = prevEpoch ? prevEpoch.dspTarget : 0;
-  const dspRange = currentEpoch.dspTarget - prevTarget;
-  const dspStep = Math.round(dspRange / 10);
-
-  let completedEvents = Math.floor((cumulativeEarnings - prevTarget) / dspStep);
+  const dspStep = Math.round(currentEpoch.dspTarget / 10);
+  let completedEvents = Math.floor((cumulativeEarnings - currentEpoch.cumulativeStart) / dspStep);
   completedEvents = Math.max(0, Math.min(10, completedEvents));
 
-  const nextMilestone = prevTarget + (completedEvents + 1) * dspStep;
+  const nextStepIndex = Math.min(10, completedEvents + 1);
+  const nextMilestone = currentEpoch.cumulativeStart + nextStepIndex * dspStep;
 
   return {
     epoch: currentEpoch.level,
     completedEvents,
     nextMilestone,
     dspStep,
+    cumulativeStart: currentEpoch.cumulativeStart,
+    dspTarget: currentEpoch.dspTarget,
   };
+}
+
+/**
+ * Returns total completed TDE milestones (0..100) across the 10-epoch schedule.
+ * Maps 1-to-1 with on-chain `(currentEpoch - 1) * 10 + currentTgeEvent`:
+ *   - 900,000 DSP  ->  9 (Epoch 1 TDE 1..9 complete; on-chain Epoch 1, Event 9)
+ *   - 1,000,000 DSP -> 10 (Epoch 1 TDE 10 / Great Reset complete; on-chain Epoch 2, Event 0)
+ *   - 2,000,000 DSP -> 11 (Epoch 2 TDE 1 complete; on-chain Epoch 2, Event 1)
+ *   - 11,000,000 DSP -> 20 (Epoch 2 TDE 10 / Great Reset complete; on-chain Epoch 3, Event 0)
+ */
+function getCompletedMilestoneCount(cumulativeEarnings) {
+  let total = 0;
+  for (const epoch of EPOCH_SCHEDULE) {
+    const end = epoch.cumulativeStart + epoch.dspTarget;
+    if (cumulativeEarnings >= end) {
+      total += 10;
+    } else if (cumulativeEarnings > epoch.cumulativeStart) {
+      const step = Math.round(epoch.dspTarget / 10);
+      total += Math.max(0, Math.min(10, Math.floor((cumulativeEarnings - epoch.cumulativeStart) / step)));
+      break;
+    } else {
+      break;
+    }
+  }
+  return total;
 }
 
 /**
@@ -265,9 +290,13 @@ async function performTGE(triggerSource) {
   const exactFivePercentCap = currentTotalSupply > 0 ? Math.round(currentTotalSupply * 0.05) : 0;
 
   const commAwardedMap = {};
+  const commWalletMap = {};
   commSnap.forEach((cDoc) => {
     const cData = cDoc.data() || {};
     commAwardedMap[cDoc.id] = Math.floor(Number(cData.awardedBalance || cData.points || 0));
+    if (cData.walletAddress && cData.walletAddress.length >= 10) {
+      commWalletMap[cDoc.id] = cData.walletAddress;
+    }
   });
   if (exactFivePercentCap > 0) {
     commAwardedMap["global_community"] = exactFivePercentCap;
@@ -283,16 +312,44 @@ async function performTGE(triggerSource) {
     ["function balanceOf(address account) external view returns (uint256)"],
     provider
   );
+  const walletFactoryAddr = process.env.WALLET_FACTORY_ADDRESS || "0x9cF797cf332595c00410fc4ee9FdEe5C59501945";
+  const walletFactory = new ethers.Contract(
+    walletFactoryAddr,
+    ["function computeAddress(bytes32 salt) view returns (address)"],
+    provider
+  );
 
   let treasuriesIncluded = 0;
   const treasuryConfigErrors = [];
+  const SYSTEM_DOC_IDS = new Set(["founders", "liquidity", "investors", "burn"]);
 
   for (const doc of govSnap.docs) {
+    if (SYSTEM_DOC_IDS.has(doc.id)) continue;
+
     const d = doc.data();
-    const walletAddress = d.walletAddress;
+    let walletAddress = d.walletAddress;
     const rawTreasuryDsp = Math.floor(Number(d.treasuryBalance || 0));
 
     if (rawTreasuryDsp <= 0) continue; // legitimate: no funds to release
+
+    const commId = d.communityId || (doc.id === "global_community" ? "global_community" : null);
+
+    if ((!walletAddress || walletAddress.length < 10) && commId) {
+      walletAddress = commWalletMap[commId] || null;
+      if (!walletAddress) {
+        try {
+          const salt = ethers.keccak256(ethers.toUtf8Bytes("community:" + commId));
+          walletAddress = await walletFactory.computeAddress(salt);
+        } catch (_) {}
+      }
+      if (walletAddress && walletAddress.length >= 10 && walletAddress !== ethers.ZeroAddress) {
+        await db.collection("governance").doc(doc.id).set({
+          walletAddress,
+          walletType: "smart",
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+    }
 
     if (!walletAddress || walletAddress.length < 10) {
       treasuryConfigErrors.push(
@@ -300,18 +357,6 @@ async function performTGE(triggerSource) {
       );
       continue;
     }
-
-    // CPCT: Average PCT of community members → decile efficiency.
-    // Hard-fail on missing field — silent default to 0 burns the entire tribute.
-    // System treasuries (founders / liquidity / burn) are exempt:
-    // they're handled separately below with efficiency=100 per whitepaper.
-    // `investors` is still skipped here to avoid mis-classifying the legacy
-    // doc as a community treasury; it should hold treasuryBalance=0 after the
-    // 2026-06-04 investors→liquidity migration.
-    const SYSTEM_DOC_IDS = new Set(["founders", "liquidity", "investors", "burn"]);
-    if (SYSTEM_DOC_IDS.has(doc.id)) continue;
-
-    const commId = d.communityId || (doc.id === "global_community" ? "global_community" : null);
     let treasuryDsp = rawTreasuryDsp;
     const cumulativeAwarded = commId ? Number(commAwardedMap[commId] || 0) : 0;
     if (cumulativeAwarded > 0) {
@@ -449,9 +494,14 @@ async function performTGE(triggerSource) {
     });
   }
 
+  const BURN_ADDRESS = "0x000000000000000000000000000000000000dEaD";
   if (recipients.length === 0) {
-    console.log("[TGE Oracle] No eligible recipients. Aborting.");
-    return null;
+    // Even if all eligible balances were already converted 1:1 via PoH, still advance
+    // the on-chain TDE/Epoch counter cleanly via a 0-amount sentinel entry.
+    console.log("[TGE Oracle] 0 net DSP delta for recipients — advancing on-chain TDE counter via 0-amount sentinel.");
+    recipients.push(BURN_ADDRESS);
+    amounts.push(0n);
+    efficiencies.push(100);
   }
 
   console.log(
@@ -469,7 +519,7 @@ async function performTGE(triggerSource) {
 
   console.log(`[TGE Oracle] On-chain: Epoch ${epochBefore}, Event ${eventBefore}`);
 
-  // Verify controller has sufficient locked tokens for this batch; auto-mint if new epoch requires pre-mint
+  // Verify controller has sufficient locked tokens for this batch; auto-mint if current epoch requires pre-mint
   let batchTotalNeeded = 0n;
   for (const amt of amounts) {
     batchTotalNeeded += amt;
@@ -483,7 +533,11 @@ async function performTGE(triggerSource) {
       `[TGE Oracle] Locked balance (${ethers.formatUnits(lockedBalance, 18)}) < batch needed (${ethers.formatUnits(batchTotalNeeded, 18)}). ` +
       `Auto-minting Epoch ${epochBefore} supply (${epochSupplyTokens} tokens)...`
     );
-    const mintTx = await tgeController.mintEpochSupply(ethers.parseUnits(epochSupplyTokens.toString(), 18));
+    const preNonce = await provider.getTransactionCount(signer.address, "pending");
+    const mintTx = await tgeController.mintEpochSupply(
+      ethers.parseUnits(epochSupplyTokens.toString(), 18),
+      { nonce: preNonce }
+    );
     await mintTx.wait();
     console.log(`[TGE Oracle] ✅ Pre-minted Epoch ${epochBefore} supply: ${mintTx.hash}`);
   }
@@ -524,7 +578,8 @@ async function performTGE(triggerSource) {
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
-  const tx = await tgeController.executeTGE(recipients, amounts, efficiencies, merkleRoot);
+  const tgeNonce = await provider.getTransactionCount(signer.address, "pending");
+  const tx = await tgeController.executeTGE(recipients, amounts, efficiencies, merkleRoot, { nonce: tgeNonce });
   const receipt = await tx.wait();
 
   for (const uid of Object.keys(recipientsMap)) {
@@ -543,6 +598,45 @@ async function performTGE(triggerSource) {
 
   console.log(`[TGE Oracle] ✅ TX: ${receipt.hash}`);
   console.log(`[TGE Oracle] Epoch ${epochBefore}→${epochAfter}, Event ${eventBefore}→${eventAfter}`);
+
+  // ── Step 3b: Pre-mint & Lock Next 10x Epoch Supply on Epoch Rollover ──
+  let nextEpochPreMintTxHash = null;
+  if (epochAfter > epochBefore) {
+    const nextEpochEntry = EPOCH_SCHEDULE.find(e => e.level === epochAfter);
+    if (nextEpochEntry) {
+      const targetSupplyWei = ethers.parseUnits(nextEpochEntry.dspTarget.toString(), 18);
+      const currentLockedWei = await tgeController.getLockedBalance();
+      if (currentLockedWei < targetSupplyWei) {
+        const topUpWei = targetSupplyWei - currentLockedWei;
+        console.log(
+          `[TGE Oracle] 🚀 Epoch ${epochBefore}→${epochAfter} rollover! ` +
+          `Pre-minting ${ethers.formatUnits(topUpWei, 18)} $DIASPORA to lock exact ${nextEpochEntry.dspTarget.toLocaleString()} Epoch ${epochAfter} supply...`
+        );
+        const mintNonce = await provider.getTransactionCount(signer.address, "pending");
+        const mintTx = await tgeController.mintEpochSupply(topUpWei, { nonce: mintNonce });
+        const mintReceipt = await mintTx.wait();
+        nextEpochPreMintTxHash = mintReceipt.hash;
+        console.log(`[TGE Oracle] ✅ Epoch ${epochAfter} 10x supply locked: ${mintReceipt.hash}`);
+      }
+      const [sNow, epLockedNow, epDistNow, maxGenNow] = await Promise.all([
+        tgeController.getStats(),
+        tgeController.epochLockedSupply(),
+        tgeController.epochDistributed(),
+        tgeController.maxGenesisDistribution(),
+      ]);
+      if (epLockedNow !== targetSupplyWei) {
+        const recNonce = await provider.getTransactionCount(signer.address, "pending");
+        const recTx = await tgeController.adminReconcileState(
+          [sNow[0], sNow[1], sNow[2], sNow[3], sNow[4], sNow[5], targetSupplyWei, epDistNow, sNow[6], maxGenNow],
+          [],
+          [],
+          { nonce: recNonce }
+        );
+        await recTx.wait();
+        console.log(`[TGE Oracle] ✅ Aligned epochLockedSupply to ${nextEpochEntry.dspTarget.toLocaleString()} $DIASPORA: ${recTx.hash}`);
+      }
+    }
+  }
 
   // ── Step 4: Record TGE event in Firestore (deterministic doc ID by epoch/event) ──
   // TDE 1-9 (eventBefore 0-8): Only converted DSP is deducted; unconverted DSP carries over
@@ -720,6 +814,7 @@ async function performTGE(triggerSource) {
   return {
     success: true,
     txHash: receipt.hash,
+    nextEpochPreMintTxHash,
     epoch: epochBefore,
     tgeEvent: eventBefore,
     newEpoch: epochAfter,
@@ -733,8 +828,171 @@ async function performTGE(triggerSource) {
 }
 
 /**
+ * Shared mutex-protected milestone synchronizer used by both `onGlobalDspMilestone`
+ * (instant Firestore trigger) and `reconcileMissedTgeMilestones` (periodic watchdog).
+ *
+ * Compares `getCompletedMilestoneCount(totalMinted)` against on-chain
+ * `(currentEpoch - 1) * 10 + currentTgeEvent` so boundary crossings (e.g. Epoch 1
+ * TDE 10 Great Reset -> Epoch 2 rollover + 10x supply pre-mint) can never be
+ * skipped by off-by-one wraparound or stale lock keys.
+ */
+async function syncTgeMilestonesToSupply(totalMinted, triggerPrefix) {
+  const targetMilestoneCount = getCompletedMilestoneCount(totalMinted);
+  if (targetMilestoneCount <= 0) return null;
+
+  const expectedEpoch = getEpochState(totalMinted).epoch;
+  const lockRef = db.collection("system_stats").doc("tge_lock");
+  const STALE_INFLIGHT_MS = 240 * 1000;
+
+  // Fast-path check before touching RPC
+  const initialLockSnap = await lockRef.get();
+  const initialLockData = initialLockSnap.exists ? (initialLockSnap.data() || {}) : {};
+  if (
+    Number(initialLockData.syncedMilestoneCount || 0) >= targetMilestoneCount &&
+    Number(initialLockData.syncedEpochSupply || 0) === expectedEpoch
+  ) {
+    return null;
+  }
+
+  for (let waitAttempt = 0; waitAttempt < 36; waitAttempt++) {
+    const preCheck = await lockRef.get();
+    const preData = preCheck.exists ? (preCheck.data() || {}) : {};
+    if (
+      Number(preData.syncedMilestoneCount || 0) >= targetMilestoneCount &&
+      Number(preData.syncedEpochSupply || 0) === expectedEpoch
+    ) {
+      return null;
+    }
+    const inFlightAtMs = preData.inFlightAt && typeof preData.inFlightAt.toMillis === "function"
+      ? preData.inFlightAt.toMillis()
+      : 0;
+    const isFreshInFlight = preData.inFlight === true && (Date.now() - inFlightAtMs < STALE_INFLIGHT_MS);
+    if (!isFreshInFlight) break;
+    console.log(`[TGE Oracle] Waiting for in-flight TGE (${preData.inFlightMilestone || "unknown"}) to finish...`);
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+  }
+
+  try {
+    await db.runTransaction(async (transaction) => {
+      const lockDoc = await transaction.get(lockRef);
+      const lockData = lockDoc.exists ? (lockDoc.data() || {}) : {};
+      const inFlightAtMs = lockData.inFlightAt && typeof lockData.inFlightAt.toMillis === "function"
+        ? lockData.inFlightAt.toMillis()
+        : 0;
+      if (lockData.inFlight === true && (Date.now() - inFlightAtMs < STALE_INFLIGHT_MS)) {
+        throw new Error("IN_FLIGHT");
+      }
+      if (
+        Number(lockData.syncedMilestoneCount || 0) >= targetMilestoneCount &&
+        Number(lockData.syncedEpochSupply || 0) === expectedEpoch
+      ) {
+        throw new Error("ALREADY_SYNCED");
+      }
+      transaction.set(lockRef, {
+        inFlight: true,
+        inFlightMilestone: `target_${targetMilestoneCount}`,
+        inFlightAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastTriggered: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    });
+  } catch (e) {
+    if (e.message === "IN_FLIGHT" || e.message === "ALREADY_SYNCED") return null;
+    console.error("[TGE Oracle] Lock transaction failed:", e.message);
+    return null;
+  }
+
+  try {
+    const { backendSignerKey, tgeControllerAddress } = assertOnChainConfig(
+      "syncTgeMilestonesToSupply",
+      ["backendSignerKey", "tgeControllerAddress"]
+    );
+    const provider = new ethers.JsonRpcProvider(
+      process.env.RPC_URL || "https://mainnet.base.org",
+      8453,
+      { staticNetwork: true }
+    );
+    const signer = new ethers.Wallet(backendSignerKey, provider);
+    const tgeController = new ethers.Contract(tgeControllerAddress, TGE_CONTROLLER_ABI, signer);
+
+    let lastResult = null;
+    for (let step = 0; step < 3; step++) {
+      const stats = await tgeController.getStats();
+      const onChainEpoch = Number(stats[0]);
+      const onChainEvent = Number(stats[1]);
+      const onChainMilestoneCount = (onChainEpoch - 1) * 10 + onChainEvent;
+
+      if (onChainMilestoneCount >= targetMilestoneCount) {
+        // Ensure new Epoch's 10x supply is pre-minted and locked when sitting at event 0 of Epoch 2+
+        if (onChainEvent === 0 && onChainEpoch >= 2) {
+          const epochEntry = EPOCH_SCHEDULE.find(e => e.level === onChainEpoch);
+          if (epochEntry) {
+            const targetSupplyWei = ethers.parseUnits(epochEntry.dspTarget.toString(), 18);
+            const currentLockedWei = await tgeController.getLockedBalance();
+            if (currentLockedWei < targetSupplyWei) {
+              const topUpWei = targetSupplyWei - currentLockedWei;
+              const mintNonce = await provider.getTransactionCount(signer.address, "pending");
+              const mintTx = await tgeController.mintEpochSupply(topUpWei, { nonce: mintNonce });
+              await mintTx.wait();
+              console.log(`[TGE Oracle] ✅ Locked Epoch ${onChainEpoch} 10x supply (${epochEntry.dspTarget.toLocaleString()} $DIASPORA): ${mintTx.hash}`);
+            }
+            const [sNow, epLockedNow, epDistNow, maxGenNow] = await Promise.all([
+              tgeController.getStats(),
+              tgeController.epochLockedSupply(),
+              tgeController.epochDistributed(),
+              tgeController.maxGenesisDistribution(),
+            ]);
+            if (epLockedNow !== targetSupplyWei) {
+              const recNonce = await provider.getTransactionCount(signer.address, "pending");
+              const recTx = await tgeController.adminReconcileState(
+                [sNow[0], sNow[1], sNow[2], sNow[3], sNow[4], sNow[5], targetSupplyWei, epDistNow, sNow[6], maxGenNow],
+                [],
+                [],
+                { nonce: recNonce }
+              );
+              await recTx.wait();
+            }
+          }
+        }
+
+        const lockPatch = {
+          syncedMilestoneCount: onChainMilestoneCount,
+          syncedEpochSupply: onChainEpoch,
+          lastMilestone: `tde_epoch_${onChainEpoch}_event_${onChainEvent}`,
+        };
+        if (onChainMilestoneCount <= 10) {
+          lockPatch.epoch_2_event_0 = admin.firestore.FieldValue.delete();
+        }
+        await lockRef.set(lockPatch, { merge: true });
+        break;
+      }
+
+      const milestoneKey = `tde_epoch_${onChainEpoch}_tde_${onChainEvent + 1}`;
+      console.log(
+        `[TGE Oracle] 🎯 Executing pending milestone ${milestoneKey} ` +
+        `(onChain=${onChainMilestoneCount}, target=${targetMilestoneCount}, totalMinted=${totalMinted})...`
+      );
+      const result = await performTGE(`${triggerPrefix}:${milestoneKey}`);
+      lastResult = result;
+      if (!result) break;
+
+      await lockRef.set({
+        [milestoneKey]: true,
+        lastMilestone: milestoneKey,
+      }, { merge: true });
+    }
+
+    return lastResult;
+  } catch (error) {
+    console.error(`[TGE Oracle] ❌ Milestone sync failed:`, error.message);
+    return null;
+  } finally {
+    await lockRef.set({ inFlight: false }, { merge: true }).catch(() => {});
+  }
+}
+
+/**
  * AUTO-TRIGGER: Watches total DSP supply for TGE milestone crossings.
- * totalMinted = user earnings + all 10 expansion slots (community, founders, investors, burn)
+ * totalMinted = user earnings + all 10 expansion slots (community, founders, liquidity, burn)
  * When totalMinted crosses the next 10% epoch milestone, fires TGE automatically.
  */
 exports.onGlobalDspMilestone = functions
@@ -749,85 +1007,25 @@ exports.onGlobalDspMilestone = functions
     const newSupply = newData.totalMinted || 0;
     const oldSupply = oldData.totalMinted || 0;
 
-    // Only trigger if supply increased
     if (newSupply <= oldSupply) return null;
 
-    // Calculate epoch state based on total supply
-    const oldState = getEpochState(oldSupply);
-    const newState = getEpochState(newSupply);
+    return await syncTgeMilestonesToSupply(newSupply, "auto");
+  });
 
-    // Check if we crossed a new TGE milestone
-    if (newState.completedEvents <= oldState.completedEvents &&
-      newState.epoch <= oldState.epoch) {
-      return null; // No new milestone crossed
-    }
-
-    console.log(`[TGE Oracle] 🎯 MILESTONE CROSSED!`);
-    console.log(`  Total Supply: ${oldSupply} → ${newSupply}`);
-    console.log(`  Epoch ${oldState.epoch} Event ${oldState.completedEvents} → Epoch ${newState.epoch} Event ${newState.completedEvents}`);
-
-    // Prevent duplicate or overlapping triggers with a lock + inFlight mutex document
-    const lockRef = db.collection("system_stats").doc("tge_lock");
-    const lockKey = `epoch_${newState.epoch}_event_${newState.completedEvents}`;
-    const STALE_INFLIGHT_MS = 240 * 1000;
-
-    // Wait if a previous milestone TGE is still in-flight so its on-chain TX
-    // and Step 5 Firestore balance deductions complete before we snapshot.
-    for (let waitAttempt = 0; waitAttempt < 36; waitAttempt++) {
-      const preCheck = await lockRef.get();
-      const preData = preCheck.exists ? (preCheck.data() || {}) : {};
-      if (preData[lockKey]) {
-        console.log(`[TGE Oracle] Already processed ${lockKey}. Skipping.`);
-        return null;
-      }
-      const inFlightAtMs = preData.inFlightAt && typeof preData.inFlightAt.toMillis === "function"
-        ? preData.inFlightAt.toMillis()
-        : 0;
-      const isFreshInFlight = preData.inFlight === true && (Date.now() - inFlightAtMs < STALE_INFLIGHT_MS);
-      if (!isFreshInFlight) break;
-      console.log(`[TGE Oracle] Waiting for in-flight TGE (${preData.inFlightMilestone || "unknown"}) to finish before ${lockKey}...`);
-      await new Promise((resolve) => setTimeout(resolve, 2500));
-    }
-
-    try {
-      await db.runTransaction(async (transaction) => {
-        const lockDoc = await transaction.get(lockRef);
-        const lockData = lockDoc.exists ? lockDoc.data() : {};
-
-        if (lockData[lockKey]) {
-          console.log(`[TGE Oracle] Already processed ${lockKey}. Skipping.`);
-          throw new Error("DUPLICATE"); // Abort transaction
-        }
-
-        // Set lock + inFlight mutex BEFORE executing TGE
-        transaction.set(lockRef, {
-          [lockKey]: true,
-          inFlight: true,
-          inFlightMilestone: lockKey,
-          inFlightAt: admin.firestore.FieldValue.serverTimestamp(),
-          lastTriggered: admin.firestore.FieldValue.serverTimestamp(),
-          lastMilestone: lockKey,
-        }, { merge: true });
-      });
-    } catch (e) {
-      if (e.message === "DUPLICATE") return null;
-      console.error("[TGE Oracle] Lock transaction failed:", e.message);
-      return null;
-    }
-
-    // Execute TGE
-    try {
-      const result = await performTGE(`auto:${lockKey}`);
-      if (result) {
-        console.log(`[TGE Oracle] ✅ Auto-TGE complete: ${result.txHash}`);
-      }
-    } catch (error) {
-      console.error(`[TGE Oracle] ❌ Auto-TGE failed:`, error.message);
-      // Clear the lock so it can retry
-      await lockRef.set({ [lockKey]: false }, { merge: true });
-    } finally {
-      await lockRef.set({ inFlight: false }, { merge: true }).catch(() => {});
-    }
+/**
+ * SELF-HEALING WATCHDOG: Runs every 5 minutes to catch up any TDE milestone or
+ * 10x Epoch rollover pre-mint that was missed due to transient RPC issues or
+ * post-reconciliation state drift. Fast-paths in 1 Firestore read when in sync.
+ */
+exports.reconcileMissedTgeMilestones = functions
+  .runWith({ timeoutSeconds: 300, memory: "512MB", secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
+  .pubsub.schedule("every 5 minutes")
+  .onRun(async () => {
+    const supplySnap = await db.collection("system_stats").doc("dsp_supply").get();
+    if (!supplySnap.exists) return null;
+    const totalMinted = Number(supplySnap.data()?.totalMinted || 0);
+    if (totalMinted <= 0) return null;
+    return await syncTgeMilestonesToSupply(totalMinted, "watchdog");
   });
 
 /**

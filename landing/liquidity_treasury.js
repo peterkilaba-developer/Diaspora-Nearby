@@ -2,17 +2,24 @@
 const BASE_PRICE_USD = 0.001;
 const CONVERSION_RATES = [100,100,100,100,100,100,100,100,100,100];
 const EPOCH_MILESTONES = [
-  { epoch:1, users:10 },
-  { epoch:2, users:100 },
-  { epoch:3, users:1000 },
-  { epoch:4, users:10000 },
-  { epoch:5, users:100000 },
-  { epoch:6, users:1e6 },
-  { epoch:7, users:1e7 },
-  { epoch:8, users:1e8 },
-  { epoch:9, users:1e9 },
-  { epoch:10, users:1e10 }
+  { epoch:1, users:10,   dspTarget:1e6,  cumulativeStart:0 },
+  { epoch:2, users:100,  dspTarget:1e7,  cumulativeStart:1e6 },
+  { epoch:3, users:1000, dspTarget:1e8,  cumulativeStart:1.1e7 },
+  { epoch:4, users:10000, dspTarget:1e9, cumulativeStart:1.11e8 },
+  { epoch:5, users:100000, dspTarget:1e10, cumulativeStart:1.111e9 },
+  { epoch:6, users:1e6,  dspTarget:1e11, cumulativeStart:1.1111e10 },
+  { epoch:7, users:1e7,  dspTarget:1e12, cumulativeStart:1.11111e11 },
+  { epoch:8, users:1e8,  dspTarget:1e13, cumulativeStart:1.111111e12 },
+  { epoch:9, users:1e9,  dspTarget:1e14, cumulativeStart:1.1111111e13 },
+  { epoch:10, users:1e10, dspTarget:1e15, cumulativeStart:1.11111111e14 }
 ];
+
+function getEpochFromSupply(totalMinted){
+  for(const m of EPOCH_MILESTONES){
+    if(totalMinted < m.cumulativeStart + m.dspTarget) return m.epoch;
+  }
+  return 10;
+}
 
 // Each epoch's total supply = 10^(epoch+5) so Epoch 1 = 1M, Epoch 2 = 10M, etc.
 // Liquidity Treasury allocation = 5% of total supply:
@@ -123,13 +130,17 @@ function computeTrajectory(){
     });
   }
   if(liveValuation.impliedValue > 0){
-    trajectoryPoints[0].impliedValue = liveValuation.impliedValue;
-    trajectoryPoints[0].isLive = true;
+    const liveIdx = Math.min(Math.max((liveData.currentEpoch || 1) - 1, 0), 9);
+    trajectoryPoints[liveIdx].impliedValue = liveValuation.impliedValue;
+    trajectoryPoints[liveIdx].isLive = true;
   }
 }
 
 // ═══ UPDATE ALL DYNAMIC ELEMENTS ═══
 function updateDynamicPricing(){
+  if(liveData.totalMinted > 0){
+    liveData.currentEpoch = getEpochFromSupply(liveData.totalMinted);
+  }
   liveValuation = calculateImpliedValue(liveData);
   computeTrajectory();
 
@@ -394,7 +405,7 @@ function drawChart(canvasId, points, titleLabel = 'Initial $DIASPORA Token Price
   ctx.textAlign = 'left';
   ctx.fillText(titleLabel, pad.l, pad.t - 12);
 
-  if(trajectoryPoints[0]?.isLive && canvasId === 'trajectory-canvas'){
+  if(points.some(p => p.isLive) && canvasId === 'trajectory-canvas'){
     ctx.fillStyle = '#4caf50';
     ctx.font = 'bold 10px Inter, sans-serif';
     ctx.textAlign = 'right';

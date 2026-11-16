@@ -151,6 +151,7 @@ exports.respondEmergencyProxy = emergencyFund.respondEmergencyProxy;
 // DSP (12)
 exports.onVouchWrite = dsp.onVouchWrite;
 exports.onGlobalDspMilestone = dsp.onGlobalDspMilestone;
+exports.reconcileMissedTgeMilestones = dsp.reconcileMissedTgeMilestones;
 exports.executeTGE = dsp.executeTGE;
 exports.awardPoints = dsp.awardPoints;
 exports.backfillLifetimeEarnings = dsp.backfillLifetimeEarnings;

@@ -425,6 +425,12 @@
         onSnapshot(doc(db, 'system_stats', 'dsp_supply'), (snap) => {
             const data = snap.data() || {};
             liveData.totalMinted = data.totalMinted || 0;
+            if (typeof getEpochFromSupply === 'function') {
+                liveData.currentEpoch = getEpochFromSupply(liveData.totalMinted);
+                document.querySelectorAll('.epoch-block').forEach((el) => {
+                    el.classList.toggle('open', el.id === 'epoch-' + liveData.currentEpoch);
+                });
+            }
             scheduleDynamicPricingUpdate();
         });
 
