@@ -416,15 +416,17 @@ exports.onUserWrite = functions
             const lat = Number(rawCur.geometry.location.lat);
             const lng = Number(rawCur.geometry.location.lng);
             if (Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0)) {
+              const subLocality = newData.currentSubLocality || rawCur.subLocality || rawCur.sublocality || null;
               const city = newData.currentCity || rawCur.city || (newData.hostLocation && newData.hostLocation.city) || null;
               const state = newData.currentState || rawCur.state || (newData.hostLocation && newData.hostLocation.state) || null;
               const country = rawCur.country || newData.hostCountry || (newData.hostLocation && newData.hostLocation.country) || null;
               const countryCode = newData.currentCountryCode || rawCur.country_code || rawCur.countryCode || newData.hostCountryCode || null;
-              const summaryParts = [city, state, country].filter((p) => typeof p === "string" && p.trim().length > 0);
+              const summaryParts = [subLocality, city, state, country].filter((p) => typeof p === "string" && p.trim().length > 0);
               const tsMs = typeof rawCur.timestamp === "number" ? rawCur.timestamp : Date.now();
               locationUpdate.currentLocation = {
                 formatted_address: summaryParts.join(", "),
                 place_id: "",
+                ...(subLocality ? { subLocality } : {}),
                 city,
                 state,
                 country,

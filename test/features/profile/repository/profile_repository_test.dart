@@ -86,11 +86,13 @@ void main() {
         'lastName': 'User',
         'businessProfile': null,
         'cityVisibilityForfeited': null,
+        'currentSubLocality': 'Masaki',
         'currentCity': 'Dar es Salaam',
         'currentState': 'Dar es Salaam',
         'currentCountryCode': 'TZ',
         'currentLocation': {
-          'formatted_address': 'Dar es Salaam, Tanzania',
+          'formatted_address': 'Masaki, Dar es Salaam, Tanzania',
+          'subLocality': 'Masaki',
           'city': 'Dar es Salaam',
           'country': 'Tanzania',
           'country_code': 'TZ',
@@ -163,6 +165,7 @@ void main() {
       expect(publicData.containsKey('cityVisibilityForfeited'), isFalse);
       expect(publicData.containsKey('currentLocation'), isFalse);
       expect(publicData['showCurrentLocationName'], isFalse);
+      expect(publicData.containsKey('currentSubLocality'), isFalse);
       expect(publicData.containsKey('currentCity'), isFalse);
       expect(publicData.containsKey('currentState'), isFalse);
       expect(publicData.containsKey('currentCountryCode'), isFalse);
@@ -228,4 +231,61 @@ void main() {
     );
     verify(userDoc.get(any)).called(2);
   });
+
+  test(
+    'saveUserProfile preserves currentSubLocality on public doc when visibility is enabled',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final firestore = FakeFirebaseFirestore();
+      final repository = ProfileRepository(firestore, SessionService(prefs));
+
+      const loc = UserLocation(
+        formattedAddress: 'Houston, Texas, United States',
+        placeId: 'private-houston-id',
+        city: 'Houston',
+        state: 'Texas',
+        country: 'United States',
+        countryCode: 'US',
+        geometry: UserLocationGeometry(
+          location: UserLocationCoordinates(lat: 29.74, lng: -95.37),
+        ),
+      );
+      final profile = ProfileData(
+        uid: 'subloc-user',
+        firstName: 'Sub',
+        lastName: 'Loc',
+        phone: '+17135550101',
+        profileImage: 'https://example.com/p.jpg',
+        homeLocation: loc,
+        hostLocation: loc,
+        showCurrentLocationName: true,
+        currentLocation: CurrentLocation(
+          formattedAddress: 'Midtown, Houston, Texas, United States',
+          placeId: '',
+          subLocality: 'Midtown',
+          city: 'Houston',
+          state: 'Texas',
+          countryCode: 'US',
+          timestamp: 1700000000000,
+          geometry: const UserLocationGeometry(
+            location: UserLocationCoordinates(lat: 29.7421, lng: -95.3765),
+          ),
+        ),
+      );
+
+      await repository.saveUserProfile('subloc-user', profile);
+      final publicData = (await firestore.doc('users/subloc-user').get())
+          .data()!;
+      expect(publicData['currentSubLocality'], 'Midtown');
+      expect(publicData['currentCity'], 'Houston');
+      final pubCur = publicData['currentLocation'] as Map<String, dynamic>;
+      expect(pubCur['subLocality'], 'Midtown');
+      expect(pubCur['city'], 'Houston');
+
+      final parsed = ProfileData.fromJson({...publicData, 'uid': 'subloc-user'});
+      expect(parsed.currentLocation?.subLocality, 'Midtown');
+      expect(parsed.currentLocation?.city, 'Houston');
+    },
+  );
 }

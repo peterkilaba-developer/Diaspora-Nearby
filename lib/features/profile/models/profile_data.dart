@@ -265,13 +265,16 @@ class ProfileData {
       'formatted_address': '',
       'place_id': '',
     };
-    // [FIX] Synthesize currentLocation from top-level currentCity/currentState/currentCountryCode
+    // [FIX] Synthesize currentLocation from top-level currentSubLocality/currentCity/currentState/currentCountryCode
     // if currentLocation is missing on a public profile document.
     if (json['currentLocation'] == null &&
-        (json['currentCity'] != null || json['currentCountryCode'] != null)) {
+        (json['currentSubLocality'] != null ||
+            json['currentCity'] != null ||
+            json['currentCountryCode'] != null)) {
       final hostLoc = json['hostLocation'] is Map
           ? Map<String, dynamic>.from(json['hostLocation'] as Map)
           : <String, dynamic>{};
+      final subLocality = json['currentSubLocality'] as String?;
       final city = json['currentCity'] as String? ?? hostLoc['city'] as String?;
       final state =
           json['currentState'] as String? ?? hostLoc['state'] as String?;
@@ -282,6 +285,7 @@ class ProfileData {
           json['hostCountryCode'] as String? ??
           hostLoc['country_code'] as String?;
       final summary = [
+        subLocality,
         city,
         state,
         country,
@@ -289,6 +293,7 @@ class ProfileData {
       json['currentLocation'] = <String, dynamic>{
         'formatted_address': summary,
         'place_id': '',
+        'subLocality': ?subLocality,
         'city': city,
         'state': state,
         'country': country,
@@ -305,6 +310,8 @@ class ProfileData {
       final cur = Map<String, dynamic>.from(json['currentLocation'] as Map);
       cur['formatted_address'] ??= '';
       cur['place_id'] ??= '';
+      cur['subLocality'] ??=
+          cur['sublocality'] ?? json['currentSubLocality'];
       cur['countryCode'] ??= cur['country_code'];
       if (cur['timestamp'] is! num) {
         cur['timestamp'] = DateTime.now().millisecondsSinceEpoch;
@@ -480,6 +487,7 @@ class CurrentLocation {
   final String placeId;
 
   final UserLocationGeometry geometry;
+  final String? subLocality;
   final String? city;
   final String? state;
   final String? countryCode;
@@ -489,6 +497,7 @@ class CurrentLocation {
     required this.formattedAddress,
     required this.placeId,
     required this.geometry,
+    this.subLocality,
     this.city,
     this.state,
     this.countryCode,

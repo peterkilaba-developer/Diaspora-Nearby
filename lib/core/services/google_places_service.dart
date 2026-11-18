@@ -337,61 +337,228 @@ class GooglePlacesService {
   }
 
   /// Reverse geocode: convert lat/lng to place details
-  /// Returns structured location data including city, state, country, countryCode
+  /// Returns structured location data including subLocality, city, state, country, countryCode.
+  /// Tries native OS geocoding first (when non-web), and falls back to Google Geocoding API
+  /// (directly on mobile or via `placesProxy` on web) when native geocoding fails or lacks subLocality.
   Future<Map<String, dynamic>?> reverseGeocode(double lat, double lng) async {
-    try {
-      final placemarks = await placemarkFromCoordinates(lat, lng);
+    Map<String, dynamic>? nativeResult;
+    if (!kIsWeb) {
+      try {
+        final placemarks = await placemarkFromCoordinates(lat, lng);
 
-      if (placemarks.isEmpty) {
+        if (placemarks.isNotEmpty) {
+          String? bestSubLocality;
+          String? bestLocality;
+          String? bestSubAdmin;
+          String? bestAdmin;
+          String? bestCountry;
+          String? bestIsoCode;
+
+          for (final p in placemarks) {
+            if (bestSubLocality == null &&
+                p.subLocality != null &&
+                p.subLocality!.trim().isNotEmpty) {
+              bestSubLocality = p.subLocality!.trim();
+            }
+            if (bestLocality == null &&
+                p.locality != null &&
+                p.locality!.trim().isNotEmpty) {
+              bestLocality = p.locality!.trim();
+            }
+            if (bestSubAdmin == null &&
+                p.subAdministrativeArea != null &&
+                p.subAdministrativeArea!.trim().isNotEmpty) {
+              bestSubAdmin = p.subAdministrativeArea!.trim();
+            }
+            if (bestAdmin == null &&
+                p.administrativeArea != null &&
+                p.administrativeArea!.trim().isNotEmpty) {
+              bestAdmin = p.administrativeArea!.trim();
+            }
+            if (bestCountry == null &&
+                p.country != null &&
+                p.country!.trim().isNotEmpty) {
+              bestCountry = p.country!.trim();
+            }
+            if (bestIsoCode == null &&
+                p.isoCountryCode != null &&
+                p.isoCountryCode!.trim().isNotEmpty) {
+              bestIsoCode = p.isoCountryCode!.trim().toUpperCase();
+            }
+          }
+
+          final countryCode = bestIsoCode;
+          String? country;
+          if (countryCode != null) {
+            final matched = country_data.getCountryByCode(countryCode);
+            country = matched?.name ?? bestCountry;
+          } else {
+            country = bestCountry;
+          }
+
+          final rawCity = bestLocality ?? bestSubAdmin ?? bestSubLocality;
+          final city = rawCity != null && rawCity.isNotEmpty
+              ? formatLocationName(rawCity)
+              : null;
+
+          String? subLocality = bestSubLocality != null
+              ? formatLocationName(bestSubLocality)
+              : (bestLocality != null && bestSubAdmin != null)
+              ? formatLocationName(bestSubAdmin)
+              : null;
+          if (subLocality != null &&
+              (subLocality.isEmpty ||
+                  isSameOrRedundantLocationPart(subLocality, city))) {
+            subLocality = null;
+          }
+
+          final state = sanitizeStateForCountry(
+            state: bestAdmin,
+            city: city,
+            countryCode: countryCode,
+            countryName: country,
+          );
+
+          final formattedAddress = formatTieredLocation(
+            subLocality: subLocality,
+            city: city,
+            state: state,
+            country: country,
+            countryCode: countryCode,
+            includeSubLocality: subLocality != null,
+          );
+
+          nativeResult = {
+            'formattedAddress': formattedAddress,
+            'placeId': '',
+            'subLocality': subLocality,
+            'city': city,
+            'state': state,
+            'country': country,
+            'countryCode': countryCode,
+            'lat': lat,
+            'lng': lng,
+          };
+
+          if (subLocality != null && subLocality.isNotEmpty) {
+            return nativeResult;
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Fallback or enrich with Google Geocoding HTTP API (gets neighborhood / sublocality reliably)
+    final httpResult = await _reverseGeocodeHttp(lat, lng);
+    if (httpResult != null) {
+      if (nativeResult == null) return httpResult;
+      return {
+        ...nativeResult,
+        'subLocality': httpResult['subLocality'] ?? nativeResult['subLocality'],
+        'city': nativeResult['city'] ?? httpResult['city'],
+        'state': nativeResult['state'] ?? httpResult['state'],
+        'country': nativeResult['country'] ?? httpResult['country'],
+        'countryCode':
+            nativeResult['countryCode'] ?? httpResult['countryCode'],
+        'formattedAddress':
+            (httpResult['subLocality'] != null &&
+                (httpResult['formattedAddress'] as String?)?.isNotEmpty == true)
+            ? httpResult['formattedAddress']
+            : nativeResult['formattedAddress'],
+      };
+    }
+
+    return nativeResult;
+  }
+
+  Future<Map<String, dynamic>?> _reverseGeocodeHttp(
+    double lat,
+    double lng,
+  ) async {
+    try {
+      final apiKey = Env.googleMapsApiKey;
+      final useProxy = kIsWeb || apiKey.isEmpty;
+      final Uri url;
+      if (useProxy) {
+        url = Uri.parse(_placesProxyBaseUrl).replace(
+          queryParameters: {
+            'type': 'reverse_geocode',
+            'lat': '$lat',
+            'lng': '$lng',
+          },
+        );
+      } else {
+        url = Uri.https('maps.googleapis.com', '/maps/api/geocode/json', {
+          'latlng': '$lat,$lng',
+          'key': apiKey,
+        });
+      }
+
+      final response = await http
+          .get(url, headers: await _proxyHeaders(useProxy: useProxy))
+          .timeout(const Duration(seconds: 6));
+
+      if (response.statusCode != 200) return null;
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (data['status'] != 'OK') return null;
+      final results = data['results'] as List<dynamic>?;
+      if (results == null || results.isEmpty) return null;
+
+      String? subLocality;
+      String? city;
+      String? state;
+      String? country;
+      String? countryCode;
+
+      for (final raw in results) {
+        if (raw is! Map) continue;
+        final compsJson = raw['address_components'] as List<dynamic>?;
+        if (compsJson == null) continue;
+        final components = compsJson
+            .whereType<Map>()
+            .map(
+              (e) => AddressComponent(
+                name: (e['long_name'] as String?) ?? '',
+                shortName: (e['short_name'] as String?) ?? '',
+                types: (e['types'] as List?)?.cast<String>() ?? const [],
+              ),
+            )
+            .toList();
+
+        final parsed = parseLocationComponents(
+          (raw['formatted_address'] as String?) ?? '',
+          components,
+        );
+        if (parsed != null) {
+          subLocality ??= parsed.sublocality;
+          city ??= parsed.city;
+          state ??= parsed.state;
+          country ??= parsed.country;
+          countryCode ??= parsed.countryCode;
+          if (subLocality != null && city != null) {
+            break;
+          }
+        }
+      }
+
+      if (city == null && subLocality == null && countryCode == null) {
         return null;
       }
 
-      final place = placemarks.first;
-      final countryCode = place.isoCountryCode?.toUpperCase();
-
-      String? country;
-      if (countryCode != null) {
-        final matched = country_data.getCountryByCode(countryCode);
-        country = matched?.name ?? place.country;
-      } else {
-        country = place.country;
+      if (subLocality != null) {
+        final cleanedSub = formatLocationName(subLocality);
+        subLocality = cleanedSub.isNotEmpty ? cleanedSub : subLocality.trim();
+        if (isSameOrRedundantLocationPart(subLocality, city)) {
+          subLocality = null;
+        }
       }
-
-      final rawCity = (place.locality != null && place.locality!.trim().isNotEmpty)
-          ? place.locality!.trim()
-          : (place.subAdministrativeArea != null &&
-                place.subAdministrativeArea!.trim().isNotEmpty)
-          ? place.subAdministrativeArea!.trim()
-          : place.subLocality?.trim();
-      final city = rawCity != null && rawCity.isNotEmpty
-          ? formatLocationName(rawCity)
-          : null;
-
-      String? subLocality =
-          (place.subLocality != null && place.subLocality!.trim().isNotEmpty)
-          ? place.subLocality!.trim()
-          : (place.locality != null &&
-                place.locality!.trim().isNotEmpty &&
-                place.subAdministrativeArea != null &&
-                place.subAdministrativeArea!.trim().isNotEmpty)
-          ? formatLocationName(place.subAdministrativeArea!.trim())
-          : null;
-      if (subLocality != null && isSameOrRedundantLocationPart(subLocality, city)) {
-        subLocality = null;
-      }
-
-      final state = sanitizeStateForCountry(
-        state: place.administrativeArea,
-        city: city,
-        countryCode: countryCode,
-        countryName: country,
-      );
 
       final formattedAddress = formatTieredLocation(
+        subLocality: subLocality,
         city: city,
         state: state,
         country: country,
         countryCode: countryCode,
+        includeSubLocality: subLocality != null,
       );
 
       return {
@@ -406,6 +573,7 @@ class GooglePlacesService {
         'lng': lng,
       };
     } catch (e) {
+      debugPrint('[Places] HTTP reverse geocode error: $e');
       return null;
     }
   }

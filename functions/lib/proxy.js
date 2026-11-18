@@ -256,8 +256,20 @@ exports.placesProxy = functions
       if (fields) url.searchParams.set('fields', fields);
       if (sessiontoken) url.searchParams.set('sessiontoken', sessiontoken);
       targetUrl = url;
+    } else if (type === 'reverse_geocode') {
+      const lat = Number(req.query.lat);
+      const lng = Number(req.query.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) ||
+          lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        res.status(400).json({ error: 'Invalid lat/lng parameters' });
+        return;
+      }
+      const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
+      url.searchParams.set('latlng', `${lat},${lng}`);
+      url.searchParams.set('key', apiKey);
+      targetUrl = url;
     } else {
-      res.status(400).json({ error: 'Invalid type. Use "autocomplete" or "details".' });
+      res.status(400).json({ error: 'Invalid type. Use "autocomplete", "details", or "reverse_geocode".' });
       return;
     }
 

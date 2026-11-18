@@ -121,8 +121,12 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // [PERF FIX] Debounce: only run resume actions at most once every 5 minutes.
-      // Prevents hammering Firestore/GPS/network on rapid app switches.
+      // Always refresh location immediately on foreground resume (LocationUpdateService
+      // applies its own lightweight 30s/movement throttle) so sub-locality stays real-time.
+      unawaited(_updateLocation());
+
+      // [PERF FIX] Debounce heavier resume actions (daily check-in, update check,
+      // background service check) to at most once every 5 minutes.
       final now = DateTime.now();
       if (_lastResumeAction != null &&
           now.difference(_lastResumeAction!) < const Duration(minutes: 5)) {
@@ -131,7 +135,6 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
       }
       _lastResumeAction = now;
 
-      _updateLocation();
       _triggerDailyCheckIn();
       // Re-check background service state on resume
       _ensureBackgroundService();

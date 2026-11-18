@@ -23,18 +23,27 @@ final userProfileProvider =
       UserProfileNotifier.new,
     );
 
-// Added missing provider for fetching profile by ID (streams live updates)
+// Streams live profile updates by ID (switches to watchOwnProfile for the signed-in user)
 final userProfileStreamByIdProvider =
     StreamProvider.family<ProfileData?, String>((ref, userId) {
       final repo = ref.watch(profileRepositoryProvider);
+      final currentUid = ref.watch(authStateProvider).asData?.value?.uid;
+      if (currentUid != null && currentUid == userId) {
+        return repo.watchOwnProfile(userId);
+      }
       return repo.watchProfile(userId);
     });
 
-final userProfileByIdProvider = FutureProvider.family<ProfileData?, String>((
+final userProfileByIdProvider = StreamProvider.family<ProfileData?, String>((
   ref,
   userId,
-) async {
-  return ref.watch(userProfileStreamByIdProvider(userId).future);
+) {
+  final repo = ref.watch(profileRepositoryProvider);
+  final currentUid = ref.watch(authStateProvider).asData?.value?.uid;
+  if (currentUid != null && currentUid == userId) {
+    return repo.watchOwnProfile(userId);
+  }
+  return repo.watchProfile(userId);
 });
 
 class UserProfileNotifier extends AsyncNotifier<ProfileData?> {
@@ -123,19 +132,30 @@ class ProfileRepository {
   cf.DocumentReference<Map<String, dynamic>> _privateRef(String uid) =>
       _firestore.collection('user_private').doc(uid);
 
-  Map<String, dynamic>? _publicLocation(dynamic value) {
+  Map<String, dynamic>? _publicLocation(
+    dynamic value, {
+    bool includeSubLocality = false,
+  }) {
     if (value is! Map) return null;
     final map = Map<String, dynamic>.from(value);
+    final subLocality = includeSubLocality
+        ? (map['subLocality'] as String? ?? map['sublocality'] as String?)
+        : null;
     final city = map['city'] as String?;
     final state = map['state'] as String?;
     final country = map['country'] as String?;
     final summary = [
+      subLocality,
       city,
       state,
       country,
     ].whereType<String>().where((part) => part.trim().isNotEmpty).join(', ');
     final result = <String, dynamic>{
       'formatted_address': summary,
+      if (includeSubLocality &&
+          subLocality != null &&
+          subLocality.trim().isNotEmpty)
+        'subLocality': subLocality.trim(),
       'city': city,
       'state': state,
       'country': country,
@@ -200,9 +220,17 @@ class ProfileRepository {
       publicData['businessProfile'] = Map<String, dynamic>.from(business)
         ..remove('taxId');
     }
-    final currentSummary = _publicLocation(privateData['currentLocation']);
+    final currentSummary = _publicLocation(
+      privateData['currentLocation'],
+      includeSubLocality: true,
+    );
     if (currentSummary != null &&
         publicData['showCurrentLocationName'] != false) {
+      final subLoc = currentSummary['subLocality'] as String?;
+      publicData['currentSubLocality'] =
+          (subLoc != null && subLoc.trim().isNotEmpty)
+          ? subLoc.trim()
+          : cf.FieldValue.delete();
       publicData['currentCity'] = currentSummary['city'];
       publicData['currentState'] = currentSummary['state'];
       publicData['currentCountryCode'] = currentSummary['country_code'];
@@ -220,6 +248,7 @@ class ProfileRepository {
             DateTime.now().toIso8601String(),
       };
     } else if (publicData['showCurrentLocationName'] == false) {
+      publicData['currentSubLocality'] = cf.FieldValue.delete();
       publicData['currentCity'] = cf.FieldValue.delete();
       publicData['currentState'] = cf.FieldValue.delete();
       publicData['currentCountryCode'] = cf.FieldValue.delete();

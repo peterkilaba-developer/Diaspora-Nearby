@@ -308,19 +308,36 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
     final proximityColor = _getProximityColor(proximityLevel, isDark, theme);
     final (distanceValue, distanceUnit) = _formatDistanceMetric(distance);
 
-    // Format current city display
+    // Format current location display (prefer sub-locality / neighborhood over locality)
     String? currentCityDisplay;
-    final city = effectiveUser.currentLocation?.city;
-    if (city != null && city.isNotEmpty) {
-      final cleanState = sanitizeStateForCountry(
-        state: effectiveUser.currentLocation?.state,
-        city: city,
-        countryCode: effectiveUser.currentLocation?.countryCode,
-      );
-      if (cleanState != null && cleanState.isNotEmpty) {
-        currentCityDisplay = '$city, $cleanState';
-      } else {
-        currentCityDisplay = city;
+    final subLocality = effectiveUser.currentLocation?.subLocality?.trim();
+    final city = effectiveUser.currentLocation?.city?.trim();
+    if ((subLocality != null && subLocality.isNotEmpty) ||
+        (city != null && city.isNotEmpty)) {
+      if (subLocality != null &&
+          subLocality.isNotEmpty &&
+          city != null &&
+          city.isNotEmpty &&
+          !isSameOrRedundantLocationPart(subLocality, city)) {
+        currentCityDisplay = '$subLocality, $city';
+      } else if (subLocality != null && subLocality.isNotEmpty) {
+        final cleanState = sanitizeStateForCountry(
+          state: effectiveUser.currentLocation?.state,
+          city: subLocality,
+          countryCode: effectiveUser.currentLocation?.countryCode,
+        );
+        currentCityDisplay = (cleanState != null && cleanState.isNotEmpty)
+            ? '$subLocality, $cleanState'
+            : subLocality;
+      } else if (city != null && city.isNotEmpty) {
+        final cleanState = sanitizeStateForCountry(
+          state: effectiveUser.currentLocation?.state,
+          city: city,
+          countryCode: effectiveUser.currentLocation?.countryCode,
+        );
+        currentCityDisplay = (cleanState != null && cleanState.isNotEmpty)
+            ? '$city, $cleanState'
+            : city;
       }
     } else if (effectiveUser.hostLocation.formattedAddress.isNotEmpty) {
       final loc = effectiveUser.hostLocation;

@@ -176,7 +176,7 @@ class BackgroundLocationService {
           if (position != null) {
             cachedLastKnownPosition = position;
           }
-          await _performBackgroundCheck(service);
+          await _performBackgroundCheck(service, providedPosition: position);
         },
         onError: (e) {
           debugPrint('📍 [BACKGROUND] Stream Error: $e');
@@ -193,12 +193,18 @@ class BackgroundLocationService {
     }
   }
 
-  static Future<void> _performBackgroundCheck(ServiceInstance service) async {
+  static Future<void> _performBackgroundCheck(
+    ServiceInstance service, {
+    Position? providedPosition,
+  }) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         debugPrint('Background: Updating location for ${user.uid}');
-        await LocationUpdateService().updateCurrentLocation(user.uid);
+        await LocationUpdateService().updateCurrentLocation(
+          user.uid,
+          providedPosition: providedPosition,
+        );
       } else {
         debugPrint('No user logged in, skipping background location update.');
       }

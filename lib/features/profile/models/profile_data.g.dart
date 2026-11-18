@@ -209,6 +209,7 @@ CurrentLocation _$CurrentLocationFromJson(Map<String, dynamic> json) =>
       geometry: UserLocationGeometry.fromJson(
         json['geometry'] as Map<String, dynamic>,
       ),
+      subLocality: json['subLocality'] as String?,
       city: json['city'] as String?,
       state: json['state'] as String?,
       countryCode: json['countryCode'] as String?,
@@ -220,6 +221,7 @@ Map<String, dynamic> _$CurrentLocationToJson(CurrentLocation instance) =>
       'formatted_address': instance.formattedAddress,
       'place_id': instance.placeId,
       'geometry': instance.geometry.toJson(),
+      'subLocality': instance.subLocality,
       'city': instance.city,
       'state': instance.state,
       'countryCode': instance.countryCode,

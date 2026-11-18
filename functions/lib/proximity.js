@@ -199,7 +199,7 @@ function publicProfile(document, distance, privateData = {}, targetCoords = null
         "homeCountryCode", "hostCountryCode", "profession", "industry",
         "yearsInHostCountry", "servicesOffered", "lookingFor",
         "availability", "meetingPreferences", "showCurrentLocationName",
-        "currentCity", "currentState", "currentCountryCode",
+        "currentSubLocality", "currentCity", "currentState", "currentCountryCode",
     ];
     const result = {uid: document.id};
     for (const field of allowed) {
@@ -207,12 +207,20 @@ function publicProfile(document, distance, privateData = {}, targetCoords = null
     }
     if (Number.isFinite(distance)) result.distance = distance;
 
-    // Synthesize a safe city-level currentLocation for ProfileData.fromJson
-    // so UserCardView displays the bottom flag, city, and proximity/distance.
+    // Synthesize a safe neighborhood/city-level currentLocation for ProfileData.fromJson
+    // so UserCardView displays the bottom flag, sub-locality, city, and proximity/distance.
+    const showName = data.showCurrentLocationName !== false;
     const rawCur = (privateData && privateData.currentLocation) || data.currentLocation;
     const hostLoc = data.hostLocation || (privateData && privateData.hostLocation) || {};
-    const city = data.currentCity || (rawCur && rawCur.city) || hostLoc.city || null;
-    const state = data.currentState || (rawCur && rawCur.state) || hostLoc.state || null;
+    const subLocality = showName
+        ? (data.currentSubLocality || (rawCur && (rawCur.subLocality || rawCur.sublocality)) || null)
+        : null;
+    const city = showName
+        ? (data.currentCity || (rawCur && rawCur.city) || hostLoc.city || null)
+        : (hostLoc.city || null);
+    const state = showName
+        ? (data.currentState || (rawCur && rawCur.state) || hostLoc.state || null)
+        : (hostLoc.state || null);
     const country = (rawCur && rawCur.country) || data.hostCountry || hostLoc.country || null;
     const countryCode = data.currentCountryCode ||
         (rawCur && (rawCur.country_code || rawCur.countryCode)) ||
@@ -226,13 +234,15 @@ function publicProfile(document, distance, privateData = {}, targetCoords = null
     const safeLat = coords ? Math.round(coords.lat * 100) / 100 : 0;
     const safeLng = coords ? Math.round(coords.lng * 100) / 100 : 0;
 
-    if (city || countryCode || coords) {
-        const summaryParts = [city, state, country].filter((p) => typeof p === "string" && p.trim().length > 0);
+    if (subLocality || city || countryCode || coords) {
+        const summaryParts = [subLocality, city, state, country]
+            .filter((p) => typeof p === "string" && p.trim().length > 0);
         const rawTs = rawCur && rawCur.timestamp;
         const tsMs = typeof rawTs === "number" ? rawTs : Date.now();
         result.currentLocation = {
             formatted_address: summaryParts.join(", "),
             place_id: "",
+            subLocality: subLocality,
             city: city,
             state: state,
             country: country,
@@ -318,7 +328,14 @@ function hasUsableName(data) {
 }
 
 function locationDisplayName(loc, fallback = "your area") {
+    const subLocality = loc && (loc.subLocality || loc.sublocality)
+        ? String(loc.subLocality || loc.sublocality).trim()
+        : "";
     const city = loc && loc.city ? String(loc.city).trim() : "";
+    if (subLocality && city && subLocality.toLowerCase() !== city.toLowerCase()) {
+        return `${subLocality}, ${city}`;
+    }
+    if (subLocality) return subLocality;
     if (city) return city;
 
     const formatted = loc && (loc.formatted_address || loc.formattedAddress)
