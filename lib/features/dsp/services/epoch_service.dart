@@ -124,83 +124,82 @@ class EpochService {
   // Community Epoch Logic (10-Base Scaling)
   // ------------------------------------------------------------------------
 
-  // Community Epoch Scaling (10x User/Supply Growth: 10 users to 10B users)
-  // Each Epoch requires 10x more new DSP distributed within that Epoch
-  // (e.g., Epoch 1 = 1M DSP [100K/TDE], Epoch 2 = 10M new DSP [1M/TDE, cumulative 1M->11M]).
+  // Community Epoch Scaling (10x User & Strict Epoch Max Supply: 1M -> 1QD)
+  // `dspTarget` is the strict cumulative Max Supply cap for each Epoch
+  // (Epoch 1 = 1M [100K/TDE], Epoch 2 = 10M Max Supply [+9M range, 900K/TDE], ..., Epoch 10 = 1QD).
   static const List<CommunityEpochDefinition> _communityEpochSchedule = [
     CommunityEpochDefinition(
       level: 1,
       dspTarget: 1000000,
       cumulativeDspStart: 0,
       memberTarget: 10,
-    ), // 1M / 10 users (cum: 0 -> 1M)
+    ), // Max Supply: 1M / 10 users (0 -> 1M)
     CommunityEpochDefinition(
       level: 2,
       dspTarget: 10000000,
       cumulativeDspStart: 1000000,
       memberTarget: 100,
-    ), // 10M / 100 users (cum: 1M -> 11M)
+    ), // Max Supply: 10M / 100 users (1M -> 10M)
     CommunityEpochDefinition(
       level: 3,
       dspTarget: 100000000,
-      cumulativeDspStart: 11000000,
+      cumulativeDspStart: 10000000,
       memberTarget: 1000,
-    ), // 100M / 1k (cum: 11M -> 111M)
+    ), // Max Supply: 100M / 1k (10M -> 100M)
     CommunityEpochDefinition(
       level: 4,
       dspTarget: 1000000000,
-      cumulativeDspStart: 111000000,
+      cumulativeDspStart: 100000000,
       memberTarget: 10000,
-    ), // 1B / 10k (cum: 111M -> 1.111B)
+    ), // Max Supply: 1B / 10k (100M -> 1B)
     CommunityEpochDefinition(
       level: 5,
       dspTarget: 10000000000,
-      cumulativeDspStart: 1111000000,
+      cumulativeDspStart: 1000000000,
       memberTarget: 100000,
-    ), // 10B / 100k
+    ), // Max Supply: 10B / 100k (1B -> 10B)
     CommunityEpochDefinition(
       level: 6,
       dspTarget: 100000000000,
-      cumulativeDspStart: 11111000000,
+      cumulativeDspStart: 10000000000,
       memberTarget: 1000000,
-    ), // 100B / 1M
+    ), // Max Supply: 100B / 1M (10B -> 100B)
     CommunityEpochDefinition(
       level: 7,
       dspTarget: 1000000000000,
-      cumulativeDspStart: 111111000000,
+      cumulativeDspStart: 100000000000,
       memberTarget: 10000000,
-    ), // 1T / 10M
+    ), // Max Supply: 1T / 10M (100B -> 1T)
     CommunityEpochDefinition(
       level: 8,
       dspTarget: 10000000000000,
-      cumulativeDspStart: 1111111000000,
+      cumulativeDspStart: 1000000000000,
       memberTarget: 100000000,
-    ), // 10T / 100M
+    ), // Max Supply: 10T / 100M (1T -> 10T)
     CommunityEpochDefinition(
       level: 9,
       dspTarget: 100000000000000,
-      cumulativeDspStart: 11111111000000,
+      cumulativeDspStart: 10000000000000,
       memberTarget: 1000000000,
-    ), // 100T / 1B
+    ), // Max Supply: 100T / 1B (10T -> 100T)
     CommunityEpochDefinition(
       level: 10,
       dspTarget: 1000000000000000,
-      cumulativeDspStart: 111111111000000,
+      cumulativeDspStart: 100000000000000,
       memberTarget: 10000000000,
-    ), // 1QD / 10B
+    ), // Max Supply: 1QD / 10B (100T -> 1QD)
   ];
 
   static const int absoluteSupplyCap = 1000000000000000; // 1 Quadrillion (1QD)
 
   /// Get the CURRENT epoch a community is working towards.
-  /// Epoch advances when cumulative DSP reaches cumulativeDspTarget
-  /// (population is tracked as an informational benchmark, not a gate).
+  /// Epoch advances when cumulative DSP reaches strict Epoch Max Supply (`dspTarget`).
   CommunityEpochDefinition getCurrentCommunityEpoch(
     int cumulativeEarnings,
     int memberCount,
   ) {
     for (final epoch in _communityEpochSchedule) {
-      if (cumulativeEarnings < epoch.cumulativeDspTarget) {
+      if (cumulativeEarnings < epoch.dspTarget) {
         return epoch;
       }
     }
@@ -215,10 +214,10 @@ class EpochService {
     );
   }
 
-  /// Calculates the cumulative DSP threshold for the next TDE milestone (10% of current epoch target).
+  /// Calculates the cumulative DSP threshold for the next TDE milestone (10% of current epoch range).
   int getNextCommunityMilestone(int cumulativeEarnings, int memberCount) {
     final epoch = getCurrentCommunityEpoch(cumulativeEarnings, memberCount);
-    final int step = (epoch.dspTarget / 10).round();
+    final int step = (epoch.epochDspRange / 10).round();
 
     final int completedSteps = getCompletedTgeEvents(
       cumulativeEarnings,
@@ -230,10 +229,10 @@ class EpochService {
   }
 
   /// Returns the number of fully completed TDE releases (0 to 10) within the current Epoch.
-  /// TDE progression is based on 10% deciles of the current epoch's dspTarget.
+  /// TDE progression is based on 10% deciles of the current epoch's range (`dspTarget - cumulativeDspStart`).
   int getCompletedTgeEvents(int cumulativeEarnings, int memberCount) {
     final epoch = getCurrentCommunityEpoch(cumulativeEarnings, memberCount);
-    final int dspStep = (epoch.dspTarget / 10).round();
+    final int dspStep = (epoch.epochDspRange / 10).round();
     if (dspStep <= 0) return 0;
 
     int completedSteps =
@@ -271,16 +270,20 @@ class CommunityEpochDefinition {
     required this.memberTarget,
   });
 
-  int get cumulativeDspTarget => cumulativeDspStart + dspTarget;
+  /// Strict cumulative Max Supply target at the end of this Epoch (`1M`, `10M`, ..., `1QD`).
+  int get cumulativeDspTarget => dspTarget;
 
-  /// Returns DSP distributed strictly within this epoch (0 .. dspTarget).
+  /// New supply range distributed within this Epoch (`dspTarget - cumulativeDspStart`).
+  int get epochDspRange => dspTarget - cumulativeDspStart;
+
+  /// Returns DSP distributed strictly within this epoch (`0 .. epochDspRange`).
   int epochEarnedDsp(int cumulativeDsp) {
-    return (cumulativeDsp - cumulativeDspStart).clamp(0, dspTarget);
+    return (cumulativeDsp - cumulativeDspStart).clamp(0, epochDspRange);
   }
 
-  // TDE progress is based on distributed DSP within this epoch. Member growth is informational.
+  // TDE progress is based on distributed DSP within this epoch's range. Member growth is informational.
   double calculateProgress(int currentDsp, int currentMembers) {
-    if (dspTarget <= 0) return 0.0;
-    return ((currentDsp - cumulativeDspStart) / dspTarget).clamp(0.0, 1.0);
+    if (epochDspRange <= 0) return 0.0;
+    return ((currentDsp - cumulativeDspStart) / epochDspRange).clamp(0.0, 1.0);
   }
 }

@@ -839,7 +839,6 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
               totalMinted,
               globalMembers,
             );
-            final int epochEarned = epoch.epochEarnedDsp(totalMinted);
             final double progress = epoch.calculateProgress(
               totalMinted,
               globalMembers,
@@ -856,7 +855,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    '${NumberFormat('#,###').format(epochEarned)} / ${NumberFormat('#,###').format(epoch.dspTarget)} \$DIASPORA',
+                    '${NumberFormat('#,###').format(totalMinted.clamp(0, epoch.dspTarget))} / ${NumberFormat('#,###').format(epoch.dspTarget)} \$DIASPORA',
                     style: const TextStyle(
                       fontSize: 16,
                       color: AppTheme.accent,
@@ -1775,20 +1774,23 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
     int uniqueQrCount,
     double trustScore,
   ) {
-    final int epochEarned = epoch.epochEarnedDsp(currentSupply);
-    final int stepSize = (epoch.dspTarget / 10).round();
-    final int memberStepSize = (epoch.memberTarget / 10).round();
+    final prevEpoch = epochService.getPreviousCommunityEpoch(epoch.level);
+    final int prevMemberTarget = prevEpoch?.memberTarget ?? 0;
+    final int stepSize = (epoch.epochDspRange / 10).round();
+    final int memberStepSize =
+        ((epoch.memberTarget - prevMemberTarget) / 10).round();
     final int effectiveMemberStep = memberStepSize > 0 ? memberStepSize : 1;
 
     return Column(
       children: List.generate(10, (index) {
         final tdeNumber = index + 1;
 
-        final stepStart = index * stepSize;
-        final stepTarget = (index + 1) * stepSize;
+        final stepStart = epoch.cumulativeDspStart + (index * stepSize);
+        final stepTarget = epoch.cumulativeDspStart + ((index + 1) * stepSize);
 
-        final memberStart = index * effectiveMemberStep;
-        final memberTarget = (index + 1) * effectiveMemberStep;
+        final memberStart = prevMemberTarget + (index * effectiveMemberStep);
+        final memberTarget =
+            prevMemberTarget + ((index + 1) * effectiveMemberStep);
 
         // Logged-in user's personal $DIASPORA distribution record for this TDE
         final record = userPoints.tdeHistory.firstWhere(
@@ -1802,15 +1804,15 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
           ),
         );
 
-        final bool isSupplyMet = epochEarned >= stepTarget;
+        final bool isSupplyMet = currentSupply >= stepTarget;
         final bool isCompleted = isSupplyMet;
-        final bool isActive = !isCompleted && epochEarned >= stepStart;
+        final bool isActive = !isCompleted && currentSupply >= stepStart;
 
         double supplyProgress = 0.0;
         double memberProgress = 0.0;
 
         if (isActive) {
-          supplyProgress = ((epochEarned - stepStart) / stepSize).clamp(
+          supplyProgress = ((currentSupply - stepStart) / stepSize).clamp(
             0.0,
             1.0,
           );
@@ -1925,7 +1927,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                '${NumberFormat.compact().format(epochEarned)} / ${NumberFormat.compact().format(stepTarget)} Target',
+                                '${NumberFormat.compact().format(currentSupply)} / ${NumberFormat.compact().format(stepTarget)} Target',
                                 style: const TextStyle(
                                   fontSize: 9,
                                   color: AppTheme.accent,

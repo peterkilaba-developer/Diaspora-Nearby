@@ -24,23 +24,24 @@ class CountryLeaderboardItem extends StatelessWidget {
     final epochService = EpochService();
     final int memberCount = int.tryParse(country['memberCount'] ?? '0') ?? 0;
 
-    // Country-specific Epoch (10x scaling per epoch)
+    // Country-specific Epoch (strict 10x Epoch Max Supply: 1M -> 1QD)
     final countryEpoch = epochService.getCurrentCommunityEpoch(
       cumulativeValue.round(),
       memberCount,
     );
-    final double epochEarned =
-        (cumulativeValue - countryEpoch.cumulativeDspStart).clamp(
-          0.0,
-          countryEpoch.dspTarget.toDouble(),
-        );
-
-    final double dspProgress = (epochEarned / countryEpoch.dspTarget).clamp(
-      0.0,
-      1.0,
+    final prevEpoch = epochService.getPreviousCommunityEpoch(
+      countryEpoch.level,
     );
-    final double memberProgress = (memberCount / countryEpoch.memberTarget)
-        .clamp(0.0, 1.0);
+    final int prevMemberTarget = prevEpoch?.memberTarget ?? 0;
+
+    final double dspProgress = countryEpoch.calculateProgress(
+      cumulativeValue.round(),
+      memberCount,
+    );
+    final double memberProgress =
+        ((memberCount - prevMemberTarget) /
+                (countryEpoch.memberTarget - prevMemberTarget))
+            .clamp(0.0, 1.0);
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
@@ -91,7 +92,7 @@ class CountryLeaderboardItem extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '${NumberFormat.compact().format(epochEarned)} / ${NumberFormat.compact().format(countryEpoch.dspTarget)} DSP',
+                '${NumberFormat.compact().format(cumulativeValue)} / ${NumberFormat.compact().format(countryEpoch.dspTarget)} DSP',
                 style: const TextStyle(
                   fontSize: 10,
                   color: AppTheme.accent,

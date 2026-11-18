@@ -1558,7 +1558,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             );
             final int epochEarned = epoch.epochEarnedDsp(supply);
 
-            // 10x Epoch progress calculation (10M new DSP in Epoch 2, 1M per TDE)
+            // Strict 10x Epoch Max Supply progress calculation (1M -> 10M -> ... -> 1QD)
             final double supplyProgress = epoch.calculateProgress(
               supply,
               members,
@@ -1569,12 +1569,13 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             );
 
             // Calculate Total DSP Milestone Progress for this Epoch
-            final int stepSize = (epoch.dspTarget / 10).round();
+            final int stepSize = (epoch.epochDspRange / 10).round();
             final int completedSteps = stepSize > 0
                 ? (epochEarned ~/ stepSize).clamp(0, 10)
                 : 0;
-            final double platformMilestoneDsp = (completedSteps * stepSize)
-                .toDouble();
+            final double platformMilestoneDsp =
+                (epoch.cumulativeDspStart + (completedSteps * stepSize))
+                    .toDouble();
 
             return Container(
               margin: const EdgeInsets.symmetric(
@@ -1644,7 +1645,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                         ],
                       ),
                       Text(
-                        '${NumberFormat.compact().format(epochEarned)} / ${NumberFormat.compact().format(epoch.dspTarget)}',
+                        '${NumberFormat.compact().format(supply.clamp(0, epoch.dspTarget))} / ${NumberFormat.compact().format(epoch.dspTarget)}',
                         style: const TextStyle(
                           fontSize: 12,
                           color: AppTheme.accent,
@@ -1747,30 +1748,33 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
     int uniqueQrCount,
     double trustScore,
   ) {
-    final int epochEarned = epoch.epochEarnedDsp(currentSupply);
-    final int stepSize = (epoch.dspTarget / 10).round();
-    final int memberStepSize = (epoch.memberTarget / 10).round();
+    final prevEpoch = epochService.getPreviousCommunityEpoch(epoch.level);
+    final int prevMemberTarget = prevEpoch?.memberTarget ?? 0;
+    final int stepSize = (epoch.epochDspRange / 10).round();
+    final int memberStepSize =
+        ((epoch.memberTarget - prevMemberTarget) / 10).round();
     final int effectiveMemberStep = memberStepSize > 0 ? memberStepSize : 1;
 
     return Column(
       children: List.generate(10, (index) {
         final tdeNumber = index + 1;
 
-        final stepStart = index * stepSize;
-        final stepTarget = (index + 1) * stepSize;
+        final stepStart = epoch.cumulativeDspStart + (index * stepSize);
+        final stepTarget = epoch.cumulativeDspStart + ((index + 1) * stepSize);
 
-        final memberStart = index * effectiveMemberStep;
-        final memberTarget = (index + 1) * effectiveMemberStep;
+        final memberStart = prevMemberTarget + (index * effectiveMemberStep);
+        final memberTarget =
+            prevMemberTarget + ((index + 1) * effectiveMemberStep);
 
-        final bool isSupplyMet = epochEarned >= stepTarget;
+        final bool isSupplyMet = currentSupply >= stepTarget;
         final bool isCompleted = isSupplyMet;
-        final bool isActive = !isCompleted && epochEarned >= stepStart;
+        final bool isActive = !isCompleted && currentSupply >= stepStart;
 
         double supplyProgress = 0.0;
         double memberProgress = 0.0;
 
         if (isActive) {
-          supplyProgress = ((epochEarned - stepStart) / stepSize).clamp(
+          supplyProgress = ((currentSupply - stepStart) / stepSize).clamp(
             0.0,
             1.0,
           );
@@ -1880,7 +1884,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                '${NumberFormat.compact().format(epochEarned)} / ${NumberFormat.compact().format(stepTarget)} DSP',
+                                '${NumberFormat.compact().format(currentSupply)} / ${NumberFormat.compact().format(stepTarget)} DSP',
                                 style: const TextStyle(
                                   fontSize: 9,
                                   color: AppTheme.accent,

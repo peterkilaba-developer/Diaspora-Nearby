@@ -499,6 +499,7 @@ exports.createChat = functions.https.onCall(async (data, context) => {
     chatData.metadata = {
       isListingChat: true,
       listingId,
+      sellerId,
       listingType: resolvedListingType,
       sellerRole: resolvedSellerRole,
     };

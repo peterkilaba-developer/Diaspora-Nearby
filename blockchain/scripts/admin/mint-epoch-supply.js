@@ -71,13 +71,22 @@ async function main() {
     console.log(`Requested Epoch: ${epochNumber}`);
     console.log(`Epoch ${epochNumber} Supply: ${Number(epochSupply).toLocaleString()} $DIASPORA`);
 
-    // Check controller's current balance
+    // Check controller's current balance & strict Epoch Max Supply cap
     const balanceBefore = await token.balanceOf(TGE_ADDRESS);
+    const totalSupplyBefore = await token.totalSupply();
+    const targetMaxSupply = ethers.parseUnits(epochSupply, 18);
     console.log(`\nController balance before: ${ethers.formatUnits(balanceBefore, 18)} $DIASPORA`);
+    console.log(`Total supply before:       ${ethers.formatUnits(totalSupplyBefore, 18)} $DIASPORA`);
+    console.log(`Strict Epoch ${epochNumber} Max Supply: ${ethers.formatUnits(targetMaxSupply, 18)} $DIASPORA`);
 
-    // Mint epoch supply to TGEController
-    console.log(`\n🔒 Minting ${Number(epochSupply).toLocaleString()} $DIASPORA to TGEController...`);
-    const amount = ethers.parseUnits(epochSupply, 18);
+    if (totalSupplyBefore >= targetMaxSupply) {
+        console.log(`\n✅ On-chain totalSupply already meets/exceeds Epoch ${epochNumber} Max Supply (${Number(epochSupply).toLocaleString()}). Minting 0.`);
+        return;
+    }
+
+    // Mint only the exact delta so token.totalSupply() equals targetMaxSupply
+    const amount = targetMaxSupply - totalSupplyBefore;
+    console.log(`\n🔒 Minting exact delta ${ethers.formatUnits(amount, 18)} $DIASPORA to TGEController...`);
     const tx = await tge.mintEpochSupply(amount);
     const receipt = await tx.wait();
 

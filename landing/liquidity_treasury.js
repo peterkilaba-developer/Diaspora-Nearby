@@ -4,19 +4,19 @@ const CONVERSION_RATES = [100,100,100,100,100,100,100,100,100,100];
 const EPOCH_MILESTONES = [
   { epoch:1, users:10,   dspTarget:1e6,  cumulativeStart:0 },
   { epoch:2, users:100,  dspTarget:1e7,  cumulativeStart:1e6 },
-  { epoch:3, users:1000, dspTarget:1e8,  cumulativeStart:1.1e7 },
-  { epoch:4, users:10000, dspTarget:1e9, cumulativeStart:1.11e8 },
-  { epoch:5, users:100000, dspTarget:1e10, cumulativeStart:1.111e9 },
-  { epoch:6, users:1e6,  dspTarget:1e11, cumulativeStart:1.1111e10 },
-  { epoch:7, users:1e7,  dspTarget:1e12, cumulativeStart:1.11111e11 },
-  { epoch:8, users:1e8,  dspTarget:1e13, cumulativeStart:1.111111e12 },
-  { epoch:9, users:1e9,  dspTarget:1e14, cumulativeStart:1.1111111e13 },
-  { epoch:10, users:1e10, dspTarget:1e15, cumulativeStart:1.11111111e14 }
+  { epoch:3, users:1000, dspTarget:1e8,  cumulativeStart:1e7 },
+  { epoch:4, users:10000, dspTarget:1e9, cumulativeStart:1e8 },
+  { epoch:5, users:100000, dspTarget:1e10, cumulativeStart:1e9 },
+  { epoch:6, users:1e6,  dspTarget:1e11, cumulativeStart:1e10 },
+  { epoch:7, users:1e7,  dspTarget:1e12, cumulativeStart:1e11 },
+  { epoch:8, users:1e8,  dspTarget:1e13, cumulativeStart:1e12 },
+  { epoch:9, users:1e9,  dspTarget:1e14, cumulativeStart:1e13 },
+  { epoch:10, users:1e10, dspTarget:1e15, cumulativeStart:1e14 }
 ];
 
 function getEpochFromSupply(totalMinted){
   for(const m of EPOCH_MILESTONES){
-    if(totalMinted < m.cumulativeStart + m.dspTarget) return m.epoch;
+    if(totalMinted < m.dspTarget) return m.epoch;
   }
   return 10;
 }

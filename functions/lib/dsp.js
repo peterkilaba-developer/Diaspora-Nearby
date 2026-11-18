@@ -38,6 +38,7 @@ const TGE_CONTROLLER_ABI = [
   "function totalWelcomeBonuses() view returns (uint256)",
   "function getStats() view returns (uint256,uint256,uint256,uint256,uint256,uint256,uint256)",
   "function getLockedBalance() view returns (uint256)",
+  "function token() view returns (address)",
 ];
 
 // ══════════════════════════════════════════════════════════════════
@@ -57,35 +58,90 @@ function calculateEfficiency(trustScore) {
 }
 
 // ── Epoch Schedule (mirrors EpochService in Dart) ──────────────────────
-// 10 Epochs, each requiring 10x new DSP distributed within that Epoch
-// (e.g., Epoch 1 = 1M DSP [100K/TDE], Epoch 2 = 10M new DSP [1M/TDE, cumulative 1M->11M]).
+// Strict 10x Epoch Max Supply scaling from exact 1,000,000 (Epoch 1) to exact 1QD (Epoch 10 = HARD_CAP).
+// `dspTarget` is the strict cumulative Max Supply cap (`token.totalSupply()`) for that Epoch:
+//   - Epoch 1: 0 -> 1,000,000 (+1M minted, 100K/TDE)
+//   - Epoch 2: 1,000,000 -> 10,000,000 (+9M new supply, 900K/TDE)
+//   - Epoch 3: 10,000,000 -> 100,000,000 (+90M new supply, 9M/TDE)
+//   - ...
+//   - Epoch 10: 100T -> 1,000,000,000,000,000 (+900T new supply, exact 1QD HARD_CAP)
 const EPOCH_SCHEDULE = [
-  { level: 1,  dspTarget: 1000000,          cumulativeStart: 0 },               // 1M (cum: 0 -> 1M)
-  { level: 2,  dspTarget: 10000000,         cumulativeStart: 1000000 },         // 10M (cum: 1M -> 11M)
-  { level: 3,  dspTarget: 100000000,        cumulativeStart: 11000000 },        // 100M (cum: 11M -> 111M)
-  { level: 4,  dspTarget: 1000000000,       cumulativeStart: 111000000 },       // 1B (cum: 111M -> 1.111B)
-  { level: 5,  dspTarget: 10000000000,      cumulativeStart: 1111000000 },      // 10B
-  { level: 6,  dspTarget: 100000000000,     cumulativeStart: 11111000000 },     // 100B
-  { level: 7,  dspTarget: 1000000000000,    cumulativeStart: 111111000000 },    // 1T
-  { level: 8,  dspTarget: 10000000000000,   cumulativeStart: 1111111000000 },   // 10T
-  { level: 9,  dspTarget: 100000000000000,  cumulativeStart: 11111111000000 },  // 100T
-  { level: 10, dspTarget: 1000000000000000, cumulativeStart: 111111111000000 }, // 1QD
+  { level: 1,  dspTarget: 1000000,          cumulativeStart: 0 },               // Max Supply: 1M
+  { level: 2,  dspTarget: 10000000,         cumulativeStart: 1000000 },         // Max Supply: 10M (+9M)
+  { level: 3,  dspTarget: 100000000,        cumulativeStart: 10000000 },        // Max Supply: 100M (+90M)
+  { level: 4,  dspTarget: 1000000000,       cumulativeStart: 100000000 },       // Max Supply: 1B (+900M)
+  { level: 5,  dspTarget: 10000000000,      cumulativeStart: 1000000000 },      // Max Supply: 10B (+9B)
+  { level: 6,  dspTarget: 100000000000,     cumulativeStart: 10000000000 },     // Max Supply: 100B (+90B)
+  { level: 7,  dspTarget: 1000000000000,    cumulativeStart: 100000000000 },    // Max Supply: 1T (+900B)
+  { level: 8,  dspTarget: 10000000000000,   cumulativeStart: 1000000000000 },   // Max Supply: 10T (+9T)
+  { level: 9,  dspTarget: 100000000000000,  cumulativeStart: 10000000000000 },  // Max Supply: 100T (+90T)
+  { level: 10, dspTarget: 1000000000000000, cumulativeStart: 100000000000000 }, // Max Supply: 1QD (+900T)
 ];
 
 /**
+ * Enforces the strict on-chain Epoch Max Supply invariant:
+ * `DiasporaToken.totalSupply()` MUST NEVER exceed `EPOCH_SCHEDULE[epochLevel].dspTarget`.
+ *
+ * Only mints the exact delta `maxSupplyWei - currentTotalSupplyWei` when `totalSupply() < maxSupplyWei`.
+ * If `totalSupply() >= maxSupplyWei`, mints 0 wei (no-op).
+ */
+async function ensureStrictEpochMaxSupplyOnChain({
+  provider,
+  signer,
+  tgeController,
+  epochLevel,
+  tokenAddress,
+  scope,
+}) {
+  const epochEntry = EPOCH_SCHEDULE.find((e) => e.level === Number(epochLevel)) || EPOCH_SCHEDULE[0];
+  const maxSupplyWei = ethers.parseUnits(epochEntry.dspTarget.toString(), 18);
+  const resolvedTokenAddr = tokenAddress || process.env.TOKEN_ADDRESS || (await tgeController.token());
+  const tokenReader = new ethers.Contract(
+    resolvedTokenAddr,
+    ["function totalSupply() external view returns (uint256)"],
+    provider
+  );
+  const currentTotalSupplyWei = await tokenReader.totalSupply();
+
+  if (currentTotalSupplyWei >= maxSupplyWei) {
+    if (currentTotalSupplyWei > maxSupplyWei) {
+      console.warn(
+        `[TGE Oracle:${scope}] On-chain totalSupply (${ethers.formatUnits(currentTotalSupplyWei, 18)}) ` +
+        `already exceeds Epoch ${epochEntry.level} strict max supply (${epochEntry.dspTarget.toLocaleString()}). Minting 0.`
+      );
+    }
+    return null;
+  }
+
+  const topUpWei = maxSupplyWei - currentTotalSupplyWei;
+  console.log(
+    `[TGE Oracle:${scope}] Minting exact ${ethers.formatUnits(topUpWei, 18)} $DIASPORA ` +
+    `so totalSupply reaches strict Epoch ${epochEntry.level} max supply (${epochEntry.dspTarget.toLocaleString()})...`
+  );
+  const nonce = await provider.getTransactionCount(signer.address, "pending");
+  const mintTx = await tgeController.mintEpochSupply(topUpWei, { nonce });
+  const mintReceipt = await mintTx.wait();
+  console.log(
+    `[TGE Oracle:${scope}] ✅ Locked Epoch ${epochEntry.level} supply up to exact ${epochEntry.dspTarget.toLocaleString()} max supply: ${mintReceipt.hash}`
+  );
+  return mintReceipt.hash;
+}
+
+/**
  * Get the current epoch and completed TDE events within that epoch based on cumulative DSP earnings.
- * Returns { epoch, completedEvents, nextMilestone, dspStep, cumulativeStart, dspTarget }
+ * Returns { epoch, completedEvents, nextMilestone, dspStep, cumulativeStart, dspTarget, epochRange }
  */
 function getEpochState(cumulativeEarnings) {
   let currentEpoch = EPOCH_SCHEDULE[EPOCH_SCHEDULE.length - 1];
   for (const epoch of EPOCH_SCHEDULE) {
-    if (cumulativeEarnings < epoch.cumulativeStart + epoch.dspTarget) {
+    if (cumulativeEarnings < epoch.dspTarget) {
       currentEpoch = epoch;
       break;
     }
   }
 
-  const dspStep = Math.round(currentEpoch.dspTarget / 10);
+  const epochRange = currentEpoch.dspTarget - currentEpoch.cumulativeStart;
+  const dspStep = Math.round(epochRange / 10);
   let completedEvents = Math.floor((cumulativeEarnings - currentEpoch.cumulativeStart) / dspStep);
   completedEvents = Math.max(0, Math.min(10, completedEvents));
 
@@ -97,6 +153,7 @@ function getEpochState(cumulativeEarnings) {
     completedEvents,
     nextMilestone,
     dspStep,
+    epochRange,
     cumulativeStart: currentEpoch.cumulativeStart,
     dspTarget: currentEpoch.dspTarget,
   };
@@ -105,19 +162,18 @@ function getEpochState(cumulativeEarnings) {
 /**
  * Returns total completed TDE milestones (0..100) across the 10-epoch schedule.
  * Maps 1-to-1 with on-chain `(currentEpoch - 1) * 10 + currentTgeEvent`:
- *   - 900,000 DSP  ->  9 (Epoch 1 TDE 1..9 complete; on-chain Epoch 1, Event 9)
- *   - 1,000,000 DSP -> 10 (Epoch 1 TDE 10 / Great Reset complete; on-chain Epoch 2, Event 0)
- *   - 2,000,000 DSP -> 11 (Epoch 2 TDE 1 complete; on-chain Epoch 2, Event 1)
- *   - 11,000,000 DSP -> 20 (Epoch 2 TDE 10 / Great Reset complete; on-chain Epoch 3, Event 0)
+ *   - 900,000 DSP    ->  9 (Epoch 1 TDE 1..9 complete; on-chain Epoch 1, Event 9)
+ *   - 1,000,000 DSP  -> 10 (Epoch 1 TDE 10 / Great Reset complete; on-chain Epoch 2, Event 0)
+ *   - 1,900,000 DSP  -> 11 (Epoch 2 TDE 1 complete; on-chain Epoch 2, Event 1)
+ *   - 10,000,000 DSP -> 20 (Epoch 2 TDE 10 / Great Reset complete; on-chain Epoch 3, Event 0)
  */
 function getCompletedMilestoneCount(cumulativeEarnings) {
   let total = 0;
   for (const epoch of EPOCH_SCHEDULE) {
-    const end = epoch.cumulativeStart + epoch.dspTarget;
-    if (cumulativeEarnings >= end) {
+    if (cumulativeEarnings >= epoch.dspTarget) {
       total += 10;
     } else if (cumulativeEarnings > epoch.cumulativeStart) {
-      const step = Math.round(epoch.dspTarget / 10);
+      const step = Math.round((epoch.dspTarget - epoch.cumulativeStart) / 10);
       total += Math.max(0, Math.min(10, Math.floor((cumulativeEarnings - epoch.cumulativeStart) / step)));
       break;
     } else {
@@ -519,27 +575,53 @@ async function performTGE(triggerSource) {
 
   console.log(`[TGE Oracle] On-chain: Epoch ${epochBefore}, Event ${eventBefore}`);
 
-  // Verify controller has sufficient locked tokens for this batch; auto-mint if current epoch requires pre-mint
+  // Verify controller has sufficient locked tokens for this batch within the strict Epoch Max Supply cap
   let batchTotalNeeded = 0n;
   for (const amt of amounts) {
     batchTotalNeeded += amt;
   }
 
-  const lockedBalance = await tgeController.getLockedBalance();
+  let lockedBalance = await tgeController.getLockedBalance();
   if (lockedBalance < batchTotalNeeded) {
-    const epochEntry = EPOCH_SCHEDULE.find(e => e.level === epochBefore) || EPOCH_SCHEDULE[0];
-    const epochSupplyTokens = epochEntry.dspTarget;
-    console.log(
-      `[TGE Oracle] Locked balance (${ethers.formatUnits(lockedBalance, 18)}) < batch needed (${ethers.formatUnits(batchTotalNeeded, 18)}). ` +
-      `Auto-minting Epoch ${epochBefore} supply (${epochSupplyTokens} tokens)...`
+    await ensureStrictEpochMaxSupplyOnChain({
+      provider,
+      signer,
+      tgeController,
+      epochLevel: epochBefore,
+      tokenAddress,
+      scope: "performTGE:preBatch",
+    });
+    lockedBalance = await tgeController.getLockedBalance();
+  }
+
+  if (batchTotalNeeded > lockedBalance) {
+    console.warn(
+      `[TGE Oracle] Capping Epoch ${epochBefore} TDE batch (${ethers.formatUnits(batchTotalNeeded, 18)}) ` +
+      `to remaining strict Epoch locked balance (${ethers.formatUnits(lockedBalance, 18)}) so totalSupply never exceeds max supply.`
     );
-    const preNonce = await provider.getTransactionCount(signer.address, "pending");
-    const mintTx = await tgeController.mintEpochSupply(
-      ethers.parseUnits(epochSupplyTokens.toString(), 18),
-      { nonce: preNonce }
-    );
-    await mintTx.wait();
-    console.log(`[TGE Oracle] ✅ Pre-minted Epoch ${epochBefore} supply: ${mintTx.hash}`);
+    if (lockedBalance === 0n) {
+      recipients.length = 0;
+      amounts.length = 0;
+      efficiencies.length = 0;
+      snapshotDetails.length = 0;
+      recipients.push(BURN_ADDRESS);
+      amounts.push(0n);
+      efficiencies.push(100);
+      batchTotalNeeded = 0n;
+    } else {
+      const wholeLockedTokens = lockedBalance / (10n ** 18n);
+      let scaledSum = 0n;
+      for (let i = 0; i < amounts.length; i++) {
+        const scaledWhole = (amounts[i] * wholeLockedTokens) / batchTotalNeeded;
+        const scaledWei = scaledWhole * (10n ** 18n);
+        amounts[i] = scaledWei;
+        scaledSum += scaledWei;
+        if (snapshotDetails[i]) {
+          snapshotDetails[i].dsp = Number(scaledWhole);
+        }
+      }
+      batchTotalNeeded = scaledSum;
+    }
   }
 
   const keccak256 = ethers.keccak256;
@@ -599,43 +681,17 @@ async function performTGE(triggerSource) {
   console.log(`[TGE Oracle] ✅ TX: ${receipt.hash}`);
   console.log(`[TGE Oracle] Epoch ${epochBefore}→${epochAfter}, Event ${eventBefore}→${eventAfter}`);
 
-  // ── Step 3b: Pre-mint & Lock Next 10x Epoch Supply on Epoch Rollover ──
+  // ── Step 3b: Pre-mint & Lock Next 10x Epoch Supply up to Strict Epoch Max Supply on Rollover ──
   let nextEpochPreMintTxHash = null;
   if (epochAfter > epochBefore) {
-    const nextEpochEntry = EPOCH_SCHEDULE.find(e => e.level === epochAfter);
-    if (nextEpochEntry) {
-      const targetSupplyWei = ethers.parseUnits(nextEpochEntry.dspTarget.toString(), 18);
-      const currentLockedWei = await tgeController.getLockedBalance();
-      if (currentLockedWei < targetSupplyWei) {
-        const topUpWei = targetSupplyWei - currentLockedWei;
-        console.log(
-          `[TGE Oracle] 🚀 Epoch ${epochBefore}→${epochAfter} rollover! ` +
-          `Pre-minting ${ethers.formatUnits(topUpWei, 18)} $DIASPORA to lock exact ${nextEpochEntry.dspTarget.toLocaleString()} Epoch ${epochAfter} supply...`
-        );
-        const mintNonce = await provider.getTransactionCount(signer.address, "pending");
-        const mintTx = await tgeController.mintEpochSupply(topUpWei, { nonce: mintNonce });
-        const mintReceipt = await mintTx.wait();
-        nextEpochPreMintTxHash = mintReceipt.hash;
-        console.log(`[TGE Oracle] ✅ Epoch ${epochAfter} 10x supply locked: ${mintReceipt.hash}`);
-      }
-      const [sNow, epLockedNow, epDistNow, maxGenNow] = await Promise.all([
-        tgeController.getStats(),
-        tgeController.epochLockedSupply(),
-        tgeController.epochDistributed(),
-        tgeController.maxGenesisDistribution(),
-      ]);
-      if (epLockedNow !== targetSupplyWei) {
-        const recNonce = await provider.getTransactionCount(signer.address, "pending");
-        const recTx = await tgeController.adminReconcileState(
-          [sNow[0], sNow[1], sNow[2], sNow[3], sNow[4], sNow[5], targetSupplyWei, epDistNow, sNow[6], maxGenNow],
-          [],
-          [],
-          { nonce: recNonce }
-        );
-        await recTx.wait();
-        console.log(`[TGE Oracle] ✅ Aligned epochLockedSupply to ${nextEpochEntry.dspTarget.toLocaleString()} $DIASPORA: ${recTx.hash}`);
-      }
-    }
+    nextEpochPreMintTxHash = await ensureStrictEpochMaxSupplyOnChain({
+      provider,
+      signer,
+      tgeController,
+      epochLevel: epochAfter,
+      tokenAddress,
+      scope: "performTGE:rollover",
+    });
   }
 
   // ── Step 4: Record TGE event in Firestore (deterministic doc ID by epoch/event) ──
@@ -922,36 +978,15 @@ async function syncTgeMilestonesToSupply(totalMinted, triggerPrefix) {
       const onChainMilestoneCount = (onChainEpoch - 1) * 10 + onChainEvent;
 
       if (onChainMilestoneCount >= targetMilestoneCount) {
-        // Ensure new Epoch's 10x supply is pre-minted and locked when sitting at event 0 of Epoch 2+
+        // Ensure new Epoch's supply is pre-minted up to strict Epoch Max Supply (never above)
         if (onChainEvent === 0 && onChainEpoch >= 2) {
-          const epochEntry = EPOCH_SCHEDULE.find(e => e.level === onChainEpoch);
-          if (epochEntry) {
-            const targetSupplyWei = ethers.parseUnits(epochEntry.dspTarget.toString(), 18);
-            const currentLockedWei = await tgeController.getLockedBalance();
-            if (currentLockedWei < targetSupplyWei) {
-              const topUpWei = targetSupplyWei - currentLockedWei;
-              const mintNonce = await provider.getTransactionCount(signer.address, "pending");
-              const mintTx = await tgeController.mintEpochSupply(topUpWei, { nonce: mintNonce });
-              await mintTx.wait();
-              console.log(`[TGE Oracle] ✅ Locked Epoch ${onChainEpoch} 10x supply (${epochEntry.dspTarget.toLocaleString()} $DIASPORA): ${mintTx.hash}`);
-            }
-            const [sNow, epLockedNow, epDistNow, maxGenNow] = await Promise.all([
-              tgeController.getStats(),
-              tgeController.epochLockedSupply(),
-              tgeController.epochDistributed(),
-              tgeController.maxGenesisDistribution(),
-            ]);
-            if (epLockedNow !== targetSupplyWei) {
-              const recNonce = await provider.getTransactionCount(signer.address, "pending");
-              const recTx = await tgeController.adminReconcileState(
-                [sNow[0], sNow[1], sNow[2], sNow[3], sNow[4], sNow[5], targetSupplyWei, epDistNow, sNow[6], maxGenNow],
-                [],
-                [],
-                { nonce: recNonce }
-              );
-              await recTx.wait();
-            }
-          }
+          await ensureStrictEpochMaxSupplyOnChain({
+            provider,
+            signer,
+            tgeController,
+            epochLevel: onChainEpoch,
+            scope: "syncTgeMilestonesToSupply",
+          });
         }
 
         const lockPatch = {
@@ -3034,15 +3069,25 @@ async function executeImmediatePohTokenMint(userId, userData, amountDsp) {
     [walletAddress, userAmount, treasuryRecipients, treasuryAmounts]
   );
 
-  // Ensure controller holds sufficient locked supply for this Genesis distribution
+  // Ensure controller holds sufficient locked supply within the strict Epoch Max Supply cap
   const totalNeeded = userAmount + treasuryAmounts.reduce((a, b) => a + b, 0n);
-  const locked = await tge.getLockedBalance();
+  let locked = await tge.getLockedBalance();
   if (locked < totalNeeded) {
     const stats = await tge.getStats();
     const epochNow = Number(stats[0]);
-    const epochEntry = EPOCH_SCHEDULE.find((e) => e.level === epochNow) || EPOCH_SCHEDULE[0];
-    const mintTx = await tge.mintEpochSupply(ethers.parseUnits(epochEntry.dspTarget.toString(), 18));
-    await mintTx.wait();
+    await ensureStrictEpochMaxSupplyOnChain({
+      provider,
+      signer,
+      tgeController: tge,
+      epochLevel: epochNow,
+      scope: "executeImmediatePohTokenMint",
+    });
+    locked = await tge.getLockedBalance();
+    if (locked < totalNeeded) {
+      throw new Error(
+        `[executeImmediatePohTokenMint] Epoch ${epochNow} strict max supply is fully allocated (${ethers.formatUnits(locked, 18)} remaining < ${ethers.formatUnits(totalNeeded, 18)} needed); awaiting Epoch rollover.`
+      );
+    }
   }
 
   // Strictly call distributeGenesisTokens (enforces 70k lifetime Genesis cap on-chain

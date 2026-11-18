@@ -1043,7 +1043,7 @@
                         <span class="epoch-stat-value accent-green"><img src="icons/token-logo-transparent.png" alt="" style="width:14px;height:14px;border-radius:0;object-fit:contain;vertical-align:middle;margin-right:2px;"><span id="epoch-preminted-val">10,000,000 $DIASPORA</span></span>
                     </div>
                     <div class="epoch-stat">
-                        <span class="epoch-stat-label">Epoch DSP Earned</span>
+                        <span class="epoch-stat-label">Community DSP Earned</span>
                         <span class="epoch-stat-value" id="epoch-dsp-earned">—</span>
                     </div>
                     <div class="epoch-stat">
@@ -2140,40 +2140,41 @@
         window._serverTimestamp = serverTimestamp;
         window._addPlayStoreTester = httpsCallable(funcs, 'addPlayStoreTester');
 
-        // ── Real-time 10x Epoch Progress (0ms localStorage hydration + live onSnapshot) ──
+        // ── Real-time Strict 10x Epoch Max Supply Progress (1M -> 1QD) ──
         const EPOCH_SCHEDULE = [
             { level: 1,  dspTarget: 1000000,          cumulativeStart: 0,               shortLabel: '1M' },
             { level: 2,  dspTarget: 10000000,         cumulativeStart: 1000000,         shortLabel: '10M' },
-            { level: 3,  dspTarget: 100000000,        cumulativeStart: 11000000,        shortLabel: '100M' },
-            { level: 4,  dspTarget: 1000000000,       cumulativeStart: 111000000,       shortLabel: '1B' },
-            { level: 5,  dspTarget: 10000000000,      cumulativeStart: 1111000000,      shortLabel: '10B' },
-            { level: 6,  dspTarget: 100000000000,     cumulativeStart: 11111000000,     shortLabel: '100B' },
-            { level: 7,  dspTarget: 1000000000000,    cumulativeStart: 111111000000,    shortLabel: '1T' },
-            { level: 8,  dspTarget: 10000000000000,   cumulativeStart: 1111111000000,   shortLabel: '10T' },
-            { level: 9,  dspTarget: 100000000000000,  cumulativeStart: 11111111000000,  shortLabel: '100T' },
-            { level: 10, dspTarget: 1000000000000000, cumulativeStart: 111111111000000, shortLabel: '1QD' },
+            { level: 3,  dspTarget: 100000000,        cumulativeStart: 10000000,        shortLabel: '100M' },
+            { level: 4,  dspTarget: 1000000000,       cumulativeStart: 100000000,       shortLabel: '1B' },
+            { level: 5,  dspTarget: 10000000000,      cumulativeStart: 1000000000,      shortLabel: '10B' },
+            { level: 6,  dspTarget: 100000000000,     cumulativeStart: 10000000000,     shortLabel: '100B' },
+            { level: 7,  dspTarget: 1000000000000,    cumulativeStart: 100000000000,    shortLabel: '1T' },
+            { level: 8,  dspTarget: 10000000000000,   cumulativeStart: 1000000000000,   shortLabel: '10T' },
+            { level: 9,  dspTarget: 100000000000000,  cumulativeStart: 10000000000000,  shortLabel: '100T' },
+            { level: 10, dspTarget: 1000000000000000, cumulativeStart: 100000000000000, shortLabel: '1QD' },
         ];
         const EPOCH_CACHE_KEY = 'dn_epoch_stats_cache';
         const fmt = (n) => n.toLocaleString('en-US');
 
         function resolveCurrentEpoch(totalMinted) {
             for (const ep of EPOCH_SCHEDULE) {
-                if (totalMinted < ep.cumulativeStart + ep.dspTarget) return ep;
+                if (totalMinted < ep.dspTarget) return ep;
             }
             return EPOCH_SCHEDULE[EPOCH_SCHEDULE.length - 1];
         }
 
         function renderEpochMinted(totalMinted) {
             const ep = resolveCurrentEpoch(totalMinted);
-            const epochEarned = Math.max(0, Math.min(ep.dspTarget, totalMinted - ep.cumulativeStart));
-            const pct = Math.min((epochEarned / ep.dspTarget) * 100, 100);
+            const epochRange = ep.dspTarget - ep.cumulativeStart;
+            const epochEarned = Math.max(0, Math.min(epochRange, totalMinted - ep.cumulativeStart));
+            const pct = epochRange > 0 ? Math.min((epochEarned / epochRange) * 100, 100) : 0;
 
             const titleEl = document.getElementById('epoch-title-text');
             if (titleEl) titleEl.textContent = 'Epoch ' + ep.level + ' Progress';
             const preEl = document.getElementById('epoch-preminted-val');
             if (preEl) preEl.textContent = fmt(ep.dspTarget) + ' $DIASPORA';
             const el = document.getElementById('epoch-dsp-earned');
-            if (el) el.textContent = fmt(epochEarned) + ' DSP';
+            if (el) el.textContent = fmt(Math.min(totalMinted, ep.dspTarget)) + ' DSP';
             const bar = document.getElementById('epoch-bar-fill');
             if (bar) bar.style.width = Math.max(pct, 0.5) + '%';
             const pctEl = document.getElementById('epoch-pct');
@@ -2182,7 +2183,7 @@
             if (targetEl) {
                 targetEl.textContent = ep.level === 1
                     ? 'Genesis: 1M DSP'
-                    : 'Epoch ' + ep.level + ' Target: ' + ep.shortLabel + ' DSP (' + fmt(totalMinted) + ' Total)';
+                    : 'Epoch ' + ep.level + ' Target: ' + ep.shortLabel + ' DSP';
             }
 
             document.querySelectorAll('.epoch-grid .epoch-card').forEach((card) => {

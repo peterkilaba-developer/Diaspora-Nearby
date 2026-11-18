@@ -659,7 +659,7 @@ class MessageBubble extends ConsumerWidget {
     );
   }
 
-  /// Returns a color for the seller role badge
+  /// Returns a color for the listing participant role badge
   Color _getRoleBadgeColor(String role) {
     switch (role.toLowerCase()) {
       case 'employer':
@@ -668,6 +668,12 @@ class MessageBubble extends ConsumerWidget {
         return const Color(0xFF8B5CF6); // Purple
       case 'seller':
         return marketplaceSageGreen; // Sage green
+      case 'buyer':
+        return const Color(0xFF0EA5E9); // Sky blue
+      case 'client':
+        return const Color(0xFF14B8A6); // Teal
+      case 'applicant':
+        return const Color(0xFFF59E0B); // Amber
       default:
         return marketplaceSageGreen;
     }

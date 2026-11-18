@@ -2499,9 +2499,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                                 ),
                                 message: message,
                                 isOwn: isOwn,
-                                showAvatar: chatAsync.value?.type != 'direct',
+                                showAvatar: currentChat?.type != 'direct',
                                 sellerRole: _getSellerRoleForMessage(
-                                  chatAsync.value,
+                                  currentChat,
                                   message,
                                   currentUserId,
                                 ),
@@ -2721,23 +2721,53 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         prevDate.year != currDate.year;
   }
 
-  /// Returns the seller role badge text for listing chats, or null for
-  /// non-listing chats or the buyer's own messages.
+  /// Returns the participant role badge text for listing chats, or null for
+  /// non-listing chats, system messages, or the viewer's own messages.
   String? _getSellerRoleForMessage(
-    dynamic chat,
+    Chat? chat,
     Message message,
     String currentUserId,
   ) {
-    if (chat == null) return null;
+    if (chat == null || !chat.isListingChat) return null;
+    if (message.isSystem ||
+        message.senderId == 'system' ||
+        message.senderId == 'diaspora_ai_agent' ||
+        message.senderId == currentUserId) {
+      return null;
+    }
+
     final metadata = chat.metadata;
-    if (metadata == null || metadata['isListingChat'] != true) return null;
+    final sellerId = (metadata?['sellerId'] as String?)?.trim();
+    final isMessageFromSeller =
+        message.senderId == chat.createdBy ||
+        (sellerId != null &&
+            sellerId.isNotEmpty &&
+            message.senderId == sellerId) ||
+        (chat.admins?.contains(message.senderId) ?? false);
 
-    // Only show the role badge on the *seller's* messages (not the buyer's)
-    // The seller is the "other" participant (the one who received the chat)
-    final isMessageFromSeller = message.senderId != currentUserId;
-    if (!isMessageFromSeller) return null;
+    if (isMessageFromSeller) {
+      final configuredRole = (metadata?['sellerRole'] as String?)?.trim();
+      if (configuredRole != null && configuredRole.isNotEmpty) {
+        return configuredRole;
+      }
+      switch (chat.listingType) {
+        case 'job':
+          return 'Employer';
+        case 'service':
+          return 'Provider';
+        default:
+          return 'Seller';
+      }
+    }
 
-    return metadata['sellerRole'] as String?;
+    switch (chat.listingType) {
+      case 'job':
+        return 'Applicant';
+      case 'service':
+        return 'Client';
+      default:
+        return 'Buyer';
+    }
   }
 
   Widget _buildDateSeparator(int timestamp, ThemeData theme) {
