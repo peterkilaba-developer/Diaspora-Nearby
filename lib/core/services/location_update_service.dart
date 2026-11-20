@@ -31,8 +31,10 @@ class LocationUpdateService {
   StreamSubscription<Position>? _positionStreamSub;
   String? _heartbeatUserId;
   bool _isUpdating = false;
+  Position? _pendingPosition;
+  bool _pendingForce = false;
 
-  /// Starts a real-time foreground position stream (35m movement filter) AND
+  /// Starts a real-time foreground position stream (15m movement filter) AND
   /// a 3-minute periodic location heartbeat so:
   ///   1. Moving between neighborhoods / sub-localities updates user cards in real time.
   ///   2. Stationary devices meeting within 100 feet continuously advance the
@@ -68,12 +70,13 @@ class LocationUpdateService {
       }
       if (_heartbeatUserId != userId || _positionStreamSub != null) return;
 
-      const int distanceFilterMeters = 35;
+      const int distanceFilterMeters = 15;
       final LocationSettings settings;
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
         settings = AndroidSettings(
           accuracy: LocationAccuracy.high,
           distanceFilter: distanceFilterMeters,
+          intervalDuration: const Duration(seconds: 5),
         );
       } else if (!kIsWeb &&
           (defaultTargetPlatform == TargetPlatform.iOS ||
@@ -81,7 +84,7 @@ class LocationUpdateService {
         settings = AppleSettings(
           accuracy: LocationAccuracy.high,
           distanceFilter: distanceFilterMeters,
-          pauseLocationUpdatesAutomatically: true,
+          pauseLocationUpdatesAutomatically: false,
         );
       } else {
         settings = const LocationSettings(
@@ -124,15 +127,25 @@ class LocationUpdateService {
     Position? providedPosition,
     bool force = false,
   }) async {
-    if (userId.isEmpty || _isUpdating) return;
+    if (userId.isEmpty) return;
+    if (_isUpdating) {
+      // Queue latest real-time GPS coordinate instead of dropping it while a previous write is in flight
+      if (providedPosition != null) {
+        _pendingPosition = providedPosition;
+      }
+      if (force) {
+        _pendingForce = true;
+      }
+      return;
+    }
     _isUpdating = true;
     try {
       final now = DateTime.now();
       final lastUpdate = _lastUpdateByUser[userId];
       final lastPos = _lastPositionByUser[userId];
 
-      // Allow immediate updates when forced or when the user moved >= 35 meters;
-      // otherwise throttle rapid duplicate calls within 30 seconds.
+      // Allow immediate updates when forced or when the user moved >= 15 meters;
+      // otherwise throttle rapid duplicate calls within 15 seconds.
       if (!force && lastUpdate != null) {
         final elapsed = now.difference(lastUpdate);
         bool movedSignificantly = false;
@@ -145,12 +158,12 @@ class LocationUpdateService {
                 providedPosition.longitude,
               ) *
               1000.0;
-          movedSignificantly = movedMeters >= 35.0;
+          movedSignificantly = movedMeters >= 15.0;
         }
-        if (!movedSignificantly && elapsed < const Duration(seconds: 30)) {
+        if (!movedSignificantly && elapsed < const Duration(seconds: 15)) {
           return;
         }
-        if (movedSignificantly && elapsed < const Duration(seconds: 5)) {
+        if (movedSignificantly && elapsed < const Duration(seconds: 3)) {
           return;
         }
       }
@@ -241,6 +254,7 @@ class LocationUpdateService {
       String? adminArea2 = geocoded?['adminArea2'] as String?;
       String? city = geocoded?['city'] as String?;
       String? state = geocoded?['state'] as String?;
+      String? stateCode = geocoded?['stateCode'] as String?;
       String? country = geocoded?['country'] as String?;
       String? countryCode = geocoded?['countryCode'] as String?;
 
@@ -253,10 +267,7 @@ class LocationUpdateService {
       if (city != null && city.trim().isEmpty) {
         city = null;
       }
-      if (subLocality != null &&
-          isSameOrRedundantLocationPart(subLocality, city) &&
-          (adminArea2 == null ||
-              isSameOrRedundantLocationPart(subLocality, adminArea2))) {
+      if (subLocality != null && isSameOrRedundantLocationPart(subLocality, city)) {
         subLocality = null;
       }
       if (adminArea2 != null &&
@@ -264,13 +275,18 @@ class LocationUpdateService {
               isSameOrRedundantLocationPart(adminArea2, city))) {
         adminArea2 = null;
       }
+      stateCode ??= abbreviateStateForCountry(
+        state: state,
+        city: city,
+        countryCode: countryCode,
+        countryName: country,
+      );
 
       String formattedAddress =
           (geocoded?['formattedAddress'] as String?)?.trim() ?? '';
       if (formattedAddress.isEmpty) {
         final parts = [
           subLocality,
-          adminArea2,
           city,
           state,
           country,
@@ -300,6 +316,7 @@ class LocationUpdateService {
         'adminArea2': adminArea2,
         'city': city,
         'state': state,
+        'stateCode': stateCode,
         'country': country,
         'countryCode': countryCode,
         'country_code': countryCode,
@@ -338,11 +355,12 @@ class LocationUpdateService {
       // 100-ft / 60-min Grassroots Gathering rewards server-authoritatively.
       final batch = _firestore.batch();
       if (showCity) {
-        final safeLat = (position.latitude * 100).round() / 100;
-        final safeLng = (position.longitude * 100).round() / 100;
+        // Round to 3 decimal places (~110m neighborhood grid) so neighborhood /
+        // sub-locality movement updates peers in real time without exposing exact street address.
+        final safeLat = (position.latitude * 1000).round() / 1000;
+        final safeLng = (position.longitude * 1000).round() / 1000;
         final summaryParts = [
           subLocality,
-          adminArea2,
           city,
           state,
           country,
@@ -354,6 +372,7 @@ class LocationUpdateService {
           'adminArea2': adminArea2,
           'city': city,
           'state': state,
+          'stateCode': stateCode,
           'country': country,
           'country_code': countryCode,
           'countryCode': countryCode,
@@ -369,6 +388,7 @@ class LocationUpdateService {
           'currentAdminArea2': adminArea2 ?? FieldValue.delete(),
           'currentCity': city,
           'currentState': state,
+          'currentStateCode': stateCode ?? FieldValue.delete(),
           'currentCountryCode': countryCode,
           'currentLocation': publicCurrentLocation,
         }, SetOptions(merge: true));
@@ -384,6 +404,19 @@ class LocationUpdateService {
       debugPrint('LocationUpdateService: Failed to update location: $e');
     } finally {
       _isUpdating = false;
+      final queuedPos = _pendingPosition;
+      final queuedForce = _pendingForce;
+      _pendingPosition = null;
+      _pendingForce = false;
+      if (queuedPos != null || queuedForce) {
+        unawaited(
+          updateCurrentLocation(
+            userId,
+            providedPosition: queuedPos,
+            force: queuedForce,
+          ),
+        );
+      }
     }
   }
 

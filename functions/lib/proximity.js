@@ -199,7 +199,7 @@ function publicProfile(document, distance, privateData = {}, targetCoords = null
         "homeCountryCode", "hostCountryCode", "profession", "industry",
         "yearsInHostCountry", "servicesOffered", "lookingFor",
         "availability", "meetingPreferences", "showCurrentLocationName",
-        "currentSubLocality", "currentAdminArea2", "currentCity", "currentState", "currentCountryCode",
+        "currentSubLocality", "currentAdminArea2", "currentCity", "currentState", "currentStateCode", "currentCountryCode",
     ];
     const result = {uid: document.id};
     for (const field of allowed) {
@@ -208,37 +208,47 @@ function publicProfile(document, distance, privateData = {}, targetCoords = null
     if (Number.isFinite(distance)) result.distance = distance;
 
     // Synthesize a safe neighborhood/city-level currentLocation for ProfileData.fromJson
-    // so UserCardView displays the bottom flag, sub-locality, adminArea2, city, and proximity/distance.
+    // so UserCardView displays the bottom flag, sub-locality, adminArea2, city, stateCode, and proximity/distance.
     const showName = data.showCurrentLocationName !== false;
     const rawCur = (privateData && privateData.currentLocation) || data.currentLocation;
     const hostLoc = data.hostLocation || (privateData && privateData.hostLocation) || {};
-    const subLocality = showName
-        ? (data.currentSubLocality || (rawCur && (rawCur.subLocality || rawCur.sublocality)) || null)
-        : null;
-    const adminArea2 = showName
-        ? (data.currentAdminArea2 || (rawCur && (rawCur.adminArea2 || rawCur.subAdministrativeArea)) || null)
-        : null;
-    const city = showName
-        ? (data.currentCity || (rawCur && rawCur.city) || hostLoc.city || null)
-        : (hostLoc.city || null);
-    const state = showName
-        ? (data.currentState || (rawCur && rawCur.state) || hostLoc.state || null)
-        : (hostLoc.state || null);
-    const country = (rawCur && rawCur.country) || data.hostCountry || hostLoc.country || null;
     const countryCode = data.currentCountryCode ||
         (rawCur && (rawCur.country_code || rawCur.countryCode)) ||
         data.hostCountryCode ||
         hostLoc.country_code ||
         hostLoc.countryCode ||
         null;
+    const adminArea2 = showName
+        ? (data.currentAdminArea2 || (rawCur && (rawCur.adminArea2 || rawCur.subAdministrativeArea)) || null)
+        : null;
+    let subLocality = showName
+        ? (data.currentSubLocality || (rawCur && (rawCur.subLocality || rawCur.sublocality)) || null)
+        : null;
+    // Strip legacy county-as-subLocality in 3-tier countries so counties never appear before cities
+    if (isThreeTierCountryCode(countryCode) &&
+        subLocality &&
+        adminArea2 &&
+        String(subLocality).trim().toLowerCase() === String(adminArea2).trim().toLowerCase()) {
+        subLocality = null;
+    }
+    const city = showName
+        ? (data.currentCity || (rawCur && rawCur.city) || hostLoc.city || null)
+        : (hostLoc.city || null);
+    const state = showName
+        ? (data.currentState || (rawCur && rawCur.state) || hostLoc.state || null)
+        : (hostLoc.state || null);
+    const stateCode = showName
+        ? (data.currentStateCode || (rawCur && (rawCur.stateCode || rawCur.state_code)) || null)
+        : null;
+    const country = (rawCur && rawCur.country) || data.hostCountry || hostLoc.country || null;
 
     const coords = targetCoords || extractCoordinates(privateData, data);
-    // Round coordinates to ~1km city grid (2 decimal places) to protect exact street GPS
-    const safeLat = coords ? Math.round(coords.lat * 100) / 100 : 0;
-    const safeLng = coords ? Math.round(coords.lng * 100) / 100 : 0;
+    // Round coordinates to ~110m neighborhood grid (3 decimal places) so neighborhood updates reflect live
+    const safeLat = coords ? Math.round(coords.lat * 1000) / 1000 : 0;
+    const safeLng = coords ? Math.round(coords.lng * 1000) / 1000 : 0;
 
     if (subLocality || adminArea2 || city || countryCode || coords) {
-        const summaryParts = [subLocality, adminArea2, city, state, country]
+        const summaryParts = [subLocality, city, state, country]
             .filter((p) => typeof p === "string" && p.trim().length > 0);
         const rawTs = rawCur && rawCur.timestamp;
         const tsMs = typeof rawTs === "number" ? rawTs : Date.now();
@@ -249,6 +259,7 @@ function publicProfile(document, distance, privateData = {}, targetCoords = null
             adminArea2: adminArea2,
             city: city,
             state: state,
+            ...(stateCode ? { stateCode } : {}),
             country: country,
             country_code: countryCode,
             countryCode: countryCode,
@@ -496,6 +507,15 @@ async function runProximityCheck(userId, userData, oldLoc, isNewUser) {
     return null;
 }
 
+const THREE_TIER_COUNTRY_CODES = new Set([
+    "AR", "AU", "BR", "CA", "CL", "CN", "CO", "FR", "DE", "IN",
+    "ID", "IT", "MX", "NG", "PK", "PH", "PL", "RU", "CH", "US",
+]);
+
+function isThreeTierCountryCode(code) {
+    return typeof code === "string" && THREE_TIER_COUNTRY_CODES.has(code.trim().toUpperCase());
+}
+
 function cleanAdminSuffix(name) {
     return String(name || "")
         .replace(/\s+(Region|State|Province|District|County|Township|Municipality)\b/gi, "")
@@ -523,6 +543,7 @@ async function serverReverseGeocodeSubLocality(lat, lng) {
         let adminArea2 = null;
         let locality = null;
         let state = null;
+        let stateCode = null;
         let country = null;
         let countryCode = null;
 
@@ -556,6 +577,9 @@ async function serverReverseGeocodeSubLocality(lat, lng) {
                     if (!postalTown) postalTown = longName;
                 } else if (types.includes("administrative_area_level_1")) {
                     if (!state) state = longName;
+                    if (!stateCode && shortName && shortName.length <= 5 && !shortName.includes(" ")) {
+                        stateCode = shortName.toUpperCase();
+                    }
                 } else if (types.includes("country")) {
                     if (!country) country = longName;
                     if (!countryCode) countryCode = shortName.toUpperCase();
@@ -570,15 +594,22 @@ async function serverReverseGeocodeSubLocality(lat, lng) {
             if (subLocality && (locality || adminArea2)) break;
         }
 
-        if (!subLocality && adminArea2 && locality && adminArea2.toLowerCase() !== locality.toLowerCase()) {
+        const city = locality || adminArea2 || null;
+        // In 2-tier countries where state == city (e.g. Dar es Salaam), intra-city municipal
+        // district (Ilala, Kinondoni, Ubungo) serves as sub-locality when no neighborhood was returned.
+        if (!isThreeTierCountryCode(countryCode) &&
+            !subLocality &&
+            locality &&
+            adminArea2 &&
+            state &&
+            cleanAdminSuffix(state).toLowerCase().slice(0, 8) === city.toLowerCase().slice(0, 8) &&
+            adminArea2.toLowerCase() !== city.toLowerCase()) {
             subLocality = adminArea2;
         }
-        const city = locality || adminArea2 || null;
-        if (subLocality && city && subLocality.toLowerCase() === city.toLowerCase() &&
-            (!adminArea2 || subLocality.toLowerCase() === adminArea2.toLowerCase())) {
+        if (subLocality && city && subLocality.toLowerCase() === city.toLowerCase()) {
             subLocality = null;
         }
-        return { subLocality, adminArea2, city, state, country, countryCode };
+        return { subLocality, adminArea2, city, state, stateCode, country, countryCode };
     } catch (err) {
         console.warn("[Proximity] Server reverse geocode warning:", err.message);
         return null;
@@ -596,28 +627,37 @@ async function syncPublicCurrentLocation(userId, pubData, afterPrivData) {
         const lng = Number(rawCur.geometry.location.lng);
         if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) return;
 
+        let countryCode = rawCur.countryCode || rawCur.country_code || pubData.currentCountryCode || null;
         let subLocality = rawCur.subLocality || rawCur.sublocality || null;
         let adminArea2 = rawCur.adminArea2 || rawCur.subAdministrativeArea || null;
+        // Strip legacy county-as-subLocality if present in 3-tier countries
+        if (isThreeTierCountryCode(countryCode) &&
+            subLocality &&
+            adminArea2 &&
+            String(subLocality).trim().toLowerCase() === String(adminArea2).trim().toLowerCase()) {
+            subLocality = null;
+        }
         let city = rawCur.city || pubData.currentCity || null;
         let state = rawCur.state || pubData.currentState || null;
+        let stateCode = rawCur.stateCode || rawCur.state_code || pubData.currentStateCode || null;
         let country = rawCur.country || pubData.hostCountry || null;
-        let countryCode = rawCur.countryCode || rawCur.country_code || pubData.currentCountryCode || null;
 
         // Enrich older client builds or native-geocoder misses via Google Geocoding API
-        if (!subLocality) {
+        if (!subLocality || (isThreeTierCountryCode(countryCode) && !stateCode)) {
             const enriched = await serverReverseGeocodeSubLocality(lat, lng);
             if (enriched) {
                 subLocality = enriched.subLocality || subLocality;
                 adminArea2 = enriched.adminArea2 || adminArea2;
                 city = city || enriched.city;
                 state = state || enriched.state;
+                stateCode = stateCode || enriched.stateCode;
                 country = country || enriched.country;
                 countryCode = countryCode || enriched.countryCode;
             }
         }
 
-        const safeLat = Math.round(lat * 100) / 100;
-        const safeLng = Math.round(lng * 100) / 100;
+        const safeLat = Math.round(lat * 1000) / 1000;
+        const safeLng = Math.round(lng * 1000) / 1000;
         const existingPubLoc = pubData.currentLocation || {};
         const existingLat = existingPubLoc.geometry && existingPubLoc.geometry.location
             ? existingPubLoc.geometry.location.lat : null;
@@ -628,6 +668,7 @@ async function syncPublicCurrentLocation(userId, pubData, afterPrivData) {
             (subLocality || null) !== (pubData.currentSubLocality || null) ||
             (adminArea2 || null) !== (pubData.currentAdminArea2 || null) ||
             (city || null) !== (pubData.currentCity || null) ||
+            (stateCode || null) !== (pubData.currentStateCode || null) ||
             existingLat !== safeLat ||
             existingLng !== safeLng;
 
@@ -635,7 +676,7 @@ async function syncPublicCurrentLocation(userId, pubData, afterPrivData) {
 
         const tsMs = typeof rawCur.timestamp === "number" ? rawCur.timestamp : Date.now();
         const isoNow = rawCur.lastUpdated || new Date(tsMs).toISOString();
-        const summaryParts = [subLocality, adminArea2, city, state, country]
+        const summaryParts = [subLocality, city, state, country]
             .filter((p) => typeof p === "string" && p.trim().length > 0);
 
         const publicCurrentLocation = {
@@ -645,6 +686,7 @@ async function syncPublicCurrentLocation(userId, pubData, afterPrivData) {
             ...(adminArea2 ? { adminArea2 } : {}),
             city: city || null,
             state: state || null,
+            ...(stateCode ? { stateCode } : {}),
             country: country || null,
             country_code: countryCode || null,
             countryCode: countryCode || null,
@@ -660,6 +702,7 @@ async function syncPublicCurrentLocation(userId, pubData, afterPrivData) {
             currentAdminArea2: adminArea2 ? adminArea2 : admin.firestore.FieldValue.delete(),
             currentCity: city || null,
             currentState: state || null,
+            currentStateCode: stateCode ? stateCode : admin.firestore.FieldValue.delete(),
             currentCountryCode: countryCode || null,
             currentLocation: publicCurrentLocation,
         }, { merge: true });

@@ -267,6 +267,7 @@ void main() {
           adminArea2: 'Harris',
           city: 'Houston',
           state: 'Texas',
+          stateCode: 'TX',
           countryCode: 'US',
           timestamp: 1700000000000,
           geometry: const UserLocationGeometry(
@@ -281,15 +282,18 @@ void main() {
       expect(publicData['currentSubLocality'], 'Midtown');
       expect(publicData['currentAdminArea2'], 'Harris');
       expect(publicData['currentCity'], 'Houston');
+      expect(publicData['currentStateCode'], 'TX');
       final pubCur = publicData['currentLocation'] as Map<String, dynamic>;
       expect(pubCur['subLocality'], 'Midtown');
       expect(pubCur['adminArea2'], 'Harris');
       expect(pubCur['city'], 'Houston');
+      expect(pubCur['stateCode'], 'TX');
 
       final parsed = ProfileData.fromJson({...publicData, 'uid': 'subloc-user'});
       expect(parsed.currentLocation?.subLocality, 'Midtown');
       expect(parsed.currentLocation?.adminArea2, 'Harris');
       expect(parsed.currentLocation?.city, 'Houston');
+      expect(parsed.currentLocation?.stateCode, 'TX');
     },
   );
 }

@@ -280,6 +280,7 @@ class ProfileData {
       final city = json['currentCity'] as String? ?? hostLoc['city'] as String?;
       final state =
           json['currentState'] as String? ?? hostLoc['state'] as String?;
+      final stateCode = json['currentStateCode'] as String?;
       final country =
           json['hostCountry'] as String? ?? hostLoc['country'] as String?;
       final countryCode =
@@ -300,6 +301,7 @@ class ProfileData {
         'adminArea2': ?adminArea2,
         'city': city,
         'state': state,
+        'stateCode': ?stateCode,
         'country': country,
         'country_code': countryCode,
         'countryCode': countryCode,
@@ -320,6 +322,7 @@ class ProfileData {
           cur['subAdministrativeArea'] ??
           cur['administrative_area_level_2'] ??
           json['currentAdminArea2'];
+      cur['stateCode'] ??= cur['state_code'] ?? json['currentStateCode'];
       cur['countryCode'] ??= cur['country_code'];
       if (cur['timestamp'] is! num) {
         cur['timestamp'] = DateTime.now().millisecondsSinceEpoch;
@@ -499,6 +502,7 @@ class CurrentLocation {
   final String? adminArea2;
   final String? city;
   final String? state;
+  final String? stateCode;
   final String? countryCode;
   final int timestamp;
 
@@ -510,6 +514,7 @@ class CurrentLocation {
     this.adminArea2,
     this.city,
     this.state,
+    this.stateCode,
     this.countryCode,
     required this.timestamp,
   });

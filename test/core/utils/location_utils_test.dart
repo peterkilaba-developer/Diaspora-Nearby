@@ -133,5 +133,48 @@ void main() {
       expect(listing.state, isNull);
       expect(listing.locationLabel, 'Dar es Salaam');
     });
+
+    test('Three-tier US cities never promote County (adminArea2) into sublocality and abbreviate state', () {
+      final parsedMesa = location_utils.parseLocationComponents(
+        'Mesa, AZ, USA',
+        [
+          AddressComponent(
+            name: 'Mesa',
+            shortName: 'Mesa',
+            types: ['locality', 'political'],
+          ),
+          AddressComponent(
+            name: 'Maricopa County',
+            shortName: 'Maricopa County',
+            types: ['administrative_area_level_2', 'political'],
+          ),
+          AddressComponent(
+            name: 'Arizona',
+            shortName: 'AZ',
+            types: ['administrative_area_level_1', 'political'],
+          ),
+          AddressComponent(
+            name: 'United States',
+            shortName: 'US',
+            types: ['country', 'political'],
+          ),
+        ],
+      );
+
+      expect(parsedMesa, isNotNull);
+      expect(parsedMesa!.sublocality, isNull);
+      expect(parsedMesa.adminArea2, 'Maricopa');
+      expect(parsedMesa.city, 'Mesa');
+      expect(parsedMesa.state, 'Arizona');
+      expect(parsedMesa.stateCode, 'AZ');
+      expect(
+        location_utils.abbreviateStateForCountry(
+          state: 'Iowa',
+          city: 'Waukee',
+          countryCode: 'US',
+        ),
+        'IA',
+      );
+    });
   });
 }

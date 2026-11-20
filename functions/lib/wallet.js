@@ -384,6 +384,7 @@ exports.onUserWrite = functions
           const priv = privSnap.data() || {};
           const locationUpdate = {};
           const roundCoord = (n) => Math.round(Number(n) * 100) / 100;
+          const roundLiveCoord = (n) => Math.round(Number(n) * 1000) / 1000;
 
           if (priv.hostLocation && priv.hostLocation.geometry && priv.hostLocation.geometry.location) {
             const lat = Number(priv.hostLocation.geometry.location.lat);
@@ -416,13 +417,17 @@ exports.onUserWrite = functions
             const lat = Number(rawCur.geometry.location.lat);
             const lng = Number(rawCur.geometry.location.lng);
             if (Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0)) {
-              const subLocality = newData.currentSubLocality || rawCur.subLocality || rawCur.sublocality || null;
               const adminArea2 = newData.currentAdminArea2 || rawCur.adminArea2 || rawCur.subAdministrativeArea || null;
+              let subLocality = newData.currentSubLocality || rawCur.subLocality || rawCur.sublocality || null;
+              if (subLocality && adminArea2 && String(subLocality).trim().toLowerCase() === String(adminArea2).trim().toLowerCase()) {
+                subLocality = null;
+              }
               const city = newData.currentCity || rawCur.city || (newData.hostLocation && newData.hostLocation.city) || null;
               const state = newData.currentState || rawCur.state || (newData.hostLocation && newData.hostLocation.state) || null;
+              const stateCode = newData.currentStateCode || rawCur.stateCode || rawCur.state_code || null;
               const country = rawCur.country || newData.hostCountry || (newData.hostLocation && newData.hostLocation.country) || null;
               const countryCode = newData.currentCountryCode || rawCur.country_code || rawCur.countryCode || newData.hostCountryCode || null;
-              const summaryParts = [subLocality, adminArea2, city, state, country].filter((p) => typeof p === "string" && p.trim().length > 0);
+              const summaryParts = [subLocality, city, state, country].filter((p) => typeof p === "string" && p.trim().length > 0);
               const tsMs = typeof rawCur.timestamp === "number" ? rawCur.timestamp : Date.now();
               locationUpdate.currentLocation = {
                 formatted_address: summaryParts.join(", "),
@@ -431,12 +436,13 @@ exports.onUserWrite = functions
                 ...(adminArea2 ? { adminArea2 } : {}),
                 city,
                 state,
+                ...(stateCode ? { stateCode } : {}),
                 country,
                 country_code: countryCode,
                 countryCode,
                 timestamp: tsMs,
                 geometry: {
-                  location: { lat: roundCoord(lat), lng: roundCoord(lng) },
+                  location: { lat: roundLiveCoord(lat), lng: roundLiveCoord(lng) },
                 },
                 lastUpdated: rawCur.lastUpdated || new Date(tsMs).toISOString(),
               };

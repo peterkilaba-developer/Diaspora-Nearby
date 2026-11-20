@@ -72,7 +72,25 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
   void _ensureCoordinateSubLocality(ProfileData user) {
     if (user.showCurrentLocationName == false) return;
     final sub = user.currentLocation?.subLocality?.trim();
-    if (sub != null && sub.isNotEmpty) return;
+    final adm2 = user.currentLocation?.adminArea2?.trim();
+    final cc =
+        user.currentLocation?.countryCode ??
+        user.hostCountryCode ??
+        user.hostLocation.countryCode;
+    final isThreeTier = country_data.hasStateLevelForCountry(
+      countryCode: cc,
+      countryName: user.hostCountry ?? user.hostLocation.country,
+    );
+    // In 3-tier countries (e.g. US), if subLocality matches adminArea2 (legacy county-as-sublocality bug),
+    // reverse-geocode the live coordinates so we always display true neighborhood/town hierarchy.
+    final subLooksLikeLegacyCounty =
+        isThreeTier &&
+        sub != null &&
+        sub.isNotEmpty &&
+        adm2 != null &&
+        adm2.isNotEmpty &&
+        isSameOrRedundantLocationPart(sub, adm2);
+    if (sub != null && sub.isNotEmpty && !subLooksLikeLegacyCounty) return;
 
     final coords = extractProfileCoords(user);
     if (coords == null) return;
@@ -355,10 +373,30 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
         effectiveUser.homeCountryCode == effectiveUser.hostCountryCode;
 
     // Calculate distance and proximity in real time relative to the logged-in
-    // viewer's live coordinates (falling back to caller-supplied distanceKm or
-    // server-computed user.distance when coordinates are unavailable).
+    // viewer's live GPS stream + profile coordinates (falling back to caller-supplied
+    // distanceKm or server-computed user.distance when coordinates are unavailable).
+    final livePos = ref.watch(liveUserPositionProvider).value;
     final viewer = ref.watch(userProfileProvider).value;
-    final double? distance = calculateProfileDistanceKm(
+    double? distance;
+    if (viewer != null &&
+        effectiveUser.uid != null &&
+        viewer.uid == effectiveUser.uid) {
+      distance = 0.0;
+    } else if (livePos != null &&
+        livePos.latitude.isFinite &&
+        livePos.longitude.isFinite &&
+        (livePos.latitude != 0 || livePos.longitude != 0)) {
+      final theirCoords = extractProfileCoords(effectiveUser);
+      if (theirCoords != null) {
+        distance = calculateDistance(
+          livePos.latitude,
+          livePos.longitude,
+          theirCoords.$1,
+          theirCoords.$2,
+        );
+      }
+    }
+    distance ??= calculateProfileDistanceKm(
       viewer,
       effectiveUser,
       fallbackDistanceKm: widget.distanceKm ?? effectiveUser.distance,
@@ -368,90 +406,136 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
     final (distanceValue, distanceUnit) = _formatDistanceMetric(distance);
 
     // Trigger client-side coordinate reverse-geocoding if subLocality is not yet populated
-    // so peers see sub-locality + locality/adminArea2 immediately in real time.
+    // so peers see sub-locality + locality + abbreviated state immediately in real time.
     _ensureCoordinateSubLocality(effectiveUser);
 
-    // Format current location display (show both sub-locality and locality/adminArea2)
+    // Format current location display:
+    // - Smallest town/neighborhood designation -> higher town/city
+    // - Plus abbreviated State/Province for the 20 three-tier countries in countries.dart
     String? currentCityDisplay;
-    final subLocality =
-        (effectiveUser.currentLocation?.subLocality?.trim().isNotEmpty == true
-                ? effectiveUser.currentLocation!.subLocality!.trim()
-                : (_resolvedCoordLocation?['subLocality'] as String?)?.trim());
-    final adminArea2 =
-        (effectiveUser.currentLocation?.adminArea2?.trim().isNotEmpty == true
-                ? effectiveUser.currentLocation!.adminArea2!.trim()
-                : (_resolvedCoordLocation?['adminArea2'] as String?)?.trim());
-    final city =
-        (effectiveUser.currentLocation?.city?.trim().isNotEmpty == true
-                ? effectiveUser.currentLocation!.city!.trim()
-                : (_resolvedCoordLocation?['city'] as String?)?.trim());
+    final effectiveCountryCode =
+        effectiveUser.currentLocation?.countryCode ??
+        (_resolvedCoordLocation?['countryCode'] as String?) ??
+        effectiveUser.hostCountryCode ??
+        effectiveUser.hostLocation.countryCode;
+    final effectiveCountryName =
+        (_resolvedCoordLocation?['country'] as String?) ??
+        effectiveUser.hostCountry ??
+        effectiveUser.hostLocation.country;
+    final isThreeTier = country_data.hasStateLevelForCountry(
+      countryCode: effectiveCountryCode,
+      countryName: effectiveCountryName,
+    );
 
-    String? secondaryArea;
-    if (city != null &&
-        city.isNotEmpty &&
-        !isSameOrRedundantLocationPart(city, subLocality)) {
-      secondaryArea = city;
-    } else if (adminArea2 != null &&
-        adminArea2.isNotEmpty &&
-        !isSameOrRedundantLocationPart(adminArea2, subLocality)) {
-      secondaryArea = adminArea2;
+    final rawStoredSub = effectiveUser.currentLocation?.subLocality?.trim();
+    final rawStoredAdm2 = effectiveUser.currentLocation?.adminArea2?.trim();
+    final storedSubIsLegacyCounty =
+        isThreeTier &&
+        rawStoredSub != null &&
+        rawStoredSub.isNotEmpty &&
+        rawStoredAdm2 != null &&
+        rawStoredAdm2.isNotEmpty &&
+        isSameOrRedundantLocationPart(rawStoredSub, rawStoredAdm2);
+
+    final subLocality =
+        (!storedSubIsLegacyCounty &&
+                rawStoredSub != null &&
+                rawStoredSub.isNotEmpty)
+        ? rawStoredSub
+        : (_resolvedCoordLocation?['subLocality'] as String?)?.trim();
+    final adminArea2 = (rawStoredAdm2 != null && rawStoredAdm2.isNotEmpty)
+        ? rawStoredAdm2
+        : (_resolvedCoordLocation?['adminArea2'] as String?)?.trim();
+    final city =
+        (effectiveUser.currentLocation?.city?.trim().isNotEmpty == true)
+        ? effectiveUser.currentLocation!.city!.trim()
+        : (_resolvedCoordLocation?['city'] as String?)?.trim();
+
+    String buildDisplayParts({
+      String? smallestArea,
+      String? primaryTown,
+      String? districtOrCounty,
+      String? rawState,
+      String? rawStateCode,
+      String? countryCode,
+      String? countryName,
+      required bool threeTier,
+    }) {
+      final parts = <String>[];
+      void addPart(String? p) {
+        if (p == null) return;
+        final trimmed = p.trim();
+        if (trimmed.isEmpty) return;
+        if (parts.any((e) => isSameOrRedundantLocationPart(e, trimmed))) return;
+        parts.add(trimmed);
+      }
+
+      addPart(smallestArea);
+      addPart(primaryTown);
+
+      if (threeTier) {
+        final abbrState = abbreviateStateForCountry(
+          state: rawState,
+          stateCode: rawStateCode,
+          city: primaryTown ?? smallestArea,
+          countryCode: countryCode,
+          countryName: countryName,
+        );
+        addPart(abbrState);
+      } else {
+        // For non-3-tier countries, if only one town part was found and a distinct
+        // higher municipal district/adminArea2 exists (smaller town -> higher district),
+        // append it after the town so two levels show cleanly.
+        if (parts.length == 1 &&
+            districtOrCounty != null &&
+            districtOrCounty.trim().isNotEmpty) {
+          addPart(districtOrCounty);
+        }
+      }
+
+      return parts.join(', ');
     }
 
     if ((subLocality != null && subLocality.isNotEmpty) ||
-        (secondaryArea != null && secondaryArea.isNotEmpty) ||
-        (city != null && city.isNotEmpty)) {
-      if (subLocality != null &&
-          subLocality.isNotEmpty &&
-          secondaryArea != null &&
-          secondaryArea.isNotEmpty) {
-        currentCityDisplay = '$subLocality, $secondaryArea';
-      } else if (subLocality != null && subLocality.isNotEmpty) {
-        final cleanState = sanitizeStateForCountry(
-          state:
-              effectiveUser.currentLocation?.state ??
-              (_resolvedCoordLocation?['state'] as String?),
-          city: subLocality,
-          countryCode:
-              effectiveUser.currentLocation?.countryCode ??
-              (_resolvedCoordLocation?['countryCode'] as String?),
-        );
-        currentCityDisplay = (cleanState != null && cleanState.isNotEmpty)
-            ? '$subLocality, $cleanState'
-            : subLocality;
-      } else if (city != null && city.isNotEmpty) {
-        if (adminArea2 != null &&
-            adminArea2.isNotEmpty &&
-            !isSameOrRedundantLocationPart(adminArea2, city)) {
-          currentCityDisplay = '$adminArea2, $city';
-        } else {
-          final cleanState = sanitizeStateForCountry(
-            state:
-                effectiveUser.currentLocation?.state ??
-                (_resolvedCoordLocation?['state'] as String?),
-            city: city,
-            countryCode:
-                effectiveUser.currentLocation?.countryCode ??
-                (_resolvedCoordLocation?['countryCode'] as String?),
-          );
-          currentCityDisplay = (cleanState != null && cleanState.isNotEmpty)
-              ? '$city, $cleanState'
-              : city;
-        }
+        (city != null && city.isNotEmpty) ||
+        (adminArea2 != null && adminArea2.isNotEmpty)) {
+      final formatted = buildDisplayParts(
+        smallestArea: subLocality,
+        primaryTown: city ?? (!isThreeTier ? adminArea2 : null),
+        districtOrCounty: adminArea2,
+        rawState:
+            effectiveUser.currentLocation?.state ??
+            (_resolvedCoordLocation?['state'] as String?),
+        rawStateCode:
+            effectiveUser.currentLocation?.stateCode ??
+            (_resolvedCoordLocation?['stateCode'] as String?),
+        countryCode: effectiveCountryCode,
+        countryName: effectiveCountryName,
+        threeTier: isThreeTier,
+      );
+      if (formatted.isNotEmpty) {
+        currentCityDisplay = formatted;
       }
-    } else if (effectiveUser.hostLocation.formattedAddress.isNotEmpty) {
+    }
+
+    if (currentCityDisplay == null &&
+        effectiveUser.hostLocation.formattedAddress.isNotEmpty) {
       final loc = effectiveUser.hostLocation;
+      final hostCc = loc.countryCode ?? effectiveUser.hostCountryCode;
+      final hostCn = loc.country ?? effectiveUser.hostCountry;
+      final hostThreeTier = country_data.hasStateLevelForCountry(
+        countryCode: hostCc,
+        countryName: hostCn,
+      );
       if (loc.city != null && loc.city!.isNotEmpty) {
-        final cleanState = sanitizeStateForCountry(
-          state: loc.state,
-          city: loc.city,
-          countryCode: loc.countryCode ?? effectiveUser.hostCountryCode,
-          countryName: loc.country ?? effectiveUser.hostCountry,
+        final formatted = buildDisplayParts(
+          primaryTown: loc.city,
+          rawState: loc.state,
+          countryCode: hostCc,
+          countryName: hostCn,
+          threeTier: hostThreeTier,
         );
-        if (cleanState != null && cleanState.isNotEmpty) {
-          currentCityDisplay = '${loc.city}, $cleanState';
-        } else {
-          currentCityDisplay = loc.city;
-        }
+        currentCityDisplay = formatted.isNotEmpty ? formatted : loc.city;
       } else {
         currentCityDisplay = formatFullAddress(
           effectiveUser.hostLocation.formattedAddress,
@@ -896,57 +980,63 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (bottomFlag.isNotEmpty) ...[
-                          Text(
-                            bottomFlag,
-                            style: const TextStyle(fontSize: 15),
+                    // Fixed 80px width + 12px gap matching the avatar column above
+                    // so the moving app logo sits on the exact vertical line of
+                    // the "From" / "Lives in" flags (X = 8 + 80 + 12 = 100px).
+                    SizedBox(
+                      width: 80,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (bottomFlag.isNotEmpty) ...[
+                            Text(
+                              bottomFlag,
+                              style: const TextStyle(fontSize: 15),
+                            ),
+                            const SizedBox(width: 4),
+                          ],
+                          Flexible(
+                            child: Text(
+                              proximityLevel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: proximityColor,
+                              ),
+                            ),
                           ),
-                          const SizedBox(width: 4),
                         ],
-                        Text(
-                          proximityLevel,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: proximityColor,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                    // Place current location display name closest to the distance text
-                    // with Expanded right alignment so most/all of "SubLocality, Locality/Admin2" shows.
+                    const SizedBox(width: 12),
                     if (effectiveUser.showCurrentLocationName != false &&
                         currentCityDisplay != null) ...[
-                      const SizedBox(width: 6),
                       Expanded(
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const _MovingLogo(),
-                              const SizedBox(width: 4),
-                              Flexible(
-                                child: Text(
-                                  currentCityDisplay,
-                                  textAlign: TextAlign.right,
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    fontSize: 12,
-                                    color:
-                                        theme.colorScheme.onSurfaceVariant,
-                                    decoration: TextDecoration.none,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                        child: Row(
+                          children: [
+                            const SizedBox(
+                              width: 16,
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: _MovingLogo(),
                               ),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                currentCityDisplay,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  fontSize: 12,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                  decoration: TextDecoration.none,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(width: 6),

@@ -17,6 +17,7 @@ import 'package:diaspora_nearby/features/community/viewmodels/community_hierarch
 import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
+import 'package:diaspora_nearby/core/services/location_update_service.dart';
 import 'package:diaspora_nearby/core/utils/location_utils.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
@@ -75,9 +76,11 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
       _isLoadingProfile = false;
     }
 
-    // [PERF] Pre-warm own referral code in the background so Share buttons open in 0ms
+    // [PERF] Pre-warm own referral code and refresh own live GPS immediately
     if (currentUserId != null && currentUserId == widget.userId) {
       unawaited(ref.read(pointsRepositoryProvider).getReferralCode(currentUserId));
+      LocationUpdateService().startProximityHeartbeat(currentUserId);
+      unawaited(LocationUpdateService().updateCurrentLocation(currentUserId));
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -729,14 +732,18 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
   Widget build(BuildContext context) {
     final user = ref.watch(authRepositoryProvider).currentUser;
     final isSelf = user?.uid == widget.userId;
+    final streamedProfile = isSelf
+        ? ref.watch(userProfileProvider).value
+        : ref.watch(userProfileByIdProvider(widget.userId)).value;
+    final effectiveProfile = streamedProfile ?? _profile;
 
     return Stack(
       children: [
-        if (_isLoadingProfile)
+        if (_isLoadingProfile && effectiveProfile == null)
           const Scaffold(body: Center(child: CircularProgressIndicator()))
-        else if (_errorMessage != null)
+        else if (_errorMessage != null && effectiveProfile == null)
           Scaffold(body: Center(child: Text('Error: $_errorMessage')))
-        else if (_profile == null)
+        else if (effectiveProfile == null)
           const Scaffold(body: Center(child: Text('User not found')))
         else
           PopScope(
@@ -750,14 +757,14 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
             child: _isEditing
                 ? UserProfileEditor(
                     key: const ValueKey('profile_editor'),
-                    initialProfile: _profile!,
+                    initialProfile: effectiveProfile,
                     onSave: _saveProfile,
                     onCancel: () => setState(() => _isEditing = false),
                     highlightFields: _initialHighlightFields,
                   )
                 : UserProfileView(
                     key: const ValueKey('profile_view'),
-                    profile: _profile!,
+                    profile: effectiveProfile,
                     isSelf: isSelf,
                     isEnforced: widget.isEnforced,
                     onEdit: () {
@@ -773,14 +780,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                       final currentUserProfile = ref
                           .watch(userProfileProvider)
                           .value;
-                      final liveTargetProfile =
-                          ref
-                              .watch(userProfileByIdProvider(widget.userId))
-                              .value ??
-                          _profile;
                       return calculateProfileDistanceKm(
                         currentUserProfile,
-                        liveTargetProfile,
+                        effectiveProfile,
                         fallbackDistanceKm: widget.initialDistance,
                       );
                     }(),

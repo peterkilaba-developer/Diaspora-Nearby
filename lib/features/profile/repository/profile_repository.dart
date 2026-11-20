@@ -148,10 +148,12 @@ class ProfileRepository {
         : null;
     final city = map['city'] as String?;
     final state = map['state'] as String?;
+    final stateCode = includeSubLocality
+        ? (map['stateCode'] as String? ?? map['state_code'] as String?)
+        : null;
     final country = map['country'] as String?;
     final summary = [
       subLocality,
-      adminArea2,
       city,
       state,
       country,
@@ -168,6 +170,10 @@ class ProfileRepository {
         'adminArea2': adminArea2.trim(),
       'city': city,
       'state': state,
+      if (includeSubLocality &&
+          stateCode != null &&
+          stateCode.trim().isNotEmpty)
+        'stateCode': stateCode.trim(),
       'country': country,
       'country_code': map['country_code'] ?? map['countryCode'],
     };
@@ -177,10 +183,11 @@ class ProfileRepository {
       final lat = (loc['lat'] as num?)?.toDouble();
       final lng = (loc['lng'] as num?)?.toDouble();
       if (lat != null && lng != null && (lat != 0 || lng != 0)) {
+        final scale = includeSubLocality ? 1000 : 100;
         result['geometry'] = {
           'location': {
-            'lat': (lat * 100).round() / 100,
-            'lng': (lng * 100).round() / 100,
+            'lat': (lat * scale).round() / scale,
+            'lng': (lng * scale).round() / scale,
           },
         };
       }
@@ -248,6 +255,11 @@ class ProfileRepository {
           : cf.FieldValue.delete();
       publicData['currentCity'] = currentSummary['city'];
       publicData['currentState'] = currentSummary['state'];
+      final stCode = currentSummary['stateCode'] as String?;
+      publicData['currentStateCode'] =
+          (stCode != null && stCode.trim().isNotEmpty)
+          ? stCode.trim()
+          : cf.FieldValue.delete();
       publicData['currentCountryCode'] = currentSummary['country_code'];
       final rawCur = privateData['currentLocation'];
       final tsMs = (rawCur is Map && rawCur['timestamp'] is num)
@@ -267,6 +279,7 @@ class ProfileRepository {
       publicData['currentAdminArea2'] = cf.FieldValue.delete();
       publicData['currentCity'] = cf.FieldValue.delete();
       publicData['currentState'] = cf.FieldValue.delete();
+      publicData['currentStateCode'] = cf.FieldValue.delete();
       publicData['currentCountryCode'] = cf.FieldValue.delete();
       publicData['currentLocation'] = cf.FieldValue.delete();
     }

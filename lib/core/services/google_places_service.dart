@@ -408,10 +408,10 @@ class GooglePlacesService {
             adminArea2 = null;
           }
 
+          // Only treat p.subLocality as a true smaller sub-locality/neighborhood.
+          // Never promote subAdministrativeArea (County/District) to subLocality!
           String? subLocality = bestSubLocality != null
               ? formatLocationName(bestSubLocality)
-              : (bestLocality != null && adminArea2 != null)
-              ? adminArea2
               : null;
           if (subLocality != null &&
               (subLocality.isEmpty ||
@@ -420,6 +420,12 @@ class GooglePlacesService {
           }
 
           final state = sanitizeStateForCountry(
+            state: bestAdmin,
+            city: city,
+            countryCode: countryCode,
+            countryName: country,
+          );
+          final stateCode = abbreviateStateForCountry(
             state: bestAdmin,
             city: city,
             countryCode: countryCode,
@@ -442,6 +448,7 @@ class GooglePlacesService {
             'adminArea2': adminArea2,
             'city': city,
             'state': state,
+            'stateCode': stateCode,
             'country': country,
             'countryCode': countryCode,
             'lat': lat,
@@ -467,6 +474,7 @@ class GooglePlacesService {
         'adminArea2': httpResult['adminArea2'] ?? nativeResult['adminArea2'],
         'city': nativeResult['city'] ?? httpResult['city'],
         'state': nativeResult['state'] ?? httpResult['state'],
+        'stateCode': httpResult['stateCode'] ?? nativeResult['stateCode'],
         'country': nativeResult['country'] ?? httpResult['country'],
         'countryCode':
             nativeResult['countryCode'] ?? httpResult['countryCode'],
@@ -543,6 +551,7 @@ class GooglePlacesService {
       String? adminArea2;
       String? city;
       String? state;
+      String? stateCode;
       String? country;
       String? countryCode;
 
@@ -570,6 +579,7 @@ class GooglePlacesService {
           adminArea2 ??= parsed.adminArea2;
           city ??= parsed.city;
           state ??= parsed.state;
+          stateCode ??= parsed.stateCode;
           country ??= parsed.country;
           countryCode ??= parsed.countryCode;
           if (subLocality != null && (city != null || adminArea2 != null)) {
@@ -588,12 +598,17 @@ class GooglePlacesService {
       if (subLocality != null) {
         final cleanedSub = formatLocationName(subLocality);
         subLocality = cleanedSub.isNotEmpty ? cleanedSub : subLocality.trim();
-        if (isSameOrRedundantLocationPart(subLocality, city) &&
-            (adminArea2 == null ||
-                isSameOrRedundantLocationPart(subLocality, adminArea2))) {
+        if (isSameOrRedundantLocationPart(subLocality, city)) {
           subLocality = null;
         }
       }
+
+      stateCode ??= abbreviateStateForCountry(
+        state: state,
+        city: city,
+        countryCode: countryCode,
+        countryName: country,
+      );
 
       final formattedAddress = formatTieredLocation(
         subLocality: subLocality,
@@ -611,6 +626,7 @@ class GooglePlacesService {
         'adminArea2': adminArea2,
         'city': city,
         'state': state,
+        'stateCode': stateCode,
         'country': country,
         'countryCode': countryCode,
         'lat': lat,

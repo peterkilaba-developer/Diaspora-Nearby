@@ -27,6 +27,7 @@ LocationParsed? parseLocationComponents(
       postalTown,
       locality,
       state,
+      stateShort,
       country,
       countryCode,
       postalCode;
@@ -60,6 +61,10 @@ LocationParsed? parseLocationComponents(
       locality ??= name;
     } else if (types.contains('administrative_area_level_1')) {
       state ??= name;
+      final sShort = component.shortName.trim();
+      if (sShort.isNotEmpty) {
+        stateShort ??= sShort;
+      }
     } else if (types.contains('country')) {
       country = name;
       countryCode = component.shortName.trim();
@@ -72,21 +77,6 @@ LocationParsed? parseLocationComponents(
 
   String? city =
       locality ?? postalTown ?? adminArea2 ?? sublocality ?? adminArea3;
-
-  // If city came from locality/postalTown and sublocality wasn't set,
-  // use administrative_area_level_2 (e.g. "Ilala" district in Dar es Salaam)
-  // when it is distinct from city and state.
-  if ((locality != null || postalTown != null) &&
-      sublocality == null &&
-      adminArea2 != null &&
-      !isSameOrRedundantLocationPart(adminArea2, city) &&
-      !isSameOrRedundantLocationPart(adminArea2, state)) {
-    sublocality = formatLocationName(adminArea2);
-  }
-
-  if (sublocality != null && isSameOrRedundantLocationPart(sublocality, city)) {
-    sublocality = null;
-  }
 
   // Fallback for country from address string if components lacked country
   if ((country == null || countryCode == null) && address.isNotEmpty) {
@@ -102,6 +92,31 @@ LocationParsed? parseLocationComponents(
         countryCode ??= matchedCountry.code;
       }
     }
+  }
+
+  final bool isThreeTierCountry = country_data.hasStateLevelForCountry(
+    countryCode: countryCode,
+    countryName: country,
+  );
+
+  // In 2-tier countries where administrative_area_level_1 is redundant with the
+  // major city (e.g. "Dar es Salam" Region == "Dar es Salaam" City), Google uses
+  // administrative_area_level_2 for the intra-city municipal district (e.g. "Ilala",
+  // "Kinondoni", "Ubungo", "Temeke"). In 3-tier countries (US, CA, etc.),
+  // administrative_area_level_2 is a County (Maricopa County, Dallas County) which is
+  // larger than the city and must NEVER be promoted into sublocality.
+  if (!isThreeTierCountry &&
+      (locality != null || postalTown != null) &&
+      sublocality == null &&
+      adminArea2 != null &&
+      state != null &&
+      isSameOrRedundantLocationPart(city, state) &&
+      !isSameOrRedundantLocationPart(adminArea2, city)) {
+    sublocality = formatLocationName(adminArea2);
+  }
+
+  if (sublocality != null && isSameOrRedundantLocationPart(sublocality, city)) {
+    sublocality = null;
   }
 
   // [FIX] Explicitly handle New York City to avoid "New York Community" (which sounds like State)
@@ -196,11 +211,21 @@ LocationParsed? parseLocationComponents(
     cleanedAdminArea2 = null;
   }
 
+  final cleanedStateShort = state != null
+      ? abbreviateStateForCountry(
+          state: stateShort ?? state,
+          city: city,
+          countryCode: countryCode,
+          countryName: country,
+        )
+      : null;
+
   return LocationParsed(
     sublocality: sublocality,
     adminArea2: cleanedAdminArea2,
     city: city,
     state: state,
+    stateCode: cleanedStateShort,
     country: country,
     countryCode: countryCode,
     streetAddress: streetAddress,
@@ -214,6 +239,7 @@ class LocationParsed {
   final String? adminArea2; // district / county / administrative_area_level_2
   final String? city;
   final String? state;
+  final String? stateCode; // abbreviated state/province code for 3-tier countries
   final String country;
   final String countryCode;
   final String? placeId; // [NEW] Explicit Place ID for robust matching
@@ -225,6 +251,7 @@ class LocationParsed {
     this.adminArea2,
     this.city,
     this.state,
+    this.stateCode,
     required this.country,
     required this.countryCode,
     this.placeId,
@@ -234,7 +261,7 @@ class LocationParsed {
 
   @override
   String toString() =>
-      'LocationParsed(sublocality: $sublocality, adminArea2: $adminArea2, city: $city, state: $state, country: $country, code: $countryCode, placeId: $placeId, streetAddress: $streetAddress)';
+      'LocationParsed(sublocality: $sublocality, adminArea2: $adminArea2, city: $city, state: $state, stateCode: $stateCode, country: $country, code: $countryCode, placeId: $placeId, streetAddress: $streetAddress)';
 }
 
 // --------------------------------------------------------------------------
@@ -807,6 +834,607 @@ String? sanitizeStateForCountry({
   }
 
   return cleaned;
+}
+
+const Map<String, Map<String, String>> _threeTierStateAbbreviations = {
+  'US': {
+    'alabama': 'AL',
+    'alaska': 'AK',
+    'arizona': 'AZ',
+    'arkansas': 'AR',
+    'california': 'CA',
+    'colorado': 'CO',
+    'connecticut': 'CT',
+    'delaware': 'DE',
+    'florida': 'FL',
+    'georgia': 'GA',
+    'hawaii': 'HI',
+    'idaho': 'ID',
+    'illinois': 'IL',
+    'indiana': 'IN',
+    'iowa': 'IA',
+    'kansas': 'KS',
+    'kentucky': 'KY',
+    'louisiana': 'LA',
+    'maine': 'ME',
+    'maryland': 'MD',
+    'massachusetts': 'MA',
+    'michigan': 'MI',
+    'minnesota': 'MN',
+    'mississippi': 'MS',
+    'missouri': 'MO',
+    'montana': 'MT',
+    'nebraska': 'NE',
+    'nevada': 'NV',
+    'new hampshire': 'NH',
+    'new jersey': 'NJ',
+    'new mexico': 'NM',
+    'new york': 'NY',
+    'north carolina': 'NC',
+    'north dakota': 'ND',
+    'ohio': 'OH',
+    'oklahoma': 'OK',
+    'oregon': 'OR',
+    'pennsylvania': 'PA',
+    'rhode island': 'RI',
+    'south carolina': 'SC',
+    'south dakota': 'SD',
+    'tennessee': 'TN',
+    'texas': 'TX',
+    'utah': 'UT',
+    'vermont': 'VT',
+    'virginia': 'VA',
+    'washington': 'WA',
+    'west virginia': 'WV',
+    'wisconsin': 'WI',
+    'wyoming': 'WY',
+    'district of columbia': 'DC',
+  },
+  'CA': {
+    'alberta': 'AB',
+    'british columbia': 'BC',
+    'manitoba': 'MB',
+    'new brunswick': 'NB',
+    'newfoundland and labrador': 'NL',
+    'northwest territories': 'NT',
+    'nova scotia': 'NS',
+    'nunavut': 'NU',
+    'ontario': 'ON',
+    'prince edward island': 'PE',
+    'quebec': 'QC',
+    'québec': 'QC',
+    'saskatchewan': 'SK',
+    'yukon': 'YT',
+  },
+  'AU': {
+    'australian capital territory': 'ACT',
+    'new south wales': 'NSW',
+    'northern territory': 'NT',
+    'queensland': 'QLD',
+    'south australia': 'SA',
+    'tasmania': 'TAS',
+    'victoria': 'VIC',
+    'western australia': 'WA',
+  },
+  'BR': {
+    'acre': 'AC',
+    'alagoas': 'AL',
+    'amapa': 'AP',
+    'amapá': 'AP',
+    'amazonas': 'AM',
+    'bahia': 'BA',
+    'ceara': 'CE',
+    'ceará': 'CE',
+    'distrito federal': 'DF',
+    'federal district': 'DF',
+    'espirito santo': 'ES',
+    'espírito santo': 'ES',
+    'goias': 'GO',
+    'goiás': 'GO',
+    'maranhao': 'MA',
+    'maranhão': 'MA',
+    'mato grosso': 'MT',
+    'mato grosso do sul': 'MS',
+    'minas gerais': 'MG',
+    'para': 'PA',
+    'pará': 'PA',
+    'paraiba': 'PB',
+    'paraíba': 'PB',
+    'parana': 'PR',
+    'paraná': 'PR',
+    'pernambuco': 'PE',
+    'piaui': 'PI',
+    'piauí': 'PI',
+    'rio de janeiro': 'RJ',
+    'rio grande do norte': 'RN',
+    'rio grande do sul': 'RS',
+    'rondonia': 'RO',
+    'rondônia': 'RO',
+    'roraima': 'RR',
+    'santa catarina': 'SC',
+    'sao paulo': 'SP',
+    'são paulo': 'SP',
+    'sergipe': 'SE',
+    'tocantins': 'TO',
+  },
+  'MX': {
+    'aguascalientes': 'AGS',
+    'baja california': 'BC',
+    'baja california sur': 'BCS',
+    'campeche': 'CAMP',
+    'chiapas': 'CHIS',
+    'chihuahua': 'CHIH',
+    'ciudad de mexico': 'CDMX',
+    'ciudad de méxico': 'CDMX',
+    'mexico city': 'CDMX',
+    'coahuila': 'COAH',
+    'coahuila de zaragoza': 'COAH',
+    'colima': 'COL',
+    'durango': 'DGO',
+    'estado de mexico': 'EDOMEX',
+    'state of mexico': 'EDOMEX',
+    'méxico': 'EDOMEX',
+    'guanajuato': 'GTO',
+    'guerrero': 'GRO',
+    'hidalgo': 'HGO',
+    'jalisco': 'JAL',
+    'michoacan': 'MICH',
+    'michoacán': 'MICH',
+    'morelos': 'MOR',
+    'nayarit': 'NAY',
+    'nuevo leon': 'NL',
+    'nuevo león': 'NL',
+    'oaxaca': 'OAX',
+    'puebla': 'PUE',
+    'queretaro': 'QRO',
+    'querétaro': 'QRO',
+    'quintana roo': 'QROO',
+    'san luis potosi': 'SLP',
+    'san luis potosí': 'SLP',
+    'sinaloa': 'SIN',
+    'sonora': 'SON',
+    'tabasco': 'TAB',
+    'tamaulipas': 'TAMPS',
+    'tlaxcala': 'TLAX',
+    'veracruz': 'VER',
+    'yucatan': 'YUC',
+    'yucatán': 'YUC',
+    'zacatecas': 'ZAC',
+  },
+  'IN': {
+    'andhra pradesh': 'AP',
+    'arunachal pradesh': 'AR',
+    'assam': 'AS',
+    'bihar': 'BR',
+    'chhattisgarh': 'CG',
+    'delhi': 'DL',
+    'national capital territory of delhi': 'DL',
+    'goa': 'GA',
+    'gujarat': 'GJ',
+    'haryana': 'HR',
+    'himachal pradesh': 'HP',
+    'jammu and kashmir': 'JK',
+    'jharkhand': 'JH',
+    'karnataka': 'KA',
+    'kerala': 'KL',
+    'ladakh': 'LA',
+    'madhya pradesh': 'MP',
+    'maharashtra': 'MH',
+    'manipur': 'MN',
+    'meghalaya': 'ML',
+    'mizoram': 'MZ',
+    'nagaland': 'NL',
+    'odisha': 'OD',
+    'punjab': 'PB',
+    'rajasthan': 'RJ',
+    'sikkim': 'SK',
+    'tamil nadu': 'TN',
+    'telangana': 'TG',
+    'tripura': 'TR',
+    'uttar pradesh': 'UP',
+    'uttarakhand': 'UK',
+    'west bengal': 'WB',
+    'chandigarh': 'CH',
+    'puducherry': 'PY',
+  },
+  'NG': {
+    'abia': 'AB',
+    'adamawa': 'AD',
+    'akwa ibom': 'AK',
+    'anambra': 'AN',
+    'bauchi': 'BA',
+    'bayelsa': 'BY',
+    'benue': 'BE',
+    'borno': 'BO',
+    'cross river': 'CR',
+    'delta': 'DE',
+    'ebonyi': 'EB',
+    'edo': 'ED',
+    'ekiti': 'EK',
+    'enugu': 'EN',
+    'federal capital territory': 'FCT',
+    'abuja': 'FCT',
+    'gombe': 'GO',
+    'imo': 'IM',
+    'jigawa': 'JI',
+    'kaduna': 'KD',
+    'kano': 'KN',
+    'katsina': 'KT',
+    'kebbi': 'KB',
+    'kogi': 'KO',
+    'kwara': 'KW',
+    'lagos': 'LA',
+    'nasarawa': 'NA',
+    'niger': 'NI',
+    'ogun': 'OG',
+    'ondo': 'ON',
+    'osun': 'OS',
+    'oyo': 'OY',
+    'plateau': 'PL',
+    'rivers': 'RI',
+    'sokoto': 'SO',
+    'taraba': 'TA',
+    'yobe': 'YO',
+    'zamfara': 'ZA',
+  },
+  'DE': {
+    'baden-württemberg': 'BW',
+    'baden-wurttemberg': 'BW',
+    'bayern': 'BY',
+    'bavaria': 'BY',
+    'berlin': 'BE',
+    'brandenburg': 'BB',
+    'bremen': 'HB',
+    'hamburg': 'HH',
+    'hessen': 'HE',
+    'hesse': 'HE',
+    'mecklenburg-vorpommern': 'MV',
+    'niedersachsen': 'NI',
+    'lower saxony': 'NI',
+    'nordrhein-westfalen': 'NW',
+    'north rhine-westphalia': 'NW',
+    'rheinland-pfalz': 'RP',
+    'rhineland-palatinate': 'RP',
+    'saarland': 'SL',
+    'sachsen': 'SN',
+    'saxony': 'SN',
+    'sachsen-anhalt': 'ST',
+    'saxony-anhalt': 'ST',
+    'schleswig-holstein': 'SH',
+    'thüringen': 'TH',
+    'thuringia': 'TH',
+  },
+  'CH': {
+    'aargau': 'AG',
+    'appenzell ausserrhoden': 'AR',
+    'appenzell innerrhoden': 'AI',
+    'basel-landschaft': 'BL',
+    'basel-stadt': 'BS',
+    'bern': 'BE',
+    'berne': 'BE',
+    'fribourg': 'FR',
+    'genève': 'GE',
+    'geneva': 'GE',
+    'glarus': 'GL',
+    'graubünden': 'GR',
+    'grisons': 'GR',
+    'jura': 'JU',
+    'luzern': 'LU',
+    'lucerne': 'LU',
+    'neuchâtel': 'NE',
+    'neuchatel': 'NE',
+    'nidwalden': 'NW',
+    'obwalden': 'OW',
+    'schaffhausen': 'SH',
+    'schwyz': 'SZ',
+    'solothurn': 'SO',
+    'st. gallen': 'SG',
+    'st gallen': 'SG',
+    'thurgau': 'TG',
+    'ticino': 'TI',
+    'uri': 'UR',
+    'valais': 'VS',
+    'vaud': 'VD',
+    'zug': 'ZG',
+    'zürich': 'ZH',
+    'zurich': 'ZH',
+  },
+  'IT': {
+    'abruzzo': 'ABR',
+    'basilicata': 'BAS',
+    'calabria': 'CAL',
+    'campania': 'CAM',
+    'emilia-romagna': 'EMR',
+    'friuli-venezia giulia': 'FVG',
+    'lazio': 'LAZ',
+    'liguria': 'LIG',
+    'lombardia': 'LOM',
+    'lombardy': 'LOM',
+    'marche': 'MAR',
+    'molise': 'MOL',
+    'piemonte': 'PIE',
+    'piedmont': 'PIE',
+    'puglia': 'PUG',
+    'apulia': 'PUG',
+    'sardegna': 'SAR',
+    'sardinia': 'SAR',
+    'sicilia': 'SIC',
+    'sicily': 'SIC',
+    'toscana': 'TOS',
+    'tuscany': 'TOS',
+    'trentino-alto adige': 'TAA',
+    'umbria': 'UMB',
+    "valle d'aosta": 'VDA',
+    'veneto': 'VEN',
+  },
+  'FR': {
+    'auvergne-rhône-alpes': 'ARA',
+    'auvergne-rhone-alpes': 'ARA',
+    'bourgogne-franche-comté': 'BFC',
+    'bourgogne-franche-comte': 'BFC',
+    'bretagne': 'BRE',
+    'brittany': 'BRE',
+    'centre-val de loire': 'CVL',
+    'corse': 'COR',
+    'corsica': 'COR',
+    'grand est': 'GES',
+    'hauts-de-france': 'HDF',
+    'île-de-france': 'IDF',
+    'ile-de-france': 'IDF',
+    'normandie': 'NOR',
+    'normandy': 'NOR',
+    'nouvelle-aquitaine': 'NAQ',
+    'occitanie': 'OCC',
+    'pays de la loire': 'PDL',
+    "provence-alpes-côte d'azur": 'PACA',
+    "provence-alpes-cote d'azur": 'PACA',
+  },
+  'AR': {
+    'buenos aires': 'BA',
+    'autonomous city of buenos aires': 'CABA',
+    'ciudad autónoma de buenos aires': 'CABA',
+    'catamarca': 'CT',
+    'chaco': 'CC',
+    'chubut': 'CH',
+    'córdoba': 'CB',
+    'cordoba': 'CB',
+    'corrientes': 'CR',
+    'entre ríos': 'ER',
+    'entre rios': 'ER',
+    'formosa': 'FO',
+    'jujuy': 'JY',
+    'la pampa': 'LP',
+    'la rioja': 'LR',
+    'mendoza': 'MZ',
+    'misiones': 'MN',
+    'neuquén': 'NQ',
+    'neuquen': 'NQ',
+    'río negro': 'RN',
+    'rio negro': 'RN',
+    'salta': 'SA',
+    'san juan': 'SJ',
+    'san luis': 'SL',
+    'santa cruz': 'SC',
+    'santa fe': 'SF',
+    'santiago del estero': 'SE',
+    'tierra del fuego': 'TF',
+    'tucumán': 'TM',
+    'tucuman': 'TM',
+  },
+  'PK': {
+    'balochistan': 'BL',
+    'islamabad capital territory': 'ICT',
+    'islamabad': 'ICT',
+    'khyber pakhtunkhwa': 'KP',
+    'punjab': 'PB',
+    'sindh': 'SD',
+    'gilgit-baltistan': 'GB',
+    'azad kashmir': 'AJK',
+    'azad jammu and kashmir': 'AJK',
+  },
+  'CL': {
+    'santiago metropolitan': 'RM',
+    'región metropolitana': 'RM',
+    'region metropolitana': 'RM',
+    'valparaíso': 'VS',
+    'valparaiso': 'VS',
+    'biobío': 'BI',
+    'biobio': 'BI',
+    'antofagasta': 'AN',
+    'atacama': 'AT',
+    'coquimbo': 'CO',
+    'araucanía': 'AR',
+    'los lagos': 'LL',
+    'los ríos': 'LR',
+    'maule': 'ML',
+    'tarapacá': 'TA',
+  },
+  'CO': {
+    'antioquia': 'ANT',
+    'atlántico': 'ATL',
+    'atlantico': 'ATL',
+    'bogotá': 'DC',
+    'bogota': 'DC',
+    'bolívar': 'BOL',
+    'bolivar': 'BOL',
+    'boyacá': 'BOY',
+    'caldas': 'CAL',
+    'cauca': 'CAU',
+    'cesar': 'CES',
+    'córdoba': 'COR',
+    'cundinamarca': 'CUN',
+    'huila': 'HUI',
+    'magdalena': 'MAG',
+    'meta': 'MET',
+    'nariño': 'NAR',
+    'norte de santander': 'NSA',
+    'quindío': 'QUI',
+    'risaralda': 'RIS',
+    'santander': 'SAN',
+    'sucre': 'SUC',
+    'tolima': 'TOL',
+    'valle del cauca': 'VAC',
+  },
+  'CN': {
+    'beijing': 'BJ',
+    'shanghai': 'SH',
+    'tianjin': 'TJ',
+    'chongqing': 'CQ',
+    'guangdong': 'GD',
+    'zhejiang': 'ZJ',
+    'jiangsu': 'JS',
+    'sichuan': 'SC',
+    'hubei': 'HB',
+    'hunan': 'HN',
+    'fujian': 'FJ',
+    'shandong': 'SD',
+    'henan': 'HA',
+    'hebei': 'HE',
+    'liaoning': 'LN',
+    'shaanxi': 'SN',
+    'yunnan': 'YN',
+    'guangxi': 'GX',
+    'hong kong': 'HK',
+    'macau': 'MO',
+  },
+  'ID': {
+    'jakarta': 'JK',
+    'daerah khusus ibukota jakarta': 'JK',
+    'west java': 'JB',
+    'jawa barat': 'JB',
+    'central java': 'JT',
+    'jawa tengah': 'JT',
+    'east java': 'JI',
+    'jawa timur': 'JI',
+    'bali': 'BA',
+    'banten': 'BT',
+    'yogyakarta': 'YO',
+    'north sumatra': 'SU',
+    'sumatera utara': 'SU',
+    'south sulawesi': 'SN',
+  },
+  'PH': {
+    'metro manila': 'NCR',
+    'national capital region': 'NCR',
+    'calabarzon': 'IVA',
+    'central luzon': 'III',
+    'central visayas': 'VII',
+    'davao': 'XI',
+    'western visayas': 'VI',
+    'northern mindanao': 'X',
+    'ilocos': 'I',
+    'bicol': 'V',
+  },
+  'PL': {
+    'masovian': 'MZ',
+    'mazowieckie': 'MZ',
+    'lesser poland': 'MA',
+    'małopolskie': 'MA',
+    'malopolskie': 'MA',
+    'silesian': 'SL',
+    'śląskie': 'SL',
+    'lower silesian': 'DS',
+    'dolnośląskie': 'DS',
+    'greater poland': 'WP',
+    'wielkopolskie': 'WP',
+    'pomeranian': 'PM',
+    'pomorskie': 'PM',
+    'łódź': 'LD',
+    'lodz': 'LD',
+  },
+  'RU': {
+    'moscow': 'MOW',
+    'moscow oblast': 'MOS',
+    'saint petersburg': 'SPE',
+    'leningrad oblast': 'LEN',
+    'krasnodar krai': 'KDA',
+    'sverdlovsk oblast': 'SVE',
+    'tatarstan': 'TA',
+    'republic of tatarstan': 'TA',
+    'novosibirsk oblast': 'NVS',
+  },
+};
+
+/// Returns an abbreviated state/province string ONLY if the country is one of
+/// the 20 three-tier countries (`hasStateLevel == true` in `countries.dart`)
+/// and the state is not redundant with [city].
+/// For all 2-tier countries, returns `null`.
+String? abbreviateStateForCountry({
+  String? state,
+  String? stateCode,
+  String? city,
+  String? countryCode,
+  String? countryName,
+}) {
+  final matchedCountry = (countryCode != null && countryCode.trim().isNotEmpty)
+      ? country_data.getCountryByCode(countryCode)
+      : (countryName != null && countryName.trim().isNotEmpty)
+      ? country_data.getCountryByName(countryName)
+      : null;
+
+  if (matchedCountry == null || !matchedCountry.hasStateLevel) {
+    return null;
+  }
+
+  final codeUpper = matchedCountry.code.toUpperCase();
+  final countryMap = _threeTierStateAbbreviations[codeUpper];
+
+  // Check explicit short code from Google first (e.g. "AZ", "IA", "ON", "NSW")
+  final rawShort = stateCode?.trim();
+  if (rawShort != null && rawShort.isNotEmpty) {
+    final cleanShort = rawShort
+        .replaceAll(RegExp('^$codeUpper[-_]'), '')
+        .trim();
+    if (countryMap != null) {
+      final mappedShort = countryMap[cleanShort.toLowerCase()];
+      if (mappedShort != null) {
+        if (isSameOrRedundantLocationPart(city, cleanShort)) return null;
+        return mappedShort;
+      }
+    }
+    if (cleanShort.length >= 2 &&
+        cleanShort.length <= 5 &&
+        cleanShort == cleanShort.toUpperCase() &&
+        !cleanShort.contains(' ') &&
+        RegExp(r'^[A-Z0-9-]+$').hasMatch(cleanShort)) {
+      final fullFromShort = formatLocationName(cleanShort);
+      if (isSameOrRedundantLocationPart(city, fullFromShort)) {
+        return null;
+      }
+      return cleanShort;
+    }
+  }
+
+  final rawState = state?.trim();
+  if (rawState == null || rawState.isEmpty) return null;
+
+  final cleanedState = formatLocationName(rawState);
+  if (cleanedState.isEmpty) return null;
+  if (isSameOrRedundantLocationPart(city, rawState) ||
+      isSameOrRedundantLocationPart(city, cleanedState)) {
+    return null;
+  }
+
+  // Always consult the country abbreviation dictionary FIRST so short full names
+  // like "Iowa" -> "IA", "Ohio" -> "OH", "Utah" -> "UT", "Goa" -> "GA", "Zug" -> "ZG", "Bali" -> "BA"
+  // map to their true postal abbreviation instead of being treated as pre-abbreviated!
+  if (countryMap != null) {
+    final hit =
+        countryMap[cleanedState.toLowerCase()] ??
+        countryMap[rawState.toLowerCase()];
+    if (hit != null) return hit;
+  }
+
+  // If rawState itself is already an uppercase 2-4 letter code (e.g. "IA", "AZ", "NSW")
+  if (rawState.length >= 2 &&
+      rawState.length <= 4 &&
+      rawState == rawState.toUpperCase() &&
+      !rawState.contains(' ') &&
+      RegExp(r'^[A-Z]+$').hasMatch(rawState)) {
+    return rawState;
+  }
+
+  return cleanedState;
 }
 
 /// Formats a location string strictly following 2-tier (`City, Country`) or

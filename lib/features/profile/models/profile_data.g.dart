@@ -213,6 +213,7 @@ CurrentLocation _$CurrentLocationFromJson(Map<String, dynamic> json) =>
       adminArea2: json['adminArea2'] as String?,
       city: json['city'] as String?,
       state: json['state'] as String?,
+      stateCode: json['stateCode'] as String?,
       countryCode: json['countryCode'] as String?,
       timestamp: (json['timestamp'] as num).toInt(),
     );
@@ -226,6 +227,7 @@ Map<String, dynamic> _$CurrentLocationToJson(CurrentLocation instance) =>
       'adminArea2': instance.adminArea2,
       'city': instance.city,
       'state': instance.state,
+      'stateCode': instance.stateCode,
       'countryCode': instance.countryCode,
       'timestamp': instance.timestamp,
     };
