@@ -199,7 +199,7 @@ function publicProfile(document, distance, privateData = {}, targetCoords = null
         "homeCountryCode", "hostCountryCode", "profession", "industry",
         "yearsInHostCountry", "servicesOffered", "lookingFor",
         "availability", "meetingPreferences", "showCurrentLocationName",
-        "currentSubLocality", "currentCity", "currentState", "currentCountryCode",
+        "currentSubLocality", "currentAdminArea2", "currentCity", "currentState", "currentCountryCode",
     ];
     const result = {uid: document.id};
     for (const field of allowed) {
@@ -208,12 +208,15 @@ function publicProfile(document, distance, privateData = {}, targetCoords = null
     if (Number.isFinite(distance)) result.distance = distance;
 
     // Synthesize a safe neighborhood/city-level currentLocation for ProfileData.fromJson
-    // so UserCardView displays the bottom flag, sub-locality, city, and proximity/distance.
+    // so UserCardView displays the bottom flag, sub-locality, adminArea2, city, and proximity/distance.
     const showName = data.showCurrentLocationName !== false;
     const rawCur = (privateData && privateData.currentLocation) || data.currentLocation;
     const hostLoc = data.hostLocation || (privateData && privateData.hostLocation) || {};
     const subLocality = showName
         ? (data.currentSubLocality || (rawCur && (rawCur.subLocality || rawCur.sublocality)) || null)
+        : null;
+    const adminArea2 = showName
+        ? (data.currentAdminArea2 || (rawCur && (rawCur.adminArea2 || rawCur.subAdministrativeArea)) || null)
         : null;
     const city = showName
         ? (data.currentCity || (rawCur && rawCur.city) || hostLoc.city || null)
@@ -234,8 +237,8 @@ function publicProfile(document, distance, privateData = {}, targetCoords = null
     const safeLat = coords ? Math.round(coords.lat * 100) / 100 : 0;
     const safeLng = coords ? Math.round(coords.lng * 100) / 100 : 0;
 
-    if (subLocality || city || countryCode || coords) {
-        const summaryParts = [subLocality, city, state, country]
+    if (subLocality || adminArea2 || city || countryCode || coords) {
+        const summaryParts = [subLocality, adminArea2, city, state, country]
             .filter((p) => typeof p === "string" && p.trim().length > 0);
         const rawTs = rawCur && rawCur.timestamp;
         const tsMs = typeof rawTs === "number" ? rawTs : Date.now();
@@ -243,6 +246,7 @@ function publicProfile(document, distance, privateData = {}, targetCoords = null
             formatted_address: summaryParts.join(", "),
             place_id: "",
             subLocality: subLocality,
+            adminArea2: adminArea2,
             city: city,
             state: state,
             country: country,
@@ -492,7 +496,181 @@ async function runProximityCheck(userId, userData, oldLoc, isNewUser) {
     return null;
 }
 
-exports.checkProximity = functions.firestore
+function cleanAdminSuffix(name) {
+    return String(name || "")
+        .replace(/\s+(Region|State|Province|District|County|Township|Municipality)\b/gi, "")
+        .trim();
+}
+
+async function serverReverseGeocodeSubLocality(lat, lng) {
+    const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+    if (!apiKey || !Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) {
+        return null;
+    }
+    try {
+        const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
+        url.searchParams.set("latlng", `${lat},${lng}`);
+        url.searchParams.set("key", apiKey);
+        const resp = await fetch(url, {
+            signal: AbortSignal.timeout(6000),
+            headers: { Accept: "application/json" },
+        });
+        if (!resp.ok) return null;
+        const data = await resp.json();
+        if (data.status !== "OK" || !Array.isArray(data.results)) return null;
+
+        let subLocality = null;
+        let adminArea2 = null;
+        let locality = null;
+        let state = null;
+        let country = null;
+        let countryCode = null;
+
+        for (const res of data.results) {
+            const comps = Array.isArray(res.address_components) ? res.address_components : [];
+            let sub1 = null;
+            let nb = null;
+            let sub2 = null;
+            let adm3 = null;
+            let adm2 = null;
+            let loc = null;
+            let postalTown = null;
+            for (const c of comps) {
+                const types = Array.isArray(c.types) ? c.types : [];
+                const longName = String(c.long_name || "").trim();
+                const shortName = String(c.short_name || "").trim();
+                if (!longName) continue;
+                if (types.includes("sublocality") || types.includes("sublocality_level_1")) {
+                    if (!sub1) sub1 = longName;
+                } else if (types.includes("neighborhood")) {
+                    if (!nb) nb = longName;
+                } else if (types.includes("sublocality_level_2") || types.includes("sublocality_level_3")) {
+                    if (!sub2) sub2 = longName;
+                } else if (types.includes("administrative_area_level_3")) {
+                    if (!adm3) adm3 = longName;
+                } else if (types.includes("administrative_area_level_2")) {
+                    if (!adm2) adm2 = longName;
+                } else if (types.includes("locality")) {
+                    if (!loc) loc = longName;
+                } else if (types.includes("postal_town")) {
+                    if (!postalTown) postalTown = longName;
+                } else if (types.includes("administrative_area_level_1")) {
+                    if (!state) state = longName;
+                } else if (types.includes("country")) {
+                    if (!country) country = longName;
+                    if (!countryCode) countryCode = shortName.toUpperCase();
+                }
+            }
+            const candSub = sub1 || nb || sub2 || adm3;
+            const candAdm2 = adm2 ? cleanAdminSuffix(adm2) : null;
+            const candLoc = loc || postalTown;
+            if (!subLocality && candSub) subLocality = cleanAdminSuffix(candSub) || candSub;
+            if (!adminArea2 && candAdm2) adminArea2 = candAdm2;
+            if (!locality && candLoc) locality = cleanAdminSuffix(candLoc) || candLoc;
+            if (subLocality && (locality || adminArea2)) break;
+        }
+
+        if (!subLocality && adminArea2 && locality && adminArea2.toLowerCase() !== locality.toLowerCase()) {
+            subLocality = adminArea2;
+        }
+        const city = locality || adminArea2 || null;
+        if (subLocality && city && subLocality.toLowerCase() === city.toLowerCase() &&
+            (!adminArea2 || subLocality.toLowerCase() === adminArea2.toLowerCase())) {
+            subLocality = null;
+        }
+        return { subLocality, adminArea2, city, state, country, countryCode };
+    } catch (err) {
+        console.warn("[Proximity] Server reverse geocode warning:", err.message);
+        return null;
+    }
+}
+
+async function syncPublicCurrentLocation(userId, pubData, afterPrivData) {
+    try {
+        if (!pubData || pubData.cityVisibilityForfeited === true || pubData.showCurrentLocationName === false) {
+            return;
+        }
+        const rawCur = afterPrivData && afterPrivData.currentLocation;
+        if (!rawCur || !rawCur.geometry || !rawCur.geometry.location) return;
+        const lat = Number(rawCur.geometry.location.lat);
+        const lng = Number(rawCur.geometry.location.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) return;
+
+        let subLocality = rawCur.subLocality || rawCur.sublocality || null;
+        let adminArea2 = rawCur.adminArea2 || rawCur.subAdministrativeArea || null;
+        let city = rawCur.city || pubData.currentCity || null;
+        let state = rawCur.state || pubData.currentState || null;
+        let country = rawCur.country || pubData.hostCountry || null;
+        let countryCode = rawCur.countryCode || rawCur.country_code || pubData.currentCountryCode || null;
+
+        // Enrich older client builds or native-geocoder misses via Google Geocoding API
+        if (!subLocality) {
+            const enriched = await serverReverseGeocodeSubLocality(lat, lng);
+            if (enriched) {
+                subLocality = enriched.subLocality || subLocality;
+                adminArea2 = enriched.adminArea2 || adminArea2;
+                city = city || enriched.city;
+                state = state || enriched.state;
+                country = country || enriched.country;
+                countryCode = countryCode || enriched.countryCode;
+            }
+        }
+
+        const safeLat = Math.round(lat * 100) / 100;
+        const safeLng = Math.round(lng * 100) / 100;
+        const existingPubLoc = pubData.currentLocation || {};
+        const existingLat = existingPubLoc.geometry && existingPubLoc.geometry.location
+            ? existingPubLoc.geometry.location.lat : null;
+        const existingLng = existingPubLoc.geometry && existingPubLoc.geometry.location
+            ? existingPubLoc.geometry.location.lng : null;
+
+        const needsPublicSync =
+            (subLocality || null) !== (pubData.currentSubLocality || null) ||
+            (adminArea2 || null) !== (pubData.currentAdminArea2 || null) ||
+            (city || null) !== (pubData.currentCity || null) ||
+            existingLat !== safeLat ||
+            existingLng !== safeLng;
+
+        if (!needsPublicSync) return;
+
+        const tsMs = typeof rawCur.timestamp === "number" ? rawCur.timestamp : Date.now();
+        const isoNow = rawCur.lastUpdated || new Date(tsMs).toISOString();
+        const summaryParts = [subLocality, adminArea2, city, state, country]
+            .filter((p) => typeof p === "string" && p.trim().length > 0);
+
+        const publicCurrentLocation = {
+            formatted_address: summaryParts.join(", "),
+            place_id: "",
+            ...(subLocality ? { subLocality } : {}),
+            ...(adminArea2 ? { adminArea2 } : {}),
+            city: city || null,
+            state: state || null,
+            country: country || null,
+            country_code: countryCode || null,
+            countryCode: countryCode || null,
+            timestamp: tsMs,
+            lastUpdated: isoNow,
+            geometry: {
+                location: { lat: safeLat, lng: safeLng },
+            },
+        };
+
+        await db.collection("users").doc(userId).set({
+            currentSubLocality: subLocality ? subLocality : admin.firestore.FieldValue.delete(),
+            currentAdminArea2: adminArea2 ? adminArea2 : admin.firestore.FieldValue.delete(),
+            currentCity: city || null,
+            currentState: state || null,
+            currentCountryCode: countryCode || null,
+            currentLocation: publicCurrentLocation,
+        }, { merge: true });
+    } catch (err) {
+        console.warn(`[Proximity] syncPublicCurrentLocation warning for ${userId}:`, err.message);
+    }
+}
+
+exports.checkProximity = functions
+    .runWith({ secrets: ["GOOGLE_PLACES_API_KEY"] })
+    .firestore
     .document("user_private/{userId}")
     .onUpdate(async (change, context) => {
         const userId = context.params.userId;
@@ -521,9 +699,11 @@ exports.checkProximity = functions.firestore
 
         const profile = await db.collection("users").doc(userId).get();
         if (!profile.exists) return null;
-        const mergedUserData = {...profile.data(), ...after};
+        const pubData = profile.data() || {};
+        const mergedUserData = {...pubData, ...after};
 
         await Promise.all([
+            syncPublicCurrentLocation(userId, pubData, after),
             evaluateProximityDwellAndGatherings(userId, mergedUserData).catch((err) => {
                 console.error(`[ProximityDwell] Error for ${userId}:`, err);
             }),
@@ -537,16 +717,20 @@ exports.checkProximity = functions.firestore
         return null;
     });
 
-exports.checkProximityOnCreate = functions.firestore
+exports.checkProximityOnCreate = functions
+    .runWith({ secrets: ["GOOGLE_PLACES_API_KEY"] })
+    .firestore
     .document("user_private/{userId}")
     .onCreate(async (snap, context) => {
         if (snap.data().securityMigrationVersion === 1) return null;
         const userId = context.params.userId;
         const profile = await db.collection("users").doc(userId).get();
         if (!profile.exists) return null;
-        const userData = {...profile.data(), ...snap.data()};
+        const pubData = profile.data() || {};
+        const userData = {...pubData, ...snap.data()};
         // Onboarding-incomplete docs are gated inside runProximityCheck.
         await Promise.all([
+            syncPublicCurrentLocation(userId, pubData, snap.data()),
             evaluateProximityDwellAndGatherings(userId, userData).catch((err) => {
                 console.error(`[ProximityDwell] onCreate error for ${userId}:`, err);
             }),

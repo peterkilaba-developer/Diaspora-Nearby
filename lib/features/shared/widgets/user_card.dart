@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
+import 'package:diaspora_nearby/core/services/google_places_service.dart';
 import 'package:diaspora_nearby/core/utils/location_utils.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
@@ -57,9 +58,67 @@ class UserCardView extends ConsumerStatefulWidget {
 }
 
 class _UserCardViewState extends ConsumerState<UserCardView> {
+  static final Map<String, Map<String, dynamic>> _coordGeocodeCache = {};
+  static final Map<String, Future<Map<String, dynamic>?>>
+  _coordGeocodeInFlight = {};
+  Map<String, dynamic>? _resolvedCoordLocation;
+  String? _resolvedCoordKey;
+
   @override
   void initState() {
     super.initState();
+  }
+
+  void _ensureCoordinateSubLocality(ProfileData user) {
+    if (user.showCurrentLocationName == false) return;
+    final sub = user.currentLocation?.subLocality?.trim();
+    if (sub != null && sub.isNotEmpty) return;
+
+    final coords = extractProfileCoords(user);
+    if (coords == null) return;
+
+    final key =
+        '${coords.$1.toStringAsFixed(3)},${coords.$2.toStringAsFixed(3)}';
+    final cached = _coordGeocodeCache[key];
+    if (cached != null) {
+      if (_resolvedCoordKey != key) {
+        _resolvedCoordKey = key;
+        _resolvedCoordLocation = cached;
+      }
+      return;
+    }
+
+    if (_resolvedCoordKey != key) {
+      _resolvedCoordLocation = null;
+    }
+
+    Future<Map<String, dynamic>?>? future = _coordGeocodeInFlight[key];
+    if (future == null) {
+      final places = ref.read(googlePlacesServiceProvider);
+      future = places
+          .reverseGeocode(coords.$1, coords.$2)
+          .then((res) {
+            _coordGeocodeInFlight.remove(key);
+            if (res != null) {
+              _coordGeocodeCache[key] = res;
+            }
+            return res;
+          })
+          .catchError((_) {
+            _coordGeocodeInFlight.remove(key);
+            return null;
+          });
+      _coordGeocodeInFlight[key] = future;
+    }
+
+    future.then((res) {
+      if (res != null && mounted && _resolvedCoordKey != key) {
+        setState(() {
+          _resolvedCoordKey = key;
+          _resolvedCoordLocation = res;
+        });
+      }
+    });
   }
 
   // ... (keep all helper methods same) ...
@@ -308,36 +367,76 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
     final proximityColor = _getProximityColor(proximityLevel, isDark, theme);
     final (distanceValue, distanceUnit) = _formatDistanceMetric(distance);
 
-    // Format current location display (prefer sub-locality / neighborhood over locality)
+    // Trigger client-side coordinate reverse-geocoding if subLocality is not yet populated
+    // so peers see sub-locality + locality/adminArea2 immediately in real time.
+    _ensureCoordinateSubLocality(effectiveUser);
+
+    // Format current location display (show both sub-locality and locality/adminArea2)
     String? currentCityDisplay;
-    final subLocality = effectiveUser.currentLocation?.subLocality?.trim();
-    final city = effectiveUser.currentLocation?.city?.trim();
+    final subLocality =
+        (effectiveUser.currentLocation?.subLocality?.trim().isNotEmpty == true
+                ? effectiveUser.currentLocation!.subLocality!.trim()
+                : (_resolvedCoordLocation?['subLocality'] as String?)?.trim());
+    final adminArea2 =
+        (effectiveUser.currentLocation?.adminArea2?.trim().isNotEmpty == true
+                ? effectiveUser.currentLocation!.adminArea2!.trim()
+                : (_resolvedCoordLocation?['adminArea2'] as String?)?.trim());
+    final city =
+        (effectiveUser.currentLocation?.city?.trim().isNotEmpty == true
+                ? effectiveUser.currentLocation!.city!.trim()
+                : (_resolvedCoordLocation?['city'] as String?)?.trim());
+
+    String? secondaryArea;
+    if (city != null &&
+        city.isNotEmpty &&
+        !isSameOrRedundantLocationPart(city, subLocality)) {
+      secondaryArea = city;
+    } else if (adminArea2 != null &&
+        adminArea2.isNotEmpty &&
+        !isSameOrRedundantLocationPart(adminArea2, subLocality)) {
+      secondaryArea = adminArea2;
+    }
+
     if ((subLocality != null && subLocality.isNotEmpty) ||
+        (secondaryArea != null && secondaryArea.isNotEmpty) ||
         (city != null && city.isNotEmpty)) {
       if (subLocality != null &&
           subLocality.isNotEmpty &&
-          city != null &&
-          city.isNotEmpty &&
-          !isSameOrRedundantLocationPart(subLocality, city)) {
-        currentCityDisplay = '$subLocality, $city';
+          secondaryArea != null &&
+          secondaryArea.isNotEmpty) {
+        currentCityDisplay = '$subLocality, $secondaryArea';
       } else if (subLocality != null && subLocality.isNotEmpty) {
         final cleanState = sanitizeStateForCountry(
-          state: effectiveUser.currentLocation?.state,
+          state:
+              effectiveUser.currentLocation?.state ??
+              (_resolvedCoordLocation?['state'] as String?),
           city: subLocality,
-          countryCode: effectiveUser.currentLocation?.countryCode,
+          countryCode:
+              effectiveUser.currentLocation?.countryCode ??
+              (_resolvedCoordLocation?['countryCode'] as String?),
         );
         currentCityDisplay = (cleanState != null && cleanState.isNotEmpty)
             ? '$subLocality, $cleanState'
             : subLocality;
       } else if (city != null && city.isNotEmpty) {
-        final cleanState = sanitizeStateForCountry(
-          state: effectiveUser.currentLocation?.state,
-          city: city,
-          countryCode: effectiveUser.currentLocation?.countryCode,
-        );
-        currentCityDisplay = (cleanState != null && cleanState.isNotEmpty)
-            ? '$city, $cleanState'
-            : city;
+        if (adminArea2 != null &&
+            adminArea2.isNotEmpty &&
+            !isSameOrRedundantLocationPart(adminArea2, city)) {
+          currentCityDisplay = '$adminArea2, $city';
+        } else {
+          final cleanState = sanitizeStateForCountry(
+            state:
+                effectiveUser.currentLocation?.state ??
+                (_resolvedCoordLocation?['state'] as String?),
+            city: city,
+            countryCode:
+                effectiveUser.currentLocation?.countryCode ??
+                (_resolvedCoordLocation?['countryCode'] as String?),
+          );
+          currentCityDisplay = (cleanState != null && cleanState.isNotEmpty)
+              ? '$city, $cleanState'
+              : city;
+        }
       }
     } else if (effectiveUser.hostLocation.formattedAddress.isNotEmpty) {
       final loc = effectiveUser.hostLocation;
@@ -779,7 +878,7 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
               },
               child: Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
+                  horizontal: AppTheme.pageHorizontalPadding,
                   vertical: 12,
                 ),
                 decoration: BoxDecoration(
@@ -795,85 +894,70 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                         ),
                 ),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Expanded(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: Row(
-                              children: [
-                                if (bottomFlag.isNotEmpty) ...[
-                                  Text(
-                                    bottomFlag,
-                                    style: const TextStyle(fontSize: 16),
-                                  ),
-                                  const SizedBox(width: 6),
-                                ],
-                                Flexible(
-                                  child: Text(
-                                    proximityLevel,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: proximityColor,
-                                    ),
-                                  ),
-                                ),
-                                // Show city when we have something to display —
-                                // either a real currentLocation, or a fallback
-                                // from hostLocation (city populated above on
-                                // ~L300). Previously this row was gated on
-                                // currentLocation != null, which hid the
-                                // fallback for connections who haven't opened
-                                // the app since location tracking shipped.
-                                if (effectiveUser.showCurrentLocationName !=
-                                        false &&
-                                    currentCityDisplay != null) ...[
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    width: 1,
-                                    height: 12,
-                                    color: theme.hintColor.withValues(
-                                      alpha: 0.2,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Flexible(
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const _MovingLogo(),
-                                        const SizedBox(width: 4),
-                                        Flexible(
-                                          child: Text(
-                                            currentCityDisplay,
-                                            style: theme.textTheme.bodySmall
-                                                ?.copyWith(
-                                                  fontSize: 12,
-                                                  color: theme
-                                                      .colorScheme
-                                                      .onSurfaceVariant,
-                                                  decoration:
-                                                      TextDecoration.none,
-                                                ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (bottomFlag.isNotEmpty) ...[
+                          Text(
+                            bottomFlag,
+                            style: const TextStyle(fontSize: 15),
                           ),
+                          const SizedBox(width: 4),
                         ],
-                      ),
+                        Text(
+                          proximityLevel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: proximityColor,
+                          ),
+                        ),
+                      ],
                     ),
+                    // Place current location display name closest to the distance text
+                    // with Expanded right alignment so most/all of "SubLocality, Locality/Admin2" shows.
+                    if (effectiveUser.showCurrentLocationName != false &&
+                        currentCityDisplay != null) ...[
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const _MovingLogo(),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  currentCityDisplay,
+                                  textAlign: TextAlign.right,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    fontSize: 12,
+                                    color:
+                                        theme.colorScheme.onSurfaceVariant,
+                                    decoration: TextDecoration.none,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        width: 1,
+                        height: 12,
+                        color: theme.hintColor.withValues(alpha: 0.2),
+                      ),
+                      const SizedBox(width: 6),
+                    ] else
+                      const Spacer(),
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [

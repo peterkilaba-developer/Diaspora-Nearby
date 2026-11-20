@@ -401,10 +401,17 @@ class GooglePlacesService {
               ? formatLocationName(rawCity)
               : null;
 
+          String? adminArea2 = bestSubAdmin != null && bestSubAdmin.isNotEmpty
+              ? formatLocationName(bestSubAdmin)
+              : null;
+          if (adminArea2 != null && adminArea2.isEmpty) {
+            adminArea2 = null;
+          }
+
           String? subLocality = bestSubLocality != null
               ? formatLocationName(bestSubLocality)
-              : (bestLocality != null && bestSubAdmin != null)
-              ? formatLocationName(bestSubAdmin)
+              : (bestLocality != null && adminArea2 != null)
+              ? adminArea2
               : null;
           if (subLocality != null &&
               (subLocality.isEmpty ||
@@ -432,6 +439,7 @@ class GooglePlacesService {
             'formattedAddress': formattedAddress,
             'placeId': '',
             'subLocality': subLocality,
+            'adminArea2': adminArea2,
             'city': city,
             'state': state,
             'country': country,
@@ -440,20 +448,23 @@ class GooglePlacesService {
             'lng': lng,
           };
 
-          if (subLocality != null && subLocality.isNotEmpty) {
+          if (subLocality != null &&
+              subLocality.isNotEmpty &&
+              (city != null || adminArea2 != null)) {
             return nativeResult;
           }
         }
       } catch (_) {}
     }
 
-    // Fallback or enrich with Google Geocoding HTTP API (gets neighborhood / sublocality reliably)
+    // Fallback or enrich with Google Geocoding HTTP API (gets neighborhood / sublocality / adminArea2 reliably)
     final httpResult = await _reverseGeocodeHttp(lat, lng);
     if (httpResult != null) {
       if (nativeResult == null) return httpResult;
       return {
         ...nativeResult,
         'subLocality': httpResult['subLocality'] ?? nativeResult['subLocality'],
+        'adminArea2': httpResult['adminArea2'] ?? nativeResult['adminArea2'],
         'city': nativeResult['city'] ?? httpResult['city'],
         'state': nativeResult['state'] ?? httpResult['state'],
         'country': nativeResult['country'] ?? httpResult['country'],
@@ -474,36 +485,62 @@ class GooglePlacesService {
     double lat,
     double lng,
   ) async {
+    Future<http.Response?> doFetch({required bool useProxy}) async {
+      try {
+        final apiKey = Env.googleMapsApiKey;
+        if (!useProxy && apiKey.isEmpty) return null;
+        final Uri url;
+        if (useProxy) {
+          url = Uri.parse(_placesProxyBaseUrl).replace(
+            queryParameters: {
+              'type': 'reverse_geocode',
+              'lat': '$lat',
+              'lng': '$lng',
+            },
+          );
+        } else {
+          url = Uri.https('maps.googleapis.com', '/maps/api/geocode/json', {
+            'latlng': '$lat,$lng',
+            'key': apiKey,
+          });
+        }
+        return await http
+            .get(url, headers: await _proxyHeaders(useProxy: useProxy))
+            .timeout(const Duration(seconds: 6));
+      } catch (_) {
+        return null;
+      }
+    }
+
     try {
       final apiKey = Env.googleMapsApiKey;
-      final useProxy = kIsWeb || apiKey.isEmpty;
-      final Uri url;
-      if (useProxy) {
-        url = Uri.parse(_placesProxyBaseUrl).replace(
-          queryParameters: {
-            'type': 'reverse_geocode',
-            'lat': '$lat',
-            'lng': '$lng',
-          },
-        );
-      } else {
-        url = Uri.https('maps.googleapis.com', '/maps/api/geocode/json', {
-          'latlng': '$lat,$lng',
-          'key': apiKey,
-        });
+      // Route via Cloud Functions proxy when web or if direct key denies Geocoding API
+      Map<String, dynamic>? data;
+      if (!kIsWeb && apiKey.isNotEmpty) {
+        final directResp = await doFetch(useProxy: false);
+        if (directResp != null && directResp.statusCode == 200) {
+          final decoded = jsonDecode(directResp.body) as Map<String, dynamic>;
+          if (decoded['status'] == 'OK') {
+            data = decoded;
+          }
+        }
       }
+      if (data == null) {
+        final proxyResp = await doFetch(useProxy: true);
+        if (proxyResp != null && proxyResp.statusCode == 200) {
+          final decoded = jsonDecode(proxyResp.body) as Map<String, dynamic>;
+          if (decoded['status'] == 'OK') {
+            data = decoded;
+          }
+        }
+      }
+      if (data == null) return null;
 
-      final response = await http
-          .get(url, headers: await _proxyHeaders(useProxy: useProxy))
-          .timeout(const Duration(seconds: 6));
-
-      if (response.statusCode != 200) return null;
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      if (data['status'] != 'OK') return null;
       final results = data['results'] as List<dynamic>?;
       if (results == null || results.isEmpty) return null;
 
       String? subLocality;
+      String? adminArea2;
       String? city;
       String? state;
       String? country;
@@ -530,31 +567,37 @@ class GooglePlacesService {
         );
         if (parsed != null) {
           subLocality ??= parsed.sublocality;
+          adminArea2 ??= parsed.adminArea2;
           city ??= parsed.city;
           state ??= parsed.state;
           country ??= parsed.country;
           countryCode ??= parsed.countryCode;
-          if (subLocality != null && city != null) {
+          if (subLocality != null && (city != null || adminArea2 != null)) {
             break;
           }
         }
       }
 
-      if (city == null && subLocality == null && countryCode == null) {
+      if (city == null &&
+          subLocality == null &&
+          adminArea2 == null &&
+          countryCode == null) {
         return null;
       }
 
       if (subLocality != null) {
         final cleanedSub = formatLocationName(subLocality);
         subLocality = cleanedSub.isNotEmpty ? cleanedSub : subLocality.trim();
-        if (isSameOrRedundantLocationPart(subLocality, city)) {
+        if (isSameOrRedundantLocationPart(subLocality, city) &&
+            (adminArea2 == null ||
+                isSameOrRedundantLocationPart(subLocality, adminArea2))) {
           subLocality = null;
         }
       }
 
       final formattedAddress = formatTieredLocation(
         subLocality: subLocality,
-        city: city,
+        city: city ?? adminArea2,
         state: state,
         country: country,
         countryCode: countryCode,
@@ -565,6 +608,7 @@ class GooglePlacesService {
         'formattedAddress': formattedAddress,
         'placeId': '',
         'subLocality': subLocality,
+        'adminArea2': adminArea2,
         'city': city,
         'state': state,
         'country': country,

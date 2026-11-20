@@ -189,8 +189,16 @@ LocationParsed? parseLocationComponents(
     }
   }
 
+  String? cleanedAdminArea2 = adminArea2 != null
+      ? formatLocationName(adminArea2)
+      : null;
+  if (cleanedAdminArea2 != null && cleanedAdminArea2.isEmpty) {
+    cleanedAdminArea2 = null;
+  }
+
   return LocationParsed(
     sublocality: sublocality,
+    adminArea2: cleanedAdminArea2,
     city: city,
     state: state,
     country: country,
@@ -203,6 +211,7 @@ LocationParsed? parseLocationComponents(
 class LocationParsed {
   final String?
   sublocality; // neighborhood / sub-locality for precise marketplace locations
+  final String? adminArea2; // district / county / administrative_area_level_2
   final String? city;
   final String? state;
   final String country;
@@ -213,6 +222,7 @@ class LocationParsed {
 
   LocationParsed({
     this.sublocality,
+    this.adminArea2,
     this.city,
     this.state,
     required this.country,
@@ -224,7 +234,7 @@ class LocationParsed {
 
   @override
   String toString() =>
-      'LocationParsed(sublocality: $sublocality, city: $city, state: $state, country: $country, code: $countryCode, placeId: $placeId, streetAddress: $streetAddress)';
+      'LocationParsed(sublocality: $sublocality, adminArea2: $adminArea2, city: $city, state: $state, country: $country, code: $countryCode, placeId: $placeId, streetAddress: $streetAddress)';
 }
 
 // --------------------------------------------------------------------------

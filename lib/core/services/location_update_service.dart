@@ -238,6 +238,7 @@ class LocationUpdateService {
       }
 
       String? subLocality = geocoded?['subLocality'] as String?;
+      String? adminArea2 = geocoded?['adminArea2'] as String?;
       String? city = geocoded?['city'] as String?;
       String? state = geocoded?['state'] as String?;
       String? country = geocoded?['country'] as String?;
@@ -246,12 +247,22 @@ class LocationUpdateService {
       if (subLocality != null && subLocality.trim().isEmpty) {
         subLocality = null;
       }
+      if (adminArea2 != null && adminArea2.trim().isEmpty) {
+        adminArea2 = null;
+      }
       if (city != null && city.trim().isEmpty) {
         city = null;
       }
       if (subLocality != null &&
-          isSameOrRedundantLocationPart(subLocality, city)) {
+          isSameOrRedundantLocationPart(subLocality, city) &&
+          (adminArea2 == null ||
+              isSameOrRedundantLocationPart(subLocality, adminArea2))) {
         subLocality = null;
+      }
+      if (adminArea2 != null &&
+          (isSameOrRedundantLocationPart(adminArea2, subLocality) ||
+              isSameOrRedundantLocationPart(adminArea2, city))) {
+        adminArea2 = null;
       }
 
       String formattedAddress =
@@ -259,6 +270,7 @@ class LocationUpdateService {
       if (formattedAddress.isEmpty) {
         final parts = [
           subLocality,
+          adminArea2,
           city,
           state,
           country,
@@ -285,6 +297,7 @@ class LocationUpdateService {
           'location': {'lat': position.latitude, 'lng': position.longitude},
         },
         'subLocality': subLocality,
+        'adminArea2': adminArea2,
         'city': city,
         'state': state,
         'country': country,
@@ -329,6 +342,7 @@ class LocationUpdateService {
         final safeLng = (position.longitude * 100).round() / 100;
         final summaryParts = [
           subLocality,
+          adminArea2,
           city,
           state,
           country,
@@ -337,6 +351,7 @@ class LocationUpdateService {
           'formatted_address': summaryParts,
           'place_id': '',
           'subLocality': subLocality,
+          'adminArea2': adminArea2,
           'city': city,
           'state': state,
           'country': country,
@@ -351,6 +366,7 @@ class LocationUpdateService {
         batch.set(_firestore.collection('users').doc(userId), {
           if (!forfeited && !hasExplicitChoice) 'showCurrentLocationName': true,
           'currentSubLocality': subLocality ?? FieldValue.delete(),
+          'currentAdminArea2': adminArea2 ?? FieldValue.delete(),
           'currentCity': city,
           'currentState': state,
           'currentCountryCode': countryCode,

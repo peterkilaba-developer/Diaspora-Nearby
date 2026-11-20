@@ -261,9 +261,10 @@ void main() {
         hostLocation: loc,
         showCurrentLocationName: true,
         currentLocation: CurrentLocation(
-          formattedAddress: 'Midtown, Houston, Texas, United States',
+          formattedAddress: 'Midtown, Harris, Houston, Texas, United States',
           placeId: '',
           subLocality: 'Midtown',
+          adminArea2: 'Harris',
           city: 'Houston',
           state: 'Texas',
           countryCode: 'US',
@@ -278,13 +279,16 @@ void main() {
       final publicData = (await firestore.doc('users/subloc-user').get())
           .data()!;
       expect(publicData['currentSubLocality'], 'Midtown');
+      expect(publicData['currentAdminArea2'], 'Harris');
       expect(publicData['currentCity'], 'Houston');
       final pubCur = publicData['currentLocation'] as Map<String, dynamic>;
       expect(pubCur['subLocality'], 'Midtown');
+      expect(pubCur['adminArea2'], 'Harris');
       expect(pubCur['city'], 'Houston');
 
       final parsed = ProfileData.fromJson({...publicData, 'uid': 'subloc-user'});
       expect(parsed.currentLocation?.subLocality, 'Midtown');
+      expect(parsed.currentLocation?.adminArea2, 'Harris');
       expect(parsed.currentLocation?.city, 'Houston');
     },
   );

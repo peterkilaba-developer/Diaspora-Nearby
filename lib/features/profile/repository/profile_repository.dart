@@ -141,11 +141,17 @@ class ProfileRepository {
     final subLocality = includeSubLocality
         ? (map['subLocality'] as String? ?? map['sublocality'] as String?)
         : null;
+    final adminArea2 = includeSubLocality
+        ? (map['adminArea2'] as String? ??
+              map['subAdministrativeArea'] as String? ??
+              map['administrative_area_level_2'] as String?)
+        : null;
     final city = map['city'] as String?;
     final state = map['state'] as String?;
     final country = map['country'] as String?;
     final summary = [
       subLocality,
+      adminArea2,
       city,
       state,
       country,
@@ -156,6 +162,10 @@ class ProfileRepository {
           subLocality != null &&
           subLocality.trim().isNotEmpty)
         'subLocality': subLocality.trim(),
+      if (includeSubLocality &&
+          adminArea2 != null &&
+          adminArea2.trim().isNotEmpty)
+        'adminArea2': adminArea2.trim(),
       'city': city,
       'state': state,
       'country': country,
@@ -227,9 +237,14 @@ class ProfileRepository {
     if (currentSummary != null &&
         publicData['showCurrentLocationName'] != false) {
       final subLoc = currentSummary['subLocality'] as String?;
+      final adm2 = currentSummary['adminArea2'] as String?;
       publicData['currentSubLocality'] =
           (subLoc != null && subLoc.trim().isNotEmpty)
           ? subLoc.trim()
+          : cf.FieldValue.delete();
+      publicData['currentAdminArea2'] =
+          (adm2 != null && adm2.trim().isNotEmpty)
+          ? adm2.trim()
           : cf.FieldValue.delete();
       publicData['currentCity'] = currentSummary['city'];
       publicData['currentState'] = currentSummary['state'];
@@ -249,6 +264,7 @@ class ProfileRepository {
       };
     } else if (publicData['showCurrentLocationName'] == false) {
       publicData['currentSubLocality'] = cf.FieldValue.delete();
+      publicData['currentAdminArea2'] = cf.FieldValue.delete();
       publicData['currentCity'] = cf.FieldValue.delete();
       publicData['currentState'] = cf.FieldValue.delete();
       publicData['currentCountryCode'] = cf.FieldValue.delete();
