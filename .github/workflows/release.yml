@@ -229,21 +229,24 @@ jobs:
         env:
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
         run: |
+          APP_VERSION=$(grep '^version:' pubspec.yaml | sed -E 's/^version: *([^+]+).*/\1/' | tr -d '[:space:]')
+          APP_VERSION="${APP_VERSION:-1.2.8}"
           BUILD_NUMBER=$((25 + ${{ github.run_number }}))
+          echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
           echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_ENV
-          echo "Building version code: $BUILD_NUMBER"
+          echo "Building version $APP_VERSION ($BUILD_NUMBER)"
           flutter build appbundle --release \
             --flavor production \
             -t lib/main_production.dart \
             --target-platform android-arm,android-arm64 \
-            --build-name=1.2.7 \
+            --build-name=$APP_VERSION \
             --build-number=$BUILD_NUMBER \
             --dart-define=GOOGLE_MAPS_API_KEY=$GOOGLE_MAPS_API_KEY
           flutter build apk --release \
             --flavor production \
             -t lib/main_production.dart \
             --target-platform android-arm,android-arm64 \
-            --build-name=1.2.7 \
+            --build-name=$APP_VERSION \
             --build-number=$BUILD_NUMBER \
             --dart-define=GOOGLE_MAPS_API_KEY=$GOOGLE_MAPS_API_KEY
           df -h
@@ -261,17 +264,68 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG_NAME="v1.2.7-build.${{ env.BUILD_NUMBER }}"
+          TAG_NAME="v${{ env.APP_VERSION }}-build.${{ env.BUILD_NUMBER }}"
           gh release create "$TAG_NAME" \
             build/app/outputs/flutter-apk/app-production-release.apk \
             build/app/outputs/bundle/productionRelease/app-production-release.aab \
-            --title "Diaspora Nearby v1.2.7 (Build ${{ env.BUILD_NUMBER }})" \
-            --notes "Automated production release (Build ${{ env.BUILD_NUMBER }}, commit ${{ github.sha }})." \
+            --title "Diaspora Nearby v${{ env.APP_VERSION }} (Build ${{ env.BUILD_NUMBER }})" \
+            --notes "Automated production release v${{ env.APP_VERSION }} (Build ${{ env.BUILD_NUMBER }}, commit ${{ github.sha }})." \
             --latest || true
           gh release upload latest \
             build/app/outputs/flutter-apk/app-production-release.apk \
             build/app/outputs/bundle/productionRelease/app-production-release.aab \
             --clobber || true
+
+      - name: Inspect Active Google Play Tracks
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.publish_play_store == true }}
+        env:
+          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          INPUT_TRACK: ${{ inputs.track }}
+        run: |
+          node -e '
+            const crypto = require("crypto");
+            const sa = JSON.parse(process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON || "{}");
+            if (!sa.client_email || !sa.private_key) {
+              console.log("PLAY_TRACKS=" + (process.env.INPUT_TRACK || "beta"));
+              process.exit(0);
+            }
+            const b64u = (s) => Buffer.from(s).toString("base64url");
+            const now = Math.floor(Date.now() / 1000);
+            const hdr = b64u(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+            const clm = b64u(JSON.stringify({
+              iss: sa.client_email,
+              scope: "https://www.googleapis.com/auth/androidpublisher",
+              aud: "https://oauth2.googleapis.com/token",
+              iat: now,
+              exp: now + 3600,
+            }));
+            const sig = crypto.createSign("RSA-SHA256").update(hdr + "." + clm).sign(sa.private_key, "base64url");
+            (async () => {
+              const tokRes = await fetch("https://oauth2.googleapis.com/token", {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=" + hdr + "." + clm + "." + sig,
+              });
+              const { access_token } = await tokRes.json();
+              const base = "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/com.diasporanearby.diasporanearby/edits";
+              const headers = { Authorization: "Bearer " + access_token, "Content-Type": "application/json" };
+              const editRes = await fetch(base, { method: "POST", headers, body: "{}" });
+              const edit = await editRes.json();
+              if (!edit.id) { console.log("Edit response:", edit); return; }
+              const tracksRes = await fetch(base + "/" + edit.id + "/tracks", { headers });
+              const tracksData = await tracksRes.json();
+              const summary = (tracksData.tracks || []).map((t) => ({
+                track: t.track,
+                releases: (t.releases || []).map((r) => ({
+                  name: r.name,
+                  status: r.status,
+                  versionCodes: r.versionCodes,
+                })),
+              }));
+              console.log("Google Play Tracks Summary:", JSON.stringify(summary, null, 2));
+              await fetch(base + "/" + edit.id, { method: "DELETE", headers });
+            })().catch((e) => console.warn("Track inspection skipped:", e.message));
+          ' || true
 
       - name: Publish to Google Play Console (Open Testing / Beta Track)
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.publish_play_store == true }}
@@ -280,9 +334,9 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.diasporanearby.diasporanearby
           releaseFiles: build/app/outputs/bundle/productionRelease/app-production-release.aab
-          track: ${{ inputs.track || 'beta' }}
+          tracks: ${{ inputs.track || 'beta' }}
           status: completed
-          inAppUpdatePriority: 2
+          inAppUpdatePriority: 4
 
       - name: Update Firestore system_stats/app_version Metadata
         if: ${{ !cancelled() }}
@@ -299,7 +353,8 @@ jobs:
             const admin = require("./functions/node_modules/firebase-admin");
             admin.initializeApp({ projectId: "diaspora-nearby-a3dac" });
             const db = admin.firestore();
-            const buildNum = Number(process.env.BUILD_NUMBER || 45);
+            const appVer = process.env.APP_VERSION || "1.2.8";
+            const buildNum = Number(process.env.BUILD_NUMBER || 67);
             const avatarUrl = "https://diasporanearby.com/icons/Icon-512.png";
             const defaultLoc = {
               formatted_address: "Global Diaspora",
@@ -311,19 +366,19 @@ jobs:
             };
             (async () => {
               await db.doc("system_stats/app_version").set({
-                latestVersion: "1.2.7",
-                androidVersion: "1.2.7",
-                iosVersion: "1.2.7",
+                latestVersion: appVer,
+                androidVersion: appVer,
+                iosVersion: appVer,
                 latestBuildNumber: buildNum,
                 androidBuildNumber: buildNum,
                 androidMinBuildNumber: 25,
-                iosBuildNumber: buildNum,
+                iosBuildNumber: admin.firestore.FieldValue.delete(),
                 iosMinBuildNumber: 25,
                 forceUpdate: false,
                 androidUpdateUrl: "https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby",
                 androidApkUrl: admin.firestore.FieldValue.delete(),
                 iosUpdateUrl: "https://testflight.apple.com/join/vB3XzPKg",
-                releaseNotes: "AI Agent concierge actions, voice call messages, PoH/TDE token reconciliation, and Android/iOS stability updates.",
+                releaseNotes: "Real-time sub-locality & abbreviated state location updates, aligned UserCard indicators, App Info live version badge, and Android/iOS improvements.",
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
               }, { merge: true });
 

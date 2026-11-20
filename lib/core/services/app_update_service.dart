@@ -34,20 +34,39 @@ class AppUpdateService {
       'https://apps.apple.com/app/id6821194997';
   static const String _dismissedBuildPrefKey =
       'app_update_dismissed_build_number';
+  static const String _dismissedReleaseKeyPref =
+      'app_update_dismissed_release_key';
+  static const String fallbackVersionName = '1.2.8';
+
+  /// Formats a human-readable version string for App Info cards across platforms.
+  static String formatVersionLabel(PackageInfo info) {
+    final version = info.version.trim().isNotEmpty
+        ? info.version.trim()
+        : fallbackVersionName;
+    final build = info.buildNumber.trim();
+    if (build.isEmpty) {
+      return 'Version $version';
+    }
+    return 'Version $version (Build $build)';
+  }
 
   DateTime? _lastCheckAt;
   bool _dialogShowing = false;
   int? _dismissedBuildNumber;
+  String? _dismissedReleaseKey;
 
   /// Checks for updates at most once every [cooldown] unless [force] is true.
+  /// Set [showUpToDateFeedback] to true when triggered manually from App Info.
   Future<void> checkForUpdate(
     BuildContext context, {
     Duration cooldown = const Duration(minutes: 15),
     bool force = false,
+    bool showUpToDateFeedback = false,
   }) async {
     if (kIsWeb) return;
+    final effectiveForce = force || showUpToDateFeedback;
     final now = DateTime.now();
-    if (!force &&
+    if (!effectiveForce &&
         _lastCheckAt != null &&
         now.difference(_lastCheckAt!) < cooldown) {
       return;
@@ -56,25 +75,35 @@ class AppUpdateService {
 
     // 1. On Android, rely on Google Play Core's authoritative In-App Update API.
     // If Play Store responds cleanly (either triggering an update or reporting
-    // that no update is available yet on the user's track), stop here so we
-    // never trap users in a "Play Store shows Open -> app shows Update modal"
-    // loop while a release is pending Play Store review.
+    // that no update is available yet on the user's track), stop here on
+    // background checks so we never trap users in a "Play Store shows Open ->
+    // app shows Update modal" loop while a release is pending Play Store review.
     if (defaultTargetPlatform == TargetPlatform.android) {
-      final handledByPlayCore = await _tryAndroidPlayInAppUpdate();
-      if (handledByPlayCore) return;
+      final playOutcome = await _tryAndroidPlayInAppUpdate();
+      if (playOutcome == _PlayUpdateOutcome.triggered) return;
+      if (playOutcome == _PlayUpdateOutcome.notAvailable &&
+          !showUpToDateFeedback) {
+        return;
+      }
+      if (playOutcome == _PlayUpdateOutcome.notAvailable &&
+          showUpToDateFeedback) {
+        if (!context.mounted) return;
+        await _showManualAndroidPlayStatus(context);
+        return;
+      }
     }
 
     // 2. Check Firestore `system_stats/app_version` metadata (for iOS / TestFlight,
     // or Android devices where Google Play Services is unavailable).
     if (!context.mounted) return;
-    await _checkRemoteVersionDoc(context);
+    await _checkRemoteVersionDoc(
+      context,
+      showUpToDateFeedback: showUpToDateFeedback,
+    );
   }
 
   /// Queries Google Play Core for update availability.
-  /// Returns `true` whenever Google Play Core authoritatively handled the check
-  /// (including when Play Store reports `updateNotAvailable` for this user's track),
-  /// and `false` only if Play Core threw an exception (e.g. missing Play Services).
-  Future<bool> _tryAndroidPlayInAppUpdate() async {
+  Future<_PlayUpdateOutcome> _tryAndroidPlayInAppUpdate() async {
     try {
       final info = await InAppUpdate.checkForUpdate().timeout(
         const Duration(seconds: 8),
@@ -87,16 +116,16 @@ class AppUpdateService {
         final isCritical = info.updatePriority >= 5;
         if (isCritical && info.immediateUpdateAllowed) {
           await InAppUpdate.performImmediateUpdate();
-          return true;
+          return _PlayUpdateOutcome.triggered;
         } else if (info.flexibleUpdateAllowed) {
           final result = await InAppUpdate.startFlexibleUpdate();
           if (result == AppUpdateResult.success) {
             await InAppUpdate.completeFlexibleUpdate();
           }
-          return true;
+          return _PlayUpdateOutcome.triggered;
         } else if (info.immediateUpdateAllowed) {
           await InAppUpdate.performImmediateUpdate();
-          return true;
+          return _PlayUpdateOutcome.triggered;
         }
       } else if (info.updateAvailability ==
           UpdateAvailability.developerTriggeredUpdateInProgress) {
@@ -105,24 +134,69 @@ class AppUpdateService {
         } else if (info.immediateUpdateAllowed) {
           await InAppUpdate.performImmediateUpdate();
         }
-        return true;
+        return _PlayUpdateOutcome.triggered;
       } else if (info.updateAvailability ==
           UpdateAvailability.updateNotAvailable) {
         // Play Store authoritatively says no newer build is live for this user
-        // yet (e.g. new build is still in Google Play review). Do NOT fall
-        // through to the Firestore modal, which would send the user to Play
-        // Store where only "Open" is shown.
-        return true;
+        // yet (e.g. new build is still in Google Play review).
+        return _PlayUpdateOutcome.notAvailable;
       }
     } catch (e) {
       // Devices without Play Services or sideloaded builds throw PlatformException;
       // fall through to the Firestore version check.
       debugPrint('AppUpdateService: Play In-App Update unavailable ($e)');
     }
-    return false;
+    return _PlayUpdateOutcome.unavailable;
   }
 
-  Future<void> _checkRemoteVersionDoc(BuildContext context) async {
+  Future<void> _showManualAndroidPlayStatus(BuildContext context) async {
+    try {
+      final results = await Future.wait([
+        PackageInfo.fromPlatform(),
+        FirebaseFirestore.instance
+            .collection('system_stats')
+            .doc('app_version')
+            .get(const GetOptions(source: Source.server))
+            .timeout(const Duration(seconds: 6)),
+      ]);
+      if (!context.mounted) return;
+      final info = results[0] as PackageInfo;
+      final doc = results[1] as DocumentSnapshot<Map<String, dynamic>>;
+      final currentBuild = int.tryParse(info.buildNumber) ?? 0;
+      final currentVersion = info.version;
+      final data = doc.data();
+      final remoteBuild = _readInt(
+        data?['androidBuildNumber'] ?? data?['latestBuildNumber'],
+      );
+      final remoteVersion =
+          (data?['androidVersion'] ?? data?['latestVersion'] ?? currentVersion)
+              .toString();
+      final pendingPlayReview =
+          _isSemverLess(currentVersion, remoteVersion) ||
+          (!_isSemverLess(remoteVersion, currentVersion) &&
+              remoteBuild != null &&
+              currentBuild > 0 &&
+              currentBuild < remoteBuild);
+      final message = pendingPlayReview
+          ? 'Version $remoteVersion${remoteBuild != null ? " (Build $remoteBuild)" : ""} is uploaded and pending Google Play review.'
+          : 'You are on the latest version (${formatVersionLabel(info)}).';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You are on the latest Play Store build.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _checkRemoteVersionDoc(
+    BuildContext context, {
+    bool showUpToDateFeedback = false,
+  }) async {
     if (_dialogShowing) return;
     try {
       final results = await Future.wait([
@@ -141,14 +215,27 @@ class AppUpdateService {
       final currentBuild = int.tryParse(packageInfo.buildNumber) ?? 0;
       final currentVersion = packageInfo.version;
       _dismissedBuildNumber ??= prefs.getInt(_dismissedBuildPrefKey);
+      _dismissedReleaseKey ??= prefs.getString(_dismissedReleaseKeyPref);
 
-      if (!doc.exists || doc.data() == null) return;
+      if (!doc.exists || doc.data() == null) {
+        if (showUpToDateFeedback && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'You are on the latest version (${formatVersionLabel(packageInfo)}).',
+              ),
+            ),
+          );
+        }
+        return;
+      }
       final data = doc.data()!;
 
       final isIOS = defaultTargetPlatform == TargetPlatform.iOS;
       final latestBuild = _readInt(
-        data[isIOS ? 'iosBuildNumber' : 'androidBuildNumber'] ??
-            data['latestBuildNumber'],
+        isIOS
+            ? data['iosBuildNumber']
+            : (data['androidBuildNumber'] ?? data['latestBuildNumber']),
       );
       final minBuild = _readInt(
         data[isIOS ? 'iosMinBuildNumber' : 'androidMinBuildNumber'] ??
@@ -163,17 +250,35 @@ class AppUpdateService {
           data['forceUpdate'] == true ||
           (minBuild != null && currentBuild > 0 && currentBuild < minBuild);
 
-      final hasNewerBuild =
-          latestBuild != null && currentBuild > 0 && currentBuild < latestBuild;
       final hasNewerSemver = _isSemverLess(currentVersion, latestVersion);
+      final isSameSemver =
+          !hasNewerSemver && !_isSemverLess(latestVersion, currentVersion);
+      final hasNewerBuild =
+          isSameSemver &&
+          latestBuild != null &&
+          currentBuild > 0 &&
+          currentBuild < latestBuild;
 
       if (!hasNewerBuild && !hasNewerSemver && !forceUpdate) {
+        if (showUpToDateFeedback && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'You are on the latest version (${formatVersionLabel(packageInfo)}).',
+              ),
+            ),
+          );
+        }
         return;
       }
 
+      final releaseKey = '$latestVersion+${latestBuild ?? 0}';
       if (!forceUpdate &&
-          latestBuild != null &&
-          _dismissedBuildNumber == latestBuild) {
+          !showUpToDateFeedback &&
+          (_dismissedReleaseKey == releaseKey ||
+              (isSameSemver &&
+                  latestBuild != null &&
+                  _dismissedBuildNumber == latestBuild))) {
         return;
       }
 
@@ -221,6 +326,10 @@ class AppUpdateService {
               actions: [
                 TextButton(
                   onPressed: () {
+                    _dismissedReleaseKey = releaseKey;
+                    unawaited(
+                      prefs.setString(_dismissedReleaseKeyPref, releaseKey),
+                    );
                     if (latestBuild != null) {
                       _dismissedBuildNumber = latestBuild;
                       unawaited(
@@ -233,6 +342,10 @@ class AppUpdateService {
                 ),
                 FilledButton(
                   onPressed: () {
+                    _dismissedReleaseKey = releaseKey;
+                    unawaited(
+                      prefs.setString(_dismissedReleaseKeyPref, releaseKey),
+                    );
                     if (latestBuild != null) {
                       _dismissedBuildNumber = latestBuild;
                       unawaited(
@@ -309,3 +422,5 @@ class AppUpdateService {
     }
   }
 }
+
+enum _PlayUpdateOutcome { triggered, notAvailable, unavailable }

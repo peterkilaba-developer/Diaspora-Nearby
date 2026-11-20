@@ -80,9 +80,11 @@ MAPS_KEY="${GOOGLE_MAPS_API_KEY:-AIzaSyAj0oAGYEX5osyDa_2Pn828clvv72UhEF8}"
 cat << EOF > "ios/Flutter/Secrets.xcconfig"
 GOOGLE_MAPS_API_KEY=$MAPS_KEY
 EOF
+APP_VERSION=$(grep '^version:' pubspec.yaml | sed -E 's/^version: *([^+]+).*/\1/' | tr -d '[:space:]')
+APP_VERSION="${APP_VERSION:-1.2.8}"
 IOS_BUILD_NUMBER=$((50 + ${CI_BUILD_NUMBER:-1}))
-echo "Configuring iOS production build number: $IOS_BUILD_NUMBER"
-flutter build ios --config-only --flavor production -t lib/main_production.dart --release --build-name="1.2.7" --build-number="$IOS_BUILD_NUMBER" --dart-define="GOOGLE_MAPS_API_KEY=$MAPS_KEY"
+echo "Configuring iOS production version $APP_VERSION build number: $IOS_BUILD_NUMBER"
+flutter build ios --config-only --flavor production -t lib/main_production.dart --release --build-name="$APP_VERSION" --build-number="$IOS_BUILD_NUMBER" --dart-define="GOOGLE_MAPS_API_KEY=$MAPS_KEY"
 
 # 7. Ensure FunctionsStreamHandler.swift in cloud_functions is patched cleanly
 for fn_file in $(find "$HOME/.pub-cache" "ios/.symlinks" -name "FunctionsStreamHandler.swift" 2>/dev/null); do

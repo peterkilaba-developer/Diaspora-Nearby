@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:ui';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:diaspora_nearby/core/services/app_update_service.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
@@ -18,6 +21,10 @@ import 'package:diaspora_nearby/core/services/pwa_install_service.dart';
 import 'package:go_router/go_router.dart';
 import 'package:diaspora_nearby/features/settings/screens/privacy_settings_screen.dart';
 import 'package:diaspora_nearby/features/settings/widgets/language_selector_sheet.dart';
+
+final appPackageInfoProvider = FutureProvider<PackageInfo>((ref) async {
+  return PackageInfo.fromPlatform();
+});
 
 class AccountSection extends ConsumerWidget {
   final ProfileData? userProfile;
@@ -193,9 +200,62 @@ class AccountSection extends ConsumerWidget {
                       'Diaspora Nearby',
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    const Text(
-                      'Version 1.0.0',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    const SizedBox(height: 6),
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final pkgAsync = ref.watch(appPackageInfoProvider);
+                        final versionText = pkgAsync.maybeWhen(
+                          data: AppUpdateService.formatVersionLabel,
+                          orElse: () =>
+                              'Version ${AppUpdateService.fallbackVersionName}',
+                        );
+                        return GestureDetector(
+                          onTap: kIsWeb
+                              ? null
+                              : () => unawaited(
+                                  AppUpdateService.instance.checkForUpdate(
+                                    context,
+                                    force: true,
+                                    showUpToDateFeedback: true,
+                                  ),
+                                ),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.06,
+                              ),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  versionText,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: theme.colorScheme.onSurface
+                                        .withValues(alpha: 0.7),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                if (!kIsWeb) ...[
+                                  const SizedBox(width: 6),
+                                  Icon(
+                                    LucideIcons.refreshCw,
+                                    size: 11,
+                                    color: theme.colorScheme.onSurface
+                                        .withValues(alpha: 0.55),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
