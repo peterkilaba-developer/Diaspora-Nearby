@@ -1,0 +1,18 @@
+{
+  "version": "1.0",
+  "chainId": "8453",
+  "createdAt": 1793585097862,
+  "meta": {
+    "name": "Revoke Legacy TGE_ORACLE_ROLE from 0xeEf494A14E6e66ec7c3E14E8674dCe2d99144de6",
+    "description": "Revokes TGE_ORACLE_ROLE from the retired deployer EOA (0xeEf494A14E6e66ec7c3E14E8674dCe2d99144de6) on DiasporaTGEController (0xb6C049D47A2FaE5413c331760C22E715D0bF4d45) so only the rotated Secret Manager signer (0x0b3Fa2C16585C6394A60224Ca9B2765c8Cb1FA7E) holds TGE_ORACLE_ROLE.",
+    "txBuilderVersion": "1.16.5",
+    "createdFromSafeAddress": "0xE06F8690e96a8BAAbCBe48664Ff1238F69082244"
+  },
+  "transactions": [
+    {
+      "to": "0xb6C049D47A2FaE5413c331760C22E715D0bF4d45",
+      "value": "0",
+      "data": "0xd547741f76f6a2a8078ee7b77c2ffc0574b842eb636c62eb5f6384b2400628c9dc3d3555000000000000000000000000eef494a14e6e66ec7c3e14e8674dce2d99144de6"
+    }
+  ]
+}

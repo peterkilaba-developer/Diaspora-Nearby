@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:universal_io/io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -18,58 +19,97 @@ class ImageMessageContent extends StatelessWidget {
   void _showFullScreenImage(BuildContext context, String imageUrl) {
     showDialog(
       context: context,
+      useSafeArea: false,
       barrierColor: Colors.black.withValues(alpha: 0.95),
-      builder: (context) => Stack(
-        children: [
-          Positioned(
-            top: 40,
-            right: 20,
-            child: Material(
-              color: Colors.transparent,
-              child: IconButton(
-                icon: const Icon(LucideIcons.x, color: Colors.white, size: 30),
-                onPressed: () => Navigator.of(context).pop(),
+      builder: (dialogContext) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Tap outside the image to dismiss
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => Navigator.of(dialogContext).pop(),
               ),
             ),
-          ),
-          Center(
-            child: InteractiveViewer(
-              panEnabled: true,
-              boundaryMargin: const EdgeInsets.all(20),
-              minScale: 0.5,
-              maxScale: 4.0,
-              child:
-                  (kIsWeb ||
-                      imageUrl.startsWith('http') ||
-                      imageUrl.startsWith('blob:'))
-                  ? Image.network(
-                      imageUrl,
-                      fit: BoxFit.contain,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return const Center(
-                          child: CircularProgressIndicator(color: Colors.white),
-                        );
-                      },
-                      errorBuilder: (context, error, stackTrace) {
-                        if (kIsWeb) {
-                          debugPrint(
-                            'âŒ Message Image failed to load on Web: $error',
-                          );
-                        }
-                        return _buildErrorWidget();
-                      },
-                    )
-                  : Image.file(
-                      File(imageUrl.replaceFirst('file://', '')),
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) {
-                        return _buildErrorWidget();
-                      },
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 16,
+                ),
+                child: Center(
+                  child: Listener(
+                    behavior: HitTestBehavior.opaque,
+                    child: InteractiveViewer(
+                      panEnabled: true,
+                      boundaryMargin: const EdgeInsets.all(20),
+                      minScale: 0.5,
+                      maxScale: 4.0,
+                      child:
+                          (kIsWeb ||
+                              imageUrl.startsWith('http') ||
+                              imageUrl.startsWith('blob:'))
+                          ? Image.network(
+                              imageUrl,
+                              fit: BoxFit.contain,
+                              loadingBuilder:
+                                  (context, child, loadingProgress) {
+                                    if (loadingProgress == null) return child;
+                                    return const Center(
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                      ),
+                                    );
+                                  },
+                              errorBuilder: (context, error, stackTrace) {
+                                if (kIsWeb) {
+                                  debugPrint(
+                                    'âŒ Message Image failed to load on Web: $error',
+                                  );
+                                }
+                                return _buildErrorWidget();
+                              },
+                            )
+                          : Image.file(
+                              File(imageUrl.replaceFirst('file://', '')),
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) {
+                                return _buildErrorWidget();
+                              },
+                            ),
                     ),
+                  ),
+                ),
+              ),
             ),
-          ),
-        ],
+            // Close button (always in front of the image for easy dismissal)
+            Positioned(
+              top: 0,
+              right: 0,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 12, right: 16),
+                  child: Material(
+                    color: Colors.black.withValues(alpha: 0.6),
+                    shape: const CircleBorder(),
+                    clipBehavior: Clip.antiAlias,
+                    child: IconButton(
+                      icon: const Icon(
+                        LucideIcons.x,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                      tooltip: 'Close',
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

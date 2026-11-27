@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:universal_io/io.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -219,63 +220,100 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
   void _showFullScreenImage(BuildContext context) {
     showDialog(
       context: context,
+      useSafeArea: false,
       barrierColor: Colors.black.withValues(alpha: 0.9), // Darker background
-      builder: (context) => Stack(
-        children: [
-          // Close button (positioned safely)
-          Positioned(
-            top: 40,
-            right: 20,
-            child: Material(
-              color: Colors.transparent,
-              child: IconButton(
-                icon: const Icon(LucideIcons.x, color: Colors.white, size: 30),
-                onPressed: () => Navigator.of(context).pop(),
+      builder: (dialogContext) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Tap outside the image to dismiss
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => Navigator.of(dialogContext).pop(),
               ),
             ),
-          ),
-          // Centered Interactive User Image
-          Center(
-            child: InteractiveViewer(
-              panEnabled: true,
-              boundaryMargin: const EdgeInsets.all(20),
-              minScale: 0.5,
-              maxScale: 4,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(
-                  16,
-                ), // Standardized rounding
-                child: Image.network(
-                  widget.user.profileImage,
-                  fit: BoxFit.contain,
-                  loadingBuilder: (context, child, loadingProgress) {
-                    if (loadingProgress == null) return child;
-                    return const CircularProgressIndicator(color: Colors.white);
-                  },
-                  errorBuilder: (context, error, stackTrace) {
-                    if (kIsWeb) {
-                      debugPrint(
-                        'âŒ Image failed to load on Web: $error (URL: ${widget.user.profileImage})',
-                      );
-                      if (widget.user.profileImage.contains(
-                        'firebasestorage.googleapis.com',
-                      )) {
-                        debugPrint(
-                          'ðŸ’¡ Suggestion: If this is a CORS error, use --web-renderer html or configure CORS for Storage.',
-                        );
-                      }
-                    }
-                    return const Icon(
-                      LucideIcons.imageOff,
-                      color: Colors.white,
-                      size: 50,
-                    );
-                  },
+            // Centered Interactive User Image
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 16,
+                ),
+                child: Center(
+                  child: Listener(
+                    behavior: HitTestBehavior.opaque,
+                    child: InteractiveViewer(
+                      panEnabled: true,
+                      boundaryMargin: const EdgeInsets.all(20),
+                      minScale: 0.5,
+                      maxScale: 4,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(
+                          16,
+                        ), // Standardized rounding
+                        child: Image.network(
+                          widget.user.profileImage,
+                          fit: BoxFit.contain,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return const CircularProgressIndicator(
+                              color: Colors.white,
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) {
+                            if (kIsWeb) {
+                              debugPrint(
+                                'âŒ Image failed to load on Web: $error (URL: ${widget.user.profileImage})',
+                              );
+                              if (widget.user.profileImage.contains(
+                                'firebasestorage.googleapis.com',
+                              )) {
+                                debugPrint(
+                                  'ðŸ’¡ Suggestion: If this is a CORS error, use --web-renderer html or configure CORS for Storage.',
+                                );
+                              }
+                            }
+                            return const Icon(
+                              LucideIcons.imageOff,
+                              color: Colors.white,
+                              size: 50,
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+            // Close button (always in front of the image for easy dismissal)
+            Positioned(
+              top: 0,
+              right: 0,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 12, right: 16),
+                  child: Material(
+                    color: Colors.black.withValues(alpha: 0.6),
+                    shape: const CircleBorder(),
+                    clipBehavior: Clip.antiAlias,
+                    child: IconButton(
+                      icon: const Icon(
+                        LucideIcons.x,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                      tooltip: 'Close',
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -439,8 +477,8 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
 
     final subLocality =
         (!storedSubIsLegacyCounty &&
-                rawStoredSub != null &&
-                rawStoredSub.isNotEmpty)
+            rawStoredSub != null &&
+            rawStoredSub.isNotEmpty)
         ? rawStoredSub
         : (_resolvedCoordLocation?['subLocality'] as String?)?.trim();
     final adminArea2 = (rawStoredAdm2 != null && rawStoredAdm2.isNotEmpty)
