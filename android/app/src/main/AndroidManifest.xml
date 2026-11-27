@@ -24,15 +24,20 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:appCategory="social"
-        android:enableOnBackInvokedCallback="true"
+        android:enableOnBackInvokedCallback="false"
         android:usesCleartextTraffic="false"
         android:allowBackup="false"
         android:fullBackupContent="false">
+        <!-- Use Skia OpenGL ES on Android to prevent Impeller Vulkan
+             VK_ERROR_DEVICE_LOST / BackdropFilter / engine-resume black screens
+             on Samsung and Mali Android 15/16 devices. -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTop"
-            android:taskAffinity=""
+            android:launchMode="singleTask"
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"

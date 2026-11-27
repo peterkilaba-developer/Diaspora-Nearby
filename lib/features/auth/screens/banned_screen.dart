@@ -50,8 +50,29 @@ class BannedScreen extends StatelessWidget {
       );
     }
     return Scaffold(
-      appBar: AppBar(title: const Text('BannedScreen (Stub)')),
-      body: const Center(child: Text('Coming Soon: BannedScreen')),
+      appBar: AppBar(title: const Text('Account Suspended')),
+      body: const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.block_outlined, size: 56),
+              SizedBox(height: 16),
+              Text(
+                'Your account has been suspended.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Please contact support@diasporanearby.com if you believe this is a mistake.',
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

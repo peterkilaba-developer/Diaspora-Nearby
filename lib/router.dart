@@ -10,6 +10,7 @@ import 'package:diaspora_nearby/features/dsp/providers/referral_provider.dart';
 import 'features/shared/screens/user_permissions_screen.dart';
 import 'features/auth/screens/phone_auth_screen.dart';
 import 'features/auth/screens/otp_verification_screen.dart';
+import 'features/auth/screens/banned_screen.dart';
 import 'features/auth/repository/auth_repository.dart';
 import 'features/profile/repository/profile_repository.dart';
 import 'features/profile/screens/profile_setup_screen.dart';
@@ -179,6 +180,9 @@ final routerProvider = Provider<GoRouter>((ref) {
     navigatorKey: _rootNavigatorKey,
     refreshListenable: notifier,
     initialLocation: '/auth/phone',
+    errorBuilder: (context, state) => ErrorScreen(
+      message: state.error?.toString() ?? 'Unable to open that screen.',
+    ),
     redirect: (context, state) {
       // [PERF] 100% synchronous redirect — zero platform-channel or Firestore
       // awaits on the critical navigation path.
@@ -293,7 +297,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         }
 
         if (profile?.isBanned == true) {
-          return '/banned';
+          return state.matchedLocation == '/banned' ? null : '/banned';
         }
 
         if ((state.matchedLocation == '/' ||
@@ -352,6 +356,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           final msg = state.uri.queryParameters['message'];
           return ErrorScreen(message: msg);
         },
+      ),
+
+      GoRoute(
+        path: '/banned',
+        builder: (context, state) => const BannedScreen(),
       ),
 
       GoRoute(

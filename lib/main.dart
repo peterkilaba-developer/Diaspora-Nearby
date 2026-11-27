@@ -200,15 +200,39 @@ Future<void> runDiasporaApp({AppEnvironment? environment}) async {
     () async {
       AppEnvironmentConfig.logStartup();
       // [PERF] Pre-resolve Firebase, SharedPreferences, and permission cache
-      // in parallel while native launch screen is visible so Flutter's first
-      // rendered frame is the actual destination screen with 0 loading spinner.
+      // in parallel while native launch screen is visible so fast startups
+      // paint the destination screen on frame 1 with 0 loading spinner.
+      // Never block runApp() indefinitely: if bootstrap takes longer than
+      // 1.5s, mount _BootstrapHost immediately so Android never hangs on a
+      // blank NormalTheme window.
+      final bootstrapFuture = _bootstrapContainer();
+      ProviderContainer? readyContainer;
+      Object? initialError;
       try {
-        final container = await _bootstrapContainer();
-        runApp(
-          UncontrolledProviderScope(container: container, child: const MyApp()),
+        readyContainer = await bootstrapFuture.timeout(
+          const Duration(milliseconds: 1500),
         );
+      } on TimeoutException {
+        // Still initializing — let _BootstrapHost await the same future while
+        // displaying Flutter's themed SplashScreen.
       } catch (error) {
-        runApp(_BootstrapHost(initialError: error));
+        initialError = error;
+      }
+
+      if (readyContainer != null) {
+        runApp(
+          UncontrolledProviderScope(
+            container: readyContainer,
+            child: const MyApp(),
+          ),
+        );
+      } else {
+        runApp(
+          _BootstrapHost(
+            initialError: initialError,
+            pendingBootstrap: initialError == null ? bootstrapFuture : null,
+          ),
+        );
       }
     },
     (error, stack) {
@@ -226,7 +250,7 @@ Future<void> runDiasporaApp({AppEnvironment? environment}) async {
 
 Future<ProviderContainer> _bootstrapContainer() async {
   final results = await Future.wait([
-    SharedPreferences.getInstance(),
+    SharedPreferences.getInstance().timeout(const Duration(seconds: 5)),
     AppBootstrap.init().timeout(const Duration(seconds: 6)),
     warmPermissionCache().timeout(
       const Duration(seconds: 2),
@@ -273,7 +297,8 @@ Future<ProviderContainer> _bootstrapContainer() async {
 
 class _BootstrapHost extends StatefulWidget {
   final Object? initialError;
-  const _BootstrapHost({this.initialError});
+  final Future<ProviderContainer>? pendingBootstrap;
+  const _BootstrapHost({this.initialError, this.pendingBootstrap});
 
   @override
   State<_BootstrapHost> createState() => _BootstrapHostState();
@@ -289,14 +314,25 @@ class _BootstrapHostState extends State<_BootstrapHost> {
     super.initState();
     _error = widget.initialError;
     if (_error == null) {
-      _initialization = _initialize();
+      _initialization = _attachFuture(
+        widget.pendingBootstrap ?? _bootstrapContainer(),
+      );
     }
   }
 
-  Future<ProviderContainer> _initialize() async {
-    final container = await _bootstrapContainer();
-    _container = container;
-    return container;
+  Future<ProviderContainer> _attachFuture(Future<ProviderContainer> future) {
+    return future.then((container) {
+      if (!mounted) {
+        container.dispose();
+        return container;
+      }
+      _container = container;
+      return container;
+    });
+  }
+
+  Future<ProviderContainer> _initialize() {
+    return _attachFuture(_bootstrapContainer());
   }
 
   @override

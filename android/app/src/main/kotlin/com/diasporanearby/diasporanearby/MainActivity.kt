@@ -3,7 +3,11 @@ package com.diasporanearby.diasporanearby
 import android.content.Intent
 import android.os.Bundle
 import com.ryanheise.audioservice.AudioServiceFragmentActivity
+import com.ryanheise.audioservice.AudioServicePlugin
+import id.flutter.flutter_background_service.Config
+import id.flutter.flutter_background_service.WatchdogReceiver
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : AudioServiceFragmentActivity() {
@@ -14,14 +18,43 @@ class MainActivity : AudioServiceFragmentActivity() {
     private var latestSharedText: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Ensure legacy background location watchdog/boot alarms from older app
+        // versions stay disabled on Android so a secondary background engine
+        // cannot contend with the foreground UI engine.
+        disableLegacyBackgroundService()
+
+        val wasEngineRunning = FlutterEngineCache.getInstance()
+            .get(AudioServicePlugin.getFlutterEngineId())
+            ?.dartExecutor
+            ?.isExecutingDart == true
+
         captureSharedText(intent)
         super.onCreate(savedInstanceState)
+
+        // When AudioServiceFragmentActivity uses a cached FlutterEngine,
+        // FlutterFragment skips Activity.configureFlutterEngine(). Always bind
+        // our share-intent channel directly to the shared engine here.
+        val sharedEngine = AudioServicePlugin.getFlutterEngine(this)
+        registerShareIntentChannel(sharedEngine)
+
+        // If the cached engine was already executing Dart (warm Activity
+        // recreation), initialRoute is ignored by Flutter. Forward incoming
+        // ACTION_VIEW deep links explicitly to GoRouter.
+        if (wasEngineRunning && intent?.action == Intent.ACTION_VIEW) {
+            val dataString = intent?.dataString
+            if (!dataString.isNullOrEmpty()) {
+                sharedEngine.navigationChannel.pushRouteInformation(dataString)
+            }
+        }
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         captureSharedText(intent)
         super.configureFlutterEngine(flutterEngine)
+        registerShareIntentChannel(flutterEngine)
+    }
 
+    private fun registerShareIntentChannel(flutterEngine: FlutterEngine) {
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             SHARE_INTENT_CHANNEL
@@ -41,6 +74,19 @@ class MainActivity : AudioServiceFragmentActivity() {
                 }
                 else -> result.notImplemented()
             }
+        }
+    }
+
+    private fun disableLegacyBackgroundService() {
+        try {
+            val config = Config(applicationContext)
+            if (config.isAutoStartOnBoot || !config.isManuallyStopped) {
+                config.isAutoStartOnBoot = false
+                config.isManuallyStopped = true
+            }
+            WatchdogReceiver.remove(applicationContext)
+        } catch (_: Throwable) {
+            // Best effort — never block Activity startup
         }
     }
 

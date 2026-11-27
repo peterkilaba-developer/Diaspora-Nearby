@@ -104,6 +104,11 @@ dependency_overrides:
   # background isolate. The local patch skips only that invalid registration.
   flutter_background_service_android:
     path: packages/flutter_background_service_android
+  # Upstream 0.18.19 eagerly binds AudioService from background isolates
+  # (e.g. FCM background service -> headless UI engine) and destroys/recreates
+  # the cached FlutterEngine inside a surviving process (blank screen / ANR).
+  audio_service:
+    path: packages/audio_service
 
 dev_dependencies:
   flutter_test:

@@ -72,28 +72,13 @@ public class WatchdogReceiver extends BroadcastReceiver {
 
     @Override
     public void onReceive(Context context, Intent intent) {
-        if (intent.getAction().equals(ACTION_RESPAWN)) {
+        if (intent != null && ACTION_RESPAWN.equals(intent.getAction())) {
+            // Disabled on Android to prevent legacy watchdog alarms from
+            // spawning a competing background FlutterEngine.
             final Config config = new Config(context);
-            boolean isRunning = false;
-
-            ActivityManager manager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
-            for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
-                if (BackgroundService.class.getName().equals(service.service.getClassName())) {
-                    isRunning = true;
-                }
-            }
-
-            if (!config.isManuallyStopped() && !isRunning) {
-                try {
-                    if (config.isForeground()) {
-                        ContextCompat.startForegroundService(context, new Intent(context, id.flutter.flutter_background_service.BackgroundService.class));
-                    } else {
-                        context.getApplicationContext().startService(new Intent(context, id.flutter.flutter_background_service.BackgroundService.class));
-                    }}
-                catch (Exception e){
-                    e.printStackTrace();
-                }
-            }
+            config.setAutoStartOnBoot(false);
+            config.setManuallyStopped(true);
+            remove(context);
         }
     }
 }

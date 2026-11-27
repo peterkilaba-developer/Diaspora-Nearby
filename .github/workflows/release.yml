@@ -378,7 +378,7 @@ jobs:
                 androidUpdateUrl: "https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby",
                 androidApkUrl: admin.firestore.FieldValue.delete(),
                 iosUpdateUrl: "https://testflight.apple.com/join/vB3XzPKg",
-                releaseNotes: "Real-time sub-locality & abbreviated state location updates, aligned UserCard indicators, App Info live version badge, and Android/iOS improvements.",
+                releaseNotes: "Fixed Android dark/blank screen on relaunch and deep links (Skia renderer, AudioService lifecycle, singleTask launch mode), plus stability improvements.",
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
               }, { merge: true });
 

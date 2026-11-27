@@ -6,6 +6,7 @@ analyzer:
     - pub_cache/**
     - temp_cache/**
     - packages/flutter_background_service_android/**
+    - packages/audio_service/**
     - "**/node_modules/**"
     - build/**
     - test/**/*.mocks.dart

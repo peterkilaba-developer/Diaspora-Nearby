@@ -18,6 +18,9 @@ import 'package:diaspora_nearby/config/environment_firebase_options.dart';
 /// Centralizes all application initialization logic.
 /// Enforces strict ordering to prevent race conditions.
 class AppBootstrap {
+  static bool _deferredStarted = false;
+  static bool _audioInitialized = false;
+
   static Future<void> init() async {
     // 1. Core Framework Init
     WidgetsFlutterBinding.ensureInitialized();
@@ -30,7 +33,10 @@ class AppBootstrap {
 
     // Optional subsystems must not delay first paint. They initialize in
     // parallel in the background and retain their existing fallbacks.
-    unawaited(_initDeferred());
+    if (!_deferredStarted) {
+      _deferredStarted = true;
+      unawaited(_initDeferred());
+    }
     debugPrint('▶ AppBootstrap: ✅ CRITICAL INIT COMPLETE');
   }
 
@@ -141,7 +147,8 @@ class AppBootstrap {
   }
 
   static Future<void> _initAudio() async {
-    if (kIsWeb) return; // [FIX] JustAudioBackground not supported on web
+    if (kIsWeb || _audioInitialized) return; // [FIX] JustAudioBackground not supported on web
+    _audioInitialized = true;
     try {
       debugPrint('  → JustAudioBackground.init starting...');
       await JustAudioBackground.init(
@@ -156,6 +163,7 @@ class AppBootstrap {
       await session.configure(const AudioSessionConfiguration.music());
       debugPrint('  → AudioSession.configure done');
     } catch (e) {
+      _audioInitialized = false;
       debugPrint('AppBootstrap: Audio Init Warning: $e');
     }
   }

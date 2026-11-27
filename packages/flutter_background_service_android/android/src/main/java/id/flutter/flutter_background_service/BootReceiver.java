@@ -1,31 +1,24 @@
 package id.flutter.flutter_background_service;
 
-import android.annotation.SuppressLint;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 
-import androidx.core.content.ContextCompat;
-
-
 public class BootReceiver extends BroadcastReceiver {
-    @SuppressLint("WakelockTimeout")
     @Override
     public void onReceive(Context context, Intent intent) {
-        if (intent.getAction().equals(Intent.ACTION_MY_PACKAGE_REPLACED) || intent.getAction().equals(Intent.ACTION_BOOT_COMPLETED) || intent.getAction().equals("android.intent.action.QUICKBOOT_POWERON")) {
+        if (intent == null || intent.getAction() == null) return;
+        String action = intent.getAction();
+        if (action.equals(Intent.ACTION_MY_PACKAGE_REPLACED)
+                || action.equals(Intent.ACTION_BOOT_COMPLETED)
+                || action.equals("android.intent.action.QUICKBOOT_POWERON")) {
+            // Disabled on Android: spinning up a secondary FlutterEngine in the
+            // same process as AudioServiceFragmentActivity causes plugin channel
+            // and engine lifecycle contention. Clear any legacy persisted flags.
             final Config config = new Config(context);
-            boolean autoStart = config.isAutoStartOnBoot();
-            if (autoStart) {
-                if (BackgroundService.lockStatic == null) {
-                    BackgroundService.getLock(context).acquire();
-                }
-
-                if (config.isForeground()) {
-                    ContextCompat.startForegroundService(context, new Intent(context, BackgroundService.class));
-                } else {
-                    context.startService(new Intent(context, BackgroundService.class));
-                }
-            }
+            config.setAutoStartOnBoot(false);
+            config.setManuallyStopped(true);
+            WatchdogReceiver.remove(context);
         }
     }
 }

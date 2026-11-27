@@ -6,10 +6,10 @@ class SplashScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Simple splash - matches native Android splash
-    // Uses white background to match Android's launch_background.xml
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // Match native Android launch_background / windowSplashScreenBackground
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? AppTheme.elevationDark0 : Colors.white,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
